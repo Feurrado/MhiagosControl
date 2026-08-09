@@ -1,8 +1,8 @@
 # Mhiagos Control
 
-Driver alternativo para o painel do cooler **Rise Mode Temp 6 Pro Black**
-(water cooler AIO 360 mm, `RM-WCT6-PB`), substituindo o software original
-*CPU TEMP Monitor* (SHENZHEN SHINETEK / marca Ocypus).
+Driver alternativo para o painel do **air cooler Rise Mode Temp 6 Pro Black**,
+substituindo o software original *CPU TEMP Monitor*
+(SHENZHEN SHINETEK / marca Ocypus).
 
 Permite exibir **qualquer sensor** do sistema nos dois painéis de 3 dígitos,
 em vez das duas métricas fixas que o software de fábrica oferece.
