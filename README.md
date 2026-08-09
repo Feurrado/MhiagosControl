@@ -1,10 +1,30 @@
 # Mhiagos Control
 
-Driver alternativo para o painel do cooler **Rise Mode Temp 6 Pro**, substituindo o
-software original *CPU TEMP Monitor* (SHENZHEN SHINETEK / marca Ocypus).
+Driver alternativo para o painel do cooler **Rise Mode Temp 6 Pro Black**
+(water cooler AIO 360 mm, `RM-WCT6-PB`), substituindo o software original
+*CPU TEMP Monitor* (SHENZHEN SHINETEK / marca Ocypus).
 
 Permite exibir **qualquer sensor** do sistema nos dois painéis de 3 dígitos,
 em vez das duas métricas fixas que o software de fábrica oferece.
+
+---
+
+## Telas
+
+| | |
+|:--:|:--:|
+| ![Painéis](docs/paineis.png) | ![Alertas](docs/alertas.png) |
+| **Painéis** — escolha o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça | **Alertas** — limiar por mostrador, com rearme na descida |
+| ![Perfis](docs/perfis.png) | ![Sobre](docs/sobre.png) |
+| **Perfis** — conjuntos salvos, trocáveis pelo menu da bandeja | **Sobre** — início automático e resumo dos sensores |
+
+A prévia reproduz a vista superior do cooler e o mostrador de sete segmentos
+como ele é no aparelho: os dois painéis empilhados, `°C`/`°F` sobre `%`/`W`,
+dígitos brancos sem moldura.
+
+> As leituras que aparecem nas capturas são **ilustrativas** — a interface foi
+> renderizada com uma lista de sensores representativa, não medida de uma
+> máquina específica.
 
 ---
 

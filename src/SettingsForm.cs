@@ -461,7 +461,7 @@ namespace MhiagosControl
             c.Controls.Add(t);
 
             Label d = MakeLabel(
-                "Driver alternativo para o painel do cooler Rise Mode Temp 6 Pro.\n" +
+                "Driver alternativo para o painel do cooler Rise Mode Temp 6 Pro Black.\n" +
                 "Protocolo levantado por engenharia reversa; qualquer sensor pode ir para qualquer mostrador.",
                 16, 88, Ui.FontSmall);
             d.Size = new Size(700, 40);
