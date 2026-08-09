@@ -169,10 +169,14 @@ Não exige SDK do .NET: compila com o `csc.exe` que acompanha o Windows.
 ## Compilar
 
 ```powershell
-.\build.ps1
+powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
 Saída em `bin\MhiagosControl.exe`.
+
+> O `-ExecutionPolicy Bypass` é necessário porque o Windows barra scripts `.ps1`
+> por padrão. O parâmetro vale **apenas para esse processo** e não altera a
+> configuração da máquina — não é preciso rodar `Set-ExecutionPolicy`.
 
 > **Atenção ao distribuir:** a pasta `bin\engine\` faz parte do conjunto. Copiar
 > só o `.exe` faz o aplicativo perder silenciosamente temperatura, potência e
