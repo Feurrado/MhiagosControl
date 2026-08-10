@@ -110,6 +110,8 @@ namespace MhiagosControl
 
         // ---------------- pagina: alertas ----------------
 
+        public static string NavSettings { get { return P("Configurações", "Settings"); } }
+
         public static string Thresholds { get { return P("Limiares", "Thresholds"); } }
         public static string WarnWhenReaching { get { return P("Avisar quando atingir", "Warn when it reaches"); } }
         public static string Current { get { return P("atual: ", "current: "); } }

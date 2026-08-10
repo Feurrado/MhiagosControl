@@ -71,6 +71,8 @@ namespace MhiagosControl
                 Medir("  so 2x ReadEntry", delegate { s.ReadEntry(id1); s.ReadEntry(id2); });
                 Medir("Snapshot (so com a janela aberta)", delegate { s.Snapshot(); });
                 Medir("List (so ao abrir a janela)", delegate { s.List(); });
+
+                if (s.HwInfoActive) DentroDoHwInfo(s);
             }
             return 0;
         }
@@ -123,7 +125,135 @@ namespace MhiagosControl
             if (id2 == null && lista.Count > 1) id2 = lista[1].Id;
         }
 
+        /// <summary>
+        /// Abre o ReadAll do HWiNFO, que e onde o ciclo inteiro mora.
+        ///
+        /// A pergunta e uma so: os 57 ms estao na chamada que manda a biblioteca
+        /// reler o hardware, ou na varredura que reenumera tudo em seguida? A
+        /// primeira e o preco do dado; a segunda seria nossa e teria conserto.
+        ///
+        /// As funcoes da biblioteca sao chamadas por DynamicInvoke, que custa
+        /// microssegundos - irrelevante contra dezenas de milissegundos, e o
+        /// unico jeito de alcanca-las sem abrir os delegates privados so para
+        /// poder medir.
+        /// </summary>
+        private static void DentroDoHwInfo(Sensors s)
+        {
+            object hw = FiHw.GetValue(s);
+            if (hw == null) return;
+
+            Delegate count = (Delegate)Campo(hw, "_count");
+            Delegate poll = (Delegate)Campo(hw, "_poll");
+            if (count == null || poll == null) return;
+
+            int grupos = (int)count.DynamicInvoke(null);
+            int clsMin = (int)Constante(typeof(HwInfo), "CLS_MIN");
+            int clsMax = (int)Constante(typeof(HwInfo), "CLS_MAX");
+
+            HwInfo tipado = (HwInfo)hw;
+            int leituras = tipado.ReadAll().Count;
+
+            // Cada par (grupo, classe) gasta pelo menos uma chamada a mais: a
+            // que devolve 0 e encerra a serie. Sao elas as candidatas a sobrar.
+            int sondas = grupos * (clsMax - clsMin + 1);
+            Console.WriteLine("--- por dentro do ReadAll ---");
+            Console.WriteLine(string.Format(
+                "   {0} grupos x {1} classes = {2} sondas de fim de serie, para {3} leituras uteis",
+                grupos, clsMax - clsMin + 1, sondas, leituras));
+            Console.WriteLine();
+
+            Medir("ReadAll inteiro", delegate { tipado.ReadAll(); });
+            Medir("  so a chamada que rele o hardware (263)", delegate { poll.DynamicInvoke(null); });
+            Medir("  so a contagem de grupos (156)", delegate { count.DynamicInvoke(null); });
+
+            PorChamada(hw, grupos, clsMin, clsMax);
+        }
+
+        /// <summary>
+        /// Custo de cada funcao da biblioteca, uma chamada por vez.
+        ///
+        /// A conta que importa: se a sonda que encerra a serie custar o mesmo
+        /// que uma leitura util, quase metade das chamadas do ciclo nao traz
+        /// dado nenhum, e aprender a forma uma vez as elimina.
+        ///
+        /// DynamicInvoke acrescenta alguns microssegundos por chamada. A
+        /// contagem de grupos, medida logo acima pelo mesmo caminho, saiu em
+        /// 0,00 ms - entao o acrescimo esta abaixo da resolucao daqui e nao
+        /// atrapalha numeros na casa das dezenas de microssegundos.
+        /// </summary>
+        private static void PorChamada(object hw, int grupos, int clsMin, int clsMax)
+        {
+            Delegate select = (Delegate)Campo(hw, "_select");
+            Delegate nome = (Delegate)Campo(hw, "_groupName");
+            Delegate read = (Delegate)Campo(hw, "_read");
+            if (select == null || nome == null || read == null) return;
+
+            int elem = (int)Constante(typeof(HwInfo), "ELEM");
+            byte[] buf = new byte[elem];
+            byte[] nomeBuf = new byte[256];
+
+            // Forma real: quantas leituras cada par (grupo, classe) tem.
+            int uteis = 0, vazios = 0;
+            int hitCls = -1, hitGrupo = -1, hitJ = -1;
+            int missCls = -1, missGrupo = -1, missJ = -1;
+
+            for (int i = 0; i < grupos; i++)
+            {
+                select.DynamicInvoke(i);
+                for (int cls = clsMin; cls <= clsMax; cls++)
+                {
+                    int j = 0;
+                    while (j < 256 && (int)read.DynamicInvoke(cls, i, j, buf) != 0)
+                    {
+                        if (hitCls < 0) { hitCls = cls; hitGrupo = i; hitJ = j; }
+                        uteis++; j++;
+                    }
+                    if (j == 0) vazios++;
+                    if (missCls < 0) { missCls = cls; missGrupo = i; missJ = j; }
+                }
+            }
+
+            Console.WriteLine(string.Format(
+                "   forma: {0} leituras uteis, {1} pares (grupo,classe) totalmente vazios",
+                uteis, vazios));
+            Console.WriteLine();
+
+            if (hitCls >= 0)
+            {
+                int hc = hitCls, hg = hitGrupo, hj = hitJ;
+                select.DynamicInvoke(hg);
+                Medir("  uma leitura util (641 devolvendo dado)",
+                      delegate { read.DynamicInvoke(hc, hg, hj, buf); });
+            }
+
+            if (missCls >= 0)
+            {
+                int mc = missCls, mg = missGrupo, mj = missJ;
+                select.DynamicInvoke(mg);
+                Medir("  uma sonda de fim de serie (641 devolvendo 0)",
+                      delegate { read.DynamicInvoke(mc, mg, mj, buf); });
+            }
+
+            Medir("  preparar um grupo (678)", delegate { select.DynamicInvoke(0); });
+            Medir("  nome de um grupo (952)", delegate { nome.DynamicInvoke(0, nomeBuf, nomeBuf.Length); });
+        }
+
+        private static object Campo(object alvo, string nome)
+        {
+            FieldInfo f = alvo.GetType().GetField(nome, BindingFlags.Instance | BindingFlags.NonPublic);
+            return f == null ? null : f.GetValue(alvo);
+        }
+
+        private static object Constante(Type t, string nome)
+        {
+            FieldInfo f = t.GetField(nome, BindingFlags.Static | BindingFlags.NonPublic);
+            return f == null ? 0 : f.GetRawConstantValue();
+        }
+
         // ---- acesso ao que e privado, so para atribuir custo ----
+
+        private static readonly FieldInfo FiHw =
+            typeof(Sensors).GetField("_hw", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private static readonly MethodInfo MiBuildRaw =
             typeof(Sensors).GetMethod("BuildRaw", BindingFlags.Instance | BindingFlags.NonPublic);

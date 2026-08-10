@@ -10,7 +10,7 @@ salvos, rodízio entre eles, alertas por limiar de cima e de baixo e apagamento
 automático quando ninguém está usando o computador.
 
 > A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
-> Windows na primeira execução e trocável na aba *Sobre*.
+> Windows na primeira execução e trocável em *Configurações*.
 
 ---
 
@@ -20,8 +20,14 @@ automático quando ninguém está usando o computador.
 |:--:|:--:|
 | ![Painéis](docs/paineis.png) | ![Alertas](docs/alertas.png) |
 | **Painéis** — escolha o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça | **Alertas** — limiar de cima e de baixo por mostrador, com rearme ao voltar à faixa |
-| ![Perfis](docs/perfis.png) | ![Sobre](docs/sobre.png) |
-| **Perfis** — cada conjunto salvo mostra o que põe no mostrador, com prévia, rodízio e exportação | **Sobre** — idioma, início automático, apagar por ociosidade, créditos e isenção |
+| ![Perfis](docs/perfis.png) | ![Configurações](docs/configuracoes.png) |
+| **Perfis** — cada conjunto salvo mostra o que põe no mostrador, com prévia, rodízio e exportação | **Configurações** — idioma, início automático, resumo de sensores por núcleo e apagar por ociosidade |
+
+Preferências valem para o programa todo; perfis valem para o mostrador. Por
+isso moram em páginas diferentes — as preferências ficavam dentro do *Sobre*,
+entre a identidade do programa e a isenção de responsabilidade, e isso as
+escondia duas vezes: quem procura uma preferência não clica em "Sobre", e quem
+clica em "Sobre" quer créditos, não um formulário.
 
 A prévia reproduz a vista superior do cooler e o mostrador de sete segmentos
 como ele é no aparelho: os dois painéis empilhados, `°C`/`°F` sobre `%`/`W`,
@@ -218,6 +224,9 @@ produto que comprou — não o projeto redistribuindo:
 Se nenhum dos dois acontecer, o aplicativo sobe com a fonte de reserva e diz
 isso **na aba Sobre**, em *Fontes de sensores* — não só no log.
 
+<img src="docs/sobre.png" width="480" alt="Aba Sobre, com o resumo das fontes de sensores">
+
+
 Sem o *CPU TEMP Monitor* instalado e sem uma cópia guardada, a biblioteca só
 vem do instalador que acompanha o produto.
 
@@ -282,7 +291,7 @@ valor baixo.
 
 ### Apagar quando ocioso
 
-Na aba *Sobre*, o mostrador pode apagar depois de N minutos sem teclado nem
+Em *Configurações*, o mostrador pode apagar depois de N minutos sem teclado nem
 mouse, e volta ao primeiro toque. Conta a sessão inteira do Windows, não este
 programa — o que também quer dizer que assistir a um vídeo ou esperar uma
 renderização longa conta como ocioso, porque ninguém digita. Os alertas seguem

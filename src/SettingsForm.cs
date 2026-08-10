@@ -172,10 +172,17 @@ namespace MhiagosControl
             NavItem perfis = new NavItem();
             perfis.Text = T.NavProfiles; perfis.Glyph = ""; perfis.Page = BuildPagePerfis();
 
+            // Glifo escapado, e nao o caractere solto como os de cima: E713 e a
+            // engrenagem da Segoe MDL2, e um caractere da area de uso privado
+            // colado no fonte depende de sobreviver a toda ferramenta que passar
+            // pelo arquivo.
+            NavItem config = new NavItem();
+            config.Text = T.NavSettings; config.Glyph = ""; config.Page = BuildPageConfig();
+
             NavItem sobre = new NavItem();
             sobre.Text = T.NavAbout; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
 
-            foreach (NavItem it in new NavItem[] { paineis, alertas, perfis, sobre })
+            foreach (NavItem it in new NavItem[] { paineis, alertas, perfis, config, sobre })
             {
                 _nav.Add(it);
                 it.Page.Dock = DockStyle.Fill;
@@ -835,6 +842,109 @@ namespace MhiagosControl
             _noteTimer.Start();
         }
 
+        // ---------------- pagina: Configuracoes ----------------
+
+        /// <summary>
+        /// Preferencias da maquina, em pagina propria.
+        ///
+        /// Elas moravam dentro do Sobre, entre a identidade do programa e a
+        /// isencao de responsabilidade, e isso as escondia duas vezes: quem
+        /// procura por uma preferencia nao clica em "Sobre", e quem clica em
+        /// "Sobre" quer creditos, nao um formulario. Sao de outra natureza que
+        /// o resto - valem para o programa todo, e nao para o perfil.
+        /// </summary>
+        private Control BuildPageConfig()
+        {
+            Panel page = new Panel();
+            page.BackColor = Color.Transparent;
+
+            Card c = new Card();
+            c.Title = T.NavSettings;
+            c.SetBounds(0, 0, 756, 402);
+            page.Controls.Add(c);
+
+            c.Controls.Add(MakeLabel(T.Language_, 16, 50, Ui.FontMed));
+
+            _lang = new Segmented();
+            _lang.SetItems("Português (BR)", "English (US)");
+            _lang.SetBounds(16, 74, 300, 30);
+            _lang.SelectedIndex = T.Pt ? 0 : 1;
+            // depois de fixar a posicao: o seletor avisa toda mudanca, e a
+            // primeira seria a nossa - reabriria a janela ao abrir a janela
+            _lang.SelectedIndexChanged += new EventHandler(OnLanguageChanged);
+            c.Controls.Add(_lang);
+
+            Label langNote = MakeLabel(T.LanguageNote, 328, 74, Ui.FontSmall);
+            langNote.Size = new Size(400, 30);
+            langNote.TextAlign = ContentAlignment.MiddleLeft;
+            langNote.ForeColor = Ui.Muted;
+            c.Controls.Add(langNote);
+
+            _tgAutostart = new Toggle();
+            _tgAutostart.Label = T.StartWithWindows;
+            _tgAutostart.SetBounds(16, 128, 400, 26);
+            _tgAutostart.Checked = Autostart.IsEnabled();
+            _tgAutostart.CheckedChanged += new EventHandler(OnToggleAutostart);
+            c.Controls.Add(_tgAutostart);
+
+            Toggle tgAll = new Toggle();
+            tgAll.Label = T.ShowAllSensors;
+            tgAll.SetBounds(16, 170, 480, 26);
+            tgAll.Checked = _cfg.ShowAllSensors;
+            tgAll.CheckedChanged += new EventHandler(OnToggleShowAll);
+            c.Controls.Add(tgAll);
+
+            Label allNote = MakeLabel(T.ShowAllNote, 16, 198, Ui.FontSmall);
+            allNote.Size = new Size(720, 30);
+            allNote.ForeColor = Ui.Muted;
+            c.Controls.Add(allNote);
+
+            _tgIdle = new Toggle();
+            _tgIdle.Label = T.BlankWhenIdle;
+            _tgIdle.SetBounds(16, 244, 480, 26);
+            _tgIdle.Checked = _cfg.IdleBlankMinutes > 0;
+            _tgIdle.CheckedChanged += new EventHandler(OnToggleIdle);
+            c.Controls.Add(_tgIdle);
+
+            _idleMin = new NumberBox();
+            _idleMin.Minimum = 1; _idleMin.Maximum = 999;
+            _idleMin.Value = _cfg.IdleBlankMinutes > 0 ? _cfg.IdleBlankMinutes : 15;
+            _idleMin.SetBounds(16, 274, 110, 32);
+            _idleMin.Enabled = _tgIdle.Checked;
+            _idleMin.ValueChanged += new EventHandler(OnIdleMinutes);
+            c.Controls.Add(_idleMin);
+
+            _idleNote = MakeLabel("", 134, 274, Ui.FontSmall);
+            _idleNote.Size = new Size(600, 32);
+            _idleNote.TextAlign = ContentAlignment.MiddleLeft;
+            _idleNote.ForeColor = Ui.Muted;
+            c.Controls.Add(_idleNote);
+
+            Label idleHint = MakeLabel(T.BlankWhenIdleNote, 16, 312, Ui.FontSmall);
+            idleHint.Size = new Size(720, 34);
+            idleHint.ForeColor = Ui.Muted;
+            c.Controls.Add(idleHint);
+
+            Label onde = MakeLabel(T.DataPathLabel + "  " + Paths.DataDir, 16, 356, Ui.FontSmall);
+            onde.Size = new Size(560, 30);
+            onde.TextAlign = ContentAlignment.MiddleLeft;
+            onde.ForeColor = Ui.Faint;
+            c.Controls.Add(onde);
+
+            FlatBtn abrir = new FlatBtn();
+            abrir.Text = T.OpenFolder;
+            abrir.SetBounds(600, 354, 140, 32);
+            abrir.Click += delegate
+            {
+                try { System.Diagnostics.Process.Start("explorer.exe", Paths.DataDir); }
+                catch (Exception ex) { Log.Error("abrir pasta de dados", ex); }
+            };
+            c.Controls.Add(abrir);
+
+            AtualizarOcioso();
+            return page;
+        }
+
         // ---------------- pagina: Sobre ----------------
 
         private Control BuildPageSobre()
@@ -842,14 +952,14 @@ namespace MhiagosControl
             Panel page = new Panel();
             page.BackColor = Color.Transparent;
 
-            // A unica pagina que rola: identidade, idioma, fontes, creditos e
-            // isencao passam do que cabe em 818 px, e cortar qualquer um deles
-            // seria pior do que rolar.
+            // Continua rolando: mesmo sem as preferencias, identidade, fontes,
+            // creditos e isencao passam dos 818 px, e cortar a isencao para
+            // caber seria trocar o que importa pelo que cabe.
             page.AutoScroll = true;
 
             Card c = new Card();
             c.Title = T.NavAbout;
-            c.SetBounds(0, 0, 736, 546);
+            c.SetBounds(0, 0, 736, 222);
             page.Controls.Add(c);
 
             Label t = MakeLabel(T.AppName, 16, 50, Ui.FontTitle);
@@ -861,102 +971,23 @@ namespace MhiagosControl
             d.ForeColor = Ui.Muted;
             c.Controls.Add(d);
 
-            c.Controls.Add(MakeLabel(T.Language_, 16, 128, Ui.FontMed));
-
-            _lang = new Segmented();
-            _lang.SetItems("Português (BR)", "English (US)");
-            _lang.SetBounds(16, 148, 300, 30);
-            _lang.SelectedIndex = T.Pt ? 0 : 1;
-            // depois de fixar a posicao: o seletor avisa toda mudanca, e a
-            // primeira seria a nossa - reabriria a janela ao abrir a janela
-            _lang.SelectedIndexChanged += new EventHandler(OnLanguageChanged);
-            c.Controls.Add(_lang);
-
-            Label langNote = MakeLabel(T.LanguageNote, 328, 148, Ui.FontSmall);
-            langNote.Size = new Size(400, 30);
-            langNote.TextAlign = ContentAlignment.MiddleLeft;
-            langNote.ForeColor = Ui.Muted;
-            c.Controls.Add(langNote);
-
-            _tgAutostart = new Toggle();
-            _tgAutostart.Label = T.StartWithWindows;
-            _tgAutostart.SetBounds(16, 190, 400, 26);
-            _tgAutostart.Checked = Autostart.IsEnabled();
-            _tgAutostart.CheckedChanged += new EventHandler(OnToggleAutostart);
-            c.Controls.Add(_tgAutostart);
-
-            Toggle tgAll = new Toggle();
-            tgAll.Label = T.ShowAllSensors;
-            tgAll.SetBounds(16, 222, 480, 26);
-            tgAll.Checked = _cfg.ShowAllSensors;
-            tgAll.CheckedChanged += new EventHandler(OnToggleShowAll);
-            c.Controls.Add(tgAll);
-
-            Label allNote = MakeLabel(T.ShowAllNote, 16, 250, Ui.FontSmall);
-            allNote.Size = new Size(700, 30);
-            allNote.ForeColor = Ui.Muted;
-            c.Controls.Add(allNote);
-
-            _tgIdle = new Toggle();
-            _tgIdle.Label = T.BlankWhenIdle;
-            _tgIdle.SetBounds(16, 288, 480, 26);
-            _tgIdle.Checked = _cfg.IdleBlankMinutes > 0;
-            _tgIdle.CheckedChanged += new EventHandler(OnToggleIdle);
-            c.Controls.Add(_tgIdle);
-
-            _idleMin = new NumberBox();
-            _idleMin.Minimum = 1; _idleMin.Maximum = 999;
-            _idleMin.Value = _cfg.IdleBlankMinutes > 0 ? _cfg.IdleBlankMinutes : 15;
-            _idleMin.SetBounds(16, 318, 110, 32);
-            _idleMin.Enabled = _tgIdle.Checked;
-            _idleMin.ValueChanged += new EventHandler(OnIdleMinutes);
-            c.Controls.Add(_idleMin);
-
-            _idleNote = MakeLabel("", 134, 318, Ui.FontSmall);
-            _idleNote.Size = new Size(590, 32);
-            _idleNote.TextAlign = ContentAlignment.MiddleLeft;
-            _idleNote.ForeColor = Ui.Muted;
-            c.Controls.Add(_idleNote);
-
-            Label idleHint = MakeLabel(T.BlankWhenIdleNote, 16, 354, Ui.FontSmall);
-            idleHint.Size = new Size(700, 30);
-            idleHint.ForeColor = Ui.Muted;
-            c.Controls.Add(idleHint);
-
-            AtualizarOcioso();
-
             // Quais fontes responderam, contado da propria lista de sensores.
             // Antes, perder o HWiNFO so aparecia no log: o aplicativo seguia
             // sem temperatura nem potencia da CPU e nada em tela dizia por que.
-            c.Controls.Add(MakeLabel(T.SensorSources, 16, 390, Ui.FontMed));
+            c.Controls.Add(MakeLabel(T.SensorSources, 16, 134, Ui.FontMed));
 
             // Altura fixa para as tres linhas do pior caso: com o aviso, a
             // contagem passa a dividir espaco com duas linhas de explicacao, e
             // dimensionar so para o caso bom cortava justamente o texto que
             // existe para ser lido.
-            Label fontes = MakeLabel(TextoDasFontes(), 16, 410, Ui.FontSmall);
+            Label fontes = MakeLabel(TextoDasFontes(), 16, 154, Ui.FontSmall);
             fontes.Size = new Size(716, 52);
             fontes.ForeColor = SemHwInfo() ? Ui.Warn : Ui.Muted;
             c.Controls.Add(fontes);
 
-            Label paths = MakeLabel(T.DataPathLabel + "\n" + Paths.DataDir, 16, 472, Ui.FontSmall);
-            paths.Size = new Size(700, 34);
-            paths.ForeColor = Ui.Muted;
-            c.Controls.Add(paths);
-
-            FlatBtn open = new FlatBtn();
-            open.Text = T.OpenFolder;
-            open.SetBounds(16, 498, 130, 32);
-            open.Click += delegate
-            {
-                try { System.Diagnostics.Process.Start("explorer.exe", Paths.DataDir); }
-                catch (Exception ex) { Log.Error("abrir pasta de dados", ex); }
-            };
-            c.Controls.Add(open);
-
             Card cr = new Card();
             cr.Title = T.ProjectAndCredits;
-            cr.SetBounds(0, 558, 736, 140);
+            cr.SetBounds(0, 234, 736, 140);
             page.Controls.Add(cr);
 
             Label autor = MakeLabel(T.CreatedBy, 16, 48, Ui.FontMed);
@@ -983,7 +1014,7 @@ namespace MhiagosControl
 
             Card cd = new Card();
             cd.Title = T.DisclaimerTitle;
-            cd.SetBounds(0, 710, 736, 278);
+            cd.SetBounds(0, 386, 736, 278);
             page.Controls.Add(cd);
 
             Label disc = MakeLabel(T.Disclaimer, 16, 46, Ui.FontSmall);
