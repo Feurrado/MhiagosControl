@@ -91,6 +91,8 @@ namespace MhiagosControl
         /// </summary>
         private void AbrirSensores()
         {
+            ConferirMotor();
+
             // qualificado: System.Threading tambem tem um Timer
             _demora = new System.Windows.Forms.Timer();
             _demora.Interval = 3000;
@@ -120,6 +122,37 @@ namespace MhiagosControl
             init.IsBackground = true;
             init.Name = "SensorInit";
             init.Start();
+        }
+
+        /// <summary>
+        /// Oferece adotar a biblioteca do HWiNFO da instalacao de fabrica.
+        ///
+        /// Acontece ANTES de abrir as fontes, e nao depois de falhar: assim a
+        /// copia entra a tempo de ser usada nesta mesma execucao, sem reabrir
+        /// nada nem pedir reinicio.
+        ///
+        /// So pergunta quando ha o que oferecer. Se a biblioteca nao existe em
+        /// lugar nenhum, calar aqui e proposital - o aviso fica na aba Sobre,
+        /// onde informa sem cobrar nada a cada arranque.
+        /// </summary>
+        private void ConferirMotor()
+        {
+            try
+            {
+                if (HwInfo.Installed) return;
+                string origem = HwInfo.OriginalInstallCopy();
+                if (origem == null) return;
+
+                DialogResult r = MessageBox.Show(
+                    T.AdoptEngineQuestion(origem, HwInfo.EnginePath),
+                    T.AdoptEngineTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (r != DialogResult.Yes) { Log.Write("copia da biblioteca recusada pelo usuario"); return; }
+
+                string erro;
+                if (!HwInfo.Adotar(origem, out erro))
+                    MessageBox.Show(T.AdoptFailed(erro), T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex) { Log.Error("conferencia do motor de sensores", ex); }
         }
 
         private delegate void SensoresProntosHandler(Exception falha);

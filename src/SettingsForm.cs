@@ -666,9 +666,14 @@ namespace MhiagosControl
             Panel page = new Panel();
             page.BackColor = Color.Transparent;
 
+            // A unica pagina que rola: identidade, idioma, fontes, creditos e
+            // isencao passam do que cabe em 818 px, e cortar qualquer um deles
+            // seria pior do que rolar.
+            page.AutoScroll = true;
+
             Card c = new Card();
             c.Title = T.NavAbout;
-            c.SetBounds(0, 0, 756, 374);
+            c.SetBounds(0, 0, 736, 456);
             page.Controls.Add(c);
 
             Label t = MakeLabel(T.AppName, 16, 50, Ui.FontTitle);
@@ -716,14 +721,28 @@ namespace MhiagosControl
             allNote.ForeColor = Ui.Muted;
             c.Controls.Add(allNote);
 
-            Label paths = MakeLabel(T.DataPathLabel + "\n" + Paths.DataDir, 16, 286, Ui.FontSmall);
+            // Quais fontes responderam, contado da propria lista de sensores.
+            // Antes, perder o HWiNFO so aparecia no log: o aplicativo seguia
+            // sem temperatura nem potencia da CPU e nada em tela dizia por que.
+            c.Controls.Add(MakeLabel(T.SensorSources, 16, 286, Ui.FontMed));
+
+            // Altura fixa para as tres linhas do pior caso: com o aviso, a
+            // contagem passa a dividir espaco com duas linhas de explicacao, e
+            // dimensionar so para o caso bom cortava justamente o texto que
+            // existe para ser lido.
+            Label fontes = MakeLabel(TextoDasFontes(), 16, 306, Ui.FontSmall);
+            fontes.Size = new Size(716, 52);
+            fontes.ForeColor = SemHwInfo() ? Ui.Warn : Ui.Muted;
+            c.Controls.Add(fontes);
+
+            Label paths = MakeLabel(T.DataPathLabel + "\n" + Paths.DataDir, 16, 368, Ui.FontSmall);
             paths.Size = new Size(700, 34);
             paths.ForeColor = Ui.Muted;
             c.Controls.Add(paths);
 
             FlatBtn open = new FlatBtn();
             open.Text = T.OpenFolder;
-            open.SetBounds(16, 326, 130, 32);
+            open.SetBounds(16, 408, 130, 32);
             open.Click += delegate
             {
                 try { System.Diagnostics.Process.Start("explorer.exe", Paths.DataDir); }
@@ -733,7 +752,7 @@ namespace MhiagosControl
 
             Card cr = new Card();
             cr.Title = T.ProjectAndCredits;
-            cr.SetBounds(0, 386, 756, 140);
+            cr.SetBounds(0, 468, 736, 140);
             page.Controls.Add(cr);
 
             Label autor = MakeLabel(T.CreatedBy, 16, 48, Ui.FontMed);
@@ -760,7 +779,7 @@ namespace MhiagosControl
 
             Card cd = new Card();
             cd.Title = T.DisclaimerTitle;
-            cd.SetBounds(0, 538, 756, 278);
+            cd.SetBounds(0, 620, 736, 278);
             page.Controls.Add(cd);
 
             Label disc = MakeLabel(T.Disclaimer, 16, 46, Ui.FontSmall);
@@ -799,32 +818,28 @@ namespace MhiagosControl
         private const string Repositorio = "https://github.com/Feurrado/MhiagosControl";
 
         /// <summary>
-        /// Texto de isencao.
+        /// Resumo de quem respondeu, contado pela procedencia das entradas.
         ///
-        /// Repete em tela o essencial do LICENSE porque quem instala um binario
-        /// raramente abre o arquivo de licenca - e e justamente a pessoa que
-        /// precisa saber que o programa fala com o hardware por sua conta e
-        /// risco. Vai alem do MIT no que ele nao cobre: marcas de terceiros,
-        /// engenharia reversa e garantia do equipamento.
+        /// Sai da propria lista de sensores em vez de perguntar ao motor: e a
+        /// mesma informacao, vinda de onde ela e verdade - se a fonte nao
+        /// publicou nada, ela nao esta ali, independentemente do que a camada
+        /// de baixo ache que abriu.
         /// </summary>
-        private const string Disclaimer =
-            "Este é um projeto pessoal, independente e sem fins lucrativos, feito para interoperar com\n" +
-            "hardware que o autor possui. Não tem qualquer vínculo, patrocínio, afiliação ou aprovação\n" +
-            "da Rise Mode, da Ocypus, da SHENZHEN SHINETEK, da REALiX s.r.o. ou de qualquer outro\n" +
-            "fabricante. Todas as marcas citadas pertencem aos seus respectivos donos e aparecem apenas\n" +
-            "para identificar o equipamento com que o programa se comunica.\n" +
-            "\n" +
-            "O protocolo do painel foi levantado por engenharia reversa do próprio equipamento, com a\n" +
-            "finalidade exclusiva de interoperabilidade — o programa não contém, não copia e não\n" +
-            "redistribui código do software original.\n" +
-            "\n" +
-            "O PROGRAMA É FORNECIDO \"COMO ESTÁ\", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU IMPLÍCITA,\n" +
-            "INCLUINDO AS DE COMERCIALIZAÇÃO, ADEQUAÇÃO A UM FIM ESPECÍFICO E NÃO VIOLAÇÃO. O USO É POR\n" +
-            "CONTA E RISCO DE QUEM O EXECUTA. EM NENHUMA HIPÓTESE O AUTOR RESPONDE POR QUALQUER DANO,\n" +
-            "DIRETO OU INDIRETO, INCLUINDO DANO A EQUIPAMENTO, PERDA DE DADOS OU LUCROS CESSANTES,\n" +
-            "DECORRENTE DO USO OU DA IMPOSSIBILIDADE DE USO DESTE PROGRAMA.\n" +
-            "\n" +
-            "Usar este programa pode implicar a perda da garantia do equipamento. Verifique antes.";
+        private string TextoDasFontes()
+        {
+            int hw = 0, lhm = 0;
+            foreach (SensorEntry s in _sensors)
+                if (s.Source == "HWiNFO") hw++; else lhm++;
+
+            string linha = T.SensorsFrom("HWiNFO", hw) + "   ·   " + T.SensorsFrom("LibreHardwareMonitor", lhm);
+            return hw == 0 ? linha + "\n" + T.EngineMissing : linha;
+        }
+
+        private bool SemHwInfo()
+        {
+            foreach (SensorEntry s in _sensors) if (s.Source == "HWiNFO") return false;
+            return true;
+        }
 
         private static void Abrir(string url)
         {

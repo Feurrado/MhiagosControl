@@ -281,6 +281,50 @@ namespace MhiagosControl
             }
         }
 
+        // ---------------- motor de sensores ----------------
+
+        public static string SensorSources { get { return P("Fontes de sensores", "Sensor sources"); } }
+        public static string SensorsFrom(string fonte, int n)
+        {
+            return P(fonte + ": " + n + " sensores", fonte + ": " + n + " sensors");
+        }
+
+        public static string EngineMissing
+        {
+            get
+            {
+                return P(
+                    "Sem a biblioteca do HWiNFO em engine\\, temperatura, potência e clock real da CPU não são lidos.\n" +
+                    "Copie api-ms-win-core-sysinfo-825-64.dll da instalação do CPU TEMP Monitor para a pasta engine\\.",
+                    "Without the HWiNFO library in engine\\, CPU temperature, power and real clock are not read.\n" +
+                    "Copy api-ms-win-core-sysinfo-825-64.dll from the CPU TEMP Monitor installation into engine\\.");
+            }
+        }
+
+        public static string AdoptEngineTitle { get { return P("Biblioteca de sensores", "Sensor library"); } }
+
+        public static string AdoptEngineQuestion(string origem, string destino)
+        {
+            return P(
+                "A biblioteca que lê temperatura e potência da CPU não está nesta instalação, mas foi encontrada em:\n\n" +
+                origem + "\n\n" +
+                "Copiar para a pasta do aplicativo? Isso torna o Mhiagos Control independente do software de fábrica, " +
+                "que poderá ser desinstalado sem perder esses sensores.\n\n" +
+                "Destino: " + destino,
+
+                "The library that reads CPU temperature and power is not in this installation, but was found at:\n\n" +
+                origem + "\n\n" +
+                "Copy it into the application folder? This makes Mhiagos Control independent of the factory software, " +
+                "which can then be uninstalled without losing those sensors.\n\n" +
+                "Destination: " + destino);
+        }
+
+        public static string AdoptFailed(string erro)
+        {
+            return P("Não foi possível copiar a biblioteca:\n\n" + erro,
+                     "Could not copy the library:\n\n" + erro);
+        }
+
         // ---------------- tela de carregamento ----------------
 
         public static string Starting { get { return P("Iniciando...", "Starting..."); } }

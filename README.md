@@ -175,11 +175,30 @@ O `Init` falha com código **1** sem elevação, porque a biblioteca precisa
 registrar e subir seu driver.
 
 > **A DLL não está neste repositório** — é software comercial de terceiros e
-> não pode ser redistribuída (veja *Licença*). Para habilitar essa fonte, copie
-> `api-ms-win-core-sysinfo-825-64.dll` da instalação do *CPU TEMP Monitor* que
-> acompanha o produto (`C:\Program Files\CPU TEMP Monitor\`) para `lib\` antes
-> de compilar. Sem ela o `build.ps1` avisa e o aplicativo sobe usando apenas a
-> fonte de reserva.
+> não pode ser redistribuída (veja *Licença*).
+
+#### Como colocar a biblioteca na sua instalação
+
+Ela é carregada **apenas de `bin\engine\`**. O aplicativo não lê da pasta do
+software de fábrica: fazer isso o deixaria preso ao programa que ele existe para
+substituir, e desinstalar o original tiraria temperatura e potência sem dizer
+nada em tela.
+
+Há dois caminhos, e os dois são você copiando um arquivo que já veio com o
+produto que comprou — não o projeto redistribuindo:
+
+1. **Na primeira execução**, se a biblioteca não estiver em `engine\` e o *CPU
+   TEMP Monitor* estiver instalado, o aplicativo encontra a cópia e **pergunta**
+   se quer trazê-la. Um clique e a instalação fica autônoma; o software de
+   fábrica pode ser desinstalado depois.
+2. **Ao compilar**, ponha `api-ms-win-core-sysinfo-825-64.dll` em `lib\` e o
+   `build.ps1` a copia para `bin\engine\`. Sem ela o script avisa.
+
+Se nenhum dos dois acontecer, o aplicativo sobe com a fonte de reserva e diz
+isso **na aba Sobre**, em *Fontes de sensores* — não só no log.
+
+Sem o *CPU TEMP Monitor* instalado e sem uma cópia guardada, a biblioteca só
+vem do instalador que acompanha o produto.
 
 ### LibreHardwareMonitor (reserva)
 

@@ -90,15 +90,84 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Locais procurados, em ordem. Preferimos uma copia ao lado do
-        /// executavel para que o aplicativo nao dependa da instalacao original.
+        /// Onde a biblioteca fica: em engine\, ao lado do executavel.
+        ///
+        /// A instalacao do software de fabrica NAO entra nesta lista. Carregar
+        /// de la deixava o aplicativo preso a um programa que ele existe para
+        /// substituir: desinstalar o original tirava temperatura e potencia sem
+        /// dizer nada em tela. Se a biblioteca so existe la, o caminho e copiar
+        /// uma vez - veja Adotar.
         /// </summary>
+        public static string EnginePath
+        {
+            get { return Path.Combine(Path.Combine(Paths.ExeDir, "engine"), FileName); }
+        }
+
         private static IEnumerable<string> Candidates()
         {
-            string f = FileName;
-            yield return Path.Combine(Path.Combine(Paths.ExeDir, "engine"), f);
-            yield return Path.Combine(Paths.ExeDir, f);
-            yield return Path.Combine(@"C:\Program Files\CPU TEMP Monitor", f);
+            yield return EnginePath;
+            yield return Path.Combine(Paths.ExeDir, FileName);   // formato antigo, sem engine\
+        }
+
+        /// <summary>A biblioteca ja pertence a esta instalacao.</summary>
+        public static bool Installed
+        {
+            get
+            {
+                foreach (string p in Candidates()) if (File.Exists(p)) return true;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Procura a biblioteca na instalacao do software de fabrica, apenas
+        /// para oferecer a copia. Nada e carregado daqui.
+        /// </summary>
+        public static string OriginalInstallCopy()
+        {
+            try
+            {
+                foreach (string raiz in ProgramFiles())
+                {
+                    string p = Path.Combine(Path.Combine(raiz, "CPU TEMP Monitor"), FileName);
+                    if (File.Exists(p)) return p;
+                }
+            }
+            catch (Exception ex) { Log.Error("procura da biblioteca na instalacao original", ex); }
+            return null;
+        }
+
+        private static IEnumerable<string> ProgramFiles()
+        {
+            yield return Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            yield return Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        }
+
+        /// <summary>
+        /// Copia a biblioteca para engine\, tornando esta instalacao autonoma.
+        ///
+        /// E o usuario copiando, na propria maquina, um arquivo que ja veio com
+        /// o produto que ele comprou - nao o projeto redistribuindo. Por isso a
+        /// copia e um gesto explicito, e nao algo que acontece sozinho.
+        /// </summary>
+        public static bool Adotar(string origem, out string erro)
+        {
+            erro = null;
+            try
+            {
+                string destino = EnginePath;
+                string dir = Path.GetDirectoryName(destino);
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                File.Copy(origem, destino, true);
+                Log.Write("biblioteca do HWiNFO copiada de " + origem + " para " + destino);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                erro = ex.Message;
+                Log.Error("copia da biblioteca para engine", ex);
+                return false;
+            }
         }
 
         public bool Open()
@@ -108,7 +177,7 @@ namespace MhiagosControl
                 if (!File.Exists(path)) continue;
                 if (TryLoad(path)) return true;
             }
-            Log.Write("HWiNFO: " + FileName + " nao encontrada - seguindo sem essa fonte");
+            Log.Write("HWiNFO: " + FileName + " nao encontrada em engine\\ - seguindo sem essa fonte");
             return false;
         }
 
