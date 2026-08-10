@@ -7,8 +7,9 @@ cooler**, replacing the bundled *CPU TEMP Monitor* software
 It can display **any sensor** on the two 3-digit panels, instead of the two
 fixed metrics the factory software offers.
 
-> The application interface is in Brazilian Portuguese. This README is in
-> English; the screenshots show the app as it ships.
+> The interface speaks **Brazilian Portuguese and English**, picked from the
+> Windows language on first run and switchable under *About*. Screenshots here
+> are in English.
 
 ---
 
@@ -19,7 +20,7 @@ fixed metrics the factory software offers.
 | ![Panels](docs/panels.png) | ![Alerts](docs/alerts.png) |
 | **Panels** — pick the sensor, scale and units for each display, with a live preview over the part | **Alerts** — a threshold per display, rearmed on the way down |
 | ![Profiles](docs/profiles.png) | ![About](docs/about.png) |
-| **Profiles** — saved sets, switchable from the tray menu | **About** — autostart, credits and disclaimer |
+| **Profiles** — each saved set shows what it puts on the display, previewed before you commit to it | **About** — language, autostart, credits and disclaimer |
 
 The preview reproduces the top view of the cooler and its seven-segment display
 as it looks on the device: the two panels stacked, `°C`/`°F` over `%`/`W`, white
@@ -34,6 +35,14 @@ The sensor for each display is chosen in a dedicated window, opened by the
 and preview, so twice as many rows fit — and the category pills narrow the search
 down to the hardware you are after. Text search matches name, category and type,
 all terms at once. Double click or <kbd>Enter</kbd> confirms.
+
+### Profiles
+
+A profile is a saved pair of sensors plus their units, scale and thresholds.
+The list shows what each one sends to the display, and selecting one previews it
+on the part before *Apply profile* makes it the live one — applying saves right
+away, so an "active" profile always survives closing the window. Every profile
+also appears in the tray menu, for switching without opening the settings at all.
 
 ### Loading screen
 
@@ -215,6 +224,10 @@ Output goes to `bin\MhiagosControl.exe`.
    panel.
 3. The icon stays in the tray. Double click reopens the settings.
 
+*Save* writes to disk and leaves the window open — panel tweaks rarely come one
+at a time, so closing on every save just meant reopening. *Close* asks before
+discarding anything unsaved.
+
 The original software does not need to be installed.
 
 ### Application data
@@ -224,7 +237,7 @@ Lives in `%LOCALAPPDATA%\MhiagosControl\` — reachable from the tray menu under
 
 | File | Contents |
 |------|----------|
-| `config.ini` | profiles, sensor per panel, units, thresholds |
+| `config.ini` | profiles, sensor per panel, units, thresholds, interface language |
 | `log.txt` | diagnostics, rotated at 512 KB (`log.txt.1`) |
 
 Settings from older versions (including from when the project was called
@@ -268,6 +281,16 @@ Settings from older versions (including from when the project was called
 - List height is **rounded down to a multiple of the row**; the remainder becomes
   panel padding. Without it the last row showed up cut in half, as if there were
   a hidden item where there was none.
+- **Switching language reopens the window** instead of relabelling it in place.
+  Relabelling would need every control to carry its string key and know how to
+  re-translate itself — dozens of places, and whatever was missed would sit there
+  in the old language unnoticed. Rebuilding leaves no corner untranslated.
+  Pending edits are written to the profile first, so nothing is lost.
+- Category names are **stored in Portuguese and translated at draw time**. They
+  are grouping keys, not display text; translating them at the source would break
+  the comparison that puts a sensor under the right heading.
+- Sensor **search matches both names** of a category, so typing "memory" finds
+  what the English UI calls Memory and the config calls `Memória`.
 
 ---
 

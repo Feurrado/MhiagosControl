@@ -25,6 +25,8 @@ namespace MhiagosControl
         private Profile _current;
         private bool _loading = false;
         private Timer _tick;
+        private Label _footerNote;
+        private Timer _noteTimer;
 
         // pagina Paineis
         private SensorPicker _pick1, _pick2;
@@ -38,10 +40,27 @@ namespace MhiagosControl
         private Label _alertInfo1, _alertInfo2;
 
         // pagina Perfis
-        private ListBox _profileList;
+        private ProfileList _profileList;
+        private PanelPreview _profilePreview;
+        private Label _profileInfo;
+        private FlatBtn _btnApply;
 
         // pagina Sobre
         private Toggle _tgAutostart;
+        private Segmented _lang;
+
+        /// <summary>Ha edicao ainda nao gravada. Governa o aviso ao fechar.</summary>
+        private bool _dirty = false;
+
+        /// <summary>
+        /// Alguma gravacao ja aconteceu nesta sessao da janela.
+        ///
+        /// Com Salvar deixando a janela aberta, o resultado do dialogo nao pode
+        /// mais ser lido como "clicou em Salvar": quem chama usa DialogResult
+        /// para decidir se recarrega a configuracao do disco, e recarregar
+        /// depois de uma gravacao valida jogaria fora o que acabou de ser salvo.
+        /// </summary>
+        private bool _saved = false;
 
         private static readonly int[] DivValues = new int[] { 0, 1, 10, 100, 1000 };
         private static readonly string[] DivLabels = new string[] { "Auto", "÷1", "÷10", "÷100", "÷1000" };
@@ -54,7 +73,7 @@ namespace MhiagosControl
             _relist = relist;
             _current = cfg.Active;
 
-            Text = "Mhiagos Control";
+            Text = T.AppName;
             Icon = Assets.AppIcon;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -83,7 +102,8 @@ namespace MhiagosControl
             _nav.Dock = DockStyle.Left;
             _nav.Width = 210;
             _nav.Logo = IconImage();
-            _nav.Subtitle = "perfil: " + _current.Name;
+            _nav.SubtitleCaption = T.ActiveProfile;
+            _nav.Subtitle = _current.Name;
             _nav.SelectionChanged += delegate { ShowPage(); };
             Controls.Add(_nav);
 
@@ -93,18 +113,27 @@ namespace MhiagosControl
             footer.BackColor = Ui.Window;
             Controls.Add(footer);
 
+            // Salvar grava e FICA. Fechar a janela a cada gravacao obrigava a
+            // reabri-la para o ajuste seguinte, e um ajuste de painel quase
+            // nunca vem sozinho.
             FlatBtn save = new FlatBtn();
-            save.Text = "Salvar";
+            save.Text = T.Save;
             save.Primary = true;
             save.SetBounds(ClientSize.Width - 210, 14, 96, 32);
-            save.Click += new EventHandler(OnOk);
+            save.Click += new EventHandler(OnSave);
             footer.Controls.Add(save);
 
-            FlatBtn cancel = new FlatBtn();
-            cancel.Text = "Cancelar";
-            cancel.SetBounds(ClientSize.Width - 106, 14, 96, 32);
-            cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
-            footer.Controls.Add(cancel);
+            FlatBtn close = new FlatBtn();
+            close.Text = T.Close;
+            close.SetBounds(ClientSize.Width - 106, 14, 96, 32);
+            close.Click += delegate { Close(); };
+            footer.Controls.Add(close);
+
+            _footerNote = MakeLabel("", 18, 22, Ui.FontSmall);
+            _footerNote.Size = new Size(320, 18);
+            _footerNote.ForeColor = Ui.Accent;
+            _footerNote.Visible = false;
+            footer.Controls.Add(_footerNote);
 
             _host = new Panel();
             _host.Dock = DockStyle.Fill;
@@ -124,16 +153,16 @@ namespace MhiagosControl
         private void BuildPages()
         {
             NavItem paineis = new NavItem();
-            paineis.Text = "Painéis"; paineis.Glyph = ""; paineis.Page = BuildPagePaineis();
+            paineis.Text = T.NavPanels; paineis.Glyph = ""; paineis.Page = BuildPagePaineis();
 
             NavItem alertas = new NavItem();
-            alertas.Text = "Alertas"; alertas.Glyph = ""; alertas.Page = BuildPageAlertas();
+            alertas.Text = T.NavAlerts; alertas.Glyph = ""; alertas.Page = BuildPageAlertas();
 
             NavItem perfis = new NavItem();
-            perfis.Text = "Perfis"; perfis.Glyph = ""; perfis.Page = BuildPagePerfis();
+            perfis.Text = T.NavProfiles; perfis.Glyph = ""; perfis.Page = BuildPagePerfis();
 
             NavItem sobre = new NavItem();
-            sobre.Text = "Sobre"; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
+            sobre.Text = T.NavAbout; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
 
             foreach (NavItem it in new NavItem[] { paineis, alertas, perfis, sobre })
             {
@@ -177,19 +206,19 @@ namespace MhiagosControl
             _pick2.SetSensors(Clone(_sensors));
 
             Card c1 = new Card();
-            c1.Title = "Painel 1  ·  esquerdo";
+            c1.Title = T.Panel1;
             c1.SetBounds(0, 0, 370, 268);
             page.Controls.Add(c1);
 
             _slot1 = new SensorSlot();
             _slot1.SetBounds(12, 48, 346, 80);
-            _slot1.Button.Click += delegate { TrocarSensor(_pick1, "Sensor do painel 1"); };
+            _slot1.Button.Click += delegate { TrocarSensor(_pick1, T.PickSensor1); };
             c1.Controls.Add(_slot1);
 
-            c1.Controls.Add(MakeLabel("Escala", 14, 142, Ui.FontMed));
+            c1.Controls.Add(MakeLabel(T.Scale, 14, 142, Ui.FontMed));
             _div1 = MakeDivisorRow(c1, 14, 162, 1);
 
-            c1.Controls.Add(MakeLabel("Unidade", 14, 200, Ui.FontMed));
+            c1.Controls.Add(MakeLabel(T.Unit, 14, 200, Ui.FontMed));
             _unit1 = new Segmented();
             _unit1.SetItems("°C", "°F");
             _unit1.SetBounds(14, 220, 140, 30);
@@ -197,19 +226,19 @@ namespace MhiagosControl
             c1.Controls.Add(_unit1);
 
             Card c2 = new Card();
-            c2.Title = "Painel 2  ·  direito";
+            c2.Title = T.Panel2;
             c2.SetBounds(386, 0, 370, 268);
             page.Controls.Add(c2);
 
             _slot2 = new SensorSlot();
             _slot2.SetBounds(12, 48, 346, 80);
-            _slot2.Button.Click += delegate { TrocarSensor(_pick2, "Sensor do painel 2"); };
+            _slot2.Button.Click += delegate { TrocarSensor(_pick2, T.PickSensor2); };
             c2.Controls.Add(_slot2);
 
-            c2.Controls.Add(MakeLabel("Escala", 14, 142, Ui.FontMed));
+            c2.Controls.Add(MakeLabel(T.Scale, 14, 162 - 20, Ui.FontMed));
             _div2 = MakeDivisorRow(c2, 14, 162, 2);
 
-            c2.Controls.Add(MakeLabel("Unidade", 14, 200, Ui.FontMed));
+            c2.Controls.Add(MakeLabel(T.Unit, 14, 200, Ui.FontMed));
             _unit2 = new Segmented();
             _unit2.SetItems("%", "W");
             _unit2.SetBounds(14, 220, 140, 30);
@@ -218,7 +247,7 @@ namespace MhiagosControl
 
 
             Card cp = new Card();
-            cp.Title = "Prévia";
+            cp.Title = T.Preview;
             cp.SetBounds(0, 280, 756, 532);
             page.Controls.Add(cp);
 
@@ -317,18 +346,14 @@ namespace MhiagosControl
             page.BackColor = Color.Transparent;
 
             Card c = new Card();
-            c.Title = "Limiares";
+            c.Title = T.Thresholds;
             c.SetBounds(0, 0, 756, 250);
             page.Controls.Add(c);
 
-            _alert1 = MakeLimiar(c, "Painel 1  ·  esquerdo", 16, 58, out _alertInfo1);
-            _alert2 = MakeLimiar(c, "Painel 2  ·  direito", 386, 58, out _alertInfo2);
+            _alert1 = MakeLimiar(c, T.Panel1, 16, 58, out _alertInfo1);
+            _alert2 = MakeLimiar(c, T.Panel2, 386, 58, out _alertInfo2);
 
-            Label note = MakeLabel(
-                "Zero desliga o aviso. O alerta dispara na subida e só rearma quando o valor cai abaixo do limiar —\n" +
-                "sem isso, um sensor oscilando no limite notificaria a cada ciclo. O ícone da bandeja ganha um ponto\n" +
-                "vermelho enquanto o alerta estiver ativo. Mostrador apagado não dispara alerta.",
-                16, 186, Ui.FontSmall);
+            Label note = MakeLabel(T.AlertsNote, 16, 186, Ui.FontSmall);
             note.Size = new Size(720, 52);
             note.ForeColor = Ui.Muted;
             c.Controls.Add(note);
@@ -341,7 +366,7 @@ namespace MhiagosControl
         {
             host.Controls.Add(MakeLabel(titulo, x, y, Ui.FontMed));
 
-            Label cap = MakeLabel("Avisar quando atingir", x, y + 24, Ui.FontSmall);
+            Label cap = MakeLabel(T.WarnWhenReaching, x, y + 24, Ui.FontSmall);
             cap.Size = new Size(320, 18);
             cap.ForeColor = Ui.Muted;
             host.Controls.Add(cap);
@@ -363,49 +388,105 @@ namespace MhiagosControl
 
         // ---------------- pagina: Perfis ----------------
 
+        /// <summary>
+        /// Perfis: a lista de um lado, o que o perfil selecionado poe no
+        /// mostrador do outro.
+        ///
+        /// A previa vem para ca porque a pergunta que se faz nesta pagina e
+        /// "qual deles eu quero agora", e ela nao se responde com uma lista de
+        /// nomes. Antes era preciso selecionar um perfil, ir ate a pagina de
+        /// paineis para ver o que ele mostra, voltar e repetir com o proximo.
+        /// </summary>
         private Control BuildPagePerfis()
         {
             Panel page = new Panel();
             page.BackColor = Color.Transparent;
 
             Card c = new Card();
-            c.Title = "Perfis salvos";
-            c.SetBounds(0, 0, 756, 420);
+            c.Title = T.SavedProfiles;
+            c.SetBounds(0, 0, 330, 566);
             page.Controls.Add(c);
 
-            _profileList = new ListBox();
-            _profileList.SetBounds(16, 50, 420, 300);
-            _profileList.BorderStyle = BorderStyle.FixedSingle;
-            _profileList.Font = Ui.FontBase;
-            _profileList.BackColor = Ui.SurfaceAlt;
-            _profileList.ForeColor = Ui.Text;
-            _profileList.SelectedIndexChanged += new EventHandler(OnProfileSelected);
+            _profileList = new ProfileList();
+            _profileList.SetBounds(12, 44, 306, 396);
+            _profileList.Resolve = NomeDoSensor;
+            _profileList.ActiveName = _cfg.ActiveName;
+            _profileList.SelectionChanged += new EventHandler(OnProfileSelected);
+            _profileList.ItemActivated += delegate { AplicarPerfil(); };
             c.Controls.Add(_profileList);
 
-            int bx = 452, by = 50;
-            c.Controls.Add(MakeSideButton("Novo", bx, by, new EventHandler(OnNewProfile)));
-            c.Controls.Add(MakeSideButton("Renomear", bx, by + 40, new EventHandler(OnRenameProfile)));
-            c.Controls.Add(MakeSideButton("Duplicar", bx, by + 80, new EventHandler(OnDuplicateProfile)));
-            FlatBtn del = MakeSideButton("Excluir", bx, by + 130, new EventHandler(OnDeleteProfile));
+            c.Controls.Add(MakeSideButton(T.New, 12, 452, 145, new EventHandler(OnNewProfile)));
+            c.Controls.Add(MakeSideButton(T.Rename, 173, 452, 145, new EventHandler(OnRenameProfile)));
+            c.Controls.Add(MakeSideButton(T.Duplicate, 12, 492, 145, new EventHandler(OnDuplicateProfile)));
+            FlatBtn del = MakeSideButton(T.Delete, 173, 492, 145, new EventHandler(OnDeleteProfile));
             del.Danger = true;
             c.Controls.Add(del);
 
-            Label note = MakeLabel(
-                "O perfil selecionado aqui é o que fica ativo ao salvar.\n" +
-                "Todos aparecem no menu da bandeja para troca rápida, sem abrir esta janela.",
-                16, 362, Ui.FontSmall);
-            note.Size = new Size(700, 40);
+            Card cv = new Card();
+            cv.Title = T.ProfilePreview;
+            cv.SetBounds(346, 0, 410, 566);
+            page.Controls.Add(cv);
+
+            _profilePreview = new PanelPreview();
+            _profilePreview.SetBounds(12, 44, 386, 372);
+            cv.Controls.Add(_profilePreview);
+
+            _profileInfo = MakeLabel("", 16, 428, Ui.FontSmall);
+            _profileInfo.Size = new Size(378, 66);
+            _profileInfo.ForeColor = Ui.Muted;
+            cv.Controls.Add(_profileInfo);
+
+            _btnApply = new FlatBtn();
+            _btnApply.Text = T.ApplyProfile;
+            _btnApply.Primary = true;
+            _btnApply.SetBounds(12, 508, 386, 40);
+            _btnApply.Click += delegate { AplicarPerfil(); };
+            cv.Controls.Add(_btnApply);
+
+            Label note = MakeLabel(T.ProfilesNote, 2, 578, Ui.FontSmall);
+            note.Size = new Size(750, 40);
             note.ForeColor = Ui.Muted;
-            c.Controls.Add(note);
+            page.Controls.Add(note);
 
             return page;
         }
 
-        private FlatBtn MakeSideButton(string text, int x, int y, EventHandler h)
+        /// <summary>Nome curto de um sensor, para o resumo de cada perfil.</summary>
+        private string NomeDoSensor(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            foreach (SensorEntry s in _sensors) if (s.Id == id) return s.Name;
+            return null;
+        }
+
+        /// <summary>
+        /// Torna ativo o perfil selecionado e grava.
+        ///
+        /// Aplicar e gravar sao o mesmo gesto de proposito: um perfil "ativo"
+        /// que nao sobreviveria a fechar a janela seria uma promessa falsa, e a
+        /// thread de atualizacao le o mesmo objeto de configuracao - o
+        /// mostrador muda no ciclo seguinte.
+        /// </summary>
+        private void AplicarPerfil()
+        {
+            Profile p = _profileList != null ? _profileList.Selected : _current;
+            if (p == null) return;
+
+            SaveToProfile();
+            _cfg.ActiveName = p.Name;
+            _cfg.Save();
+            _saved = true; _dirty = false;
+
+            _profileList.ActiveName = p.Name;
+            _profileList.Invalidate();
+            Aviso(T.ApplyProfile + ": " + p.Name);
+        }
+
+        private FlatBtn MakeSideButton(string text, int x, int y, int w, EventHandler h)
         {
             FlatBtn b = new FlatBtn();
             b.Text = text;
-            b.SetBounds(x, y, 130, 32);
+            b.SetBounds(x, y, w, 32);
             b.Click += h;
             return b;
         }
@@ -414,76 +495,168 @@ namespace MhiagosControl
         {
             if (_profileList == null) return;
             _loading = true;
-            _profileList.Items.Clear();
-            foreach (Profile p in _cfg.Profiles) _profileList.Items.Add(p);
-            _profileList.SelectedItem = _current;
+            _profileList.ActiveName = _cfg.ActiveName;
+            _profileList.SetItems(_cfg.Profiles, _current);
             _loading = false;
+            AtualizarPreviaDoPerfil();
+        }
+
+        /// <summary>Espelha o perfil selecionado no mostrador da direita.</summary>
+        private void AtualizarPreviaDoPerfil()
+        {
+            if (_profilePreview == null) return;
+            Profile p = _profileList != null && _profileList.Selected != null ? _profileList.Selected : _current;
+            if (p == null) return;
+
+            SensorEntry s1 = Achar(p.Panel1Id), s2 = Achar(p.Panel2Id);
+            PanelValue v1 = Scaling.Prepare(s1, Scaling.Effective(p.Divisor1, s1), p.Fahrenheit);
+            PanelValue v2 = Scaling.Prepare(s2, Scaling.Effective(p.Divisor2, s2), false);
+
+            _profilePreview.Value1 = v1.Value;
+            _profilePreview.Value2 = v2.Value;
+            _profilePreview.Fahrenheit = p.Fahrenheit;
+            _profilePreview.Percent = p.Percent;
+            _profilePreview.Alert1 = p.Alert1 > 0 && v1.Value.HasValue && v1.Value.Value >= p.Alert1;
+            _profilePreview.Alert2 = p.Alert2 > 0 && v2.Value.HasValue && v2.Value.Value >= p.Alert2;
+            _profilePreview.Invalidate();
+
+            string n1 = NomeDoSensor(p.Panel1Id), n2 = NomeDoSensor(p.Panel2Id);
+            _profileInfo.Text =
+                T.PanelShort(1) + ":  " + (n1 ?? "—") + "   (" + (p.Fahrenheit ? "°F" : "°C") + ")\n" +
+                T.PanelShort(2) + ":  " + (n2 ?? "—") + "   (" + (p.Percent ? "%" : "W") + ")\n" +
+                T.Thresholds + ":  " + (p.Alert1 > 0 ? p.Alert1.ToString() : T.Off) +
+                "   ·   " + (p.Alert2 > 0 ? p.Alert2.ToString() : T.Off);
+
+            bool ativo = string.Equals(p.Name, _cfg.ActiveName, StringComparison.Ordinal);
+            _btnApply.Text = ativo ? T.ApplyProfile + "  (" + T.AlreadyActive + ")" : T.ApplyProfile;
+            _btnApply.Enabled = !ativo;
+            _btnApply.Invalidate();
+        }
+
+        /// <summary>
+        /// Leva o ciclo tambem para a lista bruta.
+        ///
+        /// Os seletores trabalham sobre copias; a previa de perfil consulta a
+        /// lista original, que sem isto ficaria congelada no instante em que a
+        /// janela abriu.
+        /// </summary>
+        private void AtualizarValores(Dictionary<string, float> snap)
+        {
+            if (snap == null || _sensors == null) return;
+            foreach (SensorEntry s in _sensors)
+            {
+                float v;
+                if (snap.TryGetValue(s.Id, out v)) s.Value = v;
+            }
+        }
+
+        private SensorEntry Achar(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            foreach (SensorEntry s in _sensors) if (s.Id == id) return s;
+            return null;
         }
 
         private void OnProfileSelected(object sender, EventArgs e)
         {
             if (_loading) return;
-            Profile p = _profileList.SelectedItem as Profile;
+            Profile p = _profileList.Selected;
             if (p == null || p == _current) return;
             SaveToProfile();
             _current = p;
-            _nav.Subtitle = "perfil: " + _current.Name;
+            _nav.Subtitle = _current.Name;
             _nav.Invalidate();
             LoadFromProfile();
+            AtualizarPreviaDoPerfil();
         }
 
         private void OnNewProfile(object sender, EventArgs e)
         {
-            string name = Prompt("Nome do novo perfil:", "Perfil " + (_cfg.Profiles.Count + 1));
+            string name = Prompt(T.NewProfileName, T.DefaultProfileName(_cfg.Profiles.Count + 1));
             if (string.IsNullOrEmpty(name)) return;
-            if (_cfg.NameExists(name)) { Warn("Já existe um perfil com esse nome."); return; }
+            if (_cfg.NameExists(name)) { Warn(T.NameTaken); return; }
             SaveToProfile();
             Profile np = new Profile();
             np.Name = name;
             _cfg.Profiles.Add(np);
             _current = np;
+            _dirty = true;
+            _nav.Subtitle = name; _nav.Invalidate();
             RefreshProfileList(); LoadFromProfile();
         }
 
         private void OnDuplicateProfile(object sender, EventArgs e)
         {
-            string name = Prompt("Nome da cópia:", _current.Name + " (cópia)");
+            string name = Prompt(T.CopyName, _current.Name + T.CopySuffix);
             if (string.IsNullOrEmpty(name)) return;
-            if (_cfg.NameExists(name)) { Warn("Já existe um perfil com esse nome."); return; }
+            if (_cfg.NameExists(name)) { Warn(T.NameTaken); return; }
             SaveToProfile();
             Profile np = _current.Clone();
             np.Name = name;
             _cfg.Profiles.Add(np);
             _current = np;
+            _dirty = true;
+            _nav.Subtitle = name; _nav.Invalidate();
             RefreshProfileList(); LoadFromProfile();
         }
 
         private void OnRenameProfile(object sender, EventArgs e)
         {
-            string name = Prompt("Novo nome:", _current.Name);
-            if (string.IsNullOrEmpty(name) || name == _current.Name) return;
-            if (_cfg.NameExists(name)) { Warn("Já existe um perfil com esse nome."); return; }
-            _current.Name = name;
-            _nav.Subtitle = "perfil: " + name;
-            _nav.Invalidate();
+            Profile alvo = _profileList != null && _profileList.Selected != null ? _profileList.Selected : _current;
+            string name = Prompt(T.NewName, alvo.Name);
+            if (string.IsNullOrEmpty(name) || name == alvo.Name) return;
+            if (_cfg.NameExists(name)) { Warn(T.NameTaken); return; }
+
+            // Renomear o perfil ativo tem de levar o ponteiro junto: ActiveName
+            // guarda o nome, e nao a referencia, entao o antigo deixaria de
+            // casar com qualquer perfil e o primeiro da lista viraria o ativo.
+            bool eraAtivo = string.Equals(alvo.Name, _cfg.ActiveName, StringComparison.Ordinal);
+            alvo.Name = name;
+            if (eraAtivo) _cfg.ActiveName = name;
+
+            if (alvo == _current) { _nav.Subtitle = name; _nav.Invalidate(); }
+            _dirty = true;
             RefreshProfileList();
         }
 
         private void OnDeleteProfile(object sender, EventArgs e)
         {
-            if (_cfg.Profiles.Count <= 1) { Warn("É preciso manter ao menos um perfil."); return; }
-            if (MessageBox.Show("Excluir o perfil \"" + _current.Name + "\"?", "Mhiagos Control",
+            if (_cfg.Profiles.Count <= 1) { Warn(T.KeepOneProfile); return; }
+            Profile alvo = _profileList != null && _profileList.Selected != null ? _profileList.Selected : _current;
+            if (MessageBox.Show(T.DeleteProfileQ(alvo.Name), T.AppName,
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-            _cfg.Profiles.Remove(_current);
-            _current = _cfg.Profiles[0];
-            _nav.Subtitle = "perfil: " + _current.Name;
+
+            _cfg.Profiles.Remove(alvo);
+            if (_current == alvo) _current = _cfg.Profiles[0];
+            if (string.Equals(_cfg.ActiveName, alvo.Name, StringComparison.Ordinal))
+                _cfg.ActiveName = _cfg.Profiles[0].Name;
+
+            _nav.Subtitle = _current.Name;
             _nav.Invalidate();
+            _dirty = true;
             RefreshProfileList(); LoadFromProfile();
         }
 
         private static void Warn(string msg)
         {
-            MessageBox.Show(msg, "Mhiagos Control", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(msg, T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        /// <summary>Confirmacao discreta no rodape, que se apaga sozinha.</summary>
+        private void Aviso(string texto)
+        {
+            if (_footerNote == null) return;
+            _footerNote.Text = texto;
+            _footerNote.Visible = true;
+
+            if (_noteTimer == null)
+            {
+                _noteTimer = new Timer();
+                _noteTimer.Interval = 2600;
+                _noteTimer.Tick += delegate { _noteTimer.Stop(); _footerNote.Visible = false; };
+            }
+            _noteTimer.Stop();
+            _noteTimer.Start();
         }
 
         // ---------------- pagina: Sobre ----------------
@@ -494,51 +667,63 @@ namespace MhiagosControl
             page.BackColor = Color.Transparent;
 
             Card c = new Card();
-            c.Title = "Sobre";
-            c.SetBounds(0, 0, 756, 350);
+            c.Title = T.NavAbout;
+            c.SetBounds(0, 0, 756, 374);
             page.Controls.Add(c);
 
-            Label t = MakeLabel("Mhiagos Control", 16, 54, Ui.FontTitle);
+            Label t = MakeLabel(T.AppName, 16, 50, Ui.FontTitle);
             t.Size = new Size(400, 30);
             c.Controls.Add(t);
 
-            Label d = MakeLabel(
-                "Driver alternativo para o painel do cooler Rise Mode Temp 6 Pro Black.\n" +
-                "Protocolo levantado por engenharia reversa; qualquer sensor pode ir para qualquer mostrador.",
-                16, 88, Ui.FontSmall);
-            d.Size = new Size(700, 40);
+            Label d = MakeLabel(T.AboutTagline, 16, 84, Ui.FontSmall);
+            d.Size = new Size(700, 34);
             d.ForeColor = Ui.Muted;
             c.Controls.Add(d);
 
+            c.Controls.Add(MakeLabel(T.Language_, 16, 128, Ui.FontMed));
+
+            _lang = new Segmented();
+            _lang.SetItems("Português (BR)", "English (US)");
+            _lang.SetBounds(16, 148, 300, 30);
+            _lang.SelectedIndex = T.Pt ? 0 : 1;
+            // depois de fixar a posicao: o seletor avisa toda mudanca, e a
+            // primeira seria a nossa - reabriria a janela ao abrir a janela
+            _lang.SelectedIndexChanged += new EventHandler(OnLanguageChanged);
+            c.Controls.Add(_lang);
+
+            Label langNote = MakeLabel(T.LanguageNote, 328, 148, Ui.FontSmall);
+            langNote.Size = new Size(400, 30);
+            langNote.TextAlign = ContentAlignment.MiddleLeft;
+            langNote.ForeColor = Ui.Muted;
+            c.Controls.Add(langNote);
+
             _tgAutostart = new Toggle();
-            _tgAutostart.Label = "Iniciar junto com o Windows";
-            _tgAutostart.SetBounds(16, 140, 400, 26);
+            _tgAutostart.Label = T.StartWithWindows;
+            _tgAutostart.SetBounds(16, 190, 400, 26);
             _tgAutostart.Checked = Autostart.IsEnabled();
             _tgAutostart.CheckedChanged += new EventHandler(OnToggleAutostart);
             c.Controls.Add(_tgAutostart);
 
             Toggle tgAll = new Toggle();
-            tgAll.Label = "Mostrar todos os sensores (inclui um por núcleo)";
-            tgAll.SetBounds(16, 174, 460, 26);
+            tgAll.Label = T.ShowAllSensors;
+            tgAll.SetBounds(16, 222, 480, 26);
             tgAll.Checked = _cfg.ShowAllSensors;
             tgAll.CheckedChanged += new EventHandler(OnToggleShowAll);
             c.Controls.Add(tgAll);
 
-            Label allNote = MakeLabel(
-                "Desligado, dezenas de sensores por núcleo viram uma média por grupo — clock e temperatura gerais\n" +
-                "deixam de ficar enterrados entre repetições.", 16, 202, Ui.FontSmall);
-            allNote.Size = new Size(700, 34);
+            Label allNote = MakeLabel(T.ShowAllNote, 16, 250, Ui.FontSmall);
+            allNote.Size = new Size(700, 30);
             allNote.ForeColor = Ui.Muted;
             c.Controls.Add(allNote);
 
-            Label paths = MakeLabel("Configuração e registro em:\n" + Paths.DataDir, 16, 244, Ui.FontSmall);
-            paths.Size = new Size(700, 40);
+            Label paths = MakeLabel(T.DataPathLabel + "\n" + Paths.DataDir, 16, 286, Ui.FontSmall);
+            paths.Size = new Size(700, 34);
             paths.ForeColor = Ui.Muted;
             c.Controls.Add(paths);
 
             FlatBtn open = new FlatBtn();
-            open.Text = "Abrir pasta";
-            open.SetBounds(16, 292, 130, 32);
+            open.Text = T.OpenFolder;
+            open.SetBounds(16, 326, 130, 32);
             open.Click += delegate
             {
                 try { System.Diagnostics.Process.Start("explorer.exe", Paths.DataDir); }
@@ -547,46 +732,68 @@ namespace MhiagosControl
             c.Controls.Add(open);
 
             Card cr = new Card();
-            cr.Title = "Projeto e créditos";
-            cr.SetBounds(0, 362, 756, 150);
+            cr.Title = T.ProjectAndCredits;
+            cr.SetBounds(0, 386, 756, 140);
             page.Controls.Add(cr);
 
-            Label autor = MakeLabel("Criado por Feurrado", 16, 52, Ui.FontMed);
+            Label autor = MakeLabel(T.CreatedBy, 16, 48, Ui.FontMed);
             autor.Size = new Size(400, 22);
             cr.Controls.Add(autor);
 
-            Label repo = MakeLabel(Repositorio, 16, 76, Ui.FontSmall);
+            Label repo = MakeLabel(Repositorio, 16, 70, Ui.FontSmall);
             repo.Size = new Size(500, 20);
             repo.ForeColor = Ui.Muted;
             cr.Controls.Add(repo);
 
             FlatBtn git = new FlatBtn();
-            git.Text = "Abrir no GitHub";
-            git.SetBounds(16, 104, 150, 32);
+            git.Text = T.OpenOnGitHub;
+            git.SetBounds(16, 96, 150, 32);
             git.Click += delegate { Abrir(Repositorio); };
             cr.Controls.Add(git);
 
             // duas linhas, e nao tres: uma terceira invade o rotulo do
             // repositorio, que fica logo acima e atravessa esta coluna
-            Label libs = MakeLabel(
-                "Código deste projeto sob licença MIT · sensores pela LibreHardwareMonitor (MPL 2.0)\n" +
-                "e pela biblioteca cliente do HWiNFO, © REALiX s.r.o., não redistribuída com o projeto.",
-                190, 100, Ui.FontSmall);
+            Label libs = MakeLabel(T.LibsNote, 190, 92, Ui.FontSmall);
             libs.Size = new Size(552, 40);
             libs.ForeColor = Ui.Muted;
             cr.Controls.Add(libs);
 
             Card cd = new Card();
-            cd.Title = "Isenção de responsabilidade";
-            cd.SetBounds(0, 524, 756, 288);
+            cd.Title = T.DisclaimerTitle;
+            cd.SetBounds(0, 538, 756, 278);
             page.Controls.Add(cd);
 
-            Label disc = MakeLabel(Disclaimer, 16, 52, Ui.FontSmall);
+            Label disc = MakeLabel(T.Disclaimer, 16, 46, Ui.FontSmall);
             disc.Size = new Size(724, 224);
             disc.ForeColor = Ui.Muted;
             cd.Controls.Add(disc);
 
             return page;
+        }
+
+        /// <summary>
+        /// Troca de idioma: grava a escolha e reabre a janela.
+        ///
+        /// Reetiquetar tudo em pe exigiria que cada controle guardasse a chave
+        /// do seu texto e soubesse se retraduzir - dezenas de pontos, e o que
+        /// escapasse ficaria no idioma antigo sem ninguem notar. Reconstruir
+        /// nao deixa canto por traduzir. As edicoes pendentes vao para o perfil
+        /// antes, entao nada se perde.
+        /// </summary>
+        private void OnLanguageChanged(object sender, EventArgs e)
+        {
+            if (_loading) return;
+            string alvo = _lang.SelectedIndex == 1 ? T.EnUs : T.PtBr;
+            if (alvo == T.Language) return;
+
+            SaveToProfile();
+            _cfg.Language = alvo;
+            _cfg.Save();
+            _saved = true; _dirty = false;
+            T.Language = alvo;
+
+            DialogResult = DialogResult.Retry;   // quem abriu reabre
+            Close();
         }
 
         private const string Repositorio = "https://github.com/Feurrado/MhiagosControl";
@@ -651,7 +858,7 @@ namespace MhiagosControl
             bool ok = target ? Autostart.Enable() : Autostart.Disable();
             if (!ok)
             {
-                Warn("Não foi possível alterar a inicialização automática.\nDetalhes em:\n" + Log.Path);
+                Warn(T.AutostartFailed + Log.Path);
                 _loading = true; _tgAutostart.Checked = !target; _loading = false;
             }
         }
@@ -698,6 +905,7 @@ namespace MhiagosControl
         private void OnChanged()
         {
             if (_loading) return;
+            _dirty = true;
             SaveToProfile();
             Refresh0();
         }
@@ -727,8 +935,8 @@ namespace MhiagosControl
 
             if (_alertInfo1 != null)
             {
-                _alertInfo1.Text = _alert1.Value > 0 ? "atual: " + Show(v1) : "desligado";
-                _alertInfo2.Text = _alert2.Value > 0 ? "atual: " + Show(v2) : "desligado";
+                _alertInfo1.Text = _alert1.Value > 0 ? T.Current + Show(v1) : T.Off;
+                _alertInfo2.Text = _alert2.Value > 0 ? T.Current + Show(v2) : T.Off;
             }
 
             if (_slot1 != null)
@@ -740,7 +948,7 @@ namespace MhiagosControl
 
         private static string Show(PanelValue v)
         {
-            return v.Value.HasValue ? v.Value.Value.ToString() : "sem leitura";
+            return v.Value.HasValue ? v.Value.Value.ToString() : T.NoReading;
         }
 
         private void HighlightDivisor(FlatBtn[] row, int value)
@@ -761,7 +969,9 @@ namespace MhiagosControl
                 if (snap == null) return;
                 _pick1.UpdateValues(snap);
                 _pick2.UpdateValues(snap);
+                AtualizarValores(snap);
                 Refresh0();
+                AtualizarPreviaDoPerfil();
             }
             catch (Exception ex) { Log.Error("atualizacao da previa", ex); }
         }
@@ -770,7 +980,7 @@ namespace MhiagosControl
         {
             using (Form f = new Form())
             {
-                f.Text = "Mhiagos Control";
+                f.Text = T.AppName;
                 f.Icon = Assets.AppIcon;
                 f.FormBorderStyle = FormBorderStyle.FixedDialog;
                 f.MaximizeBox = false; f.MinimizeBox = false; f.ShowInTaskbar = false;
@@ -789,12 +999,12 @@ namespace MhiagosControl
                 t.BackColor = Ui.SurfaceAlt; t.ForeColor = Ui.Text;
 
                 FlatBtn ok = new FlatBtn();
-                ok.Text = "OK"; ok.Primary = true;
+                ok.Text = T.Ok; ok.Primary = true;
                 ok.SetBounds(172, 86, 90, 30);
                 ok.Click += delegate { f.DialogResult = DialogResult.OK; f.Close(); };
 
                 FlatBtn ca = new FlatBtn();
-                ca.Text = "Cancelar";
+                ca.Text = T.Cancel;
                 ca.SetBounds(272, 86, 92, 30);
                 ca.Click += delegate { f.DialogResult = DialogResult.Cancel; f.Close(); };
 
@@ -806,13 +1016,56 @@ namespace MhiagosControl
             }
         }
 
-        private void OnOk(object sender, EventArgs e)
+        /// <summary>
+        /// Grava e continua aberto.
+        ///
+        /// Fechar a cada gravacao obrigava a reabrir a janela para o proximo
+        /// ajuste, e ajuste de mostrador raramente vem sozinho: troca-se o
+        /// sensor, olha-se a previa, corrige-se a escala. A confirmacao vai
+        /// para o rodape em vez de uma caixa de dialogo, que seria mais um
+        /// clique para dizer o que ja se sabe.
+        /// </summary>
+        private void OnSave(object sender, EventArgs e)
         {
             SaveToProfile();
             _cfg.ActiveName = _current.Name;
             _cfg.Save();
-            DialogResult = DialogResult.OK;
-            Close();
+            _saved = true;
+            _dirty = false;
+
+            if (_profileList != null)
+            {
+                _profileList.ActiveName = _cfg.ActiveName;
+                _profileList.Invalidate();
+                AtualizarPreviaDoPerfil();
+            }
+            Aviso(T.Saved);
+        }
+
+        /// <summary>
+        /// Nao deixa sair calado com edicao pendente.
+        ///
+        /// Com Salvar sem fechar, "Fechar" passou a ser o unico caminho de
+        /// saida - inclusive para quem so mexeu e nao gravou. Sem esta
+        /// pergunta, o descarte seria silencioso.
+        /// </summary>
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (_dirty && DialogResult != DialogResult.Retry)
+            {
+                DialogResult r = MessageBox.Show(T.UnsavedQuestion, T.UnsavedTitle,
+                    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+
+                if (r == DialogResult.Cancel) { e.Cancel = true; base.OnFormClosing(e); return; }
+                if (r == DialogResult.Yes) OnSave(this, EventArgs.Empty);
+            }
+
+            // OK significa "ha gravacao valida no disco"; quem abriu usa isso
+            // para decidir se recarrega a configuracao e descarta a memoria
+            if (DialogResult != DialogResult.Retry)
+                DialogResult = _saved ? DialogResult.OK : DialogResult.Cancel;
+
+            base.OnFormClosing(e);
         }
 
         /// <summary>
@@ -828,6 +1081,7 @@ namespace MhiagosControl
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             if (_tick != null) { _tick.Stop(); _tick.Dispose(); }
+            if (_noteTimer != null) { _noteTimer.Stop(); _noteTimer.Dispose(); }
             base.OnFormClosed(e);
         }
     }

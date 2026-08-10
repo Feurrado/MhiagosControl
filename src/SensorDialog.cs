@@ -28,7 +28,7 @@ namespace MhiagosControl
             Height = 74;
 
             Button = new FlatBtn();
-            Button.Text = "Trocar";
+            Button.Text = T.Change;
             Button.Size = new Size(78, 30);
             Controls.Add(Button);
         }
@@ -55,14 +55,14 @@ namespace MhiagosControl
 
             if (Entry == null)
             {
-                TextRenderer.DrawText(g, "nenhum sensor escolhido", Ui.FontBase, r, Ui.Muted,
+                TextRenderer.DrawText(g, T.NoSensorChosen, Ui.FontBase, r, Ui.Muted,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 return;
             }
 
             // O valor e o que se olha; o nome do sensor so confirma a escolha.
             // Por isso ele vem primeiro na hierarquia e o nome desce a legenda.
-            string val = Entry.Value.HasValue ? Entry.Formatted : "sem leitura";
+            string val = Entry.Value.HasValue ? Entry.Formatted : T.NoReading;
             bool lido = Entry.Value.HasValue;
             Size vs = TextRenderer.MeasureText(g, val, lido ? Ui.FontValue : Ui.FontBase);
 
@@ -87,7 +87,7 @@ namespace MhiagosControl
 
             // categoria, e nao o nome do dispositivo: "NVIDIA GeForce RTX 3060
             // (Ampere)" nao cabe no espaco que sobra ao lado do valor
-            string sub = (string.IsNullOrEmpty(Entry.Category) ? "Outros" : Entry.Category) +
+            string sub = T.Category(string.IsNullOrEmpty(Entry.Category) ? "Outros" : Entry.Category) +
                          (string.IsNullOrEmpty(Entry.Source) ? "" : "  ·  " + Entry.Source);
             TextRenderer.DrawText(g, sub, Ui.FontSmall,
                 new Rectangle(16, top + TitleH, tw, SubH), Ui.Muted,
@@ -133,13 +133,13 @@ namespace MhiagosControl
             card.Controls.Add(_pick);
 
             FlatBtn ok = new FlatBtn();
-            ok.Text = "Usar"; ok.Primary = true;
+            ok.Text = T.Use; ok.Primary = true;
             ok.SetBounds(448, 540, 96, 32);
             ok.Click += delegate { DialogResult = DialogResult.OK; Close(); };
             Controls.Add(ok);
 
             FlatBtn cancel = new FlatBtn();
-            cancel.Text = "Cancelar";
+            cancel.Text = T.Cancel;
             cancel.SetBounds(344, 540, 96, 32);
             cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(cancel);

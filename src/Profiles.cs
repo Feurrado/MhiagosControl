@@ -57,6 +57,14 @@ namespace MhiagosControl
         /// </summary>
         public bool ShowAllSensors = false;
 
+        /// <summary>
+        /// Idioma da interface. Vazio significa "nunca escolhido": nesse caso
+        /// o idioma do Windows decide, e so vira valor gravado quando o usuario
+        /// escolher - assim mudar a lingua do sistema ainda acompanha, ate que
+        /// alguem diga o contrario.
+        /// </summary>
+        public string Language = "";
+
         private static string FilePath
         {
             get { return Path.Combine(Paths.DataDir, "config.ini"); }
@@ -117,6 +125,7 @@ namespace MhiagosControl
                     {
                         if (k == "active") c.ActiveName = v;
                         else if (k == "showall") c.ShowAllSensors = (v == "1");
+                        else if (k == "language") c.Language = v;
                         // chaves legadas (formato antigo, sem seccao)
                         else if (k == "panel1" || k == "panel2" || k == "fahrenheit" || k == "percent")
                         {
@@ -183,6 +192,7 @@ namespace MhiagosControl
                 sb.AppendLine("[general]");
                 sb.AppendLine("active=" + ActiveName);
                 sb.AppendLine("showall=" + (ShowAllSensors ? "1" : "0"));
+                if (!string.IsNullOrEmpty(Language)) sb.AppendLine("language=" + Language);
                 foreach (Profile p in Profiles)
                 {
                     sb.AppendLine();

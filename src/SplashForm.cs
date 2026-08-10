@@ -41,19 +41,20 @@ namespace MhiagosControl
         private static readonly object _lock = new object();
         private static SplashForm _form;
         private static Thread _thread;
-        private static string _status = "Iniciando...";
+        private static string _status = null;   // T.Starting so quando ja houver idioma
 
         public static void Show(string status)
         {
             lock (_lock)
             {
-                _status = status;
+                _status = status ?? T.Starting;
                 if (_thread != null && _thread.IsAlive) { Focar(); return; }
 
+                string inicial = _status;
                 _thread = new Thread(delegate()
                 {
                     SplashForm f = new SplashForm();
-                    f.Status = _status;
+                    f.Status = inicial;
                     lock (_lock) _form = f;
                     Application.Run(f);
                     lock (_lock) _form = null;
@@ -101,7 +102,7 @@ namespace MhiagosControl
     {
         private readonly System.Windows.Forms.Timer _anim;   // System.Threading tambem tem um Timer
         private int _phase;
-        private string _status = "Iniciando...";
+        private string _status = "";
 
         public string Status
         {
@@ -217,7 +218,7 @@ namespace MhiagosControl
                     _hoverFechar ? Ui.Text : Ui.Muted,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-            TextRenderer.DrawText(g, "fechar não interrompe a inicialização", Ui.FontSmall,
+            TextRenderer.DrawText(g, T.ClosingIsSafe, Ui.FontSmall,
                 new Rectangle(88, 76, Width - 130, 18), Ui.Faint,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 

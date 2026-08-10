@@ -13,7 +13,7 @@ namespace MhiagosControl
         public event EventHandler QueryChanged;
 
         public string Query { get { return _box.Text; } }
-        public string Placeholder = "Buscar sensor...";
+        public string Placeholder = T.SearchSensor;
 
         public SearchBox()
         {
@@ -92,6 +92,13 @@ namespace MhiagosControl
         }
 
         public string SelectedItem { get { return _sel >= 0 && _sel < _items.Count ? _items[_sel] : null; } }
+
+        /// <summary>
+        /// Posicao da pilula acesa. A lista guarda rotulos ja traduzidos, entao
+        /// quem filtra precisa da posicao, e nao do texto - comparar por texto
+        /// obrigaria a traduzir de volta para achar a categoria.
+        /// </summary>
+        public int SelectedIndex { get { return _sel; } }
 
         public void SetItems(IEnumerable<string> items)
         {
@@ -403,6 +410,7 @@ namespace MhiagosControl
         private readonly Panel _spacer;
         private readonly ScrollStrip _scroll;
         private List<SensorEntry> _all = new List<SensorEntry>();
+        private List<string> _cats = new List<string>();   // canonicas, alinhadas com as pilulas
         private readonly Dictionary<string, SensorEntry> _byId = new Dictionary<string, SensorEntry>();
         private string _selectedId = "";
         private int _hover = -1;
@@ -547,10 +555,11 @@ namespace MhiagosControl
 
             // Uma pilula por categoria presente, na ordem canonica - assim os
             // filtros nao trocam de lugar conforme a maquina ou a execucao.
-            List<string> cats = new List<string>();
-            cats.Add("Todos");
-            cats.AddRange(Presentes());
-            _chips.SetItems(cats);
+            _cats = Presentes();
+            List<string> rotulos = new List<string>();
+            rotulos.Add(T.CatAll);
+            foreach (string c in _cats) rotulos.Add(T.Category(c));
+            _chips.SetItems(rotulos);
 
             Rebuild();
         }
@@ -601,8 +610,11 @@ namespace MhiagosControl
         private void Rebuild()
         {
             string filter = _search.Query.Trim();
-            string cat = Categories ? _chips.SelectedItem : null;
-            bool byCat = cat != null && cat != "Todos";
+
+            // indice 0 e "Todos"; os demais seguem a ordem de _cats
+            int ci = Categories ? _chips.SelectedIndex - 1 : -1;
+            bool byCat = ci >= 0 && ci < _cats.Count;
+            string cat = byCat ? _cats[ci] : null;
 
             _building = true;
             _list.BeginUpdate();
@@ -664,7 +676,10 @@ namespace MhiagosControl
                 bool hit =
                     (s.Name != null && s.Name.IndexOf(term, c) >= 0) ||
                     (s.Hardware != null && s.Hardware.IndexOf(term, c) >= 0) ||
+                    // categoria pelos dois nomes: quem le "Memory" na tela
+                    // procura por "memory", nao pela chave interna
                     (s.Category != null && s.Category.IndexOf(term, c) >= 0) ||
+                    (s.Category != null && T.Category(s.Category).IndexOf(term, c) >= 0) ||
                     s.Type.ToString().IndexOf(term, c) >= 0;
                 if (!hit) return false;   // todos os termos precisam bater
             }
@@ -713,7 +728,7 @@ namespace MhiagosControl
             GroupRow grp = item as GroupRow;
             if (grp != null)
             {
-                TextRenderer.DrawText(g, grp.Name.ToUpperInvariant(), Ui.FontSmall,
+                TextRenderer.DrawText(g, T.Category(grp.Name).ToUpperInvariant(), Ui.FontSmall,
                     new Rectangle(r.X + 10, r.Y, r.Width - 14, r.Height), Ui.Muted,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
                 using (Pen pen = new Pen(Ui.Border))

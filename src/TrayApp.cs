@@ -50,6 +50,10 @@ namespace MhiagosControl
             _cfg = Config.Load();
             Sensors.ShowAll = _cfg.ShowAllSensors;
 
+            // antes de qualquer texto de tela: o menu da bandeja e montado logo
+            // abaixo e a tela de carregamento pode aparecer a qualquer momento
+            T.Language = string.IsNullOrEmpty(_cfg.Language) ? T.Detect() : _cfg.Language;
+
             _marshal = new Control();
             GC.KeepAlive(_marshal.Handle);   // cria o handle na thread de UI
 
@@ -60,7 +64,7 @@ namespace MhiagosControl
 
             _icon = new NotifyIcon();
             _icon.Icon = _iconNormal;
-            _icon.Text = "Mhiagos Control - iniciando";
+            _icon.Text = T.TrayStarting;
             _icon.Visible = true;
             _icon.Click += new EventHandler(OnIconClick);
             _icon.DoubleClick += new EventHandler(OnConfig);
@@ -93,7 +97,7 @@ namespace MhiagosControl
             _demora.Tick += delegate
             {
                 _demora.Stop();
-                StatusInicial("Carregando o driver de sensores...");
+                StatusInicial(T.LoadingDriver);
             };
             _demora.Start();
 
@@ -136,11 +140,8 @@ namespace MhiagosControl
             else
             {
                 Log.Error("inicializacao dos sensores", falha);
-                MessageBox.Show(
-                    "Falha ao inicializar os sensores.\n\n" + falha.Message +
-                    "\n\nTemperatura e potencia exigem privilegio administrativo." +
-                    "\n\nDetalhes em:\n" + Log.Path,
-                    "Mhiagos Control", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(T.SensorInitFailed(falha.Message, Log.Path),
+                    T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             Profile act = _cfg.Active;
@@ -173,7 +174,7 @@ namespace MhiagosControl
         }
 
         private volatile bool _iniciando = false;
-        private string _statusInicial = "Abrindo as fontes de sensores...";
+        private string _statusInicial = null;   // T.OpeningSources, ja com idioma resolvido
 
         private void StatusInicial(string texto)
         {
@@ -187,7 +188,7 @@ namespace MhiagosControl
         /// </summary>
         private void MostrarSplash()
         {
-            Splash.Show(_statusInicial);
+            Splash.Show(_statusInicial ?? T.OpeningSources);
         }
 
         private void FecharSplash()
@@ -201,23 +202,23 @@ namespace MhiagosControl
         {
             ContextMenu menu = new ContextMenu();
 
-            _miProfiles = new MenuItem("Perfis");
+            _miProfiles = new MenuItem(T.TrayProfiles);
             menu.MenuItems.Add(_miProfiles);
             RebuildProfileMenu();
 
-            menu.MenuItems.Add(new MenuItem("Configurar...", new EventHandler(OnConfig)));
+            menu.MenuItems.Add(new MenuItem(T.TrayConfigure, new EventHandler(OnConfig)));
             menu.MenuItems.Add("-");
 
-            _miPause = new MenuItem("Pausar", new EventHandler(OnPause));
+            _miPause = new MenuItem(T.TrayPause, new EventHandler(OnPause));
             menu.MenuItems.Add(_miPause);
 
-            _miAutostart = new MenuItem("Iniciar com o Windows", new EventHandler(OnToggleAutostart));
+            _miAutostart = new MenuItem(T.TrayAutostart, new EventHandler(OnToggleAutostart));
             _miAutostart.Checked = Autostart.IsEnabled();
             menu.MenuItems.Add(_miAutostart);
 
-            menu.MenuItems.Add(new MenuItem("Abrir pasta de dados", new EventHandler(OnOpenData)));
+            menu.MenuItems.Add(new MenuItem(T.TrayOpenData, new EventHandler(OnOpenData)));
             menu.MenuItems.Add("-");
-            menu.MenuItems.Add(new MenuItem("Sair", new EventHandler(OnExit)));
+            menu.MenuItems.Add(new MenuItem(T.TrayExit, new EventHandler(OnExit)));
 
             _icon.ContextMenu = menu;
         }
@@ -253,8 +254,8 @@ namespace MhiagosControl
             bool target = !_miAutostart.Checked;
             bool ok = target ? Autostart.Enable() : Autostart.Disable();
             if (ok) _miAutostart.Checked = target;
-            else MessageBox.Show("Nao foi possivel alterar a inicializacao automatica.\nDetalhes em:\n" + Log.Path,
-                    "Mhiagos Control", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            else MessageBox.Show(T.AutostartFailed + Log.Path,
+                    T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         /// <summary>A tarefa do software de fabrica disputaria o painel a cada logon.</summary>
@@ -263,11 +264,8 @@ namespace MhiagosControl
             try
             {
                 if (!Autostart.OriginalAppTaskEnabled()) return;
-                DialogResult r = MessageBox.Show(
-                    "A tarefa de inicializacao do CPU TEMP Monitor original ainda esta ativa.\n\n" +
-                    "No proximo logon os dois programas vao disputar o painel, e o mostrador vai piscar.\n\n" +
-                    "Desativar a tarefa do software original agora?",
-                    "Mhiagos Control", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                DialogResult r = MessageBox.Show(T.OriginalTaskWarning,
+                    T.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 if (r == DialogResult.Yes) Autostart.DisableOriginalAppTask();
             }
             catch (Exception ex) { Log.Error("verificacao da tarefa original", ex); }
@@ -378,9 +376,9 @@ namespace MhiagosControl
                 cfg.Fahrenheit ? "F" : "C",
                 v2.Value.HasValue ? v2.Value.Value.ToString(CultureInfo.InvariantCulture) : "--",
                 cfg.Percent ? "%" : "W");
-            if (_alerting) text += "  [ALERTA]";
-            if (v1.Clamped || v2.Clamped) text += "  [excede 999]";
-            if (!ok) text += "  [painel ausente]";
+            if (_alerting) text += T.TagAlert;
+            if (v1.Clamped || v2.Clamped) text += T.TagOver;
+            if (!ok) text += T.TagNoDevice;
             SetTooltip(text);
         }
 
@@ -395,8 +393,8 @@ namespace MhiagosControl
             bool a1 = cfg.Alert1 > 0 && p1.HasValue && p1.Value >= cfg.Alert1;
             bool a2 = cfg.Alert2 > 0 && p2.HasValue && p2.Value >= cfg.Alert2;
 
-            if (a1 && !_alert1) Notify("Painel 1 atingiu " + p1.Value + " (limiar " + cfg.Alert1 + ")");
-            if (a2 && !_alert2) Notify("Painel 2 atingiu " + p2.Value + " (limiar " + cfg.Alert2 + ")");
+            if (a1 && !_alert1) Notify(T.AlertReached(1, p1.Value, cfg.Alert1));
+            if (a2 && !_alert2) Notify(T.AlertReached(2, p2.Value, cfg.Alert2));
 
             _alert1 = a1; _alert2 = a2;
             bool any = a1 || a2;
@@ -420,7 +418,7 @@ namespace MhiagosControl
             {
                 try
                 {
-                    _icon.BalloonTipTitle = "Mhiagos Control";
+                    _icon.BalloonTipTitle = T.AppName;
                     _icon.BalloonTipText = message;
                     _icon.BalloonTipIcon = ToolTipIcon.Warning;
                     _icon.ShowBalloonTip(5000);
@@ -469,9 +467,17 @@ namespace MhiagosControl
                 _cache = list;
                 _snapshotWanted = true;
 
+                // A troca de idioma volta como Retry: a janela nao se
+                // reetiqueta viva, ela e reconstruida. Relistar entre as duas
+                // aberturas tambem traduz os nomes gerados, como as medias.
                 DialogResult r;
-                using (SettingsForm f = new SettingsForm(_cfg, _cache, GetSnapshot, ReListSensors))
-                    r = f.ShowDialog();
+                do
+                {
+                    using (SettingsForm f = new SettingsForm(_cfg, _cache, GetSnapshot, ReListSensors))
+                        r = f.ShowDialog();
+                    if (r == DialogResult.Retry) _cache = ReListSensors();
+                }
+                while (r == DialogResult.Retry);
 
                 _snapshotWanted = false;
 
@@ -483,7 +489,7 @@ namespace MhiagosControl
             {
                 _snapshotWanted = false;
                 Log.Error("janela de configuracao", ex);
-                MessageBox.Show(ex.Message, "Mhiagos Control", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -505,9 +511,9 @@ namespace MhiagosControl
         private void OnPause(object sender, EventArgs e)
         {
             _paused = !_paused;
-            _miPause.Text = _paused ? "Retomar" : "Pausar";
+            _miPause.Text = _paused ? T.TrayResume : T.TrayPause;
             Log.Write(_paused ? "pausado" : "retomado");
-            if (_paused) { ResetAlerts(); _icon.Text = "Mhiagos Control - pausado (o painel vai apagar)"; }
+            if (_paused) { ResetAlerts(); _icon.Text = T.TrayPaused; }
         }
 
         private void OnOpenData(object sender, EventArgs e)
@@ -561,13 +567,17 @@ namespace MhiagosControl
         public static void Main()
         {
             // Duas instancias disputariam o painel a cada 1,1 s e o resultado pisca.
+            // O idioma do Windows vale ate a configuracao ser lida: a checagem
+            // de instancia unica acontece antes disso e ja fala com o usuario.
+            T.Language = T.Detect();
+
             bool createdNew;
             using (Mutex mutex = new Mutex(true, "Local\\MhiagosControl_SingleInstance", out createdNew))
             {
                 if (!createdNew)
                 {
-                    MessageBox.Show("O Mhiagos Control ja esta em execucao (icone na bandeja).",
-                        "Mhiagos Control", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(T.AlreadyRunning,
+                        T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 

@@ -142,6 +142,13 @@ namespace MhiagosControl
             Cursor = Cursors.Hand;
         }
 
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+            base.OnEnabledChanged(e);
+        }
+
         protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hover = false; _down = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
@@ -154,7 +161,16 @@ namespace MhiagosControl
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
 
             Color fill, fore, border;
-            if (Primary)
+            if (!Enabled)
+            {
+                // Antes o ramo Primary ignorava Enabled: o botao desligado
+                // continuava azul solido, com o texto claro por cima. Parecia
+                // ativo e ilegivel ao mesmo tempo.
+                fill = Ui.SurfaceAlt;
+                fore = Ui.Faint;
+                border = Ui.Border;
+            }
+            else if (Primary)
             {
                 fill = _down ? Ui.Accent : (_hover ? Ui.AccentHover : Ui.Accent);
                 fore = Color.White;
@@ -180,7 +196,7 @@ namespace MhiagosControl
                 using (Pen pen = new Pen(border)) g.DrawPath(pen, p);
             }
 
-            TextRenderer.DrawText(g, Text, Font, r, Enabled ? fore : Ui.Muted,
+            TextRenderer.DrawText(g, Text, Font, r, fore,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
     }
@@ -536,6 +552,18 @@ namespace MhiagosControl
 
         public Image Logo;
         public string AppName = "Mhiagos Control";
+
+        /// <summary>Legenda curta acima do subtitulo - "PERFIL ATIVO".</summary>
+        public string SubtitleCaption = "";
+
+        /// <summary>
+        /// Nome do perfil ativo.
+        ///
+        /// Ganha uma linha inteira do cabecalho, e nao o resto da linha do nome
+        /// do aplicativo: ao lado do titulo sobravam 150 px e "GPU TEMP + GPU
+        /// USAGE" era cortado no meio de uma letra, sem nem as reticencias que
+        /// avisariam que havia mais texto.
+        /// </summary>
         public string Subtitle = "";
 
         public NavBar()
@@ -564,7 +592,7 @@ namespace MhiagosControl
             }
         }
 
-        private const int HeaderH = 92;
+        private const int HeaderH = 116;
         private const int RowH = 40;
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -597,13 +625,24 @@ namespace MhiagosControl
             using (SolidBrush b = new SolidBrush(Ui.Sidebar)) g.FillRectangle(b, ClientRectangle);
 
             if (Logo != null)
-                g.DrawImage(Logo, 18, 20, 34, 34);
+                g.DrawImage(Logo, 18, 18, 34, 34);
 
             using (SolidBrush b = new SolidBrush(Ui.Text))
-                g.DrawString(AppName, Ui.FontMed, b, 60, 24);
+                g.DrawString(AppName, Ui.FontMed, b, 60, 26);
+
+            // O perfil ocupa a largura toda, abaixo do titulo. TextRenderer com
+            // retangulo delimitado, e nao DrawString: DrawString corta onde o
+            // controle acaba, sem reticencias.
+            int w = Width - 34;
+            if (!string.IsNullOrEmpty(SubtitleCaption))
+                TextRenderer.DrawText(g, SubtitleCaption, Ui.FontSmall,
+                    new Rectangle(18, 62, w, 14), Ui.Faint,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
             if (!string.IsNullOrEmpty(Subtitle))
-                using (SolidBrush b = new SolidBrush(Ui.Muted))
-                    g.DrawString(Subtitle, Ui.FontSmall, b, 60, 40);
+                TextRenderer.DrawText(g, Subtitle, Ui.FontBase,
+                    new Rectangle(18, 78, w, 18), Ui.Text,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
             int y = HeaderH;
             for (int i = 0; i < _items.Count; i++)

@@ -438,7 +438,7 @@ namespace MhiagosControl
                 agg.Unit = members[0].Unit;
                 agg.Source = members[0].Source;
                 agg.Members = members.Count;
-                agg.Name = Normalize(members[0].Name) + " · média de " + members.Count;
+                agg.Name = Normalize(members[0].Name) + " · " + T.AverageOf(members.Count);
                 agg.Label = Describe(agg.Hardware, agg.Name, agg.Type);
                 agg.Value = Average(members);
                 keep.Add(agg);
@@ -551,7 +551,7 @@ namespace MhiagosControl
             agg.Unit = unit;
             agg.Source = source;
             agg.Members = members.Count;
-            agg.Name = "média de " + members.Count;
+            agg.Name = T.AverageOf(members.Count);
             agg.Value = n > 0 ? (float?)(sum / n) : null;
             return agg;
         }

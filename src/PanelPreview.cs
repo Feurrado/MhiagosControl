@@ -244,9 +244,9 @@ namespace MhiagosControl
 
             string badge = null;
             Color mark = Color.Empty;
-            if (blank) { badge = "sem leitura"; mark = Color.FromArgb(165, 170, 180); }
-            else if (over) { badge = "excede 999"; mark = Ui.Warn; }
-            else if (alert) { badge = "acima do limiar"; mark = Ui.Danger; }
+            if (blank) { badge = T.BadgeNoReading; mark = Color.FromArgb(165, 170, 180); }
+            else if (over) { badge = T.BadgeOver999; mark = Ui.Warn; }
+            else if (alert) { badge = T.BadgeAboveThreshold; mark = Ui.Danger; }
 
             if (badge != null)
             {
