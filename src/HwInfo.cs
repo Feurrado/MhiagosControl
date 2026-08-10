@@ -229,9 +229,19 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Le todas as leituras disponiveis. A biblioteca nao expoe consulta
-        /// individual, entao cada ciclo reenumera - o custo e uma copia de
-        /// memoria por leitura, irrelevante na cadencia de um segundo.
+        /// Nome do grupo -> indice, aprendido na ultima varredura completa.
+        /// So serve de palpite: quem usa confere o nome depois de selecionar.
+        /// </summary>
+        private readonly Dictionary<string, int> _indiceDoGrupo = new Dictionary<string, int>();
+
+        /// <summary>
+        /// Le todas as leituras disponiveis, e reaprende onde cada grupo esta.
+        ///
+        /// A biblioteca nao expoe consulta individual, entao a varredura visita
+        /// grupo por grupo. Medido: preparar um grupo (678) custa cerca de
+        /// 3 ms, e as 169 leituras que vem depois custam praticamente zero -
+        /// o preco desta chamada e o numero de grupos, e nada mais. Numa
+        /// maquina com 19 grupos sao 54 ms. Veja ReadGroups.
         /// </summary>
         public List<HwReading> ReadAll()
         {
@@ -244,39 +254,12 @@ namespace MhiagosControl
                 if (groups <= 0) return result;
                 _poll();
 
+                _indiceDoGrupo.Clear();
                 for (int i = 0; i < groups; i++)
                 {
-                    Array.Clear(_name, 0, _name.Length);
-                    _select(i);
-                    _groupName(i, _name, _name.Length);
-                    string group = Ansi(_name, 0, _name.Length);
-                    if (group.Length == 0) group = "Grupo " + i;
-
-                    for (int cls = CLS_MIN; cls <= CLS_MAX; cls++)
-                    {
-                        for (int j = 0; j < 256; j++)
-                        {
-                            Array.Clear(_elem, 0, ELEM);
-                            if (_read(cls, i, j, _elem) == 0) break;
-
-                            double v = BitConverter.ToDouble(_elem, OFF_VALUE);
-                            if (double.IsNaN(v) || double.IsInfinity(v)) continue;
-
-                            string label = Ansi(_elem, OFF_LABEL, 128);
-                            if (label.Length == 0) continue;
-                            string unit = Ansi(_elem, OFF_UNIT, 16);
-
-                            HwReading r = new HwReading();
-                            r.Group = group;
-                            r.Category = BitConverter.ToInt32(_elem, OFF_CAT);
-                            r.Label = label;
-                            r.Unit  = unit;
-                            r.Value = v;
-                            r.Type  = MapType(cls, unit);
-                            r.Id    = "hw:" + group + "|" + cls + "|" + label;
-                            result.Add(r);
-                        }
-                    }
+                    string group = NomeDoGrupo(i);
+                    _indiceDoGrupo[group] = i;
+                    LerGrupo(i, group, result);
                 }
             }
             catch (Exception ex)
@@ -284,6 +267,86 @@ namespace MhiagosControl
                 Log.Error("HWiNFO: leitura", ex);
             }
             return result;
+        }
+
+        /// <summary>
+        /// Le apenas os grupos nomeados, para o ciclo que so alimenta o
+        /// mostrador.
+        ///
+        /// Existe por medicao: o ciclo inteiro custa 54 ms e dois grupos custam
+        /// 3,6 ms, porque o caro e preparar cada grupo, nao ler dele. Fora da
+        /// janela de configuracao o aplicativo usa dois sensores, e preparava
+        /// dezenove grupos para chegar neles.
+        ///
+        /// Devolve null quando nao da para confiar no atalho - nome
+        /// desconhecido, ou indice que deixou de corresponder ao nome porque a
+        /// ordem dos grupos mudou. Nesse caso o chamador faz ReadAll, que
+        /// reaprende. O indice cacheado nunca e usado sem conferir o nome: um
+        /// dispositivo aparecendo ou sumindo faria o mostrador ler o sensor
+        /// errado em silencio, que e o pior modo de falhar que este programa
+        /// tem.
+        /// </summary>
+        public List<HwReading> ReadGroups(ICollection<string> nomes)
+        {
+            if (!IsOpen || nomes == null || nomes.Count == 0) return null;
+
+            List<HwReading> result = new List<HwReading>();
+            try
+            {
+                _poll();
+                foreach (string nome in nomes)
+                {
+                    int i;
+                    if (!_indiceDoGrupo.TryGetValue(nome, out i)) return null;
+                    if (NomeDoGrupo(i) != nome) return null;    // a ordem mudou
+                    LerGrupo(i, nome, result);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("HWiNFO: leitura dirigida", ex);
+                return null;
+            }
+            return result;
+        }
+
+        /// <summary>Prepara o grupo e devolve seu nome. O 678 e a chamada cara.</summary>
+        private string NomeDoGrupo(int i)
+        {
+            Array.Clear(_name, 0, _name.Length);
+            _select(i);
+            _groupName(i, _name, _name.Length);
+            string group = Ansi(_name, 0, _name.Length);
+            return group.Length == 0 ? "Grupo " + i : group;
+        }
+
+        private void LerGrupo(int i, string group, List<HwReading> result)
+        {
+            for (int cls = CLS_MIN; cls <= CLS_MAX; cls++)
+            {
+                for (int j = 0; j < 256; j++)
+                {
+                    Array.Clear(_elem, 0, ELEM);
+                    if (_read(cls, i, j, _elem) == 0) break;
+
+                    double v = BitConverter.ToDouble(_elem, OFF_VALUE);
+                    if (double.IsNaN(v) || double.IsInfinity(v)) continue;
+
+                    string label = Ansi(_elem, OFF_LABEL, 128);
+                    if (label.Length == 0) continue;
+                    string unit = Ansi(_elem, OFF_UNIT, 16);
+
+                    HwReading r = new HwReading();
+                    r.Group = group;
+                    r.Category = BitConverter.ToInt32(_elem, OFF_CAT);
+                    r.Label = label;
+                    r.Unit  = unit;
+                    r.Value = v;
+                    r.Type  = MapType(cls, unit);
+                    r.Id    = "hw:" + group + "|" + cls + "|" + label;
+                    result.Add(r);
+                }
+            }
         }
 
         /// <summary>

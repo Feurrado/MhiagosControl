@@ -318,9 +318,22 @@ chamava *RiseModePanel*) são migradas no primeiro arranque.
 - A cadência é **compensada**: o laço desconta o tempo gasto no ciclo, mantendo
   1100 ms reais independentemente da carga da máquina.
 - **Instância única** garantida por mutex — duas instâncias disputariam o painel.
-- A biblioteca do HWiNFO não expõe consulta individual, então cada ciclo
-  **reenumera** tudo. O custo é uma cópia de memória por leitura, irrelevante na
-  cadência de um segundo.
+- A biblioteca do HWiNFO não expõe consulta individual, então a enumeração
+  visita grupo por grupo. **Preparar um grupo (ordinal `678`) custa ~2,9 ms; as
+  169 leituras que vêm depois custam praticamente zero.** O preço do ciclo é o
+  número de grupos, e nada mais. Por isso, com a janela fechada, o aplicativo lê
+  **apenas os grupos dos sensores que estão no mostrador** — os do perfil ativo
+  mais os de todos os perfis do rodízio. Medido nesta máquina, com 19 grupos e
+  169 sensores: **55,7 ms por ciclo lendo tudo, 4,3 ms lendo dirigido.**
+- O identificador do sensor guarda o **nome** do grupo, não o índice. O índice é
+  cacheado, mas **nunca usado sem conferir o nome** depois de selecionar (custa
+  0,001 ms): se não bater, o aplicativo refaz a varredura completa e reaprende.
+  Sem essa conferência, um dispositivo aparecendo ou sumindo faria o mostrador
+  ler o sensor errado em silêncio — o pior modo de falhar que este programa tem.
+- `List()` e `Snapshot()` **completam sozinhos** se o último ciclo foi dirigido.
+  A garantia mora neles e não em quem chama, porque esquecer seria silencioso: o
+  seletor apareceria com dois sensores em vez de 138, e o defeito se pareceria
+  com "sumiram sensores", longe da causa.
 - Sensores por núcleo são **resumidos em médias** (clock, potência, tensão, uso),
   para não enterrar os sensores gerais. Desligável em *Mostrar todos os sensores*.
 - A conversão para Fahrenheit só se aplica a sensores do tipo `Temperature`.
@@ -403,6 +416,18 @@ Existe porque a alternativa era otimizar por leitura de código. Dá para contar
 alocações de um ciclo com o dedo na tela e chegar a um número grande; o que a
 conta não diz é se esse número importa perto do que a varredura do hardware
 custa sozinha.
+
+Não importava. As 169 KB por ciclo dão **87 coletas de geração 0 por hora**, e
+nenhuma de geração 1 ou 2 — reaproveitar objetos entre ciclos não ganharia nada.
+O banco também descartou pular as sondas que encerram cada série: **0,14 ms de
+56**. O que ele achou foi outra coisa, que só apareceu porque a medição foi feita
+com privilégio administrativo e a fonte boa ativa — sem elevação o HWiNFO nem
+abre, e o banco mede a fonte que o aplicativo não usa.
+
+A seção *leitura dirigida* confere primeiro que o atalho não muda o resultado, e
+só depois mede o ganho. O modo de falhar que interessa ali não é lentidão: é a
+lista vir truncada sem ninguém perceber, porque os dois mostradores continuam
+certos e o que some é o resto.
 
 ---
 

@@ -360,9 +360,45 @@ namespace MhiagosControl
                     for (int i = 0; i < roda.Count; i++) copia[i] = roda[i].Clone();
                     _rotation = copia;
                 }
+
+                AjustarFoco();
             }
             catch (Exception ex) { Log.Error("publicacao do perfil ativo", ex); }
         }
+
+        /// <summary>
+        /// Diz a camada de sensores de quais grupos o mostrador depende.
+        ///
+        /// Medido nesta maquina: o ciclo com os 19 grupos custa 54 ms e o
+        /// mesmo ciclo com os 2 grupos que vao ao mostrador custa 3,6 ms,
+        /// porque o caro na biblioteca do HWiNFO e preparar cada grupo, e nao
+        /// ler dele. O conjunto e o perfil ativo mais todos os do rodizio.
+        ///
+        /// Com a janela de configuracao aberta o foco sai: ali o seletor
+        /// precisa da lista inteira, e um ciclo de 54 ms enquanto alguem mexe
+        /// nos controles nao incomoda ninguem.
+        /// </summary>
+        private void AjustarFoco()
+        {
+            try
+            {
+                List<string> ids = null;
+                if (!_janelaAberta)
+                {
+                    ids = new List<string>();
+                    Profile a = _live;
+                    if (a != null) { ids.Add(a.Panel1Id); ids.Add(a.Panel2Id); }
+
+                    Profile[] roda = _rotation;
+                    if (roda != null)
+                        foreach (Profile p in roda) { ids.Add(p.Panel1Id); ids.Add(p.Panel2Id); }
+                }
+                lock (_sensorLock) { _sensors.Focar(ids); }
+            }
+            catch (Exception ex) { Log.Error("foco da leitura de sensores", ex); }
+        }
+
+        private volatile bool _janelaAberta = false;
 
         private void OnToggleAutostart(object sender, EventArgs e)
         {
@@ -687,6 +723,12 @@ namespace MhiagosControl
         {
             try
             {
+                // Antes de qualquer leitura: com a janela aberta o ciclo volta a
+                // ser completo, senao o seletor listaria so os sensores que ja
+                // estao no mostrador.
+                _janelaAberta = true;
+                AjustarFoco();
+
                 List<SensorEntry> list;
                 lock (_sensorLock)
                 {
@@ -716,6 +758,7 @@ namespace MhiagosControl
                 while (r == DialogResult.Retry);
 
                 _snapshotWanted = false;
+                _janelaAberta = false;   // antes de Publicar, que reaplica o foco
 
                 if (r != DialogResult.OK) _cfg = Config.Load();   // descarta edicoes
                 Publicar();
@@ -725,6 +768,8 @@ namespace MhiagosControl
             catch (Exception ex)
             {
                 _snapshotWanted = false;
+                _janelaAberta = false;
+                AjustarFoco();
                 Log.Error("janela de configuracao", ex);
                 MessageBox.Show(ex.Message, T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }

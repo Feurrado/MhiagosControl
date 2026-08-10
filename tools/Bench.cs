@@ -72,6 +72,8 @@ namespace MhiagosControl
                 Medir("Snapshot (so com a janela aberta)", delegate { s.Snapshot(); });
                 Medir("List (so ao abrir a janela)", delegate { s.List(); });
 
+                Dirigido(s, id1, id2, lista.Count);
+
                 if (s.HwInfoActive) DentroDoHwInfo(s);
             }
             return 0;
@@ -79,13 +81,18 @@ namespace MhiagosControl
 
         private static void Medir(string nome, Action passo)
         {
+            Medir(nome, Cycles, passo);
+        }
+
+        private static void Medir(string nome, int repeticoes, Action passo)
+        {
             GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
 
             long b0 = AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize;
             int g0 = GC.CollectionCount(0), g1 = GC.CollectionCount(1), g2 = GC.CollectionCount(2);
             Stopwatch sw = Stopwatch.StartNew();
 
-            for (int i = 0; i < Cycles; i++) passo();
+            for (int i = 0; i < repeticoes; i++) passo();
 
             sw.Stop();
             long bytes = AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize - b0;
@@ -93,13 +100,13 @@ namespace MhiagosControl
             int c1 = GC.CollectionCount(1) - g1;
             int c2 = GC.CollectionCount(2) - g2;
 
-            double porCiclo = (double)bytes / Cycles;
-            double gen0Hora = (double)c0 / Cycles * CyclesPerHour;
+            double porCiclo = (double)bytes / repeticoes;
+            double gen0Hora = (double)c0 / repeticoes * CyclesPerHour;
 
             Console.WriteLine(nome);
             Console.WriteLine(string.Format(
-                "   {0,9:n0} B/ciclo   {1,7:n2} ms/ciclo   gen0 {2}/{3} gen1 {4} gen2 {5}   ~{6:n0} gen0/hora",
-                porCiclo, sw.Elapsed.TotalMilliseconds / Cycles, c0, Cycles, c1, c2, gen0Hora));
+                "   {0,9:n0} B/ciclo   {1,7:n3} ms/ciclo   gen0 {2}/{3} gen1 {4} gen2 {5}   ~{6:n0} gen0/hora",
+                porCiclo, sw.Elapsed.TotalMilliseconds / repeticoes, c0, repeticoes, c1, c2, gen0Hora));
             Console.WriteLine();
         }
 
@@ -123,6 +130,58 @@ namespace MhiagosControl
 
             if (id1 == null && lista.Count > 0) id1 = lista[0].Id;
             if (id2 == null && lista.Count > 1) id2 = lista[1].Id;
+        }
+
+        /// <summary>
+        /// A leitura dirigida pelo caminho do aplicativo, e nao pela biblioteca.
+        ///
+        /// Prova primeiro que o atalho nao muda o resultado, e so depois mede o
+        /// ganho. O modo de falhar que interessa aqui nao e lentidao: e a lista
+        /// vir truncada e ninguem perceber, porque os dois mostradores continuam
+        /// certos e o que some e o resto.
+        /// </summary>
+        private static void Dirigido(Sensors s, string id1, string id2, int totalCompleto)
+        {
+            Console.WriteLine("--- leitura dirigida, pelo caminho do aplicativo ---");
+            Console.WriteLine();
+
+            s.Focar(null);
+            s.Refresh();
+            int crusCompleto = Crus(s).Count;
+
+            s.Focar(new string[] { id1, id2 });
+            s.Refresh();
+            int crusDirigido = Crus(s).Count;
+
+            SensorEntry e1 = s.ReadEntry(id1), e2 = s.ReadEntry(id2);
+            Console.WriteLine("   painel 1 achado: " + (e1 != null && e1.Value.HasValue) +
+                              "    painel 2 achado: " + (e2 != null && e2.Value.HasValue));
+            Console.WriteLine("   sensores lidos: " + crusDirigido + " dirigido, " + crusCompleto + " completo");
+
+            // A garantia por construcao: List() percebe que o ultimo ciclo foi
+            // dirigido e refaz completo antes de responder.
+            int aposList = s.List().Count;
+            Console.WriteLine("   List() apos ciclo dirigido: " + aposList +
+                              " (esperado " + totalCompleto + ") -> " +
+                              (aposList == totalCompleto ? "OK" : "FALHOU"));
+
+            // E o foco continua valendo para o ciclo seguinte.
+            s.Refresh();
+            Console.WriteLine("   ciclo seguinte volta a dirigir: " +
+                              (Crus(s).Count == crusDirigido ? "OK" : "FALHOU"));
+            Console.WriteLine();
+
+            Medir("ciclo dirigido (Refresh + 2x ReadEntry + Prepare)", delegate
+            {
+                s.Refresh();
+                SensorEntry a = s.ReadEntry(id1);
+                SensorEntry b = s.ReadEntry(id2);
+                Scaling.Prepare(a, Scaling.Effective(0, a), false);
+                Scaling.Prepare(b, Scaling.Effective(0, b), false);
+            });
+
+            s.Focar(null);
+            s.Refresh();
         }
 
         /// <summary>
@@ -166,7 +225,7 @@ namespace MhiagosControl
             Medir("  so a chamada que rele o hardware (263)", delegate { poll.DynamicInvoke(null); });
             Medir("  so a contagem de grupos (156)", delegate { count.DynamicInvoke(null); });
 
-            PorChamada(hw, grupos, clsMin, clsMax);
+            PorChamada(hw, poll, grupos, clsMin, clsMax);
         }
 
         /// <summary>
@@ -181,7 +240,7 @@ namespace MhiagosControl
         /// 0,00 ms - entao o acrescimo esta abaixo da resolucao daqui e nao
         /// atrapalha numeros na casa das dezenas de microssegundos.
         /// </summary>
-        private static void PorChamada(object hw, int grupos, int clsMin, int clsMax)
+        private static void PorChamada(object hw, Delegate poll, int grupos, int clsMin, int clsMax)
         {
             Delegate select = (Delegate)Campo(hw, "_select");
             Delegate nome = (Delegate)Campo(hw, "_groupName");
@@ -193,49 +252,134 @@ namespace MhiagosControl
             byte[] nomeBuf = new byte[256];
 
             // Forma real: quantas leituras cada par (grupo, classe) tem.
+            int[][] forma = new int[grupos][];
             int uteis = 0, vazios = 0;
-            int hitCls = -1, hitGrupo = -1, hitJ = -1;
-            int missCls = -1, missGrupo = -1, missJ = -1;
+            int maiorCls = -1, maiorGrupo = -1, maior = 0;
 
             for (int i = 0; i < grupos; i++)
             {
+                forma[i] = new int[clsMax + 1];
                 select.DynamicInvoke(i);
                 for (int cls = clsMin; cls <= clsMax; cls++)
                 {
                     int j = 0;
-                    while (j < 256 && (int)read.DynamicInvoke(cls, i, j, buf) != 0)
-                    {
-                        if (hitCls < 0) { hitCls = cls; hitGrupo = i; hitJ = j; }
-                        uteis++; j++;
-                    }
+                    while (j < 256 && (int)read.DynamicInvoke(cls, i, j, buf) != 0) j++;
+                    forma[i][cls] = j;
+                    uteis += j;
                     if (j == 0) vazios++;
-                    if (missCls < 0) { missCls = cls; missGrupo = i; missJ = j; }
+                    if (j > maior) { maior = j; maiorCls = cls; maiorGrupo = i; }
                 }
             }
 
             Console.WriteLine(string.Format(
-                "   forma: {0} leituras uteis, {1} pares (grupo,classe) totalmente vazios",
-                uteis, vazios));
+                "   forma: {0} leituras uteis, {1} pares (grupo,classe) vazios; maior serie tem {2}",
+                uteis, vazios, maior));
             Console.WriteLine();
 
-            if (hitCls >= 0)
+            // A pergunta que a medicao anterior errou: o custo de 641 depende do
+            // indice? Da primeira vez eu medi so o indice 0 - o caso mais barato
+            // se a biblioteca percorrer a lista desde o inicio a cada chamada.
+            if (maiorCls >= 0 && maior >= 3)
             {
-                int hc = hitCls, hg = hitGrupo, hj = hitJ;
-                select.DynamicInvoke(hg);
-                Medir("  uma leitura util (641 devolvendo dado)",
-                      delegate { read.DynamicInvoke(hc, hg, hj, buf); });
-            }
-
-            if (missCls >= 0)
-            {
-                int mc = missCls, mg = missGrupo, mj = missJ;
+                int mc = maiorCls, mg = maiorGrupo, ult = maior - 1, meio = maior / 2;
                 select.DynamicInvoke(mg);
-                Medir("  uma sonda de fim de serie (641 devolvendo 0)",
-                      delegate { read.DynamicInvoke(mc, mg, mj, buf); });
+                Medir("  641 no indice 0", delegate { read.DynamicInvoke(mc, mg, 0, buf); });
+                Medir("  641 no indice do meio", delegate { read.DynamicInvoke(mc, mg, meio, buf); });
+                Medir("  641 no ultimo indice", delegate { read.DynamicInvoke(mc, mg, ult, buf); });
+                Medir("  641 na sonda logo apos o ultimo", delegate { read.DynamicInvoke(mc, mg, maior, buf); });
             }
 
             Medir("  preparar um grupo (678)", delegate { select.DynamicInvoke(0); });
             Medir("  nome de um grupo (952)", delegate { nome.DynamicInvoke(0, nomeBuf, nomeBuf.Length); });
+
+            // A medicao decisiva, e a que nao depende de teoria nenhuma sobre o
+            // custo por chamada: a varredura inteira como o codigo faz hoje, e a
+            // mesma varredura sabendo de antemao onde cada serie termina. A
+            // diferenca entre as duas E o ganho da otimizacao proposta.
+            Console.WriteLine("--- a varredura inteira ---");
+            Console.WriteLine();
+
+            Medir("  como hoje: " + uteis + " leituras + " + (grupos * (clsMax - clsMin + 1)) + " sondas",
+                  60, delegate
+            {
+                for (int i = 0; i < grupos; i++)
+                {
+                    select.DynamicInvoke(i);
+                    for (int cls = clsMin; cls <= clsMax; cls++)
+                    {
+                        int j = 0;
+                        while (j < 256 && (int)read.DynamicInvoke(cls, i, j, buf) != 0) j++;
+                    }
+                }
+            });
+
+            Medir("  com a forma aprendida: so as " + uteis + " leituras", 60, delegate
+            {
+                for (int i = 0; i < grupos; i++)
+                {
+                    select.DynamicInvoke(i);
+                    int[] f = forma[i];
+                    for (int cls = clsMin; cls <= clsMax; cls++)
+                        for (int j = 0; j < f[cls]; j++) read.DynamicInvoke(cls, i, j, buf);
+                }
+            });
+
+            Medir("  so os 678, sem leitura nenhuma", 60, delegate
+            {
+                for (int i = 0; i < grupos; i++) select.DynamicInvoke(i);
+            });
+
+            // Se o custo esta em preparar cada grupo, e nao em ler, entao a
+            // conta que importa e outra: o mostrador usa dois sensores, e o
+            // ciclo prepara dezenove grupos. Isto mede o ciclo dirigido - so a
+            // releitura e os grupos de onde os dois sensores saem - contra o
+            // ciclo inteiro de hoje, nas mesmas condicoes.
+            int gA = -1, gB = -1;
+            for (int i = 0; i < grupos && gB < 0; i++)
+            {
+                int total = 0;
+                for (int cls = clsMin; cls <= clsMax; cls++) total += forma[i][cls];
+                if (total == 0) continue;
+                if (gA < 0) gA = i; else gB = i;
+            }
+
+            if (gA < 0 || gB < 0) return;
+
+            Console.WriteLine("--- dirigir a leitura aos grupos que vao ao mostrador ---");
+            Console.WriteLine();
+
+            Medir("  ciclo de hoje: 263 + os " + grupos + " grupos", 60, delegate
+            {
+                poll.DynamicInvoke(null);
+                for (int i = 0; i < grupos; i++) LerGrupo(select, read, buf, forma, i, clsMin, clsMax);
+            });
+
+            Medir("  ciclo dirigido: 263 + os grupos " + gA + " e " + gB, 60, delegate
+            {
+                poll.DynamicInvoke(null);
+                LerGrupo(select, read, buf, forma, gA, clsMin, clsMax);
+                LerGrupo(select, read, buf, forma, gB, clsMin, clsMax);
+            });
+
+            Medir("  ciclo dirigido a um grupo so", 60, delegate
+            {
+                poll.DynamicInvoke(null);
+                LerGrupo(select, read, buf, forma, gA, clsMin, clsMax);
+            });
+
+            Medir("  so a releitura, sem grupo nenhum", 60, delegate
+            {
+                poll.DynamicInvoke(null);
+            });
+        }
+
+        private static void LerGrupo(Delegate select, Delegate read, byte[] buf,
+                                     int[][] forma, int i, int clsMin, int clsMax)
+        {
+            select.DynamicInvoke(i);
+            int[] f = forma[i];
+            for (int cls = clsMin; cls <= clsMax; cls++)
+                for (int j = 0; j < f[cls]; j++) read.DynamicInvoke(cls, i, j, buf);
         }
 
         private static object Campo(object alvo, string nome)

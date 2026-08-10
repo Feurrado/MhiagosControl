@@ -103,6 +103,19 @@ namespace MhiagosControl
         // id sintetico -> identificadores dos sensores que ele resume
         private readonly Dictionary<string, List<string>> _synth = new Dictionary<string, List<string>>();
 
+        /// <summary>
+        /// Grupos do HWiNFO que bastam para os sensores em uso; null le tudo.
+        /// </summary>
+        private ICollection<string> _foco;
+
+        /// <summary>Identificador -> grupo, aprendido na ultima varredura completa.</summary>
+        private readonly Dictionary<string, string> _grupoDoId = new Dictionary<string, string>();
+
+        /// <summary>Se o ultimo instantaneo saiu de uma leitura dirigida.</summary>
+        private bool _dirigida = false;
+
+        private const string HwPrefix = "hw:";
+
         private const string SynthPrefix = "synth:";
 
         /// <summary>
@@ -239,7 +252,19 @@ namespace MhiagosControl
 
             if (HwInfoActive)
             {
-                foreach (HwReading r in _hw.ReadAll())
+                // Dirigida quando ha foco e ele ainda vale; senao completa, que
+                // tambem e o que reaprende onde cada grupo esta.
+                ICollection<string> foco = _foco;
+                List<HwReading> leituras = foco != null ? _hw.ReadGroups(foco) : null;
+                _dirigida = leituras != null;
+                if (leituras == null)
+                {
+                    leituras = _hw.ReadAll();
+                    _grupoDoId.Clear();
+                    foreach (HwReading r in leituras) _grupoDoId[r.Id] = r.Group;
+                }
+
+                foreach (HwReading r in leituras)
                 {
                     SensorEntry e = new SensorEntry();
                     e.Id = r.Id;
@@ -372,9 +397,75 @@ namespace MhiagosControl
             return _raw;
         }
 
+        /// <summary>
+        /// Restringe os proximos ciclos aos grupos destes sensores.
+        ///
+        /// Passe null para voltar a ler tudo - e o que a janela de configuracao
+        /// faz enquanto esta aberta. Um identificador desconhecido desliga o
+        /// atalho inteiro: ler menos do que o pedido seria devolver silencio
+        /// no lugar de uma leitura.
+        /// </summary>
+        public void Focar(IEnumerable<string> ids)
+        {
+            _foco = null;
+            if (ids == null) return;
+
+            List<string> grupos = new List<string>();
+            foreach (string id in ids)
+            {
+                if (string.IsNullOrEmpty(id)) continue;
+                if (!GruposDe(id, grupos)) return;
+            }
+            if (grupos.Count > 0) _foco = grupos;
+        }
+
+        /// <summary>
+        /// Grupos de que um identificador depende. Um agregado depende dos
+        /// grupos de todos os membros que ele resume.
+        /// </summary>
+        private bool GruposDe(string id, List<string> destino)
+        {
+            if (id.StartsWith(SynthPrefix, StringComparison.Ordinal))
+            {
+                List<string> membros;
+                if (!_synth.TryGetValue(id, out membros)) return false;
+                foreach (string m in membros)
+                    if (!GruposDe(m, destino)) return false;
+                return true;
+            }
+
+            // Sensor da LibreHardwareMonitor: nao passa pelo HWiNFO e a
+            // varredura dela ja e completa e barata.
+            if (!id.StartsWith(HwPrefix, StringComparison.Ordinal)) return true;
+
+            string grupo;
+            if (!_grupoDoId.TryGetValue(id, out grupo)) return false;
+            if (!destino.Contains(grupo)) destino.Add(grupo);
+            return true;
+        }
+
+        /// <summary>
+        /// Garante que o instantaneo corrente tem todos os sensores.
+        ///
+        /// A lista e o instantaneo servem a interface, e a interface precisa de
+        /// tudo. Sem isto, abrir o seletor depois de um ciclo dirigido mostraria
+        /// so os sensores dos dois mostradores - e o defeito apareceria como
+        /// "sumiram sensores", longe da causa. Fica aqui, e nao a cargo de quem
+        /// chama, porque esquecer seria silencioso.
+        /// </summary>
+        private void Completar()
+        {
+            if (!_dirigida) return;
+            ICollection<string> guardado = _foco;
+            _foco = null;
+            try { _raw = BuildRaw(); }
+            finally { _foco = guardado; }
+        }
+
         /// <summary>Lista os sensores para a interface.</summary>
         public List<SensorEntry> List()
         {
+            Completar();
             List<SensorEntry> raw = Snap();
             List<SensorEntry> result = ShowAll ? new List<SensorEntry>(raw) : Condense(raw);
             result.Sort(delegate(SensorEntry a, SensorEntry b)
@@ -480,6 +571,7 @@ namespace MhiagosControl
         /// <summary>Instantaneo id -&gt; valor, incluindo os agregados.</summary>
         public Dictionary<string, float> Snapshot()
         {
+            Completar();
             Dictionary<string, float> map = new Dictionary<string, float>();
             foreach (SensorEntry e in Snap())
             {
