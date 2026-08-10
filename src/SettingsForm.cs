@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using LibreHardwareMonitor.Hardware;
 
 namespace MhiagosControl
 {
@@ -27,13 +28,13 @@ namespace MhiagosControl
 
         // pagina Paineis
         private SensorPicker _pick1, _pick2;
-        private Toggle _tgF, _tgPct;
+        private Segmented _unit1, _unit2;
         private FlatBtn[] _div1, _div2;
-        private Label _exp1, _exp2;
         private PanelPreview _preview;
+        private SensorSlot _slot1, _slot2;
 
         // pagina Alertas
-        private NumericUpDown _alert1, _alert2;
+        private NumberBox _alert1, _alert2;
         private Label _alertInfo1, _alertInfo2;
 
         // pagina Perfis
@@ -154,71 +155,107 @@ namespace MhiagosControl
 
         // ---------------- pagina: Paineis ----------------
 
+        /// <summary>
+        /// O cartao de cada painel mostra apenas o sensor ja escolhido; a
+        /// escolha acontece numa janela dedicada.
+        ///
+        /// Embutida na pagina, a lista ficava com 142 px - cinco linhas e meia
+        /// para varias dezenas de sensores, parte delas cabecalhos de grupo -
+        /// porque disputava altura com escala, unidade e previa. Num dialogo
+        /// ela nao disputa com nada.
+        /// </summary>
         private Control BuildPagePaineis()
         {
             Panel page = new Panel();
             page.BackColor = Color.Transparent;
 
+            // Os seletores continuam sendo o estado da escolha; so nao aparecem
+            // na pagina. Quem os edita e o dialogo.
+            _pick1 = new SensorPicker();
+            _pick1.SetSensors(Clone(_sensors));
+            _pick2 = new SensorPicker();
+            _pick2.SetSensors(Clone(_sensors));
+
             Card c1 = new Card();
             c1.Title = "Painel 1  ·  esquerdo";
-            c1.SetBounds(0, 0, 370, 344);
+            c1.SetBounds(0, 0, 370, 268);
             page.Controls.Add(c1);
 
-            _pick1 = new SensorPicker();
-            _pick1.SetBounds(12, 44, 346, 180);
-            _pick1.SetSensors(Clone(_sensors));
-            _pick1.SelectionChanged += delegate { OnChanged(); };
-            c1.Controls.Add(_pick1);
+            _slot1 = new SensorSlot();
+            _slot1.SetBounds(12, 48, 346, 80);
+            _slot1.Button.Click += delegate { TrocarSensor(_pick1, "Sensor do painel 1"); };
+            c1.Controls.Add(_slot1);
 
-            c1.Controls.Add(MakeLabel("Escala", 14, 232, Ui.FontMed));
-            _div1 = MakeDivisorRow(c1, 14, 252, 1);
+            c1.Controls.Add(MakeLabel("Escala", 14, 142, Ui.FontMed));
+            _div1 = MakeDivisorRow(c1, 14, 162, 1);
 
-            _tgF = new Toggle();
-            _tgF.Label = "Temperatura em Fahrenheit";
-            _tgF.SetBounds(14, 286, 330, 26);
-            _tgF.CheckedChanged += delegate { OnChanged(); };
-            c1.Controls.Add(_tgF);
-
-            _exp1 = MakeLabel("", 14, 316, Ui.FontSmall);
-            _exp1.Size = new Size(344, 20);
-            _exp1.ForeColor = Ui.Muted;
-            c1.Controls.Add(_exp1);
+            c1.Controls.Add(MakeLabel("Unidade", 14, 200, Ui.FontMed));
+            _unit1 = new Segmented();
+            _unit1.SetItems("°C", "°F");
+            _unit1.SetBounds(14, 220, 140, 30);
+            _unit1.SelectedIndexChanged += delegate { OnChanged(); };
+            c1.Controls.Add(_unit1);
 
             Card c2 = new Card();
             c2.Title = "Painel 2  ·  direito";
-            c2.SetBounds(386, 0, 370, 344);
+            c2.SetBounds(386, 0, 370, 268);
             page.Controls.Add(c2);
 
-            _pick2 = new SensorPicker();
-            _pick2.SetBounds(12, 44, 346, 180);
-            _pick2.SetSensors(Clone(_sensors));
-            _pick2.SelectionChanged += delegate { OnChanged(); };
-            c2.Controls.Add(_pick2);
+            _slot2 = new SensorSlot();
+            _slot2.SetBounds(12, 48, 346, 80);
+            _slot2.Button.Click += delegate { TrocarSensor(_pick2, "Sensor do painel 2"); };
+            c2.Controls.Add(_slot2);
 
-            c2.Controls.Add(MakeLabel("Escala", 14, 232, Ui.FontMed));
-            _div2 = MakeDivisorRow(c2, 14, 252, 2);
+            c2.Controls.Add(MakeLabel("Escala", 14, 142, Ui.FontMed));
+            _div2 = MakeDivisorRow(c2, 14, 162, 2);
 
-            _tgPct = new Toggle();
-            _tgPct.Label = "Acender  %  (desligado acende  W)";
-            _tgPct.SetBounds(14, 286, 330, 26);
-            _tgPct.CheckedChanged += delegate { OnChanged(); };
-            c2.Controls.Add(_tgPct);
+            c2.Controls.Add(MakeLabel("Unidade", 14, 200, Ui.FontMed));
+            _unit2 = new Segmented();
+            _unit2.SetItems("%", "W");
+            _unit2.SetBounds(14, 220, 140, 30);
+            _unit2.SelectedIndexChanged += delegate { OnChanged(); };
+            c2.Controls.Add(_unit2);
 
-            _exp2 = MakeLabel("", 14, 316, Ui.FontSmall);
-            _exp2.Size = new Size(344, 20);
-            _exp2.ForeColor = Ui.Muted;
-            c2.Controls.Add(_exp2);
 
             Card cp = new Card();
             cp.Title = "Prévia";
-            cp.SetBounds(0, 356, 756, 456);
+            cp.SetBounds(0, 280, 756, 532);
             page.Controls.Add(cp);
 
             _preview = new PanelPreview();
-            _preview.SetBounds(12, 44, 732, 400);
+            _preview.SetBounds(12, 44, 732, 476);
             cp.Controls.Add(_preview);
 
             return page;
+        }
+
+        private void TrocarSensor(SensorPicker alvo, string titulo)
+        {
+            using (SensorDialog d = new SensorDialog(Clone(_sensors), alvo.SelectedId, titulo))
+                if (d.ShowDialog(this) == DialogResult.OK)
+                {
+                    alvo.SelectedId = d.SelectedId;
+                    if (alvo == _pick2) AjustarUnidade2();
+                    OnChanged();
+                }
+        }
+
+        /// <summary>
+        /// Acende o simbolo certo do painel 2 conforme o sensor escolhido.
+        ///
+        /// O hardware so tem esses dois: potencia acende W, carga e nivel
+        /// acendem %. Nos demais tipos - clock, tensao, RPM - nenhum dos dois
+        /// descreve a leitura, entao a escolha anterior fica de pe em vez de
+        /// mudar sozinha para algo igualmente errado. Continua editavel: o
+        /// ajuste automatico so acontece quando o sensor troca.
+        /// </summary>
+        private void AjustarUnidade2()
+        {
+            SensorEntry s = _pick2.Selected;
+            if (s == null) return;
+
+            if (s.Type == SensorType.Power) _unit2.SelectedIndex = 1;
+            else if (s.Type == SensorType.Load || s.Type == SensorType.Level) _unit2.SelectedIndex = 0;
         }
 
         private FlatBtn[] MakeDivisorRow(Control parent, int x, int y, int which)
@@ -261,7 +298,12 @@ namespace MhiagosControl
             {
                 SensorEntry e = new SensorEntry();
                 e.Id = s.Id; e.Hardware = s.Hardware; e.Name = s.Name;
-                e.Label = s.Label; e.Type = s.Type; e.Value = s.Value;
+                e.Category = s.Category;
+                e.Label = s.Label; e.Type = s.Type; e.Value = s.Value; e.Unit = s.Unit;
+                // Source e Members faltavam: a lista declarava tudo como
+                // LibreHardwareMonitor, o que nao aparecia enquanto a
+                // procedencia nao era exibida na linha do sensor.
+                e.Source = s.Source; e.Members = s.Members;
                 copy.Add(e);
             }
             return copy;
@@ -279,27 +321,14 @@ namespace MhiagosControl
             c.SetBounds(0, 0, 756, 250);
             page.Controls.Add(c);
 
-            c.Controls.Add(MakeLabel("Avisar quando o painel 1 atingir:", 16, 56, Ui.FontBase));
-            _alert1 = MakeNumeric(16, 78);
-            _alert1.ValueChanged += delegate { OnChanged(); };
-            c.Controls.Add(_alert1);
-            _alertInfo1 = MakeLabel("", 130, 82, Ui.FontSmall);
-            _alertInfo1.Size = new Size(600, 18); _alertInfo1.ForeColor = Ui.Muted;
-            c.Controls.Add(_alertInfo1);
-
-            c.Controls.Add(MakeLabel("Avisar quando o painel 2 atingir:", 16, 126, Ui.FontBase));
-            _alert2 = MakeNumeric(16, 148);
-            _alert2.ValueChanged += delegate { OnChanged(); };
-            c.Controls.Add(_alert2);
-            _alertInfo2 = MakeLabel("", 130, 152, Ui.FontSmall);
-            _alertInfo2.Size = new Size(600, 18); _alertInfo2.ForeColor = Ui.Muted;
-            c.Controls.Add(_alertInfo2);
+            _alert1 = MakeLimiar(c, "Painel 1  ·  esquerdo", 16, 58, out _alertInfo1);
+            _alert2 = MakeLimiar(c, "Painel 2  ·  direito", 386, 58, out _alertInfo2);
 
             Label note = MakeLabel(
                 "Zero desliga o aviso. O alerta dispara na subida e só rearma quando o valor cai abaixo do limiar —\n" +
                 "sem isso, um sensor oscilando no limite notificaria a cada ciclo. O ícone da bandeja ganha um ponto\n" +
                 "vermelho enquanto o alerta estiver ativo. Mostrador apagado não dispara alerta.",
-                16, 190, Ui.FontSmall);
+                16, 186, Ui.FontSmall);
             note.Size = new Size(720, 52);
             note.ForeColor = Ui.Muted;
             c.Controls.Add(note);
@@ -307,15 +336,28 @@ namespace MhiagosControl
             return page;
         }
 
-        private static NumericUpDown MakeNumeric(int x, int y)
+        /// <summary>Rotulo, campo numerico e leitura atual de um dos limiares.</summary>
+        private NumberBox MakeLimiar(Control host, string titulo, int x, int y, out Label info)
         {
-            NumericUpDown n = new NumericUpDown();
+            host.Controls.Add(MakeLabel(titulo, x, y, Ui.FontMed));
+
+            Label cap = MakeLabel("Avisar quando atingir", x, y + 24, Ui.FontSmall);
+            cap.Size = new Size(320, 18);
+            cap.ForeColor = Ui.Muted;
+            host.Controls.Add(cap);
+
+            NumberBox n = new NumberBox();
             n.Minimum = 0; n.Maximum = 999;
-            n.SetBounds(x, y, 96, 26);
-            n.Font = Ui.FontBase;
-            n.BorderStyle = BorderStyle.FixedSingle;
-            n.BackColor = Ui.SurfaceAlt;
-            n.ForeColor = Ui.Text;
+            n.SetBounds(x, y + 48, 120, 34);
+            n.ValueChanged += delegate { OnChanged(); };
+            host.Controls.Add(n);
+
+            info = MakeLabel("", x + 134, y + 48, Ui.FontSmall);
+            info.Size = new Size(200, 34);
+            info.TextAlign = ContentAlignment.MiddleLeft;   // alinha com o campo, nao com o topo
+            info.ForeColor = Ui.Muted;
+            host.Controls.Add(info);
+
             return n;
         }
 
@@ -504,7 +546,79 @@ namespace MhiagosControl
             };
             c.Controls.Add(open);
 
+            Card cr = new Card();
+            cr.Title = "Projeto e créditos";
+            cr.SetBounds(0, 362, 756, 150);
+            page.Controls.Add(cr);
+
+            Label autor = MakeLabel("Criado por Feurrado", 16, 52, Ui.FontMed);
+            autor.Size = new Size(400, 22);
+            cr.Controls.Add(autor);
+
+            Label repo = MakeLabel(Repositorio, 16, 76, Ui.FontSmall);
+            repo.Size = new Size(500, 20);
+            repo.ForeColor = Ui.Muted;
+            cr.Controls.Add(repo);
+
+            FlatBtn git = new FlatBtn();
+            git.Text = "Abrir no GitHub";
+            git.SetBounds(16, 104, 150, 32);
+            git.Click += delegate { Abrir(Repositorio); };
+            cr.Controls.Add(git);
+
+            Label libs = MakeLabel(
+                "Sensores pela LibreHardwareMonitor (MPL 2.0) e pela biblioteca cliente do HWiNFO,\n" +
+                "© REALiX s.r.o. — software comercial de terceiros, não redistribuído com este projeto.",
+                190, 100, Ui.FontSmall);
+            libs.Size = new Size(552, 40);
+            libs.ForeColor = Ui.Muted;
+            cr.Controls.Add(libs);
+
+            Card cd = new Card();
+            cd.Title = "Isenção de responsabilidade";
+            cd.SetBounds(0, 524, 756, 288);
+            page.Controls.Add(cd);
+
+            Label disc = MakeLabel(Disclaimer, 16, 52, Ui.FontSmall);
+            disc.Size = new Size(724, 224);
+            disc.ForeColor = Ui.Muted;
+            cd.Controls.Add(disc);
+
             return page;
+        }
+
+        private const string Repositorio = "https://github.com/Feurrado/MhiagosControl";
+
+        /// <summary>
+        /// Texto de isencao.
+        ///
+        /// Repete em tela a isencao do README porque quem instala um binario
+        /// raramente abre o repositorio - e e justamente a pessoa que precisa
+        /// saber que o programa fala com o hardware por sua conta e risco.
+        /// </summary>
+        private const string Disclaimer =
+            "Este é um projeto pessoal, independente e sem fins lucrativos, feito para interoperar com\n" +
+            "hardware que o autor possui. Não tem qualquer vínculo, patrocínio, afiliação ou aprovação\n" +
+            "da Rise Mode, da Ocypus, da SHENZHEN SHINETEK, da REALiX s.r.o. ou de qualquer outro\n" +
+            "fabricante. Todas as marcas citadas pertencem aos seus respectivos donos e aparecem apenas\n" +
+            "para identificar o equipamento com que o programa se comunica.\n" +
+            "\n" +
+            "O protocolo do painel foi levantado por engenharia reversa do próprio equipamento, com a\n" +
+            "finalidade exclusiva de interoperabilidade — o programa não contém, não copia e não\n" +
+            "redistribui código do software original.\n" +
+            "\n" +
+            "O PROGRAMA É FORNECIDO \"COMO ESTÁ\", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU IMPLÍCITA,\n" +
+            "INCLUINDO AS DE COMERCIALIZAÇÃO, ADEQUAÇÃO A UM FIM ESPECÍFICO E NÃO VIOLAÇÃO. O USO É POR\n" +
+            "CONTA E RISCO DE QUEM O EXECUTA. EM NENHUMA HIPÓTESE O AUTOR RESPONDE POR QUALQUER DANO,\n" +
+            "DIRETO OU INDIRETO, INCLUINDO DANO A EQUIPAMENTO, PERDA DE DADOS OU LUCROS CESSANTES,\n" +
+            "DECORRENTE DO USO OU DA IMPOSSIBILIDADE DE USO DESTE PROGRAMA.\n" +
+            "\n" +
+            "Usar este programa pode implicar a perda da garantia do equipamento. Verifique antes.";
+
+        private static void Abrir(string url)
+        {
+            try { System.Diagnostics.Process.Start(url); }
+            catch (Exception ex) { Log.Error("abrir " + url, ex); }
         }
 
         private void OnToggleShowAll(object sender, EventArgs e)
@@ -545,15 +659,21 @@ namespace MhiagosControl
             _loading = true;
             _pick1.SelectedId = _current.Panel1Id;
             _pick2.SelectedId = _current.Panel2Id;
-            _tgF.Checked = _current.Fahrenheit;
-            _tgPct.Checked = _current.Percent;
+            _unit1.SelectedIndex = _current.Fahrenheit ? 1 : 0;
+            _unit2.SelectedIndex = _current.Percent ? 0 : 1;
             _alert1.Value = Clamp(_current.Alert1);
             _alert2.Value = Clamp(_current.Alert2);
             _loading = false;
             Refresh0();
         }
 
-        private static decimal Clamp(int v)
+        /// <summary>Fahrenheit e a segunda pastilha do seletor de unidade.</summary>
+        private bool Fahrenheit { get { return _unit1.SelectedIndex == 1; } }
+
+        /// <summary>Porcentagem e a PRIMEIRA pastilha; a segunda acende W.</summary>
+        private bool Percent { get { return _unit2.SelectedIndex == 0; } }
+
+        private static int Clamp(int v)
         {
             if (v < 0) return 0;
             if (v > 999) return 999;
@@ -565,10 +685,10 @@ namespace MhiagosControl
             if (_current == null) return;
             if (_pick1.SelectedId.Length > 0) _current.Panel1Id = _pick1.SelectedId;
             if (_pick2.SelectedId.Length > 0) _current.Panel2Id = _pick2.SelectedId;
-            _current.Fahrenheit = _tgF.Checked;
-            _current.Percent = _tgPct.Checked;
-            _current.Alert1 = (int)_alert1.Value;
-            _current.Alert2 = (int)_alert2.Value;
+            _current.Fahrenheit = Fahrenheit;
+            _current.Percent = Percent;
+            _current.Alert1 = _alert1.Value;
+            _current.Alert2 = _alert2.Value;
         }
 
         private void OnChanged()
@@ -590,24 +710,27 @@ namespace MhiagosControl
             int d1 = Scaling.Effective(_current.Divisor1, s1);
             int d2 = Scaling.Effective(_current.Divisor2, s2);
 
-            _exp1.Text = Scaling.Explain(s1, d1, _tgF.Checked);
-            _exp2.Text = Scaling.Explain(s2, d2, false);
-
-            PanelValue v1 = Scaling.Prepare(s1, d1, _tgF.Checked);
+            PanelValue v1 = Scaling.Prepare(s1, d1, Fahrenheit);
             PanelValue v2 = Scaling.Prepare(s2, d2, false);
 
             _preview.Value1 = v1.Value;
             _preview.Value2 = v2.Value;
-            _preview.Fahrenheit = _tgF.Checked;
-            _preview.Percent = _tgPct.Checked;
-            _preview.Alert1 = _alert1.Value > 0 && v1.Value.HasValue && v1.Value.Value >= (int)_alert1.Value;
-            _preview.Alert2 = _alert2.Value > 0 && v2.Value.HasValue && v2.Value.Value >= (int)_alert2.Value;
+            _preview.Fahrenheit = Fahrenheit;
+            _preview.Percent = Percent;
+            _preview.Alert1 = _alert1.Value > 0 && v1.Value.HasValue && v1.Value.Value >= _alert1.Value;
+            _preview.Alert2 = _alert2.Value > 0 && v2.Value.HasValue && v2.Value.Value >= _alert2.Value;
             _preview.Invalidate();
 
             if (_alertInfo1 != null)
             {
                 _alertInfo1.Text = _alert1.Value > 0 ? "atual: " + Show(v1) : "desligado";
                 _alertInfo2.Text = _alert2.Value > 0 ? "atual: " + Show(v2) : "desligado";
+            }
+
+            if (_slot1 != null)
+            {
+                _slot1.Entry = s1; _slot1.Invalidate();
+                _slot2.Entry = s2; _slot2.Invalidate();
             }
         }
 

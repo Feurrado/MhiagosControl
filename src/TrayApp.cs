@@ -62,24 +62,82 @@ namespace MhiagosControl
             _icon.Icon = _iconNormal;
             _icon.Text = "Mhiagos Control - iniciando";
             _icon.Visible = true;
+            _icon.Click += new EventHandler(OnIconClick);
             _icon.DoubleClick += new EventHandler(OnConfig);
             BuildMenu();
 
-            try
+            // A abertura das fontes NAO acontece aqui. Ela e agendada para
+            // depois que Application.Run assumir: veja AbrirSensores.
+            _iniciando = true;
+            _marshal.BeginInvoke(new MethodInvoker(AbrirSensores));
+        }
+
+        /// <summary>
+        /// Abre as fontes de sensores sem bloquear a thread de interface.
+        ///
+        /// Antes isso rodava dentro do construtor, com Application.DoEvents num
+        /// laco de espera. Bombear na mao nunca devolve a thread ao estado
+        /// ocioso: passados alguns segundos o Windows considera a janela travada,
+        /// troca o cursor pelo de ocupado e passa a engolir os cliques - a tela
+        /// de carregamento nao fechava porque ninguem recebia o clique.
+        ///
+        /// Agora o laco de mensagens de verdade ja esta rodando quando este
+        /// metodo comeca; o trabalho pesado vai para outra thread e o retorno
+        /// volta para a de interface por BeginInvoke.
+        /// </summary>
+        private void AbrirSensores()
+        {
+            // qualificado: System.Threading tambem tem um Timer
+            _demora = new System.Windows.Forms.Timer();
+            _demora.Interval = 3000;
+            _demora.Tick += delegate
             {
-                lock (_sensorLock)
+                _demora.Stop();
+                StatusInicial("Carregando o driver de sensores...");
+            };
+            _demora.Start();
+
+            Thread init = new Thread(delegate()
+            {
+                Exception falha = null;
+                try
                 {
-                    _sensors.Open();
-                    _cache = _sensors.List();
+                    lock (_sensorLock)
+                    {
+                        _sensors.Open();
+                        _cache = _sensors.List();
+                    }
                 }
+                catch (Exception ex) { falha = ex; }
+
+                try { _marshal.BeginInvoke(new SensoresProntosHandler(SensoresProntos), falha); }
+                catch (Exception ex) { Log.Error("retorno da inicializacao", ex); }
+            });
+            init.IsBackground = true;
+            init.Name = "SensorInit";
+            init.Start();
+        }
+
+        private delegate void SensoresProntosHandler(Exception falha);
+        private System.Windows.Forms.Timer _demora;
+
+        /// <summary>Continuacao do arranque, ja de volta na thread de interface.</summary>
+        private void SensoresProntos(Exception falha)
+        {
+            _iniciando = false;
+            if (_demora != null) { _demora.Stop(); _demora.Dispose(); _demora = null; }
+            FecharSplash();
+
+            if (falha == null)
+            {
                 _sensorsOk = true;
                 Log.Write("sensores abertos: " + _cache.Count + " disponiveis");
             }
-            catch (Exception ex)
+            else
             {
-                Log.Error("inicializacao dos sensores", ex);
+                Log.Error("inicializacao dos sensores", falha);
                 MessageBox.Show(
-                    "Falha ao inicializar os sensores.\n\n" + ex.Message +
+                    "Falha ao inicializar os sensores.\n\n" + falha.Message +
                     "\n\nTemperatura e potencia exigem privilegio administrativo." +
                     "\n\nDetalhes em:\n" + Log.Path,
                     "Mhiagos Control", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -100,6 +158,41 @@ namespace MhiagosControl
             _worker.IsBackground = true;
             _worker.Name = "PanelUpdate";
             _worker.Start();
+        }
+
+        /// <summary>
+        /// Clique no icone. Durante a inicializacao ele mostra o andamento -
+        /// e o momento em que o usuario se pergunta se o programa abriu. Fora
+        /// dela nao faz nada: quem abre a configuracao e o duplo clique.
+        /// </summary>
+        private void OnIconClick(object sender, EventArgs e)
+        {
+            MouseEventArgs m = e as MouseEventArgs;
+            if (m != null && m.Button != MouseButtons.Left) return;   // direito e o menu
+            if (_iniciando) MostrarSplash();
+        }
+
+        private volatile bool _iniciando = false;
+        private string _statusInicial = "Abrindo as fontes de sensores...";
+
+        private void StatusInicial(string texto)
+        {
+            _statusInicial = texto;
+            Splash.SetStatus(texto);
+        }
+
+        /// <summary>
+        /// Mostra a tela de carregamento a pedido. Fecha-la nao cancela nada -
+        /// a inicializacao roda noutra thread e nem sabe que ela existe.
+        /// </summary>
+        private void MostrarSplash()
+        {
+            Splash.Show(_statusInicial);
+        }
+
+        private void FecharSplash()
+        {
+            Splash.Close();
         }
 
         // ---------------- menu ----------------

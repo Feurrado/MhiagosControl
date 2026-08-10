@@ -16,11 +16,29 @@ em vez das duas métricas fixas que o software de fábrica oferece.
 | ![Painéis](docs/paineis.png) | ![Alertas](docs/alertas.png) |
 | **Painéis** — escolha o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça | **Alertas** — limiar por mostrador, com rearme na descida |
 | ![Perfis](docs/perfis.png) | ![Sobre](docs/sobre.png) |
-| **Perfis** — conjuntos salvos, trocáveis pelo menu da bandeja | **Sobre** — início automático e resumo dos sensores |
+| **Perfis** — conjuntos salvos, trocáveis pelo menu da bandeja | **Sobre** — início automático, créditos e isenção de responsabilidade |
 
 A prévia reproduz a vista superior do cooler e o mostrador de sete segmentos
 como ele é no aparelho: os dois painéis empilhados, `°C`/`°F` sobre `%`/`W`,
 dígitos brancos sem moldura.
+
+### Escolha do sensor
+
+<img src="docs/dialogo.png" width="480" alt="Janela de escolha de sensor">
+
+O sensor de cada mostrador é escolhido numa janela dedicada, aberta pelo botão
+*Trocar*. Ali a lista não divide altura com escala, unidade e prévia, então
+cabem duas vezes mais linhas — e as pílulas de categoria reduzem a busca ao
+hardware procurado. Busca por texto casa nome, categoria e tipo, todos os termos
+ao mesmo tempo. Duplo clique ou <kbd>Enter</kbd> confirmam.
+
+### Tela de carregamento
+
+<img src="docs/splash.png" width="380" alt="Tela de carregamento">
+
+Não aparece sozinha: só surge se o ícone da bandeja for clicado enquanto as
+fontes de sensores ainda estão abrindo — quem estranhou a demora é quem quer
+explicação. Fechá-la não interrompe nada.
 
 > As leituras que aparecem nas capturas são **ilustrativas** — a interface foi
 > renderizada com uma lista de sensores representativa, não medida de uma
@@ -68,6 +86,12 @@ compactado nem inteiro binário. Para exibir `73`, envia-se `0`, `7`, `3`.
 Os códigos `0x0A`–`0x0F` **apagam** o dígito.
 
 **Sem checksum, sem criptografia, sem número de sequência.**
+
+O byte de dígito é um **índice de tabela no firmware**, não um mapa de
+segmentos. A prova é `0x00`: se fosse bitmap acenderia nada, e acende o `0`.
+Não há, portanto, como desenhar figuras ou animar segmentos avulsos — o painel
+escreve os dez algarismos e mais nada. Para varrer o que resta do protocolo,
+veja `tools\Probe.cs` em *Ferramentas*.
 
 ### Flags (`report[4]`)
 
@@ -218,11 +242,57 @@ chamava *RiseModePanel*) são migradas no primeiro arranque.
 - Sensores por núcleo são **resumidos em médias** (clock, potência, tensão, uso),
   para não enterrar os sensores gerais. Desligável em *Mostrar todos os sensores*.
 - A conversão para Fahrenheit só se aplica a sensores do tipo `Temperature`.
+- A **unidade vem da fonte**, não do tipo do sensor: o HWiNFO devolve memória em
+  `MB` e o rótulo genérico do tipo dizia `GB` sobre o número errado. Leituras em
+  `MB` são convertidas para `GB` e exibidas com uma casa (`11.6 GB`).
+- O seletor de unidade do painel 2 **acompanha a métrica**: escolher um sensor de
+  potência acende `W`, um de uso acende `%`.
 - Valores acima de 999 são limitados pelo hardware; o tooltip sinaliza com
   `[excede 999]`. Divisores por sensor permitem caber métricas maiores.
 - **Início automático** por Tarefa Agendada com `/rl highest`: a chave `Run` do
   registro não serve para aplicativos elevados.
 - `SessionEnding` encerra a thread antes de fechar as fontes.
+- A **tela de carregamento vive em thread própria**, com laço de mensagens
+  próprio. Pendurada na thread principal ela travava: durante a subida do driver
+  o `LoadLibrary` segura o cadeado do carregador, o Windows marca a janela como
+  travada e passa a engolir os cliques — não dava para fechá-la.
+- As **barras de rolagem são desenhadas pelo aplicativo**. A nativa entra como um
+  risco claro sobre o cartão escuro mesmo com `DarkMode_Explorer`, e não aceita
+  espessura nem raio. Escondê-la tem um efeito colateral: o `ListBox` só rola com
+  a roda enquanto a barra nativa está visível, então a roda também passou a ser
+  tratada na mão, pelo `TopIndex`.
+- A altura da lista é **acertada para um múltiplo da linha**; a sobra vira recheio
+  do painel. Sem isso a última linha aparecia cortada ao meio, como se houvesse
+  item escondido onde não havia.
+
+---
+
+## Ferramentas
+
+`tools\Probe.cs` — sonda interativa do protocolo, para varrer o que ainda não
+foi mapeado: códigos de dígito acima de `0x0F`, os seis bits sem uso conhecido
+de `report[4]`, os 56 bytes que o software original sempre zera, outros
+ReportIDs e a cadência máxima que o firmware aceita.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build-probe.ps1
+.\bin\Probe.exe
+```
+
+Um laço de fundo reenvia o quadro atual a cada 400 ms — sem isso o watchdog
+apaga o painel enquanto se olha para ele. **Não precisa de elevação:** falar HID
+com o dispositivo não envolve driver.
+
+| Comando | Efeito |
+|---------|--------|
+| `b <i> <hex>` | escreve um byte na posição `i` do quadro |
+| `v <i>` | varre `00`–`FF` na posição `i`, passo a passo |
+| `va <i> [ms]` | a mesma varredura, automática |
+| `r <hex...>` | substitui o quadro inteiro |
+| `hz <ms>` | muda a cadência de reenvio |
+| `anim [ms]` | anima os dígitos, para medir o limite de atualização |
+| `ids` | tenta outros ReportIDs |
+| `q` | sai |
 
 ---
 
@@ -248,3 +318,31 @@ chamava *RiseModePanel*) são migradas no primeiro arranque.
   memória compartilhada documentada.
 - Protocolo do painel: engenharia reversa para interoperabilidade com hardware
   próprio.
+- Feito por [Feurrado](https://github.com/Feurrado).
+
+---
+
+## Isenção de responsabilidade
+
+Este é um projeto **pessoal, independente e sem fins lucrativos**, feito para
+interoperar com hardware que o autor possui. Não tem qualquer vínculo,
+patrocínio, afiliação ou aprovação da Rise Mode, da Ocypus, da SHENZHEN
+SHINETEK, da REALiX s.r.o. ou de qualquer outro fabricante. Todas as marcas
+citadas pertencem aos seus respectivos donos e aparecem apenas para identificar
+o equipamento com que o programa se comunica.
+
+O protocolo do painel foi levantado por **engenharia reversa do próprio
+equipamento**, com a finalidade exclusiva de interoperabilidade — o programa
+não contém, não copia e não redistribui código do software original.
+
+> O PROGRAMA É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU
+> IMPLÍCITA, INCLUINDO AS DE COMERCIALIZAÇÃO, ADEQUAÇÃO A UM FIM ESPECÍFICO E
+> NÃO VIOLAÇÃO. O USO É POR CONTA E RISCO DE QUEM O EXECUTA. EM NENHUMA HIPÓTESE
+> O AUTOR RESPONDE POR QUALQUER DANO, DIRETO OU INDIRETO, INCLUINDO DANO A
+> EQUIPAMENTO, PERDA DE DADOS OU LUCROS CESSANTES, DECORRENTE DO USO OU DA
+> IMPOSSIBILIDADE DE USO DESTE PROGRAMA.
+
+Usar este programa pode implicar a **perda da garantia do equipamento**.
+Verifique antes.
+
+O mesmo texto aparece dentro do aplicativo, na aba *Sobre*.

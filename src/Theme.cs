@@ -127,6 +127,12 @@ namespace MhiagosControl
             }
 
             ApplyScrollbars(form);
+
+            // Chamada no construtor, a varredura acima nao acha nada: um
+            // controle so ganha HWND quando a janela e mostrada, e SetWindowTheme
+            // sem handle nao faz efeito. Dai a barra de rolagem da lista saia
+            // branca. Repetir na exibicao pega todos eles.
+            form.Shown += delegate { ApplyScrollbars(form); };
         }
 
         /// <summary>

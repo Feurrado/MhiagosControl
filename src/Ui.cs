@@ -29,6 +29,13 @@ namespace MhiagosControl
         public static Color Text { get { return Dark ? C(0xF0, 0xF0, 0xF3) : C(0x1B, 0x1D, 0x21); } }
         public static Color Muted { get { return Dark ? C(0x96, 0x99, 0xA3) : C(0x6B, 0x70, 0x7B); } }
 
+        /// <summary>Um degrau abaixo de Muted, para nota de rodape sem sumir.</summary>
+        public static Color Faint { get { return Dark ? C(0x6C, 0x6F, 0x79) : C(0x94, 0x99, 0xA3); } }
+
+        /// <summary>Polegar da barra de rolagem. Precisa se destacar do trilho
+        /// sem competir com o texto: Border era escuro demais e sumia nele.</summary>
+        public static Color Thumb { get { return Dark ? C(0x55, 0x58, 0x62) : C(0xB4, 0xBA, 0xC4); } }
+
         // enfase - azul do icone do aplicativo
         public static Color Accent { get { return C(0x2D, 0x7D, 0xF6); } }
         public static Color AccentHover { get { return C(0x4A, 0x91, 0xFF); } }
@@ -44,6 +51,9 @@ namespace MhiagosControl
         public static readonly Font FontTitle = new Font("Segoe UI", 14f, FontStyle.Regular);
         public static readonly Font FontSection = new Font("Segoe UI", 10.5f, FontStyle.Bold);
         public static readonly Font FontSmall = new Font("Segoe UI", 8.25f);
+
+        /// <summary>Leitura em destaque - o numero e o assunto do cartao.</summary>
+        public static readonly Font FontValue = new Font("Segoe UI", 16f, FontStyle.Bold);
 
         public const int Radius = 8;
         public const int Gap = 12;
@@ -242,6 +252,266 @@ namespace MhiagosControl
                 TextRenderer.DrawText(g, Label, Font, tr, Ui.Text,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             }
+        }
+    }
+
+    /// <summary>
+    /// Seletor de opcoes mutuamente exclusivas, em pilulas lado a lado.
+    ///
+    /// Substitui o interruptor onde a escolha nao e "ligado/desligado" mas
+    /// "isto OU aquilo": um interruptor rotulado "Fahrenheit" nao diz o que
+    /// acontece quando esta desligado, enquanto "°C | °F" mostra as duas
+    /// opcoes e qual esta valendo.
+    /// </summary>
+    public class Segmented : Control
+    {
+        private readonly System.Collections.Generic.List<string> _items = new System.Collections.Generic.List<string>();
+        private int _sel = 0, _hover = -1;
+
+        public event EventHandler SelectedIndexChanged;
+
+        public Segmented()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
+                     ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
+            Font = Ui.FontBase;
+            Size = new Size(160, 30);
+            Cursor = Cursors.Hand;
+        }
+
+        public void SetItems(params string[] items) { _items.Clear(); _items.AddRange(items); Invalidate(); }
+
+        public int SelectedIndex
+        {
+            get { return _sel; }
+            set
+            {
+                int v = Math.Max(0, Math.Min(value, Math.Max(0, _items.Count - 1)));
+                if (v == _sel) return;
+                _sel = v;
+                Invalidate();
+                if (SelectedIndexChanged != null) SelectedIndexChanged(this, EventArgs.Empty);
+            }
+        }
+
+        private int SegW { get { return _items.Count > 0 ? Width / _items.Count : Width; } }
+
+        private int Hit(Point p)
+        {
+            if (_items.Count == 0 || p.Y < 0 || p.Y > Height) return -1;
+            int i = p.X / Math.Max(1, SegW);
+            return (i >= 0 && i < _items.Count) ? i : -1;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            int h = Hit(e.Location);
+            if (h != _hover) { _hover = h; Invalidate(); }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e) { _hover = -1; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            int h = Hit(e.Location);
+            if (h >= 0) SelectedIndex = h;
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Ui.Smooth(g);
+            if (_items.Count == 0) return;
+
+            Rectangle outer = new Rectangle(0, 0, Width - 1, Height - 1);
+            int radius = Height / 2;
+            using (GraphicsPath p = Ui.RoundRect(outer, radius))
+            using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
+            using (Pen pen = new Pen(Ui.Border))
+            {
+                g.FillPath(b, p);
+                g.DrawPath(pen, p);
+            }
+
+            int w = SegW;
+            for (int i = 0; i < _items.Count; i++)
+            {
+                Rectangle seg = new Rectangle(i * w, 0, w, Height);
+                bool sel = i == _sel;
+
+                if (sel)
+                {
+                    // A pastilha acesa recua 3 px para que a borda externa
+                    // continue visivel em volta dela.
+                    Rectangle fill = new Rectangle(seg.X + 3, 3, seg.Width - 6, Height - 7);
+                    using (GraphicsPath p = Ui.RoundRect(fill, fill.Height / 2))
+                    using (SolidBrush b = new SolidBrush(Ui.Accent))
+                        g.FillPath(b, p);
+                }
+                else if (i == _hover)
+                {
+                    Rectangle fill = new Rectangle(seg.X + 3, 3, seg.Width - 6, Height - 7);
+                    using (GraphicsPath p = Ui.RoundRect(fill, fill.Height / 2))
+                    using (SolidBrush b = new SolidBrush(Ui.Hover))
+                        g.FillPath(b, p);
+                }
+
+                TextRenderer.DrawText(g, _items[i], sel ? Ui.FontMed : Ui.FontBase, seg,
+                    sel ? Color.White : Ui.Text,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Campo numerico desenhado pelo kit.
+    ///
+    /// O NumericUpDown nativo entra branco numa janela escura e nao aceita
+    /// borda arredondada - era a caixa que destoava de tudo na pagina de
+    /// alertas. Aqui a moldura e nossa e so a area de digitacao e um TextBox.
+    /// </summary>
+    public class NumberBox : Control
+    {
+        private readonly TextBox _box;
+        private bool _guard = false;
+        private int _hover = 0;          // 0 nenhum, 1 menos, 2 mais
+
+        public int Minimum = 0;
+        public int Maximum = 999;
+        public event EventHandler ValueChanged;
+
+        public NumberBox()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
+                     ControlStyles.SupportsTransparentBackColor, true);
+
+            _box = new TextBox();
+            _box.BorderStyle = BorderStyle.None;
+            _box.Font = Ui.FontBase;
+            _box.TextAlign = HorizontalAlignment.Center;
+            _box.Text = "0";
+            _box.TextChanged += delegate
+            {
+                if (_guard) return;
+                Invalidate();
+                if (ValueChanged != null) ValueChanged(this, EventArgs.Empty);
+            };
+            _box.KeyPress += delegate(object s, KeyPressEventArgs e)
+            {
+                // so digitos, Backspace e Delete
+                if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar)) e.Handled = true;
+            };
+            _box.LostFocus += delegate { Normalizar(); };
+            Controls.Add(_box);
+
+            BackColor = Color.Transparent;
+            Font = Ui.FontBase;
+            Size = new Size(120, 32);
+        }
+
+        public int Value
+        {
+            get
+            {
+                int v;
+                if (!int.TryParse(_box.Text, out v)) return Minimum;
+                return Math.Max(Minimum, Math.Min(Maximum, v));
+            }
+            set
+            {
+                int v = Math.Max(Minimum, Math.Min(Maximum, value));
+                if (v == Value && _box.Text.Length > 0) return;
+                _guard = true;
+                _box.Text = v.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                _guard = false;
+                Invalidate();
+            }
+        }
+
+        /// <summary>Devolve o campo a um numero valido depois da digitacao livre.</summary>
+        private void Normalizar()
+        {
+            int v = Value;
+            string t = v.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (_box.Text != t) { _guard = true; _box.Text = t; _guard = false; Invalidate(); }
+        }
+
+        private int BtnW { get { return 30; } }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (_box == null) return;
+            _box.SetBounds(BtnW, (Height - _box.PreferredHeight) / 2, Math.Max(10, Width - BtnW * 2), _box.PreferredHeight);
+        }
+
+        private int HitBtn(Point p)
+        {
+            if (p.X < BtnW) return 1;
+            if (p.X > Width - BtnW) return 2;
+            return 0;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            int h = HitBtn(e.Location);
+            if (h != _hover) { _hover = h; Cursor = h == 0 ? Cursors.IBeam : Cursors.Hand; Invalidate(); }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e) { _hover = 0; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            int h = HitBtn(e.Location);
+            if (h == 1) Value = Value - 1;
+            else if (h == 2) Value = Value + 1;
+            else _box.Focus();
+            if (h != 0 && ValueChanged != null) ValueChanged(this, EventArgs.Empty);
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            Value = Value + (e.Delta > 0 ? 1 : -1);
+            if (ValueChanged != null) ValueChanged(this, EventArgs.Empty);
+            base.OnMouseWheel(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Ui.Smooth(g);
+            _box.BackColor = Ui.SurfaceAlt;
+            _box.ForeColor = Ui.Text;
+
+            Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (GraphicsPath p = Ui.RoundRect(r, 8))
+            using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
+            using (Pen pen = new Pen(Ui.Border))
+            {
+                g.FillPath(b, p);
+                g.DrawPath(pen, p);
+            }
+
+            DrawSign(g, new Rectangle(0, 0, BtnW, Height), "−", _hover == 1, Value > Minimum);
+            DrawSign(g, new Rectangle(Width - BtnW, 0, BtnW, Height), "+", _hover == 2, Value < Maximum);
+        }
+
+        private static void DrawSign(Graphics g, Rectangle area, string sign, bool hover, bool enabled)
+        {
+            if (hover && enabled)
+                using (GraphicsPath p = Ui.RoundRect(new Rectangle(area.X + 3, 3, area.Width - 6, area.Height - 7), 6))
+                using (SolidBrush b = new SolidBrush(Ui.Hover))
+                    g.FillPath(b, p);
+
+            TextRenderer.DrawText(g, sign, Ui.FontMed, area, enabled ? Ui.Text : Ui.Border,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
     }
 
