@@ -163,7 +163,7 @@ O `Init` falha com código **1** sem elevação, porque a biblioteca precisa
 registrar e subir seu driver.
 
 > **A DLL não está neste repositório** — é software comercial de terceiros e
-> não pode ser redistribuída (veja *Créditos e licenças*). Para habilitar essa
+> não pode ser redistribuída (veja *Licença*). Para habilitar essa
 > fonte, copie `api-ms-win-core-sysinfo-825-64.dll` da instalação do *CPU TEMP
 > Monitor* que acompanha o produto (`C:\Program Files\CPU TEMP Monitor\`) para
 > `lib\` antes de compilar. Sem ela o `build.ps1` avisa e o aplicativo sobe
