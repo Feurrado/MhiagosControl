@@ -1,390 +1,390 @@
 # Mhiagos Control
 
-An alternative driver for the LED panel of the **Rise Mode Temp 6 Pro Black air
-cooler**, replacing the bundled *CPU TEMP Monitor* software
-(SHENZHEN SHINETEK / Ocypus brand).
+Driver alternativo para o painel do **air cooler Rise Mode Temp 6 Pro Black**,
+substituindo o software original *CPU TEMP Monitor*
+(SHENZHEN SHINETEK / marca Ocypus).
 
-It can display **any sensor** on the two 3-digit panels, instead of the two
-fixed metrics the factory software offers.
+Permite exibir **qualquer sensor** do sistema nos dois painéis de 3 dígitos,
+em vez das duas métricas fixas que o software de fábrica oferece.
 
-> The interface speaks **Brazilian Portuguese and English**, picked from the
-> Windows language on first run and switchable under *About*. Screenshots here
-> are in English.
+> A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
+> Windows na primeira execução e trocável na aba *Sobre*.
 
 ---
 
-## Screens
+## Telas
 
 | | |
 |:--:|:--:|
-| ![Panels](docs/panels.png) | ![Alerts](docs/alerts.png) |
-| **Panels** — pick the sensor, scale and units for each display, with a live preview over the part | **Alerts** — a threshold per display, rearmed on the way down |
-| ![Profiles](docs/profiles.png) | ![About](docs/about.png) |
-| **Profiles** — each saved set shows what it puts on the display, previewed before you commit to it | **About** — language, autostart, credits and disclaimer |
+| ![Painéis](docs/paineis.png) | ![Alertas](docs/alertas.png) |
+| **Painéis** — escolha o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça | **Alertas** — limiar por mostrador, com rearme na descida |
+| ![Perfis](docs/perfis.png) | ![Sobre](docs/sobre.png) |
+| **Perfis** — cada conjunto salvo mostra o que põe no mostrador, com prévia antes de aplicar | **Sobre** — idioma, início automático, créditos e isenção |
 
-The preview reproduces the top view of the cooler and its seven-segment display
-as it looks on the device: the two panels stacked, `°C`/`°F` over `%`/`W`, white
-digits with no frame.
+A prévia reproduz a vista superior do cooler e o mostrador de sete segmentos
+como ele é no aparelho: os dois painéis empilhados, `°C`/`°F` sobre `%`/`W`,
+dígitos brancos sem moldura.
 
-### Sensor picker
+### Escolha do sensor
 
-<img src="docs/picker.png" width="480" alt="Sensor picker window">
+<img src="docs/seletor.png" width="480" alt="Janela de escolha de sensor">
 
-The sensor for each display is chosen in a dedicated window, opened by the
-*Trocar* (Change) button. There the list does not share height with scale, units
-and preview, so twice as many rows fit — and the category pills narrow the search
-down to the hardware you are after. Text search matches name, category and type,
-all terms at once. Double click or <kbd>Enter</kbd> confirms.
+O sensor de cada mostrador é escolhido numa janela dedicada, aberta pelo botão
+*Trocar*. Ali a lista não divide altura com escala, unidade e prévia, então
+cabem duas vezes mais linhas — e as pílulas de categoria reduzem a busca ao
+hardware procurado. A busca por texto casa nome, categoria e tipo, todos os
+termos ao mesmo tempo. Duplo clique ou <kbd>Enter</kbd> confirmam.
 
-### Profiles
+### Perfis
 
-A profile is a saved pair of sensors plus their units, scale and thresholds.
-The list shows what each one sends to the display, and selecting one previews it
-on the part before *Apply profile* makes it the live one — applying saves right
-away, so an "active" profile always survives closing the window. Every profile
-also appears in the tray menu, for switching without opening the settings at all.
+Um perfil é um par de sensores salvo junto com unidades, escala e limiares.
+A lista mostra o que cada um manda para o mostrador, e selecionar um já exibe a
+prévia sobre a peça antes de *Aplicar perfil* torná-lo o que está valendo —
+aplicar grava na hora, então um perfil "ativo" sempre sobrevive a fechar a
+janela. Todos aparecem também no menu da bandeja, para trocar sem abrir a
+configuração.
 
-### Loading screen
+### Tela de carregamento
 
-<img src="docs/loading.png" width="380" alt="Loading screen">
+<img src="docs/carregando.png" width="380" alt="Tela de carregamento">
 
-It never shows up on its own: it only appears if the tray icon is clicked while
-the sensor sources are still opening — whoever noticed the delay is the one who
-wants an explanation. Closing it interrupts nothing.
+Não aparece sozinha: só surge se o ícone da bandeja for clicado enquanto as
+fontes de sensores ainda estão abrindo — quem estranhou a demora é quem quer
+explicação. Fechá-la não interrompe nada.
 
-> The readings in the screenshots are **illustrative** — the interface was
-> rendered with a representative sensor list, not measured on a specific machine.
+> As leituras que aparecem nas capturas são **ilustrativas** — a interface foi
+> renderizada com uma lista de sensores representativa, não medida de uma
+> máquina específica.
 
 ---
 
-## Panel protocol
+## Protocolo do painel
 
-Recovered by reverse engineering: USB capture of the original software
-(USBPcap), byte-by-byte decoding, and validation by writing directly to the
-device.
+Levantado por engenharia reversa: captura USB do software original (USBPcap),
+decodificação byte a byte e validação por escrita direta no dispositivo.
 
-**Device:** `VID 0x1A2C` / `PID 0x4984`
-The firmware identifies itself as a *"USB Gaming Keyboard"* — a generic
-descriptor reused from the microcontroller vendor. The real data channel is the
-*vendor-defined* HID collection with `UsagePage 0xFF01`.
+**Dispositivo:** `VID 0x1A2C` / `PID 0x4984`
+O firmware se identifica como *"USB Gaming Keyboard"* — descritor genérico
+reaproveitado do fabricante do microcontrolador. O canal real de dados é a
+coleção HID *vendor-defined* com `UsagePage 0xFF01`.
 
-**Transport:** control transfer on EP0 — HID class `SET_REPORT`.
+**Transporte:** transferência de controle no EP0 — `SET_REPORT` da classe HID.
 
 ```
 Setup: 21 09 07 03 01 00 40 00
        │  │  │  │  │     └── wLength = 64
        │  │  │  │  └──────── wIndex  = 1 (interface)
-       │  │  └──┴─────────── wValue  = 0x0307 (type 3 = Feature, ReportID 7)
+       │  │  └──┴─────────── wValue  = 0x0307 (tipo 3 = Feature, ReportID 7)
        │  └───────────────── bRequest = 0x09 (SET_REPORT)
        └──────────────────── bmRequestType = 0x21 (OUT | Class | Interface)
 ```
 
 **Payload — 64 bytes:**
 
-| Byte | Contents |
+| Byte | Conteúdo |
 |------|----------|
 | `[0]` | `0x07` — ReportID |
-| `[1]` | panel 1, hundreds |
-| `[2]` | panel 1, tens |
-| `[3]` | panel 1, units |
+| `[1]` | centena do painel 1 |
+| `[2]` | dezena do painel 1 |
+| `[3]` | unidade do painel 1 |
 | `[4]` | flags — `bit0 (0x01)` = °F ; `bit4 (0x10)` = % |
-| `[5]` | panel 2, hundreds |
-| `[6]` | panel 2, tens |
-| `[7]` | panel 2, units |
+| `[5]` | centena do painel 2 |
+| `[6]` | dezena do painel 2 |
+| `[7]` | unidade do painel 2 |
 | `[8..63]` | `0x00` |
 
-Digits are sent **separately, one per byte, in plain decimal** — not packed BCD,
-not a binary integer. To show `73`, you send `0`, `7`, `3`. Codes `0x0A`–`0x0F`
-**blank** the digit.
+Os dígitos são enviados **separados, um por byte, em decimal direto** — não é BCD
+compactado nem inteiro binário. Para exibir `73`, envia-se `0`, `7`, `3`.
+Os códigos `0x0A`–`0x0F` **apagam** o dígito.
 
-**No checksum, no encryption, no sequence number.**
+**Sem checksum, sem criptografia, sem número de sequência.**
 
-The digit byte is a **lookup index into a firmware table**, not a segment
-bitmap. The proof is `0x00`: a bitmap would light nothing, and it lights `0`.
-So there is no way to draw shapes or animate individual segments — the panel
-writes the ten digits and nothing else. To sweep what is left of the protocol,
-see `tools\Probe.cs` under *Tools*.
+O byte de dígito é um **índice de tabela no firmware**, não um mapa de
+segmentos. A prova é `0x00`: se fosse bitmap acenderia nada, e acende o `0`.
+Não há, portanto, como desenhar figuras ou animar segmentos avulsos — o painel
+escreve os dez algarismos e mais nada. Para varrer o que resta do protocolo,
+veja `tools\Probe.cs` em *Ferramentas*.
 
 ### Flags (`report[4]`)
 
-The two bits are **independent** — all four combinations are valid:
+Os dois bits são **independentes** — as quatro combinações são válidas:
 
-| Value | Panel 1 | Panel 2 |
-|-------|---------|---------|
+| Valor | Painel 1 | Painel 2 |
+|-------|----------|----------|
 | `0x00` | °C | W |
 | `0x01` | °F | W |
 | `0x10` | °C | % |
 | `0x11` | °F | % |
 
-The bit only **lights the symbol**; converting the number is the software's job.
-The original software uses the hundreds digit exclusively for Fahrenheit, which
-goes past 99 — but the full `000–999` range is available on both panels,
-validated by writing.
+O bit apenas **acende o símbolo**; a conversão numérica é responsabilidade do
+software. O software original usa a centena exclusivamente para Fahrenheit,
+que ultrapassa 99 — mas a faixa `000–999` está integralmente disponível nos
+dois painéis, validada por escrita.
 
 ### Watchdog
 
-The firmware blanks the panel if it stops receiving updates, so resending
-continuously is mandatory. The original software uses a **~1105 ms** cadence
-(measured: under 1% deviation). This project uses 1100 ms.
+O firmware apaga o painel se parar de receber atualizações. É obrigatório
+reenviar continuamente. O software original usa cadência de **~1105 ms**
+(medida: desvio inferior a 1%). Este projeto usa 1100 ms.
 
 ---
 
-## Sensor sources
+## Fontes de sensores
 
-The app has two sources and picks the best available at startup.
+O aplicativo tem duas fontes e escolhe a melhor disponível no arranque.
 
-### HWiNFO (preferred)
+### HWiNFO (preferida)
 
-`engine\api-ms-win-core-sysinfo-825-64.dll` is the **HWiNFO client library**
-(HWiNFO32 Client Library 8.25, REALiX s.r.o.), shipped by the cooler vendor
-under a Windows API file name. It is the same engine the original software uses
-to read temperature — and the reason it works where LibreHardwareMonitor fails:
-its driver is WHQL-signed by Microsoft and is **not** on the vulnerable driver
-blocklist.
+`engine\api-ms-win-core-sysinfo-825-64.dll` é a **biblioteca cliente do HWiNFO**
+(HWiNFO32 Client Library 8.25, REALiX s.r.o.), distribuída pelo fabricante do
+cooler com nome de API do Windows. É o mesmo motor que o software original usa
+para ler temperatura — e a razão de ele funcionar onde a LibreHardwareMonitor
+falha: seu driver é assinado WHQL pela Microsoft e **não** consta na lista de
+drivers vulneráveis.
 
-The library exports **797 functions, none of them named** — ordinals only. The
-mapping below was recovered from the original `DeviceDriver.exe` by locating the
-`GetProcAddress` calls and decoding the call sites. All are `cdecl`:
+A biblioteca exporta **797 funções, nenhuma com nome** — só por ordinal. A
+correspondência abaixo foi recuperada do `DeviceDriver.exe` original,
+localizando os `GetProcAddress` e decodificando os *call sites*. Todas são
+`cdecl`:
 
-| Ordinal | Signature | Role |
-|---------|-----------|------|
-| `850` | `int Init(0xC0)` | initialize; returns 0 on success |
-| `156` | `int GetCount()` | number of sensor groups |
-| `263` | `int (void)` | called once per cycle, after the count |
-| `678` | `int (int i)` | prepares group `i` |
-| `952` | `int (int i, char* buf, int len)` | name of group `i` |
-| `641` | `int (int class, int i, int j, void* elem)` | reading `j` of group `i`; `0` ends the series |
-| `398`, `613` | — | resolved and validated by the original, not used for reading |
+| Ordinal | Assinatura | Papel |
+|---------|-----------|-------|
+| `850` | `int Init(0xC0)` | inicializa; devolve 0 em caso de sucesso |
+| `156` | `int GetCount()` | quantidade de grupos de sensores |
+| `263` | `int (void)` | chamada uma vez por ciclo, após a contagem |
+| `678` | `int (int i)` | prepara o grupo `i` |
+| `952` | `int (int i, char* buf, int tam)` | nome do grupo `i` |
+| `641` | `int (int classe, int i, int j, void* elem)` | leitura `j` do grupo `i`; `0` encerra a série |
+| `398`, `613` | — | resolvidos e validados pelo original, não usados na leitura |
 
-The element returned by `641` is **464 bytes** (`0x1D0`):
+O elemento devolvido por `641` tem **464 bytes** (`0x1D0`):
 
-| Offset | Field |
+| Offset | Campo |
 |--------|-------|
-| `+0x08` | value (`double`) |
-| `+0x10` | unit, ASCII (`"°C"`, `"W"`, `"MHz"`, `"MB"`…) |
-| `+0x30` | hardware category (`10` system, `11` CPU, `12` motherboard, `13` GPU, `15` disk, `16` network) |
-| `+0x148` | reading label |
+| `+0x08` | valor (`double`) |
+| `+0x10` | unidade, ASCII (`"°C"`, `"W"`, `"MHz"`, `"MB"`…) |
+| `+0x30` | categoria de hardware (`10` sistema, `11` CPU, `12` placa-mãe, `13` GPU, `15` disco, `16` rede) |
+| `+0x148` | rótulo da leitura |
 
-The first argument of `641` is the **reading class**: `1` temperature,
-`2` voltage, `3` fan, `4` current, `5` power, `6` clock, `7` usage, `8` other.
-The original software only queries class 1 — which is why it shows temperature
-via HWiNFO and watts via the other source.
+O primeiro argumento de `641` é a **classe de leitura**: `1` temperatura,
+`2` voltagem, `3` ventoinha, `4` corrente, `5` potência, `6` clock, `7` uso,
+`8` outros. O software original só consulta a classe 1 — daí ele exibir
+temperatura pelo HWiNFO e watts pela outra fonte.
 
-`Init` fails with code **1** without elevation, because the library needs to
-register and start its driver.
+O `Init` falha com código **1** sem elevação, porque a biblioteca precisa
+registrar e subir seu driver.
 
-> **The DLL is not in this repository** — it is third-party commercial software
-> and cannot be redistributed (see *License*). To enable this source, copy
-> `api-ms-win-core-sysinfo-825-64.dll` from the *CPU TEMP Monitor* installation
-> that came with the product (`C:\Program Files\CPU TEMP Monitor\`) into `lib\`
-> before building. Without it `build.ps1` warns and the app starts using only
-> the fallback source.
+> **A DLL não está neste repositório** — é software comercial de terceiros e
+> não pode ser redistribuída (veja *Licença*). Para habilitar essa fonte, copie
+> `api-ms-win-core-sysinfo-825-64.dll` da instalação do *CPU TEMP Monitor* que
+> acompanha o produto (`C:\Program Files\CPU TEMP Monitor\`) para `lib\` antes
+> de compilar. Sem ela o `build.ps1` avisa e o aplicativo sobe usando apenas a
+> fonte de reserva.
 
-### LibreHardwareMonitor (fallback)
+### LibreHardwareMonitor (reserva)
 
-Used only when HWiNFO is unavailable. It covers GPU, CPU usage, memory, disk and
-network with no driver of its own, but **returns zero** for CPU temperature,
-power and real clock: those need kernel-mode access, and the driver it uses for
-that (WinRing0 1.2.0.5, CVE-2020-14979) is on the Windows blocklist. Antivirus
-removes it **on every startup**, with an alert.
+Usada apenas quando o HWiNFO não está disponível. Cobre GPU, uso de CPU,
+memória, disco e rede sem driver próprio, mas **devolve zero** em temperatura,
+potência e clock real do processador: esses exigem acesso em modo kernel, e o
+driver que ela usa para isso (WinRing0 1.2.0.5, CVE-2020-14979) está na lista de
+bloqueio do Windows. O antivírus o remove **a cada inicialização**, com alerta.
 
-That is why it is not opened when HWiNFO responds: there is nothing to gain from
-paying that price.
+É por isso que ela não é aberta quando o HWiNFO responde: não há o que ganhar
+pagando esse preço.
 
 ---
 
-## Requirements
+## Requisitos
 
 - Windows 10/11 x64
-- .NET Framework 4.7.2+ (present by default)
-- **Administrator privileges** — both sources need to start a driver
+- .NET Framework 4.7.2+ (presente por padrão)
+- **Privilégio administrativo** — as duas fontes precisam subir um driver
 
-No .NET SDK required: it builds with the `csc.exe` that ships with Windows.
+Não exige SDK do .NET: compila com o `csc.exe` que acompanha o Windows.
 
-## Building
+## Compilar
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-Output goes to `bin\MhiagosControl.exe`.
+Saída em `bin\MhiagosControl.exe`.
 
-> `-ExecutionPolicy Bypass` is needed because Windows blocks `.ps1` scripts by
-> default. The switch applies **to that process only** and does not change the
-> machine configuration — there is no need to run `Set-ExecutionPolicy`.
+> O `-ExecutionPolicy Bypass` é necessário porque o Windows barra scripts `.ps1`
+> por padrão. O parâmetro vale **apenas para esse processo** e não altera a
+> configuração da máquina — não é preciso rodar `Set-ExecutionPolicy`.
 
-> **When distributing:** the `bin\engine\` folder is part of the package. Copying
-> just the `.exe` silently costs the app CPU temperature, power and clock — it
-> falls back to the other source without saying so on screen, only in the log.
+> **Atenção ao distribuir:** a pasta `bin\engine\` faz parte do conjunto. Copiar
+> só o `.exe` faz o aplicativo perder silenciosamente temperatura, potência e
+> clock da CPU — ele cai na fonte de reserva sem avisar em tela, apenas no log.
 
-## Using it
+## Usar
 
-1. Run `bin\MhiagosControl.exe` (it asks for elevation).
-2. On first run the settings window opens. Pick the sensor and units for each
-   panel.
-3. The icon stays in the tray. Double click reopens the settings.
+1. Execute `bin\MhiagosControl.exe` (pede elevação).
+2. Na primeira execução abre a janela de configuração. Escolha o sensor de
+   cada painel e as unidades.
+3. O ícone fica na bandeja. Duplo clique reabre a configuração.
 
-*Save* writes to disk and leaves the window open — panel tweaks rarely come one
-at a time, so closing on every save just meant reopening. *Close* asks before
-discarding anything unsaved.
+*Salvar* grava no disco e **deixa a janela aberta** — ajuste de mostrador
+raramente vem sozinho, e fechar a cada gravação só significava reabrir.
+*Fechar* pergunta antes de descartar o que não foi salvo.
 
-The original software does not need to be installed.
+O software original não precisa estar instalado.
 
-### Application data
+### Dados do aplicativo
 
-Lives in `%LOCALAPPDATA%\MhiagosControl\` — reachable from the tray menu under
-*Abrir pasta de dados* (Open data folder):
+Ficam em `%LOCALAPPDATA%\MhiagosControl\` — acessível pelo menu da bandeja em
+*Abrir pasta de dados*:
 
-| File | Contents |
-|------|----------|
-| `config.ini` | profiles, sensor per panel, units, thresholds, interface language |
-| `log.txt` | diagnostics, rotated at 512 KB (`log.txt.1`) |
+| Arquivo | Conteúdo |
+|---------|----------|
+| `config.ini` | perfis, sensor de cada painel, unidades, limiares, idioma da interface |
+| `log.txt` | diagnóstico, com rotação em 512 KB (`log.txt.1`) |
 
-Settings from older versions (including from when the project was called
-*RiseModePanel*) are migrated on first start.
+Configurações de versões antigas (inclusive da época em que o projeto se
+chamava *RiseModePanel*) são migradas no primeiro arranque.
 
-### Implementation notes
+### Notas de implementação
 
-- Sensor polling runs on **its own thread**: walking the hardware takes tens to
-  hundreds of ms and would freeze the interface if done on the UI thread. Only
-  the tooltip update goes back to the UI.
-- The cadence is **compensated**: the loop subtracts the time spent in the cycle,
-  holding a real 1100 ms regardless of machine load.
-- **Single instance** enforced by a mutex — two instances would fight over the
-  panel.
-- The HWiNFO library exposes no single-sensor query, so every cycle
-  **re-enumerates** everything. The cost is one memory copy per reading,
-  irrelevant at a one-second cadence.
-- Per-core sensors are **collapsed into averages** (clock, power, voltage, usage)
-  so they do not bury the general ones. Can be turned off under *Mostrar todos os
-  sensores* (Show all sensors).
-- Fahrenheit conversion applies only to `Temperature` sensors.
-- The **unit comes from the source**, not from the sensor type: HWiNFO reports
-  memory in `MB` and the generic type label claimed `GB` over the wrong number.
-  `MB` readings are converted to `GB` and shown with one decimal (`11.6 GB`).
-- The unit selector of panel 2 **follows the metric**: picking a power sensor
-  lights `W`, a usage sensor lights `%`.
-- Values above 999 are clamped by the hardware; the tooltip flags this with
-  `[excede 999]`. Per-sensor divisors let larger metrics fit.
-- **Autostart** via a Scheduled Task with `/rl highest`: the registry `Run` key
-  does not work for elevated applications.
-- `SessionEnding` stops the thread before closing the sources.
-- The **loading screen lives on its own thread**, with its own message loop.
-  Hosted on the main thread it froze: while the driver starts, `LoadLibrary`
-  holds the loader lock, Windows marks the window as hung and starts swallowing
-  clicks — there was no way to close it.
-- **Scrollbars are drawn by the app.** The native one shows up as a bright
-  streak over the dark card even with `DarkMode_Explorer`, and accepts neither a
-  thickness nor a radius. Hiding it has a side effect: a `ListBox` only responds
-  to the wheel while its native scrollbar is visible, so the wheel is handled by
-  hand too, through `TopIndex`.
-- List height is **rounded down to a multiple of the row**; the remainder becomes
-  panel padding. Without it the last row showed up cut in half, as if there were
-  a hidden item where there was none.
-- **Switching language reopens the window** instead of relabelling it in place.
-  Relabelling would need every control to carry its string key and know how to
-  re-translate itself — dozens of places, and whatever was missed would sit there
-  in the old language unnoticed. Rebuilding leaves no corner untranslated.
-  Pending edits are written to the profile first, so nothing is lost.
-- Category names are **stored in Portuguese and translated at draw time**. They
-  are grouping keys, not display text; translating them at the source would break
-  the comparison that puts a sensor under the right heading.
-- Sensor **search matches both names** of a category, so typing "memory" finds
-  what the English UI calls Memory and the config calls `Memória`.
+- A leitura de sensores roda em **thread própria**: percorrer o hardware leva
+  dezenas a centenas de ms e travaria a interface se fosse feita na thread de
+  UI. Só a atualização do tooltip volta para a UI.
+- A cadência é **compensada**: o laço desconta o tempo gasto no ciclo, mantendo
+  1100 ms reais independentemente da carga da máquina.
+- **Instância única** garantida por mutex — duas instâncias disputariam o painel.
+- A biblioteca do HWiNFO não expõe consulta individual, então cada ciclo
+  **reenumera** tudo. O custo é uma cópia de memória por leitura, irrelevante na
+  cadência de um segundo.
+- Sensores por núcleo são **resumidos em médias** (clock, potência, tensão, uso),
+  para não enterrar os sensores gerais. Desligável em *Mostrar todos os sensores*.
+- A conversão para Fahrenheit só se aplica a sensores do tipo `Temperature`.
+- A **unidade vem da fonte**, não do tipo do sensor: o HWiNFO devolve memória em
+  `MB` e o rótulo genérico do tipo dizia `GB` sobre o número errado. Leituras em
+  `MB` são convertidas para `GB` e exibidas com uma casa (`11.6 GB`).
+- O seletor de unidade do painel 2 **acompanha a métrica**: escolher um sensor de
+  potência acende `W`, um de uso acende `%`.
+- Valores acima de 999 são limitados pelo hardware; o tooltip sinaliza com
+  `[excede 999]`. Divisores por sensor permitem caber métricas maiores.
+- **Início automático** por Tarefa Agendada com `/rl highest`: a chave `Run` do
+  registro não serve para aplicativos elevados.
+- `SessionEnding` encerra a thread antes de fechar as fontes.
+- A **tela de carregamento vive em thread própria**, com laço de mensagens
+  próprio. Pendurada na thread principal ela travava: durante a subida do driver
+  o `LoadLibrary` segura o cadeado do carregador, o Windows marca a janela como
+  travada e passa a engolir os cliques — não dava para fechá-la.
+- As **barras de rolagem são desenhadas pelo aplicativo**. A nativa entra como um
+  risco claro sobre o cartão escuro mesmo com `DarkMode_Explorer`, e não aceita
+  espessura nem raio. Escondê-la tem um efeito colateral: o `ListBox` só rola com
+  a roda enquanto a barra nativa está visível, então a roda também passou a ser
+  tratada na mão, pelo `TopIndex`.
+- A altura da lista é **acertada para um múltiplo da linha**; a sobra vira recheio
+  do painel. Sem isso a última linha aparecia cortada ao meio, como se houvesse
+  item escondido onde não havia.
+- **Trocar de idioma reabre a janela** em vez de reetiquetá-la viva. Reetiquetar
+  exigiria que cada controle guardasse a chave do seu texto e soubesse se
+  retraduzir — dezenas de pontos, e o que escapasse ficaria no idioma antigo sem
+  ninguém notar. Reconstruir não deixa canto por traduzir. As edições pendentes
+  vão para o perfil antes, então nada se perde.
+- Os nomes de categoria são **guardados em português e traduzidos na hora de
+  desenhar**. São chave de agrupamento, não texto de tela; traduzi-los na origem
+  quebraria a comparação que põe cada sensor sob o cabeçalho certo.
+- A **busca de sensor casa os dois nomes** da categoria, então digitar "memory"
+  acha o que a interface em inglês chama Memory e a configuração chama `Memória`.
 
 ---
 
-## Tools
+## Ferramentas
 
-`tools\Probe.cs` — an interactive protocol probe, for sweeping what has not been
-mapped yet: digit codes above `0x0F`, the six bits of `report[4]` with no known
-use, the 56 bytes the original software always zeroes, other ReportIDs, and the
-fastest cadence the firmware accepts.
+`tools\Probe.cs` — sonda interativa do protocolo, para varrer o que ainda não
+foi mapeado: códigos de dígito acima de `0x0F`, os seis bits sem uso conhecido
+de `report[4]`, os 56 bytes que o software original sempre zera, outros
+ReportIDs e a cadência máxima que o firmware aceita.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\build-probe.ps1
 .\bin\Probe.exe
 ```
 
-A background loop resends the current frame every 400 ms — without it the
-watchdog blanks the panel while you are looking at it. **No elevation needed:**
-speaking HID to the device involves no driver.
+Um laço de fundo reenvia o quadro atual a cada 400 ms — sem isso o watchdog
+apaga o painel enquanto se olha para ele. **Não precisa de elevação:** falar HID
+com o dispositivo não envolve driver.
 
-| Command | Effect |
+| Comando | Efeito |
 |---------|--------|
-| `b <i> <hex>` | write one byte at position `i` of the frame |
-| `v <i>` | sweep `00`–`FF` at position `i`, step by step |
-| `va <i> [ms]` | the same sweep, automatic |
-| `r <hex...>` | replace the whole frame |
-| `hz <ms>` | change the resend cadence |
-| `anim [ms]` | animate the digits, to measure the refresh limit |
-| `ids` | try other ReportIDs |
-| `q` | quit |
+| `b <i> <hex>` | escreve um byte na posição `i` do quadro |
+| `v <i>` | varre `00`–`FF` na posição `i`, passo a passo |
+| `va <i> [ms]` | a mesma varredura, automática |
+| `r <hex...>` | substitui o quadro inteiro |
+| `hz <ms>` | muda a cadência de reenvio |
+| `anim [ms]` | anima os dígitos, para medir o limite de atualização |
+| `ids` | tenta outros ReportIDs |
+| `q` | sai |
 
 ---
 
-## What this project avoids from the original software
+## O que este projeto evita do software original
 
-- **Telemetry** to `upgrade-1318931438.cos.ap-beijing.myqcloud.com` (automatic
-  firmware and software updates from a bucket in China)
-- **The WinRing0 driver**, which the original also loads through its second
-  sensor source and which Windows blocks today
-- Fixed metrics: here any sensor can go to any panel
-
----
-
-## License
-
-**MIT** — see [`LICENSE`](LICENSE). Use, modify and redistribute freely, keeping
-the copyright notice.
-
-The license covers **the code in this repository**. Dependencies have their own
-licenses and are not covered by it:
-
-| Component | License |
-|-----------|---------|
-| `src/`, `tools/`, `build.ps1`, generated `assets/` | MIT |
-| `lib/LibreHardwareMonitorLib.dll` | MPL 2.0 (see `lib/LibreHardwareMonitor-LICENSE.txt`) |
-| `engine\api-ms-win-core-sysinfo-825-64.dll` | commercial, © REALiX s.r.o. — **do not redistribute**, not present in this repository |
+- **Telemetria** para `upgrade-1318931438.cos.ap-beijing.myqcloud.com` (atualização
+  automática de firmware e software a partir de um bucket na China)
+- **O driver WinRing0**, que o original também carrega pela sua segunda fonte de
+  sensores e que hoje é bloqueado pelo Windows
+- Métricas fixas: aqui qualquer sensor pode ir para qualquer painel
 
 ---
 
-## Credits
+## Licença
+
+**MIT** — veja [`LICENSE`](LICENSE). Use, modifique e redistribua à vontade,
+mantendo o aviso de copyright.
+
+A licença cobre **o código deste repositório**. As dependências têm licença
+própria e não são cobertas por ela:
+
+| Componente | Licença |
+|------------|---------|
+| `src/`, `tools/`, `build.ps1`, `assets/` gerados | MIT |
+| `lib/LibreHardwareMonitorLib.dll` | MPL 2.0 (veja `lib/LibreHardwareMonitor-LICENSE.txt`) |
+| `engine\api-ms-win-core-sysinfo-825-64.dll` | comercial, © REALiX s.r.o. — **não redistribuir**, não está neste repositório |
+
+---
+
+## Créditos
 
 - [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) —
-  fallback source (MPL 2.0). License in `lib/LibreHardwareMonitor-LICENSE.txt`.
-- **HWiNFO32 Client Library** — © REALiX s.r.o. A **commercial** library,
-  licensed to the cooler vendor and not to this project. The copy in `engine\`
-  came from the software installation that shipped with the product and serves
-  personal use on the owner's own machine. **Do not redistribute.** For
-  legitimate use in your own software, license the SDK from REALiX or consume
-  HWiNFO through its documented shared-memory interface.
-- Panel protocol: reverse engineered for interoperability with hardware the
-  author owns.
-- Built by [Feurrado](https://github.com/Feurrado).
+  fonte de reserva (MPL 2.0). Licença em `lib/LibreHardwareMonitor-LICENSE.txt`.
+- **HWiNFO32 Client Library** — © REALiX s.r.o. Biblioteca **comercial**,
+  licenciada ao fabricante do cooler, não a este projeto. A cópia em `engine\`
+  veio da instalação do software que acompanha o produto e serve a uso pessoal
+  na própria máquina. **Não redistribuir.** Para uso legítimo em software
+  próprio, licencie o SDK com a REALiX ou consuma o HWiNFO pela interface de
+  memória compartilhada documentada.
+- Protocolo do painel: engenharia reversa para interoperabilidade com hardware
+  próprio.
+- Feito por [Feurrado](https://github.com/Feurrado).
 
 ---
 
-## Disclaimer
+## Isenção de responsabilidade
 
-This is a **personal, independent, non-commercial project**, built to
-interoperate with hardware the author owns. It has no connection, sponsorship,
-affiliation or endorsement from Rise Mode, Ocypus, SHENZHEN SHINETEK,
-REALiX s.r.o. or any other manufacturer. All trademarks mentioned belong to
-their respective owners and appear only to identify the equipment the program
-talks to.
+Este é um projeto **pessoal, independente e sem fins lucrativos**, feito para
+interoperar com hardware que o autor possui. Não tem qualquer vínculo,
+patrocínio, afiliação ou aprovação da Rise Mode, da Ocypus, da SHENZHEN
+SHINETEK, da REALiX s.r.o. ou de qualquer outro fabricante. Todas as marcas
+citadas pertencem aos seus respectivos donos e aparecem apenas para identificar
+o equipamento com que o programa se comunica.
 
-The panel protocol was recovered by **reverse engineering the device itself**,
-for the sole purpose of interoperability — the program contains no code from the
-original software, copies none and redistributes none.
+O protocolo do painel foi levantado por **engenharia reversa do próprio
+equipamento**, com a finalidade exclusiva de interoperabilidade — o programa
+não contém, não copia e não redistribui código do software original.
 
-> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-> IMPLIED, INCLUDING THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
-> PURPOSE AND NONINFRINGEMENT. USE IS AT THE RISK OF WHOEVER RUNS IT. IN NO EVENT
-> SHALL THE AUTHOR BE LIABLE FOR ANY DAMAGE, DIRECT OR INDIRECT, INCLUDING
-> DAMAGE TO EQUIPMENT, LOSS OF DATA OR LOST PROFITS, ARISING FROM THE USE OR THE
-> INABILITY TO USE THIS PROGRAM.
+> O PROGRAMA É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU
+> IMPLÍCITA, INCLUINDO AS DE COMERCIALIZAÇÃO, ADEQUAÇÃO A UM FIM ESPECÍFICO E
+> NÃO VIOLAÇÃO. O USO É POR CONTA E RISCO DE QUEM O EXECUTA. EM NENHUMA HIPÓTESE
+> O AUTOR RESPONDE POR QUALQUER DANO, DIRETO OU INDIRETO, INCLUINDO DANO A
+> EQUIPAMENTO, PERDA DE DADOS OU LUCROS CESSANTES, DECORRENTE DO USO OU DA
+> IMPOSSIBILIDADE DE USO DESTE PROGRAMA.
 
-Using this program may **void the warranty of your equipment**. Check first.
+Usar este programa pode implicar a **perda da garantia do equipamento**.
+Verifique antes.
 
-The same text appears inside the application, on the *Sobre* (About) tab.
+O mesmo texto aparece dentro do aplicativo, na aba *Sobre*.
