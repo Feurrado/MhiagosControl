@@ -45,13 +45,6 @@ namespace MhiagosControl
             return sensor != null ? Suggest(sensor.Type) : 1;
         }
 
-        /// <summary>Rotulo curto do divisor, para a interface.</summary>
-        public static string DivisorLabel(int divisor)
-        {
-            if (divisor <= 1) return "sem divisao";
-            return "dividido por " + divisor;
-        }
-
         /// <summary>
         /// Prepara o valor de um sensor para o mostrador.
         ///
@@ -88,22 +81,6 @@ namespace MhiagosControl
 
             r.Value = v;
             return r;
-        }
-
-        /// <summary>Texto do tipo "3700 MHz -> 370 (dividido por 10)".</summary>
-        public static string Explain(SensorEntry sensor, int divisor, bool toFahrenheit)
-        {
-            if (sensor == null) return "nenhum sensor selecionado";
-            PanelValue p = Prepare(sensor, divisor, toFahrenheit);
-
-            string origem = sensor.Formatted;
-            if (!p.Value.HasValue) return origem + "  ->  mostrador apagado (" + p.Note + ")";
-
-            string destino = p.Value.Value.ToString();
-            if (p.Clamped) destino += "  [limitado, excede 999]";
-
-            string escala = divisor > 1 ? "  (" + DivisorLabel(divisor) + ")" : "";
-            return origem + "  ->  painel mostra " + destino + escala;
         }
     }
 }

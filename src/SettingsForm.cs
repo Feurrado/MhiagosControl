@@ -62,6 +62,15 @@ namespace MhiagosControl
         /// </summary>
         private bool _saved = false;
 
+        /// <summary>
+        /// Gravou no disco e o perfil ativo pode ter mudado.
+        ///
+        /// Quem abriu a janela usa isto para republicar o perfil que a thread
+        /// do mostrador le. Sem o aviso, aplicar um perfil so teria efeito ao
+        /// fechar a janela - e o botao pareceria nao fazer nada.
+        /// </summary>
+        public event EventHandler Applied;
+
         private static readonly int[] DivValues = new int[] { 0, 1, 10, 100, 1000 };
         private static readonly string[] DivLabels = new string[] { "Auto", "÷1", "÷10", "÷100", "÷1000" };
 
@@ -479,6 +488,8 @@ namespace MhiagosControl
 
             _profileList.ActiveName = p.Name;
             _profileList.Invalidate();
+            AtualizarPreviaDoPerfil();
+            if (Applied != null) Applied(this, EventArgs.Empty);
             Aviso(T.ApplyProfile + ": " + p.Name);
         }
 
@@ -1054,6 +1065,7 @@ namespace MhiagosControl
                 _profileList.Invalidate();
                 AtualizarPreviaDoPerfil();
             }
+            if (Applied != null) Applied(this, EventArgs.Empty);
             Aviso(T.Saved);
         }
 

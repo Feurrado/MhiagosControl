@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 
 namespace MhiagosControl
 {
@@ -75,18 +76,57 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("remocao da tarefa agendada", ex); return false; }
         }
 
-        /// <summary>A tarefa do software de fabrica disputaria o painel conosco.</summary>
+        private const string OriginalTask = "CPU TEMP Monitor StartupTask";
+
+        /// <summary>
+        /// A tarefa do software de fabrica disputaria o painel conosco.
+        ///
+        /// Le o XML da tarefa, e nao o relatorio em texto: o campo de estado
+        /// vem traduzido, e a versao anterior procurava os literais
+        /// "Desabilitado" e "Disabled". Num Windows em qualquer outro idioma
+        /// uma tarefa desativada era lida como ativa, e o aplicativo cobrava o
+        /// usuario para desativar o que ja estava desativado.
+        ///
+        /// No XML, &lt;Enabled&gt; so aparece quando vale false - habilitado e o
+        /// padrao do esquema e fica implicito. Conferido nesta maquina: das 45
+        /// ocorrencias do elemento em todas as tarefas do sistema, 45 eram
+        /// false.
+        /// </summary>
         public static bool OriginalAppTaskEnabled()
         {
             try
             {
                 int code;
-                string output = Run("/query /tn \"CPU TEMP Monitor StartupTask\" /fo list", out code);
-                if (code != 0) return false;
-                return output.IndexOf("Desabilitado", StringComparison.OrdinalIgnoreCase) < 0 &&
-                       output.IndexOf("Disabled", StringComparison.OrdinalIgnoreCase) < 0;
+                string xml = Run("/query /tn \"" + OriginalTask + "\" /xml ONE", out code);
+                if (code != 0) return false;              // nao existe: nada a disputar
+                return !DesabilitadaNoXml(xml);
             }
-            catch { return false; }
+            catch (Exception ex) { Log.Error("consulta da tarefa original", ex); return false; }
+        }
+
+        /// <summary>
+        /// Procura o desligamento apenas dentro de &lt;Settings&gt;.
+        ///
+        /// Um gatilho tambem pode trazer &lt;Enabled&gt;false&lt;/Enabled&gt;, e uma
+        /// tarefa ativa com um gatilho desligado seria lida como desativada se
+        /// a busca fosse no documento inteiro.
+        ///
+        /// Sem XmlDocument de proposito: exigiria referenciar System.Xml no
+        /// build por uma unica consulta, e o recorte por marcador resolve o
+        /// mesmo problema. O schtasks escreve ASCII no cano de saida, apesar de
+        /// a declaracao do XML dizer UTF-16 - medido, nao suposto.
+        /// </summary>
+        private static bool DesabilitadaNoXml(string xml)
+        {
+            if (string.IsNullOrEmpty(xml)) return false;
+
+            int ini = xml.IndexOf("<Settings>", StringComparison.OrdinalIgnoreCase);
+            if (ini < 0) return false;
+            int fim = xml.IndexOf("</Settings>", ini, StringComparison.OrdinalIgnoreCase);
+            if (fim < 0) fim = xml.Length;
+
+            string settings = xml.Substring(ini, fim - ini);
+            return settings.IndexOf("<Enabled>false</Enabled>", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public static bool DisableOriginalAppTask()
@@ -94,7 +134,7 @@ namespace MhiagosControl
             try
             {
                 int code;
-                Run("/change /tn \"CPU TEMP Monitor StartupTask\" /disable", out code);
+                Run("/change /tn \"" + OriginalTask + "\" /disable", out code);
                 bool ok = (code == 0);
                 Log.Write(ok ? "tarefa do app original desabilitada" : "falha ao desabilitar tarefa original (codigo " + code + ")");
                 return ok;
@@ -102,6 +142,17 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("desabilitar tarefa original", ex); return false; }
         }
 
+        /// <summary>
+        /// Executa o schtasks e devolve saida e codigo.
+        ///
+        /// As duas saidas sao lidas por evento, e nao com ReadToEnd em
+        /// sequencia. Ler uma ate o fim e so depois a outra trava se o processo
+        /// filho encher o buffer da que ficou esperando: ele bloqueia na
+        /// escrita, nos bloqueamos na leitura da outra, e ninguem sai do lugar.
+        /// A saida do schtasks e curta demais para isso acontecer hoje, o que
+        /// so torna a falha pior - apareceria numa maquina qualquer, um dia,
+        /// sem jeito de reproduzir.
+        /// </summary>
         private static string Run(string args, out int exitCode)
         {
             ProcessStartInfo psi = new ProcessStartInfo("schtasks.exe", args);
@@ -109,12 +160,36 @@ namespace MhiagosControl
             psi.CreateNoWindow = true;
             psi.RedirectStandardOutput = true;
             psi.RedirectStandardError = true;
-            using (Process p = Process.Start(psi))
+
+            StringBuilder sb = new StringBuilder();
+            using (Process p = new Process())
             {
-                string outp = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
-                p.WaitForExit(15000);
-                exitCode = p.HasExited ? p.ExitCode : -1;
-                return outp;
+                p.StartInfo = psi;
+                DataReceivedEventHandler colher = delegate(object s, DataReceivedEventArgs e)
+                {
+                    if (e.Data == null) return;              // null marca o fim do fluxo
+                    lock (sb) sb.AppendLine(e.Data);
+                };
+                p.OutputDataReceived += colher;
+                p.ErrorDataReceived += colher;
+
+                p.Start();
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+
+                if (!p.WaitForExit(15000))
+                {
+                    Log.Write("schtasks nao respondeu em 15 s: " + args);
+                    try { p.Kill(); } catch { }
+                    exitCode = -1;
+                    lock (sb) return sb.ToString();
+                }
+
+                // Sem argumento, espera tambem o esvaziamento dos dois fluxos -
+                // com timeout, WaitForExit nao garante isso.
+                p.WaitForExit();
+                exitCode = p.ExitCode;
+                lock (sb) return sb.ToString();
             }
         }
     }

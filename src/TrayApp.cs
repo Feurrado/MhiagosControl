@@ -34,6 +34,22 @@ namespace MhiagosControl
         private readonly object _sensorLock = new object();
 
         private Config _cfg;
+
+        /// <summary>
+        /// Copia do perfil ativo, para a thread de atualizacao.
+        ///
+        /// Ela NAO pode ler _cfg: Config.Active percorre a lista de perfis com
+        /// foreach, e a janela de configuracao adiciona e remove dessa mesma
+        /// lista. Criar ou excluir perfil no momento errado lancava
+        /// InvalidOperationException na thread de fundo - capturada, mas o ciclo
+        /// se perdia. Pior, SaveToProfile escrevia nos campos que a thread
+        /// estava lendo, e o mostrador podia exibir um perfil meio aplicado.
+        ///
+        /// Quem edita publica um clone novo; a thread so le a referencia, o que
+        /// e atomico. Ninguem escreve no objeto que ela esta lendo.
+        /// </summary>
+        private volatile Profile _live;
+
         private volatile bool _paused = false;
         private volatile bool _snapshotWanted = false;
         private Dictionary<string, float> _snapshot = new Dictionary<string, float>();
@@ -188,6 +204,7 @@ namespace MhiagosControl
 
             Microsoft.Win32.SystemEvents.SessionEnding += new Microsoft.Win32.SessionEndingEventHandler(OnSessionEnding);
 
+            Publicar();   // antes de a thread comecar, senao o primeiro ciclo nao tem perfil
             _worker = new Thread(new ThreadStart(WorkerLoop));
             _worker.IsBackground = true;
             _worker.Name = "PanelUpdate";
@@ -277,9 +294,24 @@ namespace MhiagosControl
 
             _cfg.ActiveName = p.Name;
             _cfg.Save();
+            Publicar();
             RebuildProfileMenu();
             ResetAlerts();
             Log.Write("perfil ativo: " + p.Name);
+        }
+
+        /// <summary>
+        /// Entrega a thread de atualizacao uma copia do perfil ativo.
+        ///
+        /// Chamar sempre que a configuracao mudar. E o unico ponto em que a
+        /// thread de fundo passa a enxergar edicoes - o que tambem quer dizer
+        /// que esquecer de chamar aqui deixa o mostrador desatualizado, e nao
+        /// corrompido.
+        /// </summary>
+        private void Publicar()
+        {
+            try { _live = _cfg.Active.Clone(); }
+            catch (Exception ex) { Log.Error("publicacao do perfil ativo", ex); }
         }
 
         private void OnToggleAutostart(object sender, EventArgs e)
@@ -383,7 +415,8 @@ namespace MhiagosControl
 
         private void UpdateOnce(ref bool warnedDevice)
         {
-            Profile cfg = _cfg.Active;
+            Profile cfg = _live;
+            if (cfg == null) return;   // ainda nao publicado
             SensorEntry e1, e2;
 
             lock (_sensorLock)
@@ -507,7 +540,13 @@ namespace MhiagosControl
                 do
                 {
                     using (SettingsForm f = new SettingsForm(_cfg, _cache, GetSnapshot, ReListSensors))
+                    {
+                        // Aplicar dentro da janela ja vale no mostrador: sem
+                        // isto o perfil so mudaria ao fechar, o que faria o
+                        // botao parecer sem efeito.
+                        f.Applied += delegate { Publicar(); ResetAlerts(); };
                         r = f.ShowDialog();
+                    }
                     if (r == DialogResult.Retry) _cache = ReListSensors();
                 }
                 while (r == DialogResult.Retry);
@@ -515,6 +554,7 @@ namespace MhiagosControl
                 _snapshotWanted = false;
 
                 if (r != DialogResult.OK) _cfg = Config.Load();   // descarta edicoes
+                Publicar();
                 RebuildProfileMenu();
                 ResetAlerts();
             }

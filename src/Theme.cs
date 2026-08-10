@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -79,10 +80,48 @@ namespace MhiagosControl
             catch { return false; }
         }
 
-        /// <summary>Relê a preferencia; chamar quando o Windows avisar que mudou.</summary>
+        /// <summary>
+        /// Rele a preferencia e repinta o que estiver aberto.
+        ///
+        /// Invalidar o cache sozinho nao bastava: as janelas ja desenhadas
+        /// seguiam com as cores antigas ate um repaint acidental, entao trocar
+        /// o tema do Windows com a configuracao aberta deixava metade da
+        /// interface no tema anterior.
+        /// </summary>
         public static void Invalidate()
         {
-            _darkRead = false;
+            bool novo = ReadDark();
+            if (_darkRead && novo == _dark) return;   // o aviso veio, mas o tema e o mesmo
+            _dark = novo;
+            _darkRead = true;
+
+            try
+            {
+                SetPreferredAppMode(_dark ? APPMODE_FORCE_DARK : APPMODE_ALLOW_DARK);
+                FlushMenuThemes();
+            }
+            catch (Exception ex) { Log.Error("modo escuro do processo", ex); }
+
+            // Copia antes de percorrer: o aviso do Windows pode chegar fora da
+            // thread de interface, e OpenForms muda quando uma janela abre.
+            List<Form> abertas = new List<Form>();
+            try { foreach (Form f in Application.OpenForms) abertas.Add(f); }
+            catch (Exception ex) { Log.Error("leitura das janelas abertas", ex); }
+
+            foreach (Form janela in abertas)
+            {
+                Form alvo = janela;
+                try
+                {
+                    if (!alvo.IsHandleCreated || alvo.IsDisposed) continue;
+                    alvo.BeginInvoke(new MethodInvoker(delegate
+                    {
+                        try { Repintar(alvo); }
+                        catch (Exception ex) { Log.Error("repintura no novo tema", ex); }
+                    }));
+                }
+                catch (Exception ex) { Log.Error("agendamento da repintura", ex); }
+            }
         }
 
         /// <summary>Chamar uma vez no arranque, antes de criar janelas.</summary>
@@ -112,27 +151,37 @@ namespace MhiagosControl
 
         public static void Apply(Form form)
         {
-            form.BackColor = Ui.Window;
-            form.ForeColor = Ui.Text;
-
-            if (IsDark)
-            {
-                try
-                {
-                    int on = 1;
-                    if (DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref on, sizeof(int)) != 0)
-                        DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref on, sizeof(int));
-                }
-                catch (Exception ex) { Log.Error("barra de titulo escura", ex); }
-            }
-
-            ApplyScrollbars(form);
+            Repintar(form);
 
             // Chamada no construtor, a varredura acima nao acha nada: um
             // controle so ganha HWND quando a janela e mostrada, e SetWindowTheme
             // sem handle nao faz efeito. Dai a barra de rolagem da lista saia
             // branca. Repetir na exibicao pega todos eles.
             form.Shown += delegate { ApplyScrollbars(form); };
+        }
+
+        /// <summary>
+        /// Aplica as cores do tema corrente a uma janela ja existente.
+        ///
+        /// Separado do Apply porque a troca de tema chama isto em toda janela
+        /// aberta: reusar o Apply inteiro registraria mais um manipulador de
+        /// Shown a cada troca, num evento que nem vai disparar de novo.
+        /// </summary>
+        private static void Repintar(Form form)
+        {
+            form.BackColor = Ui.Window;
+            form.ForeColor = Ui.Text;
+
+            try
+            {
+                int on = IsDark ? 1 : 0;
+                if (DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref on, sizeof(int)) != 0)
+                    DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref on, sizeof(int));
+            }
+            catch (Exception ex) { Log.Error("barra de titulo escura", ex); }
+
+            ApplyScrollbars(form);
+            form.Refresh();
         }
 
         /// <summary>
