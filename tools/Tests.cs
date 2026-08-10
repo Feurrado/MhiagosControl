@@ -31,6 +31,8 @@ namespace MhiagosControl
             PreparoDoValor();
             Formatacao();
             IdaEVoltaDaConfiguracao();
+            TodosOsCamposDoPerfil();
+            RodizioDePerfis();
             CompletudeDoIdioma();
 
             Console.WriteLine();
@@ -207,6 +209,8 @@ namespace MhiagosControl
                 c.ActiveName = "CPU = GPU";
                 c.ShowAllSensors = true;
                 c.Language = T.EnUs;
+                c.IdleBlankMinutes = 15;
+                c.RotateSeconds = 20;
                 c.SaveTo(arquivo);
 
                 Verdade(File.Exists(arquivo), "gravou no arquivo do teste, e nao no real");
@@ -229,6 +233,99 @@ namespace MhiagosControl
                 Igual(100, b.Divisor1, "divisor 1");
                 Igual("CPU = GPU", lido.Active.Name, "Active resolve pelo nome");
                 Verdade(lido.NameExists("padrão"), "nome existente ignora caixa");
+                Igual(15, lido.IdleBlankMinutes, "minutos ate apagar");
+                Igual(20, lido.RotateSeconds, "segundos do rodizio");
+
+                // A roda e derivada da marca de cada perfil, e nao uma segunda
+                // lista: duas listas para a mesma coisa saem de sincronia
+                // assim que alguem excluir um perfil.
+                Igual(0, lido.Rotation.Count, "sem marca, a roda esta vazia");
+                lido.Profiles[0].Rotate = true;
+                Igual(1, lido.Rotation.Count, "um perfil marcado");
+                lido.Profiles[1].Rotate = true;
+                Igual(2, lido.Rotation.Count, "dois perfis marcados");
+                lido.Profiles.RemoveAt(1);
+                Igual(1, lido.Rotation.Count, "excluir o perfil tira ele da roda");
+            }
+            finally { try { Directory.Delete(caixa, true); } catch { } }
+        }
+
+        /// <summary>
+        /// Confere Clone e a ida e volta pelo INI campo a campo, por reflexao.
+        ///
+        /// Escrito assim porque o jeito de errar aqui e sempre o mesmo:
+        /// acrescentar um campo ao Profile e esquecer de uma das duas pontas.
+        /// Um teste que listasse os campos a mao esqueceria junto - foi
+        /// exatamente o que quase aconteceu com os limiares inferiores.
+        /// </summary>
+        private static void TodosOsCamposDoPerfil()
+        {
+            Secao("todos os campos do perfil");
+
+            FieldInfo[] campos = typeof(Profile).GetFields(BindingFlags.Instance | BindingFlags.Public);
+            Verdade(campos.Length > 0, "o perfil expoe campos a conferir");
+
+            // Cada campo recebe um valor diferente do padrao: um Clone que
+            // esquecesse de copiar passaria se o valor de teste coincidisse
+            // com o que o construtor ja poe.
+            Profile p = new Profile();
+            int n = 1;
+            foreach (FieldInfo f in campos)
+            {
+                if (f.FieldType == typeof(string)) f.SetValue(p, "campo" + n);
+                else if (f.FieldType == typeof(int)) f.SetValue(p, n * 7);
+                else if (f.FieldType == typeof(bool)) f.SetValue(p, !(bool)f.GetValue(p));
+                else { Verdade(false, "tipo nao previsto em " + f.Name + ": ajuste o teste"); continue; }
+                n++;
+            }
+
+            Profile copia = p.Clone();
+            foreach (FieldInfo f in campos)
+                Igual(f.GetValue(p), f.GetValue(copia), "Clone copia " + f.Name);
+
+            string caixa = Path.Combine(Path.GetTempPath(), "MhiagosControlTeste" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(caixa);
+            string arquivo = Path.Combine(caixa, "config.ini");
+            try
+            {
+                Config c = new Config();
+                c.Profiles.Add(p);
+                c.ActiveName = p.Name;
+                c.SaveTo(arquivo);
+
+                Config lido = Config.LoadFrom(arquivo, false);
+                Igual(1, lido.Profiles.Count, "gravou e leu um perfil");
+                if (lido.Profiles.Count == 1)
+                    foreach (FieldInfo f in campos)
+                        Igual(f.GetValue(p), f.GetValue(lido.Profiles[0]), "o INI preserva " + f.Name);
+
+                // exportar e importar e a terceira ponta do mesmo problema
+                string erro;
+                string exportado = Path.Combine(caixa, "perfil.ini");
+                Verdade(Config.ExportProfile(p, exportado, out erro), "exportou o perfil");
+                Profile volta = Config.ImportProfile(exportado, out erro);
+                Verdade(volta != null, "importou o perfil de volta");
+                if (volta != null)
+                    foreach (FieldInfo f in campos)
+                        Igual(f.GetValue(p), f.GetValue(volta), "a exportacao preserva " + f.Name);
+
+                // Lixo nao pode virar perfil: LoadFrom nunca falha, entao sem a
+                // conferencia de ImportProfile um arquivo qualquer entraria na
+                // lista do usuario como um "Padrao" mudo.
+                string lixo = Path.Combine(caixa, "lixo.txt");
+                File.WriteAllText(lixo, "isto nao e um perfil\nnem de longe\n");
+                Verdade(Config.ImportProfile(lixo, out erro) == null, "recusa arquivo sem perfil");
+                Verdade(Config.ImportProfile(Path.Combine(caixa, "nao-existe.ini"), out erro) == null,
+                        "recusa arquivo inexistente");
+
+                // nome livre: importar duas vezes nao pode gerar dois perfis iguais
+                Config d = new Config();
+                d.Profiles.Clear();
+                d.Profiles.Add(Perfil("Jogos", "a", "b", 0, 0, true, false, 0, 0));
+                Igual("Jogos (2)", d.UniqueName("Jogos"), "primeiro nome livre");
+                d.Profiles.Add(Perfil("Jogos (2)", "a", "b", 0, 0, true, false, 0, 0));
+                Igual("Jogos (3)", d.UniqueName("Jogos"), "segundo nome livre");
+                Igual("Vazio", d.UniqueName("Vazio"), "nome inedito passa inteiro");
             }
             finally { try { Directory.Delete(caixa, true); } catch { } }
         }
@@ -241,6 +338,47 @@ namespace MhiagosControl
             p.Alert1 = a1; p.Alert2 = a2; p.Percent = pct; p.Fahrenheit = f;
             p.Divisor1 = d1; p.Divisor2 = d2;
             return p;
+        }
+
+        // ---------------- rodizio ----------------
+
+        /// <summary>
+        /// A posicao na roda, que so se ve depois de esperar um minuto olhando
+        /// o cooler. Os numeros aqui sao em milissegundos, com periodo de 20 s
+        /// e tres perfis - a configuracao que o usuario de fato monta.
+        /// </summary>
+        private static void RodizioDePerfis()
+        {
+            Secao("rodizio de perfis");
+
+            Igual(0, TrayContext.IndiceDoRodizio(0, 20000, 3), "comeca no primeiro");
+            Igual(0, TrayContext.IndiceDoRodizio(19999, 20000, 3), "fica ate o limite do periodo");
+            Igual(1, TrayContext.IndiceDoRodizio(20000, 20000, 3), "vira no periodo exato");
+            Igual(2, TrayContext.IndiceDoRodizio(40000, 20000, 3), "segue para o terceiro");
+            Igual(0, TrayContext.IndiceDoRodizio(60000, 20000, 3), "da a volta");
+            Igual(1, TrayContext.IndiceDoRodizio(80000, 20000, 3), "e continua girando");
+
+            // Perder ciclos nao pode desalinhar: a posicao vem do relogio, e
+            // nao de um contador que soma um "quando der". Meia hora depois a
+            // posicao ainda e a que o relogio manda.
+            Igual(0, TrayContext.IndiceDoRodizio(1800000, 20000, 3), "meia hora depois, sem deriva");
+
+            // Um perfil so nao gira - e o caso de quem marcou so um.
+            Igual(0, TrayContext.IndiceDoRodizio(999999, 20000, 1), "roda de um fica parada");
+
+            // Entradas degeneradas nao podem estourar indice: quem chama usa o
+            // resultado para indexar um vetor.
+            Igual(0, TrayContext.IndiceDoRodizio(1000, 0, 3), "periodo zero nao divide por zero");
+            Igual(0, TrayContext.IndiceDoRodizio(1000, -5, 3), "periodo negativo nao gira");
+            Igual(0, TrayContext.IndiceDoRodizio(-1, 20000, 3), "tempo negativo nao gira");
+            Igual(0, TrayContext.IndiceDoRodizio(1000, 20000, 0), "roda vazia devolve zero");
+
+            for (long t = 0; t < 200000; t += 137)
+            {
+                int i = TrayContext.IndiceDoRodizio(t, 20000, 3);
+                if (i < 0 || i > 2) { Verdade(false, "indice fora da roda em t=" + t); break; }
+            }
+            Verdade(true, "nenhum instante devolve indice fora da roda");
         }
 
         // ---------------- idioma ----------------

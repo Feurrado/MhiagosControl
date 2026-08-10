@@ -18,9 +18,18 @@ namespace MhiagosControl
         public bool Fahrenheit = false;
         public bool Percent = true;
 
-        /// <summary>Limiar de alerta; 0 desliga. Comparado ao valor JA convertido.</summary>
+        /// <summary>Limiar superior de alerta; 0 desliga. Comparado ao valor JA convertido.</summary>
         public int Alert1 = 0;
         public int Alert2 = 0;
+
+        /// <summary>
+        /// Limiar inferior; 0 desliga. Existe porque nem todo sensor avisa por
+        /// excesso: ventoinha parada, vazao de rede que zerou e carga que
+        /// despencou sao falhas que so aparecem por baixo. Comparado ao valor
+        /// ja convertido, como o superior.
+        /// </summary>
+        public int Alert1Low = 0;
+        public int Alert2Low = 0;
 
         /// <summary>
         /// Divisor aplicado antes de enviar (1, 10, 100, 1000). Zero significa
@@ -29,13 +38,26 @@ namespace MhiagosControl
         public int Divisor1 = 0;
         public int Divisor2 = 0;
 
+        /// <summary>
+        /// Entra na roda do rodizio.
+        ///
+        /// O rodizio troca perfis inteiros, e nao sensores dentro de um
+        /// mostrador, porque o indicador de unidade e do quadro: °C/°F em cima
+        /// e %/W embaixo valem para o quadro todo. Girar so o sensor poria
+        /// watts sob o indicador de porcentagem, e o mostrador mentiria sem
+        /// jeito de perceber.
+        /// </summary>
+        public bool Rotate = false;
+
         public Profile Clone()
         {
             Profile p = new Profile();
             p.Name = Name; p.Panel1Id = Panel1Id; p.Panel2Id = Panel2Id;
             p.Fahrenheit = Fahrenheit; p.Percent = Percent;
             p.Alert1 = Alert1; p.Alert2 = Alert2;
+            p.Alert1Low = Alert1Low; p.Alert2Low = Alert2Low;
             p.Divisor1 = Divisor1; p.Divisor2 = Divisor2;
+            p.Rotate = Rotate;
             return p;
         }
 
@@ -64,6 +86,28 @@ namespace MhiagosControl
         /// alguem diga o contrario.
         /// </summary>
         public string Language = "";
+
+        /// <summary>
+        /// Minutos sem teclado nem mouse ate apagar o mostrador; 0 desliga.
+        ///
+        /// Preferencia global e nao do perfil: e sobre a maquina estar em uso,
+        /// nao sobre o que o mostrador exibe quando esta em uso.
+        /// </summary>
+        public int IdleBlankMinutes = 0;
+
+        /// <summary>Segundos em cada perfil do rodizio; 0 desliga.</summary>
+        public int RotateSeconds = 0;
+
+        /// <summary>Perfis marcados para o rodizio. Menos de dois nao e rodizio.</summary>
+        public List<Profile> Rotation
+        {
+            get
+            {
+                List<Profile> r = new List<Profile>();
+                foreach (Profile p in Profiles) if (p.Rotate) r.Add(p);
+                return r;
+            }
+        }
 
         private static string FilePath
         {
@@ -136,6 +180,8 @@ namespace MhiagosControl
                         if (k == "active") c.ActiveName = v;
                         else if (k == "showall") c.ShowAllSensors = (v == "1");
                         else if (k == "language") c.Language = v;
+                        else if (k == "idleblank") c.IdleBlankMinutes = ParseInt(v);
+                        else if (k == "rotateseconds") c.RotateSeconds = ParseInt(v);
                         // chaves legadas (formato antigo, sem seccao)
                         else if (k == "panel1" || k == "panel2" || k == "fahrenheit" || k == "percent")
                         {
@@ -167,8 +213,11 @@ namespace MhiagosControl
                 case "percent": p.Percent = (v == "1"); break;
                 case "alert1": p.Alert1 = ParseInt(v); break;
                 case "alert2": p.Alert2 = ParseInt(v); break;
+                case "alert1low": p.Alert1Low = ParseInt(v); break;
+                case "alert2low": p.Alert2Low = ParseInt(v); break;
                 case "divisor1": p.Divisor1 = ParseInt(v); break;
                 case "divisor2": p.Divisor2 = ParseInt(v); break;
+                case "rotate": p.Rotate = (v == "1"); break;
             }
         }
 
@@ -206,20 +255,9 @@ namespace MhiagosControl
                 sb.AppendLine("active=" + ActiveName);
                 sb.AppendLine("showall=" + (ShowAllSensors ? "1" : "0"));
                 if (!string.IsNullOrEmpty(Language)) sb.AppendLine("language=" + Language);
-                foreach (Profile p in Profiles)
-                {
-                    sb.AppendLine();
-                    sb.AppendLine("[profile]");
-                    sb.AppendLine("name=" + p.Name);
-                    sb.AppendLine("panel1=" + p.Panel1Id);
-                    sb.AppendLine("panel2=" + p.Panel2Id);
-                    sb.AppendLine("fahrenheit=" + (p.Fahrenheit ? "1" : "0"));
-                    sb.AppendLine("percent=" + (p.Percent ? "1" : "0"));
-                    sb.AppendLine("alert1=" + p.Alert1.ToString(CultureInfo.InvariantCulture));
-                    sb.AppendLine("alert2=" + p.Alert2.ToString(CultureInfo.InvariantCulture));
-                    sb.AppendLine("divisor1=" + p.Divisor1.ToString(CultureInfo.InvariantCulture));
-                    sb.AppendLine("divisor2=" + p.Divisor2.ToString(CultureInfo.InvariantCulture));
-                }
+                sb.AppendLine("idleblank=" + IdleBlankMinutes.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("rotateseconds=" + RotateSeconds.ToString(CultureInfo.InvariantCulture));
+                foreach (Profile p in Profiles) AppendProfile(sb, p);
                 File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
                 Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " + ActiveName + ")");
             }
@@ -227,6 +265,101 @@ namespace MhiagosControl
             {
                 Log.Error("gravacao da configuracao", ex);
             }
+        }
+
+        private static void AppendProfile(StringBuilder sb, Profile p)
+        {
+            sb.AppendLine();
+            sb.AppendLine("[profile]");
+            sb.AppendLine("name=" + p.Name);
+            sb.AppendLine("panel1=" + p.Panel1Id);
+            sb.AppendLine("panel2=" + p.Panel2Id);
+            sb.AppendLine("fahrenheit=" + (p.Fahrenheit ? "1" : "0"));
+            sb.AppendLine("percent=" + (p.Percent ? "1" : "0"));
+            sb.AppendLine("alert1=" + p.Alert1.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("alert2=" + p.Alert2.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("alert1low=" + p.Alert1Low.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("alert2low=" + p.Alert2Low.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("divisor1=" + p.Divisor1.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("divisor2=" + p.Divisor2.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("rotate=" + (p.Rotate ? "1" : "0"));
+        }
+
+        // ---------------- um perfil sozinho ----------------
+
+        /// <summary>
+        /// Grava um perfil isolado, no mesmo formato do config.ini.
+        ///
+        /// Mesmo formato de proposito: o arquivo exportado pode ser lido, e
+        /// corrigido, com o bloco de notas, e um config.ini inteiro tambem
+        /// serve de origem para importar - o leitor pega o primeiro perfil.
+        /// </summary>
+        public static bool ExportProfile(Profile p, string path, out string erro)
+        {
+            erro = null;
+            try
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine("; Mhiagos Control - perfil exportado");
+                AppendProfile(sb, p);
+                File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+                Log.Write("perfil exportado: " + p.Name + " -> " + path);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("exportacao de perfil", ex);
+                erro = ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Le o primeiro perfil de um arquivo. Devolve null quando o arquivo
+        /// nao tem perfil nenhum dentro.
+        ///
+        /// A validacao existe porque LoadFrom nunca falha: diante de lixo ele
+        /// devolve um perfil vazio, que sem esta conferencia entraria na lista
+        /// do usuario como um "Padrao" mudo.
+        /// </summary>
+        public static Profile ImportProfile(string path, out string erro)
+        {
+            erro = null;
+            try
+            {
+                if (!File.Exists(path)) { erro = "arquivo inexistente"; return null; }
+
+                Config c = LoadFrom(path, false);
+                if (c.Profiles.Count == 0) { erro = "nenhum perfil no arquivo"; return null; }
+
+                Profile p = c.Profiles[0];
+                if (string.IsNullOrEmpty(p.Panel1Id) && string.IsNullOrEmpty(p.Panel2Id))
+                {
+                    erro = "nenhum perfil no arquivo";
+                    return null;
+                }
+                if (string.IsNullOrEmpty(p.Name)) p.Name = "Importado";
+                return p;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("importacao de perfil", ex);
+                erro = ex.Message;
+                return null;
+            }
+        }
+
+        /// <summary>Nome livre a partir do desejado, acrescentando (2), (3)...</summary>
+        public string UniqueName(string desired)
+        {
+            if (string.IsNullOrEmpty(desired)) desired = "Importado";
+            if (!NameExists(desired)) return desired;
+            for (int i = 2; i < 1000; i++)
+            {
+                string n = desired + " (" + i.ToString(CultureInfo.InvariantCulture) + ")";
+                if (!NameExists(n)) return n;
+            }
+            return desired + " " + Guid.NewGuid().ToString("N").Substring(0, 6);
         }
     }
 }

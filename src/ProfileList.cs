@@ -35,6 +35,9 @@ namespace MhiagosControl
 
         private const int RowH = 54;
 
+        /// <summary>Seta circular (U+21BB), presente nas fontes que o Windows entrega.</summary>
+        private const string RotaGlifo = "↻";
+
         public ProfileList()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
@@ -200,6 +203,18 @@ namespace MhiagosControl
                     TextRenderer.DrawText(g, T.ActiveBadge, Ui.FontSmall, badge, Color.White,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                     right = badge.Left - 8;
+                }
+
+                // Marca do rodizio. Simbolo e nao pastilha: ela dividiria a
+                // linha com o distintivo de ativo, e as duas juntas nao
+                // deixariam largura para o nome, que e o que se le primeiro.
+                if (p.Rotate)
+                {
+                    Size gs = TextRenderer.MeasureText(g, RotaGlifo, Ui.FontMed);
+                    Rectangle marca = new Rectangle(right - gs.Width, r.Y + 8, gs.Width, 20);
+                    TextRenderer.DrawText(g, RotaGlifo, Ui.FontMed, marca, Ui.Accent,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                    right = marca.Left - 6;
                 }
 
                 TextRenderer.DrawText(g, p.Name, Ui.FontMed,

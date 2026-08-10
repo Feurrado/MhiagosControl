@@ -113,18 +113,30 @@ namespace MhiagosControl
         public static string Thresholds { get { return P("Limiares", "Thresholds"); } }
         public static string WarnWhenReaching { get { return P("Avisar quando atingir", "Warn when it reaches"); } }
         public static string Current { get { return P("atual: ", "current: "); } }
+        public static string AboveOf { get { return P("Acima de", "Above"); } }
+        public static string BelowOf { get { return P("Abaixo de", "Below"); } }
+
+        /// <summary>Aviso de faixa impossivel: com inferior >= superior, os dois disparam sempre.</summary>
+        public static string ThresholdsCross
+        {
+            get
+            {
+                return P("O limiar inferior está acima do superior — os dois vão disparar juntos.",
+                         "The lower threshold sits above the upper one — both will fire together.");
+            }
+        }
 
         public static string AlertsNote
         {
             get
             {
                 return P(
-                    "Zero desliga o aviso. O alerta dispara na subida e só rearma quando o valor cai abaixo do limiar —\n" +
-                    "sem isso, um sensor oscilando no limite notificaria a cada ciclo. O ícone da bandeja ganha um ponto\n" +
-                    "vermelho enquanto o alerta estiver ativo. Mostrador apagado não dispara alerta.",
-                    "Zero turns the warning off. The alert fires on the way up and only rearms once the value drops below\n" +
-                    "the threshold — without that, a sensor hovering at the limit would notify every cycle. The tray icon\n" +
-                    "gets a red dot while the alert is active. A blank display never fires an alert.");
+                    "Zero desliga o aviso. O alerta dispara ao entrar na faixa e só rearma quando o valor volta —\n" +
+                    "sem isso, um sensor oscilando no limite notificaria a cada ciclo. O limiar inferior serve ao que\n" +
+                    "falha por baixo: ventoinha parada, vazão que zerou. Mostrador apagado não dispara alerta.",
+                    "Zero turns the warning off. The alert fires when the value enters the range and only rearms once it\n" +
+                    "leaves — without that, a sensor hovering at the limit would notify every cycle. The lower threshold\n" +
+                    "catches what fails downward: a stopped fan, throughput at zero. A blank display never fires.");
             }
         }
 
@@ -136,7 +148,69 @@ namespace MhiagosControl
         public static string Rename { get { return P("Renomear", "Rename"); } }
         public static string Duplicate { get { return P("Duplicar", "Duplicate"); } }
         public static string Delete { get { return P("Excluir", "Delete"); } }
+        public static string Export { get { return P("Exportar", "Export"); } }
+        public static string Import { get { return P("Importar", "Import"); } }
+        public static string ExportProfile { get { return P("Exportar perfil", "Export profile"); } }
+        public static string ImportProfile { get { return P("Importar perfil", "Import profile"); } }
+        public static string ProfileFilter
+        {
+            get { return P("Perfil do Mhiagos Control (*.ini)|*.ini|Todos os arquivos|*.*",
+                           "Mhiagos Control profile (*.ini)|*.ini|All files|*.*"); }
+        }
+
+        public static string Exported(string nome)
+        {
+            return P("Perfil exportado: " + nome, "Profile exported: " + nome);
+        }
+
+        public static string Imported(string nome)
+        {
+            return P("Perfil importado: " + nome, "Profile imported: " + nome);
+        }
+
+        public static string ExportFailed(string erro)
+        {
+            return P("Não deu para exportar: " + erro, "Could not export: " + erro);
+        }
+
+        public static string ImportFailed(string erro)
+        {
+            return P("Não deu para importar: " + erro, "Could not import: " + erro);
+        }
+
+        /// <summary>O identificador do sensor carrega o modelo do hardware; nao viaja entre maquinas.</summary>
+        public static string ImportedUnknownSensor
+        {
+            get
+            {
+                return P("Perfil importado, mas os sensores dele não existem nesta máquina — escolha os dois de novo.",
+                         "Profile imported, but its sensors do not exist on this machine — pick both again.");
+            }
+        }
         public static string ActiveBadge { get { return P("ATIVO", "ACTIVE"); } }
+
+        public static string Rotation { get { return P("Rodízio", "Rotation"); } }
+
+        public static string IncludeInRotation
+        {
+            get { return P("Incluir o perfil selecionado no rodízio",
+                           "Include the selected profile in the rotation"); }
+        }
+
+        public static string RotationOff
+        {
+            get
+            {
+                return P("marque dois ou mais perfis para o mostrador girar entre eles",
+                         "mark two or more profiles for the display to cycle between them");
+            }
+        }
+
+        public static string RotationOn(int n)
+        {
+            return P("segundos em cada perfil  ·  " + n + " perfis no rodízio",
+                     "seconds on each profile  ·  " + n + " profiles in the rotation");
+        }
         public static string ApplyProfile { get { return P("Aplicar perfil", "Apply profile"); } }
         public static string AlreadyActive { get { return P("já é o perfil ativo", "already the active profile"); } }
 
@@ -283,6 +357,29 @@ namespace MhiagosControl
 
         // ---------------- motor de sensores ----------------
 
+        public static string BlankWhenIdle
+        {
+            get { return P("Apagar o mostrador quando ninguém usar o computador",
+                           "Blank the display when nobody is using the computer"); }
+        }
+
+        public static string BlankWhenIdleNote
+        {
+            get
+            {
+                return P("Conta teclado e mouse da sessão inteira. Assistir vídeo ou esperar uma renderização longa " +
+                         "conta como ocioso — o mostrador volta ao primeiro toque, e os alertas continuam valendo.",
+                         "Counts keyboard and mouse across the whole session. Watching a video or waiting on a long " +
+                         "render counts as idle — the display returns on the first input, and alerts keep working.");
+            }
+        }
+
+        /// <summary>Fica a direita do campo de minutos, entao le-se "15 minutos parado...".</summary>
+        public static string MinutesIdle
+        {
+            get { return P("minutos parado até apagar", "minutes idle before blanking"); }
+        }
+
         public static string SensorSources { get { return P("Fontes de sensores", "Sensor sources"); } }
         public static string SensorsFrom(string fonte, int n)
         {
@@ -350,6 +447,7 @@ namespace MhiagosControl
             get { return P("Mhiagos Control - pausado (o painel vai apagar)", "Mhiagos Control - paused (the panel will go blank)"); }
         }
         public static string TagAlert { get { return P("  [ALERTA]", "  [ALERT]"); } }
+        public static string TagIdle { get { return P("  [ocioso]", "  [idle]"); } }
         public static string TagOver { get { return P("  [excede 999]", "  [over 999]"); } }
         public static string TagNoDevice { get { return P("  [painel ausente]", "  [panel missing]"); } }
 
@@ -357,6 +455,12 @@ namespace MhiagosControl
         {
             return P("Painel " + panel + " atingiu " + value + " (limiar " + threshold + ")",
                      "Panel " + panel + " reached " + value + " (threshold " + threshold + ")");
+        }
+
+        public static string AlertDropped(int panel, int value, int threshold)
+        {
+            return P("Painel " + panel + " caiu para " + value + " (limiar inferior " + threshold + ")",
+                     "Panel " + panel + " dropped to " + value + " (lower threshold " + threshold + ")");
         }
 
         public static string AlreadyRunning

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -22,6 +23,12 @@ namespace MhiagosControl
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool DestroyIcon(IntPtr handle);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+
+        [DllImport("user32.dll")]
+        private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
 
         private NotifyIcon _icon;
         private Icon _iconNormal, _iconAlert;
@@ -50,6 +57,28 @@ namespace MhiagosControl
         /// </summary>
         private volatile Profile _live;
 
+        /// <summary>Ociosidade que apaga o mostrador, em milissegundos; 0 desliga.</summary>
+        private volatile int _idleBlankMs = 0;
+
+        /// <summary>Estado corrente do apagamento, so para nao repetir o log.</summary>
+        private bool _apagado = false;
+
+        /// <summary>
+        /// Perfis do rodizio, ja clonados. Null quando nao ha rodizio.
+        ///
+        /// Publicado inteiro de uma vez, como _live: a thread le a referencia
+        /// e passa a trabalhar no vetor novo, e o antigo morre sozinho. Trocar
+        /// item a item exigiria travar os dois lados.
+        /// </summary>
+        private volatile Profile[] _rotation;
+
+        /// <summary>Periodo do rodizio em milissegundos; 0 desliga.</summary>
+        private volatile int _rotateMs = 0;
+
+        // so a thread de atualizacao toca nestes dois
+        private int _rotIndex = 0;
+        private long _rotTicks = 0;
+
         private volatile bool _paused = false;
         private volatile bool _snapshotWanted = false;
         private Dictionary<string, float> _snapshot = new Dictionary<string, float>();
@@ -57,7 +86,14 @@ namespace MhiagosControl
         private List<SensorEntry> _cache = new List<SensorEntry>();
         private MenuItem _miPause, _miAutostart, _miProfiles;
         private bool _sensorsOk = false;
-        private bool _alerting = false, _alert1 = false, _alert2 = false;
+        private bool _alerting = false;
+
+        /// <summary>
+        /// Travas de alerta, uma por limiar. Sao quatro e nao duas porque o
+        /// limiar superior e o inferior de um mesmo mostrador disparam e
+        /// rearmam em momentos diferentes.
+        /// </summary>
+        private bool _hi1 = false, _hi2 = false, _lo1 = false, _lo2 = false;
         private bool _iconIsAlert = false;
 
         public TrayContext()
@@ -310,7 +346,21 @@ namespace MhiagosControl
         /// </summary>
         private void Publicar()
         {
-            try { _live = _cfg.Active.Clone(); }
+            try
+            {
+                _live = _cfg.Active.Clone();
+                _idleBlankMs = Math.Max(0, _cfg.IdleBlankMinutes) * 60000;
+                _rotateMs = Math.Max(0, _cfg.RotateSeconds) * 1000;
+
+                List<Profile> roda = _cfg.Rotation;
+                if (roda.Count < 2 || _rotateMs <= 0) _rotation = null;
+                else
+                {
+                    Profile[] copia = new Profile[roda.Count];
+                    for (int i = 0; i < roda.Count; i++) copia[i] = roda[i].Clone();
+                    _rotation = copia;
+                }
+            }
             catch (Exception ex) { Log.Error("publicacao do perfil ativo", ex); }
         }
 
@@ -415,15 +465,25 @@ namespace MhiagosControl
 
         private void UpdateOnce(ref bool warnedDevice)
         {
-            Profile cfg = _live;
-            if (cfg == null) return;   // ainda nao publicado
-            SensorEntry e1, e2;
+            Profile vigiar = _live;
+            if (vigiar == null) return;   // ainda nao publicado
 
+            // O que vai ao mostrador pode nao ser o perfil ativo: o rodizio
+            // gira o quadro. Os alertas, porem, seguem SEMPRE o perfil ativo -
+            // limiares que mudassem a cada giro travariam e destravariam
+            // sozinhos, e um alerta que aparece conforme a hora do relogio nao
+            // e alerta. Girar e sobre o mostrador, nao sobre a vigilancia.
+            Profile cfg = Rodar(vigiar);
+            bool mesmo = ReferenceEquals(cfg, vigiar) || cfg.Name == vigiar.Name;
+
+            SensorEntry e1, e2, g1, g2;
             lock (_sensorLock)
             {
                 _sensors.Refresh();
                 e1 = _sensors.ReadEntry(cfg.Panel1Id);
                 e2 = _sensors.ReadEntry(cfg.Panel2Id);
+                g1 = mesmo ? e1 : _sensors.ReadEntry(vigiar.Panel1Id);
+                g2 = mesmo ? e2 : _sensors.ReadEntry(vigiar.Panel2Id);
                 if (_snapshotWanted)
                     Interlocked.Exchange(ref _snapshot, _sensors.Snapshot());
             }
@@ -431,39 +491,137 @@ namespace MhiagosControl
             PanelValue v1 = Scaling.Prepare(e1, Scaling.Effective(cfg.Divisor1, e1), cfg.Fahrenheit);
             PanelValue v2 = Scaling.Prepare(e2, Scaling.Effective(cfg.Divisor2, e2), false);
 
-            bool ok = _panel.Send(v1.Value, v2.Value, cfg.Fahrenheit, cfg.Percent);
+            PanelValue a1 = mesmo ? v1 : Scaling.Prepare(g1, Scaling.Effective(vigiar.Divisor1, g1), vigiar.Fahrenheit);
+            PanelValue a2 = mesmo ? v2 : Scaling.Prepare(g2, Scaling.Effective(vigiar.Divisor2, g2), false);
+
+            // Apagar e sobre o mostrador, nao sobre a vigilancia: o quadro sai
+            // em branco, mas os alertas continuam sendo avaliados com os
+            // valores reais logo abaixo. Uma CPU nao esfria porque o dono saiu.
+            bool ocioso = Ocioso();
+            bool ok = ocioso
+                ? _panel.Send(null, null, cfg.Fahrenheit, cfg.Percent)
+                : _panel.Send(v1.Value, v2.Value, cfg.Fahrenheit, cfg.Percent);
+
             if (!ok && !warnedDevice) { Log.Write("painel ausente ou envio falhou"); warnedDevice = true; }
             else if (ok && warnedDevice) { Log.Write("painel reconectado"); warnedDevice = false; }
 
-            EvaluateAlerts(cfg, v1.Value, v2.Value);
+            EvaluateAlerts(vigiar, a1.Value, a2.Value);
 
             string text = string.Format(CultureInfo.InvariantCulture, "Mhiagos Control  {0}{1} / {2}{3}",
                 v1.Value.HasValue ? v1.Value.Value.ToString(CultureInfo.InvariantCulture) : "--",
                 cfg.Fahrenheit ? "F" : "C",
                 v2.Value.HasValue ? v2.Value.Value.ToString(CultureInfo.InvariantCulture) : "--",
                 cfg.Percent ? "%" : "W");
+            if (!mesmo) text += "  " + cfg.Name;
             if (_alerting) text += T.TagAlert;
+            if (ocioso) text += T.TagIdle;
             if (v1.Clamped || v2.Clamped) text += T.TagOver;
             if (!ok) text += T.TagNoDevice;
             SetTooltip(text);
         }
 
         /// <summary>
-        /// Notifica na borda de subida e so rearma quando o valor cai abaixo do
-        /// limiar - sem isso, um sensor oscilando no limite gera notificacao a
-        /// cada 1,1 s.
+        /// Perfil que vai ao mostrador neste ciclo.
+        ///
+        /// Quando o rodizio esta ligado ele avanca sozinho pela roda; quando
+        /// nao esta, devolve o ativo e zera o indice, para que ligar o rodizio
+        /// mais tarde comece do inicio em vez de saltar para o meio.
+        ///
+        /// Nao usa o relogio de parede para contar: DateTime.UtcNow anda com o
+        /// horario de verao e com a sincronizacao de rede, e um ajuste de meia
+        /// hora congelaria o mostrador nesse perfil ate a hora passar.
+        /// </summary>
+        private Profile Rodar(Profile ativo)
+        {
+            Profile[] roda = _rotation;
+            int periodo = _rotateMs;
+            if (roda == null || roda.Length < 2 || periodo <= 0)
+            {
+                _rotIndex = 0;
+                _rotTicks = 0;
+                return ativo;
+            }
+
+            long agora = Stopwatch.GetTimestamp();
+            if (_rotTicks == 0) _rotTicks = agora;
+
+            long periodoTicks = (long)periodo * Stopwatch.Frequency / 1000;
+            _rotIndex = IndiceDoRodizio(agora - _rotTicks, periodoTicks, roda.Length);
+            return roda[_rotIndex];
+        }
+
+        /// <summary>
+        /// Posicao na roda a partir do tempo decorrido.
+        ///
+        /// Derivar do relogio em vez de somar um a cada volta e o que impede a
+        /// deriva: o ciclo dura 1,1 s mais o que a varredura do hardware levar,
+        /// e um contador incrementado "quando der" acumularia esse resto ate o
+        /// rodizio de 20 s virar de 23. Aqui cada instante tem uma posicao so,
+        /// e perder um ciclo nao desalinha nada.
+        /// </summary>
+        internal static int IndiceDoRodizio(long decorrido, long periodo, int tamanho)
+        {
+            if (tamanho <= 0) return 0;
+            if (periodo <= 0 || decorrido < 0) return 0;
+            return (int)((decorrido / periodo) % tamanho);
+        }
+
+        /// <summary>
+        /// Ha quanto tempo ninguem toca no teclado nem no mouse.
+        ///
+        /// GetLastInputInfo mede a sessao inteira, e nao so este processo -
+        /// e o que se quer: o computador estar em uso, e nao esta janela.
+        /// Vale notar o que ele NAO ve: assistir video ou esperar uma
+        /// renderizacao demorada conta como ocioso, porque ninguem digita.
+        /// </summary>
+        private bool Ocioso()
+        {
+            int limite = _idleBlankMs;
+            if (limite <= 0) { Registrar(false); return false; }
+
+            bool ocioso;
+            try
+            {
+                LASTINPUTINFO li = new LASTINPUTINFO();
+                // qualificado: esta classe tem um metodo Marshal proprio
+                li.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(LASTINPUTINFO));
+                if (!GetLastInputInfo(ref li)) { Registrar(false); return false; }
+
+                // Aritmetica sem sinal de proposito: GetTickCount da a volta a
+                // cada 49,7 dias, e a subtracao em uint continua certa na volta.
+                uint parado = (uint)Environment.TickCount - li.dwTime;
+                ocioso = parado >= (uint)limite;
+            }
+            catch (Exception ex) { Log.Error("leitura da ociosidade", ex); return false; }
+
+            Registrar(ocioso);
+            return ocioso;
+        }
+
+        private void Registrar(bool ocioso)
+        {
+            if (ocioso == _apagado) return;
+            _apagado = ocioso;
+            Log.Write(ocioso ? "mostrador apagado por ociosidade" : "mostrador religado");
+        }
+
+        /// <summary>
+        /// Notifica na borda de entrada e so rearma quando o valor volta para a
+        /// faixa boa - sem isso, um sensor oscilando no limite gera notificacao
+        /// a cada 1,1 s.
         /// </summary>
         private void EvaluateAlerts(Profile cfg, int? p1, int? p2)
         {
-            // sem leitura nao dispara alerta: mostrador apagado nao e valor baixo
-            bool a1 = cfg.Alert1 > 0 && p1.HasValue && p1.Value >= cfg.Alert1;
-            bool a2 = cfg.Alert2 > 0 && p2.HasValue && p2.Value >= cfg.Alert2;
+            bool hi1 = Acima(p1, cfg.Alert1), lo1 = Abaixo(p1, cfg.Alert1Low);
+            bool hi2 = Acima(p2, cfg.Alert2), lo2 = Abaixo(p2, cfg.Alert2Low);
 
-            if (a1 && !_alert1) Notify(T.AlertReached(1, p1.Value, cfg.Alert1));
-            if (a2 && !_alert2) Notify(T.AlertReached(2, p2.Value, cfg.Alert2));
+            if (hi1 && !_hi1) Notify(T.AlertReached(1, p1.Value, cfg.Alert1));
+            if (hi2 && !_hi2) Notify(T.AlertReached(2, p2.Value, cfg.Alert2));
+            if (lo1 && !_lo1) Notify(T.AlertDropped(1, p1.Value, cfg.Alert1Low));
+            if (lo2 && !_lo2) Notify(T.AlertDropped(2, p2.Value, cfg.Alert2Low));
 
-            _alert1 = a1; _alert2 = a2;
-            bool any = a1 || a2;
+            _hi1 = hi1; _hi2 = hi2; _lo1 = lo1; _lo2 = lo2;
+            bool any = hi1 || hi2 || lo1 || lo2;
             if (any != _alerting)
             {
                 _alerting = any;
@@ -471,9 +629,15 @@ namespace MhiagosControl
             }
         }
 
+        // Zero desliga. Sem leitura nao dispara nada: mostrador apagado nao e
+        // valor baixo - seria o alerta inferior gritando toda vez que o sensor
+        // sumisse por um ciclo.
+        private static bool Acima(int? v, int limiar) { return limiar > 0 && v.HasValue && v.Value >= limiar; }
+        private static bool Abaixo(int? v, int limiar) { return limiar > 0 && v.HasValue && v.Value <= limiar; }
+
         private void ResetAlerts()
         {
-            _alert1 = _alert2 = false;
+            _hi1 = _hi2 = _lo1 = _lo2 = false;
             if (_alerting) { _alerting = false; SetIconAlert(false); }
         }
 

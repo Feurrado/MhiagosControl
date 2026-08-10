@@ -36,8 +36,8 @@ namespace MhiagosControl
         private SensorSlot _slot1, _slot2;
 
         // pagina Alertas
-        private NumberBox _alert1, _alert2;
-        private Label _alertInfo1, _alertInfo2;
+        private NumberBox _alert1, _alert2, _alert1Low, _alert2Low;
+        private Label _alertInfo1, _alertInfo2, _alertCross;
 
         // pagina Perfis
         private ProfileList _profileList;
@@ -46,7 +46,9 @@ namespace MhiagosControl
         private FlatBtn _btnApply;
 
         // pagina Sobre
-        private Toggle _tgAutostart;
+        private Toggle _tgAutostart, _tgIdle, _tgRotate;
+        private NumberBox _idleMin, _rotSecs;
+        private Label _idleNote, _rotNote;
         private Segmented _lang;
 
         /// <summary>Ha edicao ainda nao gravada. Governa o aviso ao fechar.</summary>
@@ -356,42 +358,57 @@ namespace MhiagosControl
 
             Card c = new Card();
             c.Title = T.Thresholds;
-            c.SetBounds(0, 0, 756, 250);
+            c.SetBounds(0, 0, 756, 288);
             page.Controls.Add(c);
 
-            _alert1 = MakeLimiar(c, T.Panel1, 16, 58, out _alertInfo1);
-            _alert2 = MakeLimiar(c, T.Panel2, 386, 58, out _alertInfo2);
+            MakeLimiar(c, T.Panel1, 16, 58, out _alert1, out _alert1Low, out _alertInfo1);
+            MakeLimiar(c, T.Panel2, 386, 58, out _alert2, out _alert2Low, out _alertInfo2);
 
-            Label note = MakeLabel(T.AlertsNote, 16, 186, Ui.FontSmall);
-            note.Size = new Size(720, 52);
+            // Aviso de faixa impossivel. Fica sempre no mesmo lugar, e nao num
+            // balao ao salvar: e uma observacao sobre o que esta na tela, e
+            // interromper para dize-la seria desproporcional - a configuracao
+            // e valida, so nao faz o que parece fazer.
+            _alertCross = MakeLabel("", 16, 182, Ui.FontSmall);
+            _alertCross.Size = new Size(720, 20);
+            _alertCross.ForeColor = Ui.Warn;
+            _alertCross.Visible = false;
+            c.Controls.Add(_alertCross);
+
+            Label note = MakeLabel(T.AlertsNote, 16, 210, Ui.FontSmall);
+            note.Size = new Size(720, 56);
             note.ForeColor = Ui.Muted;
             c.Controls.Add(note);
 
             return page;
         }
 
-        /// <summary>Rotulo, campo numerico e leitura atual de um dos limiares.</summary>
-        private NumberBox MakeLimiar(Control host, string titulo, int x, int y, out Label info)
+        /// <summary>Titulo, leitura atual e os dois limiares de um mostrador.</summary>
+        private void MakeLimiar(Control host, string titulo, int x, int y,
+                                out NumberBox alto, out NumberBox baixo, out Label info)
         {
             host.Controls.Add(MakeLabel(titulo, x, y, Ui.FontMed));
 
-            Label cap = MakeLabel(T.WarnWhenReaching, x, y + 24, Ui.FontSmall);
-            cap.Size = new Size(320, 18);
+            info = MakeLabel("", x, y + 24, Ui.FontSmall);
+            info.Size = new Size(330, 18);
+            info.ForeColor = Ui.Muted;
+            host.Controls.Add(info);
+
+            alto = MakeCampoLimiar(host, T.AboveOf, x, y + 50);
+            baixo = MakeCampoLimiar(host, T.BelowOf, x + 152, y + 50);
+        }
+
+        private NumberBox MakeCampoLimiar(Control host, string legenda, int x, int y)
+        {
+            Label cap = MakeLabel(legenda, x, y, Ui.FontSmall);
+            cap.Size = new Size(140, 18);
             cap.ForeColor = Ui.Muted;
             host.Controls.Add(cap);
 
             NumberBox n = new NumberBox();
             n.Minimum = 0; n.Maximum = 999;
-            n.SetBounds(x, y + 48, 120, 34);
+            n.SetBounds(x, y + 22, 120, 34);
             n.ValueChanged += delegate { OnChanged(); };
             host.Controls.Add(n);
-
-            info = MakeLabel("", x + 134, y + 48, Ui.FontSmall);
-            info.Size = new Size(200, 34);
-            info.TextAlign = ContentAlignment.MiddleLeft;   // alinha com o campo, nao com o topo
-            info.ForeColor = Ui.Muted;
-            host.Controls.Add(info);
-
             return n;
         }
 
@@ -417,19 +434,21 @@ namespace MhiagosControl
             page.Controls.Add(c);
 
             _profileList = new ProfileList();
-            _profileList.SetBounds(12, 44, 306, 396);
+            _profileList.SetBounds(12, 44, 306, 350);
             _profileList.Resolve = NomeDoSensor;
             _profileList.ActiveName = _cfg.ActiveName;
             _profileList.SelectionChanged += new EventHandler(OnProfileSelected);
             _profileList.ItemActivated += delegate { AplicarPerfil(); };
             c.Controls.Add(_profileList);
 
-            c.Controls.Add(MakeSideButton(T.New, 12, 452, 145, new EventHandler(OnNewProfile)));
-            c.Controls.Add(MakeSideButton(T.Rename, 173, 452, 145, new EventHandler(OnRenameProfile)));
-            c.Controls.Add(MakeSideButton(T.Duplicate, 12, 492, 145, new EventHandler(OnDuplicateProfile)));
-            FlatBtn del = MakeSideButton(T.Delete, 173, 492, 145, new EventHandler(OnDeleteProfile));
+            c.Controls.Add(MakeSideButton(T.New, 12, 406, 145, new EventHandler(OnNewProfile)));
+            c.Controls.Add(MakeSideButton(T.Rename, 173, 406, 145, new EventHandler(OnRenameProfile)));
+            c.Controls.Add(MakeSideButton(T.Duplicate, 12, 446, 145, new EventHandler(OnDuplicateProfile)));
+            FlatBtn del = MakeSideButton(T.Delete, 173, 446, 145, new EventHandler(OnDeleteProfile));
             del.Danger = true;
             c.Controls.Add(del);
+            c.Controls.Add(MakeSideButton(T.Export, 12, 486, 145, new EventHandler(OnExportProfile)));
+            c.Controls.Add(MakeSideButton(T.Import, 173, 486, 145, new EventHandler(OnImportProfile)));
 
             Card cv = new Card();
             cv.Title = T.ProfilePreview;
@@ -452,12 +471,83 @@ namespace MhiagosControl
             _btnApply.Click += delegate { AplicarPerfil(); };
             cv.Controls.Add(_btnApply);
 
-            Label note = MakeLabel(T.ProfilesNote, 2, 578, Ui.FontSmall);
+            // O rodizio mora aqui, e nao junto das outras preferencias, porque
+            // o que ele gira sao perfis: o toggle age sobre o que esta
+            // selecionado na lista ao lado, e ver as duas coisas juntas e o que
+            // torna a marcacao compreensivel.
+            Card cg = new Card();
+            cg.Title = T.Rotation;
+            cg.SetBounds(0, 578, 756, 150);
+            page.Controls.Add(cg);
+
+            _tgRotate = new Toggle();
+            _tgRotate.Label = T.IncludeInRotation;
+            _tgRotate.SetBounds(16, 48, 460, 26);
+            _tgRotate.CheckedChanged += new EventHandler(OnToggleRotate);
+            cg.Controls.Add(_tgRotate);
+
+            _rotSecs = new NumberBox();
+            _rotSecs.Minimum = 2; _rotSecs.Maximum = 999;
+            _rotSecs.Value = _cfg.RotateSeconds > 0 ? _cfg.RotateSeconds : 20;
+            _rotSecs.SetBounds(16, 84, 110, 32);
+            _rotSecs.ValueChanged += new EventHandler(OnRotateSeconds);
+            cg.Controls.Add(_rotSecs);
+
+            _rotNote = MakeLabel("", 134, 84, Ui.FontSmall);
+            _rotNote.Size = new Size(600, 32);
+            _rotNote.TextAlign = ContentAlignment.MiddleLeft;
+            _rotNote.ForeColor = Ui.Muted;
+            cg.Controls.Add(_rotNote);
+
+            Label note = MakeLabel(T.ProfilesNote, 2, 740, Ui.FontSmall);
             note.Size = new Size(750, 40);
             note.ForeColor = Ui.Muted;
             page.Controls.Add(note);
 
+            AtualizarRodizio();
             return page;
+        }
+
+        /// <summary>
+        /// Marca o perfil selecionado como participante do rodizio.
+        ///
+        /// A marca e do perfil, e o periodo e da maquina: dois perfis nao
+        /// podem discordar sobre de quanto em quanto tempo a roda gira.
+        /// </summary>
+        private void OnToggleRotate(object sender, EventArgs e)
+        {
+            if (_loading) return;
+            Profile p = _profileList != null ? _profileList.Selected : _current;
+            if (p == null) return;
+            p.Rotate = _tgRotate.Checked;
+            _cfg.RotateSeconds = _rotSecs.Value;
+            _dirty = true;
+            _profileList.Invalidate();
+            AtualizarRodizio();
+        }
+
+        private void OnRotateSeconds(object sender, EventArgs e)
+        {
+            if (_loading) return;
+            _cfg.RotateSeconds = _rotSecs.Value;
+            _dirty = true;
+            AtualizarRodizio();
+        }
+
+        private void AtualizarRodizio()
+        {
+            if (_rotNote == null) return;
+
+            Profile p = _profileList != null ? _profileList.Selected : _current;
+            _loading = true;
+            _tgRotate.Checked = p != null && p.Rotate;
+            _loading = false;
+
+            int n = _cfg.Rotation.Count;
+            bool ativo = n >= 2 && _cfg.RotateSeconds > 0;
+            _rotSecs.Enabled = n >= 2;
+            _rotNote.Text = ativo ? T.RotationOn(n) : T.RotationOff;
+            _rotNote.ForeColor = ativo ? Ui.Muted : Ui.Faint;
         }
 
         /// <summary>Nome curto de um sensor, para o resumo de cada perfil.</summary>
@@ -527,16 +617,18 @@ namespace MhiagosControl
             _profilePreview.Value2 = v2.Value;
             _profilePreview.Fahrenheit = p.Fahrenheit;
             _profilePreview.Percent = p.Percent;
-            _profilePreview.Alert1 = p.Alert1 > 0 && v1.Value.HasValue && v1.Value.Value >= p.Alert1;
-            _profilePreview.Alert2 = p.Alert2 > 0 && v2.Value.HasValue && v2.Value.Value >= p.Alert2;
+            _profilePreview.Alert1 = Fora(v1, p.Alert1, p.Alert1Low);
+            _profilePreview.Alert2 = Fora(v2, p.Alert2, p.Alert2Low);
             _profilePreview.Invalidate();
 
             string n1 = NomeDoSensor(p.Panel1Id), n2 = NomeDoSensor(p.Panel2Id);
             _profileInfo.Text =
                 T.PanelShort(1) + ":  " + (n1 ?? "—") + "   (" + (p.Fahrenheit ? "°F" : "°C") + ")\n" +
                 T.PanelShort(2) + ":  " + (n2 ?? "—") + "   (" + (p.Percent ? "%" : "W") + ")\n" +
-                T.Thresholds + ":  " + (p.Alert1 > 0 ? p.Alert1.ToString() : T.Off) +
-                "   ·   " + (p.Alert2 > 0 ? p.Alert2.ToString() : T.Off);
+                T.Thresholds + ":  " + Faixa(p.Alert1, p.Alert1Low) +
+                "   ·   " + Faixa(p.Alert2, p.Alert2Low);
+
+            AtualizarRodizio();
 
             bool ativo = string.Equals(p.Name, _cfg.ActiveName, StringComparison.Ordinal);
             _btnApply.Text = ativo ? T.ApplyProfile + "  (" + T.AlreadyActive + ")" : T.ApplyProfile;
@@ -609,6 +701,79 @@ namespace MhiagosControl
             _dirty = true;
             _nav.Subtitle = name; _nav.Invalidate();
             RefreshProfileList(); LoadFromProfile();
+        }
+
+        /// <summary>
+        /// Grava o perfil selecionado num arquivo.
+        ///
+        /// SaveToProfile antes de tudo porque o perfil em edicao mora nos
+        /// controles ate alguem mandar grava-lo: sem isso, exportar logo depois
+        /// de mexer num limiar exportaria o valor antigo, e o arquivo sairia
+        /// diferente do que esta na tela sem nenhum aviso.
+        /// </summary>
+        private void OnExportProfile(object sender, EventArgs e)
+        {
+            SaveToProfile();
+            Profile p = _profileList != null && _profileList.Selected != null ? _profileList.Selected : _current;
+            if (p == null) return;
+
+            using (SaveFileDialog d = new SaveFileDialog())
+            {
+                d.Title = T.ExportProfile;
+                d.Filter = T.ProfileFilter;
+                d.AddExtension = true;
+                d.DefaultExt = "ini";
+                d.FileName = NomeDeArquivo(p.Name) + ".ini";
+                if (d.ShowDialog(this) != DialogResult.OK) return;
+
+                string erro;
+                if (Config.ExportProfile(p, d.FileName, out erro)) Aviso(T.Exported(p.Name));
+                else Warn(T.ExportFailed(erro));
+            }
+        }
+
+        private void OnImportProfile(object sender, EventArgs e)
+        {
+            using (OpenFileDialog d = new OpenFileDialog())
+            {
+                d.Title = T.ImportProfile;
+                d.Filter = T.ProfileFilter;
+                d.CheckFileExists = true;
+                if (d.ShowDialog(this) != DialogResult.OK) return;
+
+                string erro;
+                Profile p = Config.ImportProfile(d.FileName, out erro);
+                if (p == null) { Warn(T.ImportFailed(erro)); return; }
+
+                SaveToProfile();
+                p.Name = _cfg.UniqueName(p.Name);
+                _cfg.Profiles.Add(p);
+                _current = p;
+                _dirty = true;
+                _nav.Subtitle = p.Name; _nav.Invalidate();
+                RefreshProfileList(); LoadFromProfile();
+
+                // Identificador de sensor nao viaja entre maquinas: ele carrega
+                // o modelo do hardware. Um perfil vindo de outro computador
+                // entra com o mostrador em branco, e calar sobre isso deixaria
+                // o usuario procurando defeito onde nao ha.
+                if (NomeDoSensor(p.Panel1Id) == null || NomeDoSensor(p.Panel2Id) == null)
+                    Warn(T.ImportedUnknownSensor);
+                else
+                    Aviso(T.Imported(p.Name));
+            }
+        }
+
+        /// <summary>Nome de perfil reduzido ao que o Windows aceita num arquivo.</summary>
+        private static string NomeDeArquivo(string nome)
+        {
+            if (string.IsNullOrEmpty(nome)) return "perfil";
+            char[] proibidos = System.IO.Path.GetInvalidFileNameChars();
+            System.Text.StringBuilder sb = new System.Text.StringBuilder(nome.Length);
+            foreach (char c in nome)
+                sb.Append(Array.IndexOf(proibidos, c) >= 0 ? '_' : c);
+            string s = sb.ToString().Trim();
+            return s.Length == 0 ? "perfil" : s;
         }
 
         private void OnRenameProfile(object sender, EventArgs e)
@@ -684,7 +849,7 @@ namespace MhiagosControl
 
             Card c = new Card();
             c.Title = T.NavAbout;
-            c.SetBounds(0, 0, 736, 456);
+            c.SetBounds(0, 0, 736, 546);
             page.Controls.Add(c);
 
             Label t = MakeLabel(T.AppName, 16, 50, Ui.FontTitle);
@@ -732,28 +897,56 @@ namespace MhiagosControl
             allNote.ForeColor = Ui.Muted;
             c.Controls.Add(allNote);
 
+            _tgIdle = new Toggle();
+            _tgIdle.Label = T.BlankWhenIdle;
+            _tgIdle.SetBounds(16, 288, 480, 26);
+            _tgIdle.Checked = _cfg.IdleBlankMinutes > 0;
+            _tgIdle.CheckedChanged += new EventHandler(OnToggleIdle);
+            c.Controls.Add(_tgIdle);
+
+            _idleMin = new NumberBox();
+            _idleMin.Minimum = 1; _idleMin.Maximum = 999;
+            _idleMin.Value = _cfg.IdleBlankMinutes > 0 ? _cfg.IdleBlankMinutes : 15;
+            _idleMin.SetBounds(16, 318, 110, 32);
+            _idleMin.Enabled = _tgIdle.Checked;
+            _idleMin.ValueChanged += new EventHandler(OnIdleMinutes);
+            c.Controls.Add(_idleMin);
+
+            _idleNote = MakeLabel("", 134, 318, Ui.FontSmall);
+            _idleNote.Size = new Size(590, 32);
+            _idleNote.TextAlign = ContentAlignment.MiddleLeft;
+            _idleNote.ForeColor = Ui.Muted;
+            c.Controls.Add(_idleNote);
+
+            Label idleHint = MakeLabel(T.BlankWhenIdleNote, 16, 354, Ui.FontSmall);
+            idleHint.Size = new Size(700, 30);
+            idleHint.ForeColor = Ui.Muted;
+            c.Controls.Add(idleHint);
+
+            AtualizarOcioso();
+
             // Quais fontes responderam, contado da propria lista de sensores.
             // Antes, perder o HWiNFO so aparecia no log: o aplicativo seguia
             // sem temperatura nem potencia da CPU e nada em tela dizia por que.
-            c.Controls.Add(MakeLabel(T.SensorSources, 16, 286, Ui.FontMed));
+            c.Controls.Add(MakeLabel(T.SensorSources, 16, 390, Ui.FontMed));
 
             // Altura fixa para as tres linhas do pior caso: com o aviso, a
             // contagem passa a dividir espaco com duas linhas de explicacao, e
             // dimensionar so para o caso bom cortava justamente o texto que
             // existe para ser lido.
-            Label fontes = MakeLabel(TextoDasFontes(), 16, 306, Ui.FontSmall);
+            Label fontes = MakeLabel(TextoDasFontes(), 16, 410, Ui.FontSmall);
             fontes.Size = new Size(716, 52);
             fontes.ForeColor = SemHwInfo() ? Ui.Warn : Ui.Muted;
             c.Controls.Add(fontes);
 
-            Label paths = MakeLabel(T.DataPathLabel + "\n" + Paths.DataDir, 16, 368, Ui.FontSmall);
+            Label paths = MakeLabel(T.DataPathLabel + "\n" + Paths.DataDir, 16, 472, Ui.FontSmall);
             paths.Size = new Size(700, 34);
             paths.ForeColor = Ui.Muted;
             c.Controls.Add(paths);
 
             FlatBtn open = new FlatBtn();
             open.Text = T.OpenFolder;
-            open.SetBounds(16, 408, 130, 32);
+            open.SetBounds(16, 498, 130, 32);
             open.Click += delegate
             {
                 try { System.Diagnostics.Process.Start("explorer.exe", Paths.DataDir); }
@@ -763,7 +956,7 @@ namespace MhiagosControl
 
             Card cr = new Card();
             cr.Title = T.ProjectAndCredits;
-            cr.SetBounds(0, 468, 736, 140);
+            cr.SetBounds(0, 558, 736, 140);
             page.Controls.Add(cr);
 
             Label autor = MakeLabel(T.CreatedBy, 16, 48, Ui.FontMed);
@@ -790,7 +983,7 @@ namespace MhiagosControl
 
             Card cd = new Card();
             cd.Title = T.DisclaimerTitle;
-            cd.SetBounds(0, 620, 736, 278);
+            cd.SetBounds(0, 710, 736, 278);
             page.Controls.Add(cd);
 
             Label disc = MakeLabel(T.Disclaimer, 16, 46, Ui.FontSmall);
@@ -877,6 +1070,37 @@ namespace MhiagosControl
             Refresh0();
         }
 
+        /// <summary>
+        /// Liga e desliga o apagamento por ociosidade.
+        ///
+        /// O campo de minutos guarda o valor mesmo desligado, e por isso o
+        /// desligamento grava zero em vez de zerar o campo: quem desliga e
+        /// religa no minuto seguinte encontra o numero que tinha escolhido.
+        /// </summary>
+        private void OnToggleIdle(object sender, EventArgs e)
+        {
+            if (_loading) return;
+            _idleMin.Enabled = _tgIdle.Checked;
+            _cfg.IdleBlankMinutes = _tgIdle.Checked ? _idleMin.Value : 0;
+            _dirty = true;
+            AtualizarOcioso();
+        }
+
+        private void OnIdleMinutes(object sender, EventArgs e)
+        {
+            if (_loading) return;
+            if (!_tgIdle.Checked) return;
+            _cfg.IdleBlankMinutes = _idleMin.Value;
+            _dirty = true;
+            AtualizarOcioso();
+        }
+
+        private void AtualizarOcioso()
+        {
+            if (_idleNote == null) return;
+            _idleNote.Text = _tgIdle.Checked ? T.MinutesIdle : T.Off;
+        }
+
         private void OnToggleAutostart(object sender, EventArgs e)
         {
             if (_loading) return;
@@ -900,6 +1124,8 @@ namespace MhiagosControl
             _unit2.SelectedIndex = _current.Percent ? 0 : 1;
             _alert1.Value = Clamp(_current.Alert1);
             _alert2.Value = Clamp(_current.Alert2);
+            _alert1Low.Value = Clamp(_current.Alert1Low);
+            _alert2Low.Value = Clamp(_current.Alert2Low);
             _loading = false;
             Refresh0();
         }
@@ -926,6 +1152,8 @@ namespace MhiagosControl
             _current.Percent = Percent;
             _current.Alert1 = _alert1.Value;
             _current.Alert2 = _alert2.Value;
+            _current.Alert1Low = _alert1Low.Value;
+            _current.Alert2Low = _alert2Low.Value;
         }
 
         private void OnChanged()
@@ -955,14 +1183,17 @@ namespace MhiagosControl
             _preview.Value2 = v2.Value;
             _preview.Fahrenheit = Fahrenheit;
             _preview.Percent = Percent;
-            _preview.Alert1 = _alert1.Value > 0 && v1.Value.HasValue && v1.Value.Value >= _alert1.Value;
-            _preview.Alert2 = _alert2.Value > 0 && v2.Value.HasValue && v2.Value.Value >= _alert2.Value;
+            _preview.Alert1 = Fora(v1, _alert1.Value, _alert1Low.Value);
+            _preview.Alert2 = Fora(v2, _alert2.Value, _alert2Low.Value);
             _preview.Invalidate();
 
             if (_alertInfo1 != null)
             {
-                _alertInfo1.Text = _alert1.Value > 0 ? T.Current + Show(v1) : T.Off;
-                _alertInfo2.Text = _alert2.Value > 0 ? T.Current + Show(v2) : T.Off;
+                _alertInfo1.Text = T.Current + Show(v1) + Desligado(_alert1.Value, _alert1Low.Value);
+                _alertInfo2.Text = T.Current + Show(v2) + Desligado(_alert2.Value, _alert2Low.Value);
+                _alertCross.Visible = Cruzado(_alert1.Value, _alert1Low.Value)
+                                   || Cruzado(_alert2.Value, _alert2Low.Value);
+                if (_alertCross.Visible) _alertCross.Text = T.ThresholdsCross;
             }
 
             if (_slot1 != null)
@@ -975,6 +1206,33 @@ namespace MhiagosControl
         private static string Show(PanelValue v)
         {
             return v.Value.HasValue ? v.Value.Value.ToString() : T.NoReading;
+        }
+
+        /// <summary>Mesma regra do TrayApp: zero desliga, sem leitura nao dispara.</summary>
+        private static bool Fora(PanelValue v, int alto, int baixo)
+        {
+            if (!v.Value.HasValue) return false;
+            return (alto > 0 && v.Value.Value >= alto) || (baixo > 0 && v.Value.Value <= baixo);
+        }
+
+        private static string Desligado(int alto, int baixo)
+        {
+            return (alto == 0 && baixo == 0) ? "   ·   " + T.Off : "";
+        }
+
+        private static bool Cruzado(int alto, int baixo)
+        {
+            return alto > 0 && baixo > 0 && baixo >= alto;
+        }
+
+        /// <summary>Resumo dos dois limiares de um mostrador: "&lt;30 &gt;85".</summary>
+        private static string Faixa(int alto, int baixo)
+        {
+            if (alto == 0 && baixo == 0) return T.Off;
+            string s = "";
+            if (baixo > 0) s = "<" + baixo;
+            if (alto > 0) s += (s.Length > 0 ? " " : "") + ">" + alto;
+            return s;
         }
 
         private void HighlightDivisor(FlatBtn[] row, int value)

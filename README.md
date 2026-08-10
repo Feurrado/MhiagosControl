@@ -5,7 +5,9 @@ substituindo o software original *CPU TEMP Monitor*
 (SHENZHEN SHINETEK / marca Ocypus).
 
 Permite exibir **qualquer sensor** do sistema nos dois painéis de 3 dígitos,
-em vez das duas métricas fixas que o software de fábrica oferece.
+em vez das duas métricas fixas que o software de fábrica oferece — com perfis
+salvos, rodízio entre eles, alertas por limiar de cima e de baixo e apagamento
+automático quando ninguém está usando o computador.
 
 > A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
 > Windows na primeira execução e trocável na aba *Sobre*.
@@ -17,9 +19,9 @@ em vez das duas métricas fixas que o software de fábrica oferece.
 | | |
 |:--:|:--:|
 | ![Painéis](docs/paineis.png) | ![Alertas](docs/alertas.png) |
-| **Painéis** — escolha o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça | **Alertas** — limiar por mostrador, com rearme na descida |
+| **Painéis** — escolha o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça | **Alertas** — limiar de cima e de baixo por mostrador, com rearme ao voltar à faixa |
 | ![Perfis](docs/perfis.png) | ![Sobre](docs/sobre.png) |
-| **Perfis** — cada conjunto salvo mostra o que põe no mostrador, com prévia antes de aplicar | **Sobre** — idioma, início automático, créditos e isenção |
+| **Perfis** — cada conjunto salvo mostra o que põe no mostrador, com prévia, rodízio e exportação | **Sobre** — idioma, início automático, apagar por ociosidade, créditos e isenção |
 
 A prévia reproduz a vista superior do cooler e o mostrador de sete segmentos
 como ele é no aparelho: os dois painéis empilhados, `°C`/`°F` sobre `%`/`W`,
@@ -43,6 +45,25 @@ prévia sobre a peça antes de *Aplicar perfil* torná-lo o que está valendo �
 aplicar grava na hora, então um perfil "ativo" sempre sobrevive a fechar a
 janela. Todos aparecem também no menu da bandeja, para trocar sem abrir a
 configuração.
+
+*Exportar* grava o perfil selecionado num `.ini` avulso e *Importar* traz um de
+volta, com nome livre se já houver outro igual. O identificador do sensor
+carrega o modelo do hardware, então um perfil vindo de outra máquina entra com o
+mostrador em branco — e o aplicativo diz isso na hora, em vez de deixar procurar
+defeito onde não há.
+
+### Rodízio
+
+Marcados dois ou mais perfis, o mostrador **gira entre eles** no intervalo
+escolhido. Gira perfis inteiros, e não sensores dentro de um mostrador, porque o
+indicador de unidade é do quadro: `°C`/`°F` em cima e `%`/`W` embaixo valem para
+os dois painéis de uma vez. Girar só o sensor poria watts sob o indicador de
+porcentagem, e o mostrador mentiria sem jeito de perceber.
+
+Os **alertas continuam seguindo o perfil ativo**, e não o que está girando:
+limiares que mudassem a cada volta travariam e destravariam sozinhos, e um aviso
+que aparece conforme a hora do relógio não é aviso. Girar é sobre o mostrador,
+não sobre a vigilância.
 
 ### Tela de carregamento
 
@@ -250,6 +271,23 @@ raramente vem sozinho, e fechar a cada gravação só significava reabrir.
 
 O software original não precisa estar instalado.
 
+### Alertas
+
+Cada mostrador tem dois limiares, e **zero desliga** cada um. O de cima é o
+esperado; o de baixo pega o que falha por baixo — ventoinha parada, vazão de
+rede que zerou, carga que despencou. O aviso dispara ao entrar na faixa e só
+rearma quando o valor volta, senão um sensor oscilando no limite notificaria a
+cada 1,1 s. **Mostrador em branco não dispara nada:** ausência de leitura não é
+valor baixo.
+
+### Apagar quando ocioso
+
+Na aba *Sobre*, o mostrador pode apagar depois de N minutos sem teclado nem
+mouse, e volta ao primeiro toque. Conta a sessão inteira do Windows, não este
+programa — o que também quer dizer que assistir a um vídeo ou esperar uma
+renderização longa conta como ocioso, porque ninguém digita. Os alertas seguem
+valendo com o mostrador apagado: uma CPU não esfria porque o dono saiu.
+
 ### Dados do aplicativo
 
 Ficam em `%LOCALAPPDATA%\MhiagosControl\` — acessível pelo menu da bandeja em
@@ -257,7 +295,7 @@ Ficam em `%LOCALAPPDATA%\MhiagosControl\` — acessível pelo menu da bandeja em
 
 | Arquivo | Conteúdo |
 |---------|----------|
-| `config.ini` | perfis, sensor de cada painel, unidades, limiares, idioma da interface |
+| `config.ini` | perfis, sensor de cada painel, unidades, limiares, rodízio, idioma da interface |
 | `log.txt` | diagnóstico, com rotação em 512 KB (`log.txt.1`) |
 
 Configurações de versões antigas (inclusive da época em que o projeto se
@@ -309,6 +347,53 @@ chamava *RiseModePanel*) são migradas no primeiro arranque.
   quebraria a comparação que põe cada sensor sob o cabeçalho certo.
 - A **busca de sensor casa os dois nomes** da categoria, então digitar "memory"
   acha o que a interface em inglês chama Memory e a configuração chama `Memória`.
+- A thread de atualização **nunca lê a configuração viva**. Quem edita publica um
+  clone; ela só lê a referência, o que é atômico. Antes, criar ou excluir perfil
+  no momento errado lançava exceção no meio do ciclo, e o mostrador podia exibir
+  um perfil pela metade.
+- A posição no rodízio é **derivada do relógio**, não somada a cada volta. O ciclo
+  dura 1100 ms mais o que a varredura levar, e um contador incrementado "quando
+  der" acumularia esse resto até o rodízio de 20 s virar de 23.
+- A ociosidade vem de `GetLastInputInfo` com **aritmética sem sinal**:
+  `GetTickCount` dá a volta a cada 49,7 dias, e a subtração em `uint` continua
+  certa na volta.
+
+### Testes
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build-tests.ps1
+```
+
+Sem framework de propósito: o projeto compila com o `csc.exe` que vem no Windows,
+e uma dependência de teste custaria exatamente a propriedade que o torna fácil de
+compilar. Os testes compilam **contra os fontes**, e não contra o executável,
+para alcançar o que é interno sem abrir visibilidade só para poder testar.
+
+Cobrem o que a interface não denuncia: a montagem do quadro de 64 bytes, o
+preparo do valor para três dígitos, a formatação da leitura, a ida e volta da
+configuração, o rodízio e a completude das traduções. Dois deles varrem por
+reflexão em vez de listar à mão — **todo campo do perfil** (cópia, INI,
+exportação) e **todo texto de interface nos dois idiomas** — porque o modo de
+falhar é sempre acrescentar algo e esquecer de uma das pontas, e uma lista
+escrita à mão esqueceria junto.
+
+### Medição
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build-bench.ps1
+.\bin\Bench.exe
+```
+
+Mede alocação e tempo por ciclo com `AppDomain.MonitoringTotalAllocatedMemorySize`
+— que conta bytes alocados de verdade, enquanto `GC.GetTotalMemory` só mostra o
+que sobreviveu, e lixo de vida curta é exatamente o caso aqui. Precisa de
+elevação, como o aplicativo: sem ela as fontes abrem pela metade e a medição
+mede outra máquina.
+
+Existe porque a alternativa era otimizar por leitura de código. Dá para contar as
+alocações de um ciclo com o dedo na tela e chegar a um número grande; o que a
+conta não diz é se esse número importa perto do que a varredura do hardware
+custa sozinha.
 
 ---
 
