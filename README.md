@@ -6,7 +6,7 @@ substituindo o software original *CPU TEMP Monitor*
 
 Permite exibir **qualquer sensor** do sistema nos dois painéis de 3 dígitos,
 em vez das duas métricas fixas que o software de fábrica oferece.
-
+ 
 ---
 
 ## Telas
