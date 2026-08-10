@@ -267,6 +267,37 @@ Saída em `bin\MhiagosControl.exe`.
 > só o `.exe` faz o aplicativo perder silenciosamente temperatura, potência e
 > clock da CPU — ele cai na fonte de reserva sem avisar em tela, apenas no log.
 
+## Instalador
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build-installer.ps1
+```
+
+Saída em `dist\MhiagosControlSetup.exe`: um executável só, com o aplicativo e as
+bibliotecas embutidos como recursos. Compila com o mesmo `csc.exe` do resto —
+depender do Inno Setup ou do WiX contradiria a única característica que torna
+este projeto fácil de compilar.
+
+Ele grava em `Arquivos de Programas`, cria atalho no menu Iniciar, registra a
+entrada em *Aplicativos Instalados* e, se pedido, cria a tarefa de início
+automático — a mesma que o aplicativo cria pelo próprio menu, o que também
+conserta o caso de ela ter ficado apontando para um caminho antigo. **O mesmo
+executável desinstala:** durante a instalação ele se copia para a pasta de
+destino como `uninstall.exe`, e é esse caminho que vai para o registro.
+
+A desinstalação **conserva os perfis por padrão** — apagar `%LOCALAPPDATA%\MhiagosControl`
+é uma caixa desmarcada, porque reconstruir um perfil custa reescolher dois
+sensores e o usuário raramente quer isso ao reinstalar.
+
+> **O instalador gerado não é distribuível.** Se `lib\api-ms-win-core-sysinfo-825-64.dll`
+> existir, ela entra **dentro** do executável — e é software comercial da REALiX,
+> licenciado ao fabricante do cooler, não a este projeto. Um instalador assim
+> serve a uso pessoal na própria máquina e não pode ser publicado, enviado a
+> ninguém nem virar Release no GitHub. Por isso `dist\` está no `.gitignore`.
+>
+> Para um instalador distribuível, use `-SemMotor`: ele sai sem a biblioteca, e
+> o aplicativo sobe na fonte de reserva avisando na aba *Sobre*.
+
 ## Usar
 
 1. Execute `bin\MhiagosControl.exe` (pede elevação).

@@ -2,6 +2,10 @@
 bin/
 tools/*.exe
 
+# Instalador gerado. Fica de fora porque carrega a biblioteca comercial do
+# HWiNFO embutida quando ela existe em lib\ - veja tools\build-installer.ps1.
+dist/
+
 # Biblioteca cliente do HWiNFO (REALiX s.r.o.) - COMERCIAL, licenciada ao
 # fabricante do cooler e nao a este projeto. Fica de fora do repositorio.
 # Veja "Fontes de sensores" no README para saber de onde obter a sua copia.
