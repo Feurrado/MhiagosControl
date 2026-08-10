@@ -306,7 +306,23 @@ com o dispositivo não envolve driver.
 
 ---
 
-## Créditos e licenças
+## Licença
+
+**MIT** — veja [`LICENSE`](LICENSE). Use, modifique e redistribua à vontade,
+mantendo o aviso de copyright.
+
+A licença cobre **o código deste repositório**. As dependências têm licença
+própria e não são cobertas por ela:
+
+| Componente | Licença |
+|------------|---------|
+| `src/`, `tools/`, `build.ps1`, `assets/` gerados | MIT |
+| `lib/LibreHardwareMonitorLib.dll` | MPL 2.0 (veja `lib/LibreHardwareMonitor-LICENSE.txt`) |
+| `engine\api-ms-win-core-sysinfo-825-64.dll` | comercial, © REALiX s.r.o. — **não redistribuir**, não está neste repositório |
+
+---
+
+## Créditos
 
 - [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) —
   fonte de reserva (MPL 2.0). Licença em `lib/LibreHardwareMonitor-LICENSE.txt`.

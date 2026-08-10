@@ -566,9 +566,11 @@ namespace MhiagosControl
             git.Click += delegate { Abrir(Repositorio); };
             cr.Controls.Add(git);
 
+            // duas linhas, e nao tres: uma terceira invade o rotulo do
+            // repositorio, que fica logo acima e atravessa esta coluna
             Label libs = MakeLabel(
-                "Sensores pela LibreHardwareMonitor (MPL 2.0) e pela biblioteca cliente do HWiNFO,\n" +
-                "© REALiX s.r.o. — software comercial de terceiros, não redistribuído com este projeto.",
+                "Código deste projeto sob licença MIT · sensores pela LibreHardwareMonitor (MPL 2.0)\n" +
+                "e pela biblioteca cliente do HWiNFO, © REALiX s.r.o., não redistribuída com o projeto.",
                 190, 100, Ui.FontSmall);
             libs.Size = new Size(552, 40);
             libs.ForeColor = Ui.Muted;
@@ -592,9 +594,11 @@ namespace MhiagosControl
         /// <summary>
         /// Texto de isencao.
         ///
-        /// Repete em tela a isencao do README porque quem instala um binario
-        /// raramente abre o repositorio - e e justamente a pessoa que precisa
-        /// saber que o programa fala com o hardware por sua conta e risco.
+        /// Repete em tela o essencial do LICENSE porque quem instala um binario
+        /// raramente abre o arquivo de licenca - e e justamente a pessoa que
+        /// precisa saber que o programa fala com o hardware por sua conta e
+        /// risco. Vai alem do MIT no que ele nao cobre: marcas de terceiros,
+        /// engenharia reversa e garantia do equipamento.
         /// </summary>
         private const string Disclaimer =
             "Este é um projeto pessoal, independente e sem fins lucrativos, feito para interoperar com\n" +
