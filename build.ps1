@@ -61,10 +61,13 @@ $arguments += $srcs
 
 Write-Output "compilando $($srcs.Count) fontes..."
 & $csc $arguments 2>&1 | Out-String | Write-Output
+$rc = $LASTEXITCODE
 
-if (Test-Path $out) {
+# O codigo de saida do compilador, e nao a existencia do arquivo: com um
+# executavel antigo em bin\, Test-Path dava OK numa compilacao que falhou.
+if ($rc -eq 0 -and (Test-Path $out)) {
     Write-Output ("OK -> {0} ({1} KB)" -f $out, [math]::Round((Get-Item $out).Length/1KB,1))
 } else {
-    Write-Output "FALHOU"
+    Write-Output "FALHOU (csc saiu com $rc)"
     exit 1
 }
