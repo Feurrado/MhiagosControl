@@ -182,6 +182,24 @@ namespace MhiagosControl
             return ok;
         }
 
+        /// <summary>
+        /// Envia um quadro cru de 64 bytes, sem interpretar nada.
+        ///
+        /// Existe para sondagem: os codigos de digito conhecidos vao ate 0x0F e
+        /// so dois bits de report[4] tem significado levantado. O resto do
+        /// espaco do protocolo nunca foi varrido. Nao e usado pelo aplicativo.
+        /// </summary>
+        public bool SendRaw(byte[] frame)
+        {
+            if (frame == null || frame.Length != 64) throw new ArgumentException("o quadro tem 64 bytes");
+            if (!IsConnected && !Open()) return false;
+
+            byte[] copy = (byte[])frame.Clone();   // HidD_SetFeature pode escrever no buffer
+            bool ok = HidD_SetFeature(_handle, copy, 64);
+            if (!ok) Close();
+            return ok;
+        }
+
         /// <summary>Escreve centena, dezena e unidade a partir de 'offset'.</summary>
         private static void WriteField(byte[] b, int offset, int? value)
         {
