@@ -89,13 +89,23 @@ namespace MhiagosControl
             return false;
         }
 
-        public static Config Load()
+        public static Config Load() { return LoadFrom(FilePath, true); }
+
+        /// <summary>
+        /// Le de um caminho explicito.
+        ///
+        /// Existe para que os testes trabalhem num arquivo temporario. A
+        /// tentacao era redirecionar %LOCALAPPDATA% na hora do teste, mas
+        /// Environment.GetFolderPath nao le a variavel de ambiente - consulta o
+        /// shell. O "isolamento" nao isolava nada e a suite gravou por cima da
+        /// configuracao real da maquina. Caminho explicito nao mente.
+        /// </summary>
+        public static Config LoadFrom(string path, bool migrar)
         {
             Config c = new Config();
             try
             {
-                string path = FilePath;
-                MigrateLegacyFile(path);
+                if (migrar) MigrateLegacyFile(path);
                 if (!File.Exists(path)) { c.Profiles.Add(new Profile()); return c; }
 
                 Profile current = null;
@@ -183,7 +193,10 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("migracao do config", ex); }
         }
 
-        public void Save()
+        public void Save() { SaveTo(FilePath); }
+
+        /// <summary>Grava num caminho explicito. Veja LoadFrom.</summary>
+        public void SaveTo(string path)
         {
             try
             {
@@ -207,7 +220,7 @@ namespace MhiagosControl
                     sb.AppendLine("divisor1=" + p.Divisor1.ToString(CultureInfo.InvariantCulture));
                     sb.AppendLine("divisor2=" + p.Divisor2.ToString(CultureInfo.InvariantCulture));
                 }
-                File.WriteAllText(FilePath, sb.ToString(), Encoding.UTF8);
+                File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
                 Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " + ActiveName + ")");
             }
             catch (Exception ex)
