@@ -12,6 +12,13 @@ namespace MhiagosControl
     {
         public string Id;        // "hw:<grupo>|<classe>|<rotulo>" - estavel entre sessoes
         public string Group;
+
+        /// <summary>
+        /// Categoria de hardware do elemento (+0x30): 10 sistema, 11 CPU,
+        /// 12 placa-mae, 13 GPU, 15 disco, 16 rede. Vale 0 quando nao consta.
+        /// </summary>
+        public int Category;
+
         public string Label;
         public string Unit;
         public SensorType Type;
@@ -43,6 +50,7 @@ namespace MhiagosControl
         private const int ELEM      = 0x1D0;
         private const int OFF_VALUE = 0x08;
         private const int OFF_UNIT  = 0x10;
+        private const int OFF_CAT   = 0x30;
         private const int OFF_LABEL = 0x148;
         private const int INIT_ARG  = 0xC0;
 
@@ -191,6 +199,7 @@ namespace MhiagosControl
 
                             HwReading r = new HwReading();
                             r.Group = group;
+                            r.Category = BitConverter.ToInt32(_elem, OFF_CAT);
                             r.Label = label;
                             r.Unit  = unit;
                             r.Value = v;

@@ -9,8 +9,18 @@ namespace MhiagosControl
     public class SensorEntry
     {
         public string Id;          // ISensor.Identifier, "hw:..." ou "synth:..."
-        public string Hardware;    // agrupamento na interface
+        public string Hardware;    // nome do dispositivo, como a fonte o publica
         public string Name;        // nome curto do sensor
+
+        /// <summary>
+        /// Rotulo curto do tipo de dispositivo - CPU, GPU, Disco...
+        ///
+        /// O nome cru do hardware nao serve para agrupar nem para filtrar: vem
+        /// "AMD Ryzen 5 5600X", "NVIDIA GeForce RTX 3060", "ASUS PRIME B550M-A
+        /// (Nuvoton NCT6798D)". Numa lista de 500 px isso vira parágrafo, e como
+        /// filtro nao cabe na tela.
+        /// </summary>
+        public string Category = "Outros";
         public string Label;       // texto completo, para listas simples
         public SensorType Type;
         public float? Value;
@@ -21,14 +31,30 @@ namespace MhiagosControl
         /// <summary>Quantos sensores este agregado resume; 1 quando e um sensor real.</summary>
         public int Members = 1;
 
-        /// <summary>Valor formatado com a unidade natural do tipo.</summary>
+        /// <summary>
+        /// Unidade informada pela fonte, quando ela informa.
+        ///
+        /// O tipo sozinho nao basta: SensorType.Data virava sempre "GB", mas o
+        /// HWiNFO publica memoria em MB - "Physical Memory Used 11914" aparecia
+        /// como 11914 GB. Quem sabe a unidade e quem produziu a leitura.
+        /// </summary>
+        public string Unit;
+
+        /// <summary>Valor formatado com a unidade da fonte ou, na falta dela, a do tipo.</summary>
         public string Formatted
         {
             get
             {
                 if (!Value.HasValue || float.IsNaN(Value.Value) || float.IsInfinity(Value.Value)) return "-";
-                string u = Sensors.UnitOf(Type).Replace(", ", " ");
-                return Value.Value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + u;
+                string u = string.IsNullOrEmpty(Unit)
+                    ? Sensors.UnitOf(Type).Replace(", ", " ")
+                    : " " + Unit;
+
+                // Gigabyte sempre com uma casa: "12 GB" e "12.4 GB" lado a lado
+                // na mesma lista fazem a coluna dancar, e em GB a casa decimal
+                // carrega informacao - meio giga nao e ruido.
+                string fmt = u.EndsWith("GB", StringComparison.Ordinal) ? "0.0" : "0.#";
+                return Value.Value.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture) + u;
             }
         }
 
@@ -203,6 +229,7 @@ namespace MhiagosControl
                 SensorEntry e = new SensorEntry();
                 e.Id = s.Identifier.ToString();
                 e.Hardware = hw.Name;
+                e.Category = CategoryOf(hw.HardwareType);
                 e.Name = s.Name;
                 e.Type = s.SensorType;
                 e.Value = s.Value;
@@ -217,15 +244,120 @@ namespace MhiagosControl
                     SensorEntry e = new SensorEntry();
                     e.Id = r.Id;
                     e.Hardware = r.Group;
+                    e.Category = CategoryOf(r.Category, r.Group);
                     e.Name = r.Label;
                     e.Type = r.Type;
                     e.Value = (float)r.Value;
+                    e.Unit = CleanUnit(r.Unit);
+                    ParaGigabytes(e);
                     e.Source = "HWiNFO";
                     e.Label = Describe(r.Group, r.Label, r.Type);
                     raw.Add(e);
                 }
             }
             return raw;
+        }
+
+        /// <summary>
+        /// Deixa apresentavel a unidade que vem da biblioteca.
+        ///
+        /// Ela chega em ANSI, entao o grau pode voltar como byte solto ou como
+        /// "?". O resto do aplicativo escreve temperatura so com a letra, e a
+        /// unidade vazia devolve a decisao ao tipo do sensor.
+        /// </summary>
+        private static string CleanUnit(string u)
+        {
+            if (string.IsNullOrEmpty(u)) return null;
+            u = u.Trim();
+            u = u.Replace("°", "").Replace("º", "").Replace("?", "").Trim();
+            if (u.Length == 0) return null;
+            if (u.Length > 8) return null;      // texto, nao unidade
+            return u;
+        }
+
+        /// <summary>
+        /// Converte leitura de memoria de MB para GB.
+        ///
+        /// O HWiNFO publica memoria em megabytes, e o numero cru nao diz nada:
+        /// "Physical Memory Used 11930" exige conta de cabeca. Pior, passa dos
+        /// 999 que o mostrador aceita, entao ia para o painel truncado. Em GB
+        /// cabe e se le de imediato.
+        /// </summary>
+        private static void ParaGigabytes(SensorEntry e)
+        {
+            if (e.Unit != "MB" || !e.Value.HasValue) return;
+            e.Value = e.Value.Value / 1024f;
+            e.Unit = "GB";
+        }
+
+        // ---------------- categorias ----------------
+
+        /// <summary>
+        /// A ordem em que as categorias aparecem na lista e nos filtros. Fixa,
+        /// e nao a ordem em que o hardware foi descoberto, para que a interface
+        /// nao mude de arranjo entre maquinas nem entre execucoes.
+        /// </summary>
+        public static readonly string[] Categories = new string[]
+        {
+            "CPU", "GPU", "Placa-mãe", "Memória", "Disco", "Rede", "Outros"
+        };
+
+        private static string CategoryOf(HardwareType t)
+        {
+            switch (t)
+            {
+                case HardwareType.Cpu: return "CPU";
+                case HardwareType.GpuNvidia:
+                case HardwareType.GpuAmd:
+                case HardwareType.GpuIntel: return "GPU";
+                case HardwareType.Memory: return "Memória";
+                case HardwareType.Storage: return "Disco";
+                case HardwareType.Network: return "Rede";
+                case HardwareType.Motherboard:
+                case HardwareType.SuperIO:
+                case HardwareType.EmbeddedController: return "Placa-mãe";
+                default: return "Outros";
+            }
+        }
+
+        /// <summary>
+        /// Categoria de uma leitura do HWiNFO.
+        ///
+        /// O codigo vem do campo em +0x30 do elemento, recuperado por engenharia
+        /// reversa - por isso ha o desempate pelo nome do grupo: se a biblioteca
+        /// devolver um codigo fora dos conhecidos, o nome ainda classifica.
+        /// </summary>
+        private static string CategoryOf(int code, string group)
+        {
+            switch (code)
+            {
+                case 11: return "CPU";
+                case 12: return "Placa-mãe";
+                case 13: return "GPU";
+                case 15: return "Disco";
+                case 16: return "Rede";
+            }
+            return CategoryByName(group);
+        }
+
+        private static string CategoryByName(string group)
+        {
+            if (string.IsNullOrEmpty(group)) return "Outros";
+            string g = group.ToUpperInvariant();
+
+            if (Has(g, "GEFORCE", "RADEON", "NVIDIA", "GPU", "ARC A")) return "GPU";
+            if (Has(g, "RYZEN", "CORE I", "ATHLON", "XEON", "THREADRIPPER", "CPU")) return "CPU";
+            if (Has(g, "NVME", "SSD", "HDD", "DISK", "DRIVE", "WDC ", "SEAGATE")) return "Disco";
+            if (Has(g, "DIMM", "MEMORY", "MEMÓRIA", "RAM")) return "Memória";
+            if (Has(g, "ETHERNET", "WI-FI", "WIFI", "WIRELESS", "NETWORK", "LAN")) return "Rede";
+            if (Has(g, "NUVOTON", "ITE IT", "ASUS", "GIGABYTE", "MSI", "ASROCK", "CHIPSET")) return "Placa-mãe";
+            return "Outros";
+        }
+
+        private static bool Has(string haystack, params string[] needles)
+        {
+            foreach (string n in needles) if (haystack.IndexOf(n, StringComparison.Ordinal) >= 0) return true;
+            return false;
         }
 
         private static string Describe(string hardware, string name, SensorType type)
@@ -301,7 +433,9 @@ namespace MhiagosControl
                 SensorEntry agg = new SensorEntry();
                 agg.Id = SynthPrefix + kv.Key;
                 agg.Hardware = members[0].Hardware;
+                agg.Category = members[0].Category;
                 agg.Type = members[0].Type;
+                agg.Unit = members[0].Unit;
                 agg.Source = members[0].Source;
                 agg.Members = members.Count;
                 agg.Name = Normalize(members[0].Name) + " · média de " + members.Count;
@@ -397,12 +531,14 @@ namespace MhiagosControl
             double sum = 0; int n = 0;
             SensorType type = SensorType.Clock;
             string hardware = "";
+            string category = "Outros";
             string source = "LibreHardwareMonitor";
+            string unit = null;
 
             foreach (SensorEntry e in Snap())
             {
                 if (!members.Contains(e.Id)) continue;
-                type = e.Type; hardware = e.Hardware; source = e.Source;
+                type = e.Type; hardware = e.Hardware; source = e.Source; category = e.Category; unit = e.Unit;
                 if (!e.Value.HasValue || float.IsNaN(e.Value.Value)) continue;
                 sum += e.Value.Value; n++;
             }
@@ -410,7 +546,9 @@ namespace MhiagosControl
             SensorEntry agg = new SensorEntry();
             agg.Id = id;
             agg.Hardware = hardware;
+            agg.Category = category;
             agg.Type = type;
+            agg.Unit = unit;
             agg.Source = source;
             agg.Members = members.Count;
             agg.Name = "média de " + members.Count;
