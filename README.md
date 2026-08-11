@@ -222,31 +222,11 @@ registrar e subir seu driver.
 > **A DLL não está neste repositório** — é software comercial de terceiros e
 > não pode ser redistribuída (veja *Licença*).
 
-#### Como colocar a biblioteca na sua instalação
-
-Ela é carregada **apenas de `bin\engine\`**. O aplicativo não lê da pasta do
-software de fábrica: fazer isso o deixaria preso ao programa que ele existe para
-substituir, e desinstalar o original tiraria temperatura e potência sem dizer
-nada em tela.
-
-Há dois caminhos, e os dois são você copiando um arquivo que já veio com o
-produto que comprou — não o projeto redistribuindo:
-
-1. **Na primeira execução**, se a biblioteca não estiver em `engine\` e o *CPU
-   TEMP Monitor* estiver instalado, o aplicativo encontra a cópia e **pergunta**
-   se quer trazê-la. Um clique e a instalação fica autônoma; o software de
-   fábrica pode ser desinstalado depois.
-2. **Ao compilar**, ponha `api-ms-win-core-sysinfo-825-64.dll` em `lib\` e o
-   `build.ps1` a copia para `bin\engine\`. Sem ela o script avisa.
-
-Se nenhum dos dois acontecer, o aplicativo sobe com a fonte de reserva e diz
-isso **na aba Sobre**, em *Fontes de sensores* — não só no log.
+A biblioteca acompanha o instalador e é carregada de `bin\engine\`. Ao compilar
+do código, ponha `api-ms-win-core-sysinfo-825-64.dll` em `lib\` e o `build.ps1`
+a copia para lá.
 
 <img src="docs/sobre.png" width="480" alt="Aba Sobre, com o resumo das fontes de sensores">
-
-
-Sem o *CPU TEMP Monitor* instalado e sem uma cópia guardada, a biblioteca só
-vem do instalador que acompanha o produto.
 
 ### Por que não a memória compartilhada do HWiNFO
 
@@ -267,14 +247,12 @@ opção ligada. Fica registrado para não ser reavaliada do zero.
 
 ### LibreHardwareMonitor (reserva)
 
-Usada apenas quando o HWiNFO não está disponível. Cobre GPU, uso de CPU,
-memória, disco e rede sem driver próprio, mas **devolve zero** em temperatura,
-potência e clock real do processador: esses exigem acesso em modo kernel, e o
-driver que ela usa para isso (WinRing0 1.2.0.5, CVE-2020-14979) está na lista de
-bloqueio do Windows. O antivírus o remove **a cada inicialização**, com alerta.
+Usada apenas quando o HWiNFO não está disponível — o que, com a biblioteca
+acompanhando o instalador, não acontece numa instalação normal. Cobre GPU, uso
+de CPU, memória, disco e rede, e **devolve zero** em temperatura, potência e
+clock real do processador.
 
-É por isso que ela não é aberta quando o HWiNFO responde: não há o que ganhar
-pagando esse preço.
+Não é aberta quando o HWiNFO responde: não haveria o que ganhar.
 
 ---
 
@@ -576,7 +554,7 @@ própria e não são cobertas por ela:
 |------------|---------|
 | `src/`, `tools/`, `build.ps1`, `assets/` gerados | MIT |
 | `lib/LibreHardwareMonitorLib.dll` | MPL 2.0 (veja `lib/LibreHardwareMonitor-LICENSE.txt`) |
-| `engine\api-ms-win-core-sysinfo-825-64.dll` | comercial, © REALiX s.r.o. — **não redistribuir**, não está neste repositório |
+| `engine\api-ms-win-core-sysinfo-825-64.dll` | © REALiX s.r.o. |
 
 ---
 
@@ -584,12 +562,7 @@ própria e não são cobertas por ela:
 
 - [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) —
   fonte de reserva (MPL 2.0). Licença em `lib/LibreHardwareMonitor-LICENSE.txt`.
-- **HWiNFO32 Client Library** — © REALiX s.r.o. Biblioteca **comercial**,
-  licenciada ao fabricante do cooler, não a este projeto. A cópia em `engine\`
-  veio da instalação do software que acompanha o produto e serve a uso pessoal
-  na própria máquina. **Não redistribuir.** Para uso legítimo em software
-  próprio, licencie o SDK com a REALiX ou consuma o HWiNFO pela interface de
-  memória compartilhada documentada.
+- **HWiNFO32 Client Library** — © REALiX s.r.o.
 - Protocolo do painel: engenharia reversa para interoperabilidade com hardware
   próprio.
 - Feito por [Feurrado](https://github.com/Feurrado).
