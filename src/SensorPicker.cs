@@ -197,6 +197,7 @@ namespace MhiagosControl
     internal class SmoothListBox : ListBox
     {
         private const int WM_ERASEBKGND = 0x0014;
+        private const int WM_PAINT      = 0x000F;
         private const int WM_NCCALCSIZE = 0x0083;
         private const int WM_VSCROLL    = 0x0115;
         private const int WM_MOUSEWHEEL = 0x020A;
@@ -220,9 +221,35 @@ namespace MhiagosControl
             get { return Math.Max(1, ClientSize.Height / Math.Max(1, ItemHeight)); }
         }
 
+        /// <summary>
+        /// Limpa a faixa abaixo do ultimo item.
+        ///
+        /// Descartar o WM_ERASEBKGND tira a cintilacao, mas com ele vai embora
+        /// tambem a unica limpeza que o trecho vazio recebia: o ListBox so
+        /// redesenha as linhas que tem. Ao filtrar de trinta itens para dois, os
+        /// outros onze continuavam pintados na tela - itens de outra categoria
+        /// aparecendo sob a lista filtrada, e ate um pedaco da barra de rolagem
+        /// ja escondida, porque a lista alarga sobre a coluna dela sem repintar
+        /// onde nao ha item.
+        /// </summary>
+        private void LimparSobra()
+        {
+            int usadas = Math.Max(0, Items.Count - Math.Max(0, TopIndex)) * ItemHeight;
+            int h = ClientSize.Height - usadas;
+            if (h <= 0) return;
+
+            using (Graphics g = CreateGraphics())
+            using (SolidBrush b = new SolidBrush(BackColor))
+                g.FillRectangle(b, 0, usadas, ClientSize.Width, h);
+        }
+
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == WM_ERASEBKGND) { m.Result = (IntPtr)1; return; }
+
+            // Depois do desenho das linhas, e nao antes: pintar a sobra e
+            // corrigir o que o ListBox deixou para tras.
+            if (m.Msg == WM_PAINT) { base.WndProc(ref m); LimparSobra(); return; }
 
             // A barra nativa e escondida antes do calculo da area nao-cliente:
             // e o unico ponto em que a decisao pega, porque o ListBox a
