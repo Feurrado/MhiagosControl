@@ -235,7 +235,17 @@ namespace MhiagosControl
         {
             NavItem sel = _nav.Selected;
             foreach (Control c in _host.Controls) c.Visible = false;
-            if (sel != null && sel.Page != null) { sel.Page.Visible = true; sel.Page.BringToFront(); }
+            if (sel != null && sel.Page != null)
+            {
+                sel.Page.Visible = true;
+                sel.Page.BringToFront();
+
+                // Uma pagina que nunca apareceu nao tem HWND, e SetWindowTheme
+                // sem handle nao faz efeito: a varredura feita na exibicao da
+                // janela pulava justamente as paginas de tras, e a barra de
+                // rolagem delas saia branca na primeira visita.
+                Theme.ApplyScrollbars(sel.Page);
+            }
             if (_profileList != null) RefreshProfileList();
         }
 
@@ -1003,6 +1013,12 @@ namespace MhiagosControl
 
         private readonly List<MetricCard> _cards = new List<MetricCard>();
         private readonly List<string> _cardIds = new List<string>();
+        private readonly List<int> _cardTamanhos = new List<int>();
+
+        private FlatBtn _btAddMetrica, _btPadraoMetrica;
+        private Segmented _segJanela;
+        private Label _lbDicaMetricas, _lbSemMetricas;
+        private bool _arranjando = false;
 
         /// <summary>
         /// Grade de cartoes com as leituras principais da maquina.
@@ -1017,7 +1033,25 @@ namespace MhiagosControl
         {
             _pgMetricas = new Panel();
             _pgMetricas.BackColor = Color.Transparent;
+
+            // Rolagem so na vertical.
+            //
+            // A barra horizontal aparecia porque a dica tinha 600 px fixos de
+            // largura numa pagina de 780, e uma grade que nunca precisou rolar
+            // de lado ganhava uma barra clara atravessada no rodape. A ordem
+            // abaixo e a que funciona: desligar, zerar a rolagem horizontal e
+            // so entao religar - com AutoScroll ligado, o painel restaura os
+            // valores sozinho.
+            _pgMetricas.AutoScroll = false;
+            _pgMetricas.HorizontalScroll.Enabled = false;
+            _pgMetricas.HorizontalScroll.Visible = false;
+            _pgMetricas.HorizontalScroll.Maximum = 0;
             _pgMetricas.AutoScroll = true;
+
+            // A grade se refaz com a janela: as larguras saem da area
+            // disponivel, e nao de um numero fixo que so serve para o tamanho
+            // em que foi escrito.
+            _pgMetricas.Resize += delegate { ArranjarMetricas(); };
 
             // Primeira abertura: monta uma selecao automatica e grava. A partir
             // dai a lista e do usuario, inclusive vazia - por isso o marcador
@@ -1070,69 +1104,60 @@ namespace MhiagosControl
             foreach (Control c in velhos) { _pgMetricas.Controls.Remove(c); c.Dispose(); }
             _cards.Clear();
             _cardIds.Clear();
+            _cardTamanhos.Clear();
+            _lbSemMetricas = null;
 
-            const int Larg = 176, Esp = 12, PorLinha = 4;
-            int y = 0, col = 0, alturaDaLinha = 0;
+            _btAddMetrica = new FlatBtn();
+            _btAddMetrica.Text = T.AddMetric;
+            _btAddMetrica.Primary = true;
+            _btAddMetrica.Click += delegate { AdicionarMetrica(); };
+            _pgMetricas.Controls.Add(_btAddMetrica);
 
-            FlatBtn add = new FlatBtn();
-            add.Text = T.AddMetric;
-            add.Primary = true;
-            add.SetBounds(2, y, 150, 32);
-            add.Click += delegate { AdicionarMetrica(); };
-            _pgMetricas.Controls.Add(add);
+            _btPadraoMetrica = new FlatBtn();
+            _btPadraoMetrica.Text = T.DefaultMetrics;
+            _btPadraoMetrica.Click += delegate { SelecaoPadrao(); MontarMetricas(); };
+            _pgMetricas.Controls.Add(_btPadraoMetrica);
 
-            FlatBtn padrao = new FlatBtn();
-            padrao.Text = T.DefaultMetrics;
-            padrao.SetBounds(158, y, 150, 32);
-            padrao.Click += delegate { SelecaoPadrao(); MontarMetricas(); };
-            _pgMetricas.Controls.Add(padrao);
+            // Janela de tempo dos graficos. Vale para a grade inteira: comparar
+            // dois cartoes em escalas de tempo diferentes nao diz nada, e e
+            // exatamente o que uma escolha por cartao permitiria fazer sem
+            // perceber.
+            _segJanela = new Segmented();
+            string[] nomes = new string[MetricHistory.Janelas.Length];
+            for (int i = 0; i < nomes.Length; i++)
+                nomes[i] = MetricHistory.NomeDaJanela(MetricHistory.Janelas[i]);
+            _segJanela.SetItems(nomes);
+            _segJanela.SelectedIndex = IndiceDaJanela();
+            _segJanela.SelectedIndexChanged += delegate { TrocarJanela(); };
+            _pgMetricas.Controls.Add(_segJanela);
 
-            Label dica = MakeLabel(T.MetricsHint, 318, y + 8, Ui.FontSmall);
-            dica.Size = new Size(600, 18);
-            dica.ForeColor = Ui.Faint;
-            _pgMetricas.Controls.Add(dica);
-            y += 44;
+            _lbDicaMetricas = MakeLabel(T.MetricsHint, 0, 0, Ui.FontSmall);
+            _lbDicaMetricas.ForeColor = Ui.Faint;
+            _pgMetricas.Controls.Add(_lbDicaMetricas);
 
             if (_cfg.MetricIds.Count == 0)
             {
-                Label vazio = MakeLabel(T.NoMetrics, 4, y + 8, Ui.FontBase);
-                vazio.Size = new Size(700, 40);
-                vazio.ForeColor = Ui.Muted;
-                _pgMetricas.Controls.Add(vazio);
-                _pgMetricas.ResumeLayout();
-                return;
+                _lbSemMetricas = MakeLabel(T.NoMetrics, 4, 52, Ui.FontBase);
+                _lbSemMetricas.ForeColor = Ui.Muted;
+                _pgMetricas.Controls.Add(_lbSemMetricas);
             }
 
-            // Empacotamento por fluxo: cada cartao ocupa 1, 2 ou 4 colunas e
-            // entra na linha corrente se couber; senao a linha fecha e ele
-            // comeca a proxima. A altura da linha e a do cartao mais alto dela,
-            // que e o que evita sobreposicao ao misturar tamanhos.
+            int janela = MetricHistory.JanelaValida(_cfg.MetricRange);
             for (int i = 0; i < _cfg.MetricIds.Count; i++)
             {
                 string id = _cfg.MetricIds[i];
                 SensorEntry s = Achar(id);
                 if (s == null) continue;   // sensor sumiu entre sessoes
 
-                int tam = _cfg.MetricSize(i);
-                int cols = MetricPicker.Colunas(tam);
-                int alt = MetricPicker.Altura(tam);
-
-                if (col + cols > PorLinha && col > 0)
-                {
-                    y += alturaDaLinha + Esp;
-                    col = 0; alturaDaLinha = 0;
-                }
-
                 MetricCard c = new MetricCard();
                 c.SensorId = s.Id;
                 c.Titulo = MetricPicker.Rotulo(s);
                 c.Sub = MetricPicker.Rodape(s);
                 c.Unidade = s.Unit;
+                c.Janela = janela;
                 float? at, pe;
                 MetricPicker.Faixas(s.Unit, out at, out pe);
                 c.Atencao = at; c.Perigo = pe;
-                c.SetBounds(2 + col * (Larg + Esp), y,
-                            cols * Larg + (cols - 1) * Esp, alt);
 
                 string alvo = s.Id;
                 c.Remover += delegate { MexerNaMetrica(alvo, 0); };
@@ -1143,11 +1168,127 @@ namespace MhiagosControl
                 _pgMetricas.Controls.Add(c);
                 _cards.Add(c);
                 _cardIds.Add(s.Id);
-
-                col += cols;
-                if (alt > alturaDaLinha) alturaDaLinha = alt;
+                _cardTamanhos.Add(_cfg.MetricSize(i));
             }
+
+            // Quem alimenta a serie e a thread de leitura, que roda com a janela
+            // fechada: e ela que precisa saber o que acompanhar.
+            MetricHistory.Seguir(_cfg.MetricIds);
+
             _pgMetricas.ResumeLayout();
+            ArranjarMetricas();
+        }
+
+        /// <summary>
+        /// Posiciona a barra e a grade na largura que a pagina tem agora.
+        ///
+        /// Empacotamento por fluxo: cada cartao ocupa 1, 2 ou 4 colunas e entra
+        /// na linha corrente se couber; senao a linha fecha e ele comeca a
+        /// proxima. A altura da linha e a do cartao mais alto dela, que e o que
+        /// evita sobreposicao ao misturar tamanhos.
+        ///
+        /// O numero de colunas cresce com a largura, em multiplos de quatro: sem
+        /// isso, uma janela maximizada em 1920 px daria quatro cartoes de 460 px
+        /// - um numero pequeno perdido em cada tapete de cor.
+        /// </summary>
+        private void ArranjarMetricas()
+        {
+            if (_pgMetricas == null || _arranjando) return;
+            _arranjando = true;
+            _pgMetricas.SuspendLayout();
+            try
+            {
+                const int Esp = 12;
+
+                // A largura da barra de rolagem sai da conta SEMPRE, apareca ela
+                // ou nao. Medir a area de cliente faria a grade encolher quando
+                // a barra surge e alargar quando ela some, e cada troca dispara
+                // um novo arranjo - dois estados que se chamam em circulo.
+                int disp = _pgMetricas.Width -
+                           System.Windows.Forms.SystemInformation.VerticalScrollBarWidth - 4;
+                if (disp < 320) disp = 320;
+
+                int porLinha = disp / 200;
+                if (porLinha < 4) porLinha = 4;
+                if (porLinha > 12) porLinha = 12;
+                porLinha -= porLinha % 4;
+
+                int larg = (disp - (porLinha - 1) * Esp) / porLinha;
+                if (larg < 140) larg = 140;
+
+                int y = 0;
+                if (_btAddMetrica != null) _btAddMetrica.SetBounds(2, y, 150, 32);
+                if (_btPadraoMetrica != null) _btPadraoMetrica.SetBounds(158, y, 150, 32);
+                if (_segJanela != null) _segJanela.SetBounds(314, y, 186, 32);
+
+                if (_lbDicaMetricas != null)
+                {
+                    const int x = 512;
+                    int w = disp - x;
+                    // Some quando nao cabe, em vez de ser cortada: uma dica pela
+                    // metade nao ensina nada e ainda ocupa a fileira. Recolhida,
+                    // volta para dentro da area - um controle fora dela, mesmo
+                    // invisivel, e um convite a barra horizontal de volta.
+                    bool cabe = w >= 150;
+                    _lbDicaMetricas.Visible = cabe;
+                    if (cabe) _lbDicaMetricas.SetBounds(x, y + 4, w, 30);
+                    else _lbDicaMetricas.SetBounds(2, y + 4, 1, 1);
+                }
+                y += 44;
+
+                if (_lbSemMetricas != null) _lbSemMetricas.SetBounds(4, y + 8, disp - 8, 40);
+
+                int col = 0, alturaDaLinha = 0;
+                for (int i = 0; i < _cards.Count; i++)
+                {
+                    int tam = i < _cardTamanhos.Count ? _cardTamanhos[i] : 0;
+                    int cols = MetricPicker.Colunas(tam);
+                    int alt = MetricPicker.Altura(tam);
+
+                    if (col + cols > porLinha && col > 0)
+                    {
+                        y += alturaDaLinha + Esp;
+                        col = 0; alturaDaLinha = 0;
+                    }
+
+                    _cards[i].SetBounds(2 + col * (larg + Esp), y,
+                                        cols * larg + (cols - 1) * Esp, alt);
+
+                    col += cols;
+                    if (alt > alturaDaLinha) alturaDaLinha = alt;
+                }
+            }
+            finally
+            {
+                _pgMetricas.ResumeLayout();
+                _arranjando = false;
+            }
+        }
+
+        private int IndiceDaJanela()
+        {
+            int j = MetricHistory.JanelaValida(_cfg.MetricRange);
+            for (int i = 0; i < MetricHistory.Janelas.Length; i++)
+                if (MetricHistory.Janelas[i] == j) return i;
+            return 0;
+        }
+
+        /// <summary>
+        /// Troca a janela de tempo sem remontar a grade.
+        ///
+        /// A serie nao esta nos cartoes, entao mudar a escala e so redesenhar -
+        /// nada do que foi registrado se perde ao alternar entre dez minutos e
+        /// seis horas.
+        /// </summary>
+        private void TrocarJanela()
+        {
+            if (_segJanela == null) return;
+            int i = _segJanela.SelectedIndex;
+            if (i < 0 || i >= MetricHistory.Janelas.Length) return;
+
+            _cfg.MetricRange = MetricHistory.Janelas[i];
+            GravarMetricas();
+            foreach (MetricCard c in _cards) { c.Janela = _cfg.MetricRange; c.Invalidate(); }
         }
 
         private void AdicionarMetrica()

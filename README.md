@@ -108,6 +108,28 @@ limiares que mudassem a cada volta travariam e destravariam sozinhos, e um aviso
 que aparece conforme a hora do relógio não é aviso. Girar é sobre o mostrador,
 não sobre a vigilância.
 
+### Métricas
+
+Uma grade de cartões com as leituras da máquina, cada um com o número grande e o
+histórico desenhado atrás. A primeira abertura monta um conjunto automático —
+uma leitura de cada grandeza por peça, temperatura primeiro — e o botão
+*Conjunto padrão* repõe esse conjunto a qualquer momento. Qualquer sensor pode
+virar cartão, em três tamanhos que se reorganizam sozinhos na largura
+disponível.
+
+O histórico **não vive na janela**: é gravado em disco e alimentado pelo mesmo
+ciclo que atualiza o mostrador, então continua correndo com a configuração
+fechada e sobrevive a fechar o programa. São seis horas em baldes de cinco
+segundos, e a janela desenhada é escolhida entre **10 min**, **1 h** e **6 h**.
+
+Período sem leitura fica **vazio no gráfico**, e não ligado por uma reta: o
+computador desligado das 3h às 8h é um buraco, não uma temperatura constante por
+cinco horas.
+
+O custo disso é medido: a leitura restrita ao mostrador visita só os grupos de
+que ele depende, e uma vez a cada balde ela se abre para os grupos dos cartões,
+tira a amostra e volta a fechar. Sem cartão nenhum na grade, nada disso roda.
+
 ### Tela de carregamento
 
 <img src="docs/carregando.png" width="380" alt="Tela de carregamento">

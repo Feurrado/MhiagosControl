@@ -123,6 +123,9 @@ namespace MhiagosControl
 
         public bool MetricsChosen = false;
 
+        /// <summary>Janela de tempo dos graficos, em segundos.</summary>
+        public int MetricRange = MetricHistory.JanelaPadrao;
+
         /// <summary>Tamanho do cartao i, tolerando lista curta de versao antiga.</summary>
         public int MetricSize(int i)
         {
@@ -215,6 +218,7 @@ namespace MhiagosControl
                         else if (k == "rotateseconds") c.RotateSeconds = ParseInt(v);
                         else if (k == "sidebarcollapsed") c.SidebarCollapsed = (v == "1");
                         else if (k == "metricschosen") c.MetricsChosen = (v == "1");
+                        else if (k == "metricrange") c.MetricRange = MetricHistory.JanelaValida(ParseInt(v));
                         else if (k == "metric")
                         {
                             // "0|hw:..." - tamanho e identificador. Sem a barra e
@@ -310,6 +314,7 @@ namespace MhiagosControl
                 sb.AppendLine("rotateseconds=" + RotateSeconds.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("sidebarcollapsed=" + (SidebarCollapsed ? "1" : "0"));
                 sb.AppendLine("metricschosen=" + (MetricsChosen ? "1" : "0"));
+                sb.AppendLine("metricrange=" + MetricRange.ToString(CultureInfo.InvariantCulture));
                 for (int i = 0; i < MetricIds.Count; i++)
                     if (!string.IsNullOrEmpty(MetricIds[i]))
                         sb.AppendLine("metric=" + MetricSize(i).ToString(CultureInfo.InvariantCulture) +

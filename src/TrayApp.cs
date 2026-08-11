@@ -229,6 +229,12 @@ namespace MhiagosControl
                     T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
+            // Antes de qualquer caminho que possa abrir a janela de
+            // configuracao: e la que a grade de metricas se monta e passa a
+            // acompanhar leituras.
+            MetricHistory.Carregar();
+            MetricHistory.Seguir(_cfg.MetricIds);
+
             Profile act = _cfg.Active;
             if (_sensorsOk && (string.IsNullOrEmpty(act.Panel1Id) || string.IsNullOrEmpty(act.Panel2Id)))
             {
@@ -382,20 +388,38 @@ namespace MhiagosControl
         {
             try
             {
-                List<string> ids = null;
-                if (!_janelaAberta)
-                {
-                    ids = new List<string>();
-                    Profile a = _live;
-                    if (a != null) { ids.Add(a.Panel1Id); ids.Add(a.Panel2Id); }
-
-                    Profile[] roda = _rotation;
-                    if (roda != null)
-                        foreach (Profile p in roda) { ids.Add(p.Panel1Id); ids.Add(p.Panel2Id); }
-                }
-                lock (_sensorLock) { _sensors.Focar(ids); }
+                lock (_sensorLock) { _sensors.Focar(Foco(false)); }
             }
             catch (Exception ex) { Log.Error("foco da leitura de sensores", ex); }
+        }
+
+        /// <summary>
+        /// Conjunto de identificadores que a leitura precisa cobrir.
+        ///
+        /// Nulo quer dizer "leia tudo", que e o caso com a janela aberta.
+        ///
+        /// Os cartoes da aba Metricas so entram quando o historico vai tirar uma
+        /// amostra. Deixa-los no foco o tempo todo seria voltar ao ciclo
+        /// completo para sempre - a grade padrao toca em processador, video,
+        /// memoria, placa-mae e disco, ou seja, quase todos os grupos - e o
+        /// atalho existe justamente porque o caro na biblioteca e preparar cada
+        /// grupo. Uma vez a cada balde a leitura se abre, tira a amostra e volta
+        /// a fechar.
+        /// </summary>
+        private List<string> Foco(bool comMetricas)
+        {
+            if (_janelaAberta) return null;
+
+            List<string> ids = new List<string>();
+            Profile a = _live;
+            if (a != null) { ids.Add(a.Panel1Id); ids.Add(a.Panel2Id); }
+
+            Profile[] roda = _rotation;
+            if (roda != null)
+                foreach (Profile p in roda) { ids.Add(p.Panel1Id); ids.Add(p.Panel2Id); }
+
+            if (comMetricas) ids.AddRange(MetricHistory.Seguidos);
+            return ids;
         }
 
         private volatile bool _janelaAberta = false;
@@ -515,6 +539,12 @@ namespace MhiagosControl
             SensorEntry e1, e2, g1, g2;
             lock (_sensorLock)
             {
+                // Ciclo de amostra: a leitura se abre para os grupos dos cartoes
+                // antes do Refresh, senao os sensores fora do foco viriam com o
+                // valor do ultimo ciclo em que foram lidos - historico de mentira.
+                bool amostrar = MetricHistory.HoraDeAmostrar();
+                if (amostrar) _sensors.Focar(Foco(true));
+
                 _sensors.Refresh();
                 e1 = _sensors.ReadEntry(cfg.Panel1Id);
                 e2 = _sensors.ReadEntry(cfg.Panel2Id);
@@ -522,7 +552,15 @@ namespace MhiagosControl
                 g2 = mesmo ? e2 : _sensors.ReadEntry(vigiar.Panel2Id);
                 if (_snapshotWanted)
                     Interlocked.Exchange(ref _snapshot, _sensors.Snapshot());
+
+                if (amostrar)
+                {
+                    MetricHistory.Amostrar(Ler);
+                    _sensors.Focar(Foco(false));
+                }
             }
+
+            MetricHistory.SalvarSeVencido();   // fora do lock: escreve em disco
 
             PanelValue v1 = Scaling.Prepare(e1, Scaling.Effective(cfg.Divisor1, e1), cfg.Fahrenheit);
             PanelValue v2 = Scaling.Prepare(e2, Scaling.Effective(cfg.Divisor2, e2), false);
@@ -554,6 +592,19 @@ namespace MhiagosControl
             if (v1.Clamped || v2.Clamped) text += T.TagOver;
             if (!ok) text += T.TagNoDevice;
             SetTooltip(text);
+        }
+
+        /// <summary>
+        /// Le um sensor para o historico. Chamada ja sob _sensorLock.
+        ///
+        /// Um identificador que sumiu - placa trocada, disco removido, sensor
+        /// que a fonte parou de publicar - devolve nulo, e o balde daquele
+        /// instante fica marcado como falha. Nao e erro, e ausencia.
+        /// </summary>
+        private float? Ler(string id)
+        {
+            SensorEntry e = _sensors.ReadEntry(id);
+            return e != null ? e.Value : null;
         }
 
         /// <summary>
@@ -761,6 +812,7 @@ namespace MhiagosControl
                 _janelaAberta = false;   // antes de Publicar, que reaplica o foco
 
                 if (r != DialogResult.OK) _cfg = Config.Load();   // descarta edicoes
+                MetricHistory.Seguir(_cfg.MetricIds);
                 Publicar();
                 RebuildProfileMenu();
                 ResetAlerts();
@@ -827,6 +879,10 @@ namespace MhiagosControl
             _stop.Set();
             if (_worker != null && _worker.IsAlive && !_worker.Join(3000))
                 Log.Write("thread de atualizacao nao encerrou a tempo");
+
+            // Depois de a thread parar: gravar com ela viva copiaria uma serie
+            // no meio de um balde sendo fechado.
+            try { MetricHistory.Salvar(); } catch (Exception ex) { Log.Error("gravacao do historico", ex); }
 
             if (_icon != null) { _icon.Visible = false; _icon.Dispose(); }
             if (_iconNormal != null) _iconNormal.Dispose();

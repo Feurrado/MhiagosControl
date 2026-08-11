@@ -196,6 +196,12 @@ namespace MhiagosControl
             if (!IsDark) return;
             try
             {
+                // O proprio controle recebido tambem entra: quando a chamada vem
+                // de uma pagina que acabou de aparecer, e ELA quem rola, e a
+                // varredura so dos filhos deixava a barra dela branca.
+                if (!(parent is Form) && parent.IsHandleCreated)
+                    try { SetWindowTheme(parent.Handle, "DarkMode_Explorer", null); } catch { }
+
                 foreach (Control c in parent.Controls)
                 {
                     if (c is ListBox || c is ListView || c is TreeView || c is TextBox || c is Panel)

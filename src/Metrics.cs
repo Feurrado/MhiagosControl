@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace MhiagosControl
@@ -15,6 +16,9 @@ namespace MhiagosControl
     /// que e a pergunta que leva alguem a abrir um monitor de hardware. Fica
     /// atras do valor, em area preenchida de baixa opacidade, porque e contexto
     /// e nao pode competir com a leitura.
+    ///
+    /// A serie nao mora aqui: vem do MetricHistory, que continua registrando com
+    /// a janela fechada e sobrevive ao fechamento do aplicativo.
     /// </summary>
     public class MetricCard : Control
     {
@@ -24,6 +28,9 @@ namespace MhiagosControl
 
         /// <summary>Identificador da leitura, para gravar a escolha.</summary>
         public string SensorId = "";
+
+        /// <summary>Janela de tempo desenhada, em segundos.</summary>
+        public int Janela = MetricHistory.JanelaPadrao;
 
         /// <summary>Acoes de edicao, disparadas pelos botoes do canto.</summary>
         public event EventHandler Remover, MoverEsquerda, MoverDireita, TrocarTamanho;
@@ -35,16 +42,7 @@ namespace MhiagosControl
         /// <summary>Faixas de cor. Nulo pinta tudo com a cor de enfase.</summary>
         public float? Atencao, Perigo;
 
-        /// <summary>
-        /// Amostras guardadas por cartao. A 1 s por ciclo, sao 10 minutos.
-        ///
-        /// 90 amostras davam um minuto e meio - tempo suficiente para ver um
-        /// pico, nao para ver se ele foi um evento ou o normal do dia. Dez
-        /// minutos cabem em 2,4 KB por cartao e respondem essa segunda pergunta.
-        /// </summary>
-        private const int Historico = 600;
-        private readonly float[] _serie = new float[Historico];
-        private int _n = 0;
+        private float[] _buf;
         private float? _valor;
 
         public MetricCard()
@@ -57,18 +55,10 @@ namespace MhiagosControl
             Size = new Size(172, 104);
         }
 
+        /// <summary>Leitura do ciclo corrente. A serie e alimentada em outro lugar.</summary>
         public void Push(float? v)
         {
             _valor = v;
-            if (v.HasValue)
-            {
-                if (_n < Historico) _serie[_n++] = v.Value;
-                else
-                {
-                    Array.Copy(_serie, 1, _serie, 0, Historico - 1);
-                    _serie[Historico - 1] = v.Value;
-                }
-            }
             Invalidate();
         }
 
@@ -90,13 +80,15 @@ namespace MhiagosControl
         /// decimal seria ruido de cinco digitos, e a decimal de uma rotacao de
         /// ventoinha nao existe no sensor.
         /// </summary>
+        private static string Formatar(float v)
+        {
+            if (Math.Abs(v) >= 100) return v.ToString("0");
+            return v.ToString("0.0");
+        }
+
         private string Formatado()
         {
-            if (!_valor.HasValue) return "--";
-            float v = _valor.Value;
-            if (Math.Abs(v) >= 100) return v.ToString("0");
-            if (Math.Abs(v) >= 10) return v.ToString("0.0");
-            return v.ToString("0.0");
+            return _valor.HasValue ? Formatar(_valor.Value) : "--";
         }
 
         // ---------------- edicao ----------------
@@ -191,13 +183,18 @@ namespace MhiagosControl
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
             Color cor = Cor;
 
+            // Cartao alto sobra area util abaixo do valor: a curva desce e ganha
+            // eixo e grade. No pequeno ela continua sendo pano de fundo.
+            bool detalhado = Height >= 140;
+            int topo = detalhado ? 66 : Height / 2;
+
             using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))
             {
                 using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillPath(b, p);
 
                 Region antigo = g.Clip;
                 g.SetClip(p, CombineMode.Intersect);
-                DesenharSerie(g, cor);
+                DesenharSerie(g, cor, topo, detalhado);
                 g.Clip = antigo;
 
                 using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, p);
@@ -226,45 +223,98 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// A curva ocupa a metade de baixo e e escalada pelo proprio minimo e
-        /// maximo da janela, com uma folga de 5%.
+        /// A curva, escalada pelo proprio minimo e maximo da janela com folga de 5%.
         ///
         /// Escalar de zero ao maximo achataria justamente o que interessa: uma
         /// CPU que oscila entre 38 e 42 graus viraria uma reta em cima do eixo,
         /// e a variacao - o unico motivo de existir a curva - desapareceria.
+        ///
+        /// O eixo do tempo e proporcional: dez minutos de serie vistos numa
+        /// janela de seis horas ocupam a ponta direita e deixam o resto vazio.
+        /// Esticar o que existe por toda a largura mostraria uma escala de tempo
+        /// que nao e a escolhida.
         /// </summary>
-        private void DesenharSerie(Graphics g, Color cor)
+        private void DesenharSerie(Graphics g, Color cor, int topo, bool detalhado)
         {
-            if (_n < 2) return;
+            int n = MetricHistory.Janela(SensorId, Janela, ref _buf);
 
             float min = float.MaxValue, max = float.MinValue;
-            for (int i = 0; i < _n; i++)
+            int lidos = 0;
+            for (int i = 0; i < n; i++)
             {
-                if (_serie[i] < min) min = _serie[i];
-                if (_serie[i] > max) max = _serie[i];
+                float v = _buf[i];
+                if (float.IsNaN(v)) continue;
+                lidos++;
+                if (v < min) min = v;
+                if (v > max) max = v;
             }
+            if (lidos < 2) return;
+
             float faixa = max - min;
-            if (faixa < 0.001f) { min -= 1; max += 1; faixa = max - min; }
-            else { min -= faixa * 0.05f; max += faixa * 0.05f; faixa = max - min; }
+            float baixo = min, alto = max;
+            if (faixa < 0.001f) { baixo -= 1; alto += 1; }
+            else { baixo -= faixa * 0.05f; alto += faixa * 0.05f; }
+            faixa = alto - baixo;
 
-            int topo = Height / 2, alt = Height - topo;
-            PointF[] pts = new PointF[_n];
-            for (int i = 0; i < _n; i++)
+            int alt = Height - topo;
+            if (alt < 8) return;
+
+            if (detalhado) DesenharGrade(g, topo, alt);
+
+            // Segmentos separados nas falhas: com o aplicativo desligado nao ha
+            // leitura, e ligar os dois lados do buraco desenharia uma variacao
+            // que ninguem mediu.
+            List<PointF> seg = new List<PointF>(n);
+            for (int i = 0; i < n; i++)
             {
-                float x = (_n == 1) ? 0 : (float)i / (_n - 1) * Width;
-                float y = topo + alt - (_serie[i] - min) / faixa * alt;
-                pts[i] = new PointF(x, y);
+                float v = _buf[i];
+                if (float.IsNaN(v)) { Traco(g, seg, cor); seg.Clear(); continue; }
+                float x = (float)i / (n - 1) * Width;
+                float yv = topo + alt - (v - baixo) / faixa * alt;
+                seg.Add(new PointF(x, yv));
             }
+            Traco(g, seg, cor);
 
-            PointF[] area = new PointF[_n + 2];
-            Array.Copy(pts, area, _n);
-            area[_n] = new PointF(Width, Height);
-            area[_n + 1] = new PointF(0, Height);
+            if (detalhado) DesenharEixo(g, topo, alt, min, max);
+        }
+
+        private void Traco(Graphics g, List<PointF> seg, Color cor)
+        {
+            if (seg.Count < 2) return;
+            PointF[] pts = seg.ToArray();
+
+            PointF[] area = new PointF[pts.Length + 2];
+            Array.Copy(pts, area, pts.Length);
+            area[pts.Length] = new PointF(pts[pts.Length - 1].X, Height);
+            area[pts.Length + 1] = new PointF(pts[0].X, Height);
 
             using (SolidBrush b = new SolidBrush(Color.FromArgb(38, cor)))
                 g.FillPolygon(b, area);
             using (Pen p = new Pen(Color.FromArgb(150, cor), 1.5f))
                 g.DrawLines(p, pts);
+        }
+
+        /// <summary>Tres linhas de apoio, para ler altura sem contar pixels.</summary>
+        private void DesenharGrade(Graphics g, int topo, int alt)
+        {
+            using (Pen p = new Pen(Color.FromArgb(40, Ui.Border)))
+                for (int k = 1; k <= 3; k++)
+                {
+                    int y = topo + alt * k / 4;
+                    g.DrawLine(p, 1, y, Width - 2, y);
+                }
+        }
+
+        /// <summary>Extremos da janela, para a curva ter escala e nao so forma.</summary>
+        private void DesenharEixo(Graphics g, int topo, int alt, float min, float max)
+        {
+            TextRenderer.DrawText(g, Formatar(max), Ui.FontSmall,
+                new Rectangle(Width - 78, topo + 2, 70, 14), Ui.Faint,
+                TextFormatFlags.Right | TextFormatFlags.NoPadding);
+
+            TextRenderer.DrawText(g, Formatar(min), Ui.FontSmall,
+                new Rectangle(Width - 78, topo + alt - 18, 70, 14), Ui.Faint,
+                TextFormatFlags.Right | TextFormatFlags.NoPadding);
         }
     }
 
@@ -300,29 +350,174 @@ namespace MhiagosControl
             return 104;
         }
 
+        // ---------------- nomes ----------------
+
+        private static readonly Regex Enumeracao = new Regex(@"^[A-Za-z0-9 ]{1,12}\[#\d+\]\s*:\s*");
+        private static readonly Regex Espacos = new Regex(@"\s{2,}");
+
         /// <summary>
-        /// Rotulo do cartao: so a parte que nomeia a LEITURA.
+        /// Rotulo do cartao, com o nome que a fonte da a LEITURA.
         ///
-        /// As fontes publicam "CPU [#0]: AMD Ryzen 5 5600X: Core Temperatures".
-        /// Inteiro, o rotulo era cortado antes de chegar em "Core Temperatures"
-        /// - o cartao dizia de qual peca e nunca dizia de que leitura, que e o
-        /// contrario do util, porque a peca ja esta escrita embaixo.
+        /// A primeira versao usava o rotulo completo, que traz o dispositivo
+        /// junto: sobrava "Enhanced - CPU (Tctl/Tdie) ..." num cartao de 176 px,
+        /// ou seja, o pedaco do meio de uma frase. Aqui vale o nome do sensor,
+        /// limpo do que a fonte acrescenta, e traduzido quando e uma leitura
+        /// conhecida. O que nao esta na tabela passa limpo e inteiro - nenhuma
+        /// maquina depende de constar dela.
         /// </summary>
         public static string Rotulo(SensorEntry s)
         {
-            if (s == null || string.IsNullOrEmpty(s.Label)) return "";
-            string t = s.Label;
-            int i = t.LastIndexOf(':');
-            return i >= 0 && i < t.Length - 1 ? t.Substring(i + 1).Trim() : t.Trim();
+            if (s == null) return "";
+            string bruto = string.IsNullOrEmpty(s.Name) ? s.Label : s.Name;
+            return Amigavel(bruto);
+        }
+
+        public static string Amigavel(string bruto)
+        {
+            if (string.IsNullOrEmpty(bruto)) return "";
+
+            // "CPU [#0]: ..." - a enumeracao da fonte, que nao nomeia nada.
+            string n = Enumeracao.Replace(bruto.Trim(), "");
+
+            // "Grupo: Subgrupo: Leitura" - fica a leitura.
+            int dp = n.LastIndexOf(':');
+            if (dp >= 0 && dp < n.Length - 1) n = n.Substring(dp + 1);
+
+            n = Espacos.Replace(n, " ").Trim();
+            if (n.Length == 0) return bruto.Trim();
+
+            // Sufixo do agregado: "Core Temperatures · média de 6". Sai da busca
+            // e volta no fim, senao nenhum agregado acharia a tabela.
+            string sufixo = "";
+            int sep = n.IndexOf(" · ", StringComparison.Ordinal);
+            if (sep > 0) { sufixo = n.Substring(sep); n = n.Substring(0, sep); }
+
+            string[] par;
+            if (Tabela.TryGetValue(n.ToLowerInvariant(), out par))
+                return (T.Pt ? par[0] : par[1]) + sufixo;
+
+            return n + sufixo;
+        }
+
+        /// <summary>
+        /// Nomes conhecidos, em portugues e ingles.
+        ///
+        /// Cobre o que as duas fontes publicam nas maquinas comuns; o que faltar
+        /// aparece com o nome original, que ja e legivel. Nao ha aqui nenhuma
+        /// suposicao sobre a maquina - a tabela e um enfeite sobre um caminho
+        /// que funciona sem ela.
+        /// </summary>
+        private static readonly string[] Bruta =
+        {
+            // processador
+            "cpu (tctl/tdie)",        "Temperatura do processador", "CPU temperature",
+            "core (tctl/tdie)",       "Temperatura do processador", "CPU temperature",
+            "cpu package",            "Temperatura do pacote",      "Package temperature",
+            "core max",               "Núcleo mais quente",         "Hottest core",
+            "core average",           "Média dos núcleos",          "Core average",
+            "cpu die (average)",      "Média do die",               "Die average",
+            "cpu ccd1 (tdie)",        "Temperatura do CCD1",        "CCD1 temperature",
+            "cpu ccd2 (tdie)",        "Temperatura do CCD2",        "CCD2 temperature",
+            "total cpu usage",        "Uso do processador",         "CPU usage",
+            "cpu total",              "Uso do processador",         "CPU usage",
+            "max cpu/thread usage",   "Uso máximo de thread",       "Max thread usage",
+            "cpu package power",      "Consumo do processador",     "CPU power",
+            "core+soc power",         "Consumo núcleos + SoC",      "Core+SoC power",
+            "bus clock",              "Clock do barramento",        "Bus clock",
+            "core clocks",            "Clock dos núcleos",          "Core clock",
+            "core clock",             "Clock dos núcleos",          "Core clock",
+            "cpu clock",              "Clock do processador",       "CPU clock",
+            "vcore",                  "Tensão do núcleo",           "Core voltage",
+            "cpu vcore",              "Tensão do núcleo",           "Core voltage",
+            "thermal throttling (prochot ext)", "Limitação térmica", "Thermal throttling",
+
+            // video
+            "gpu temperature",        "Temperatura da GPU",         "GPU temperature",
+            "gpu thermal diode",      "Temperatura da GPU",         "GPU temperature",
+            "gpu core",               "Temperatura da GPU",         "GPU temperature",
+            "gpu hot spot temperature", "Ponto quente da GPU",      "GPU hot spot",
+            "gpu memory temperature", "Temperatura da memória de vídeo", "GPU memory temperature",
+            "gpu clock",              "Clock da GPU",               "GPU clock",
+            "gpu core clock",         "Clock da GPU",               "GPU clock",
+            "gpu memory clock",       "Clock da memória de vídeo",  "GPU memory clock",
+            "gpu utilization",        "Uso da GPU",                 "GPU usage",
+            "gpu core load",          "Uso da GPU",                 "GPU usage",
+            "gpu d3d usage",          "Uso 3D",                     "3D usage",
+            "gpu memory controller utilization", "Uso do controlador de memória", "Memory controller usage",
+            "gpu i/o utilization",    "Uso de entrada e saída",     "I/O usage",
+            "gpu fan",                "Ventoinha da GPU",           "GPU fan",
+            "gpu fan (odn)",          "Ventoinha da GPU",           "GPU fan",
+            "gpu fan speed",          "Ventoinha da GPU",           "GPU fan",
+            "gpu fan pwm",            "Ventoinha da GPU (PWM)",     "GPU fan (PWM)",
+            "gpu power",              "Consumo da GPU",             "GPU power",
+            "gpu core power",         "Consumo da GPU",             "GPU power",
+            "gpu core voltage (vddc)", "Tensão do núcleo da GPU",   "GPU core voltage",
+            "gpu core current (vddcr_gfx)", "Corrente do núcleo da GPU", "GPU core current",
+            "gpu memory used",        "Memória de vídeo em uso",    "GPU memory used",
+            "gpu memory usage",       "Uso da memória de vídeo",    "GPU memory usage",
+
+            // memoria
+            "memory clock",           "Clock da memória",           "Memory clock",
+            "memory used",            "Memória em uso",             "Memory used",
+            "memory available",       "Memória livre",              "Memory available",
+            "physical memory used",   "Memória em uso",             "Memory used",
+            "physical memory available", "Memória livre",           "Memory available",
+            "physical memory load",   "Uso da memória",             "Memory load",
+            "virtual memory committed", "Memória virtual em uso",   "Virtual memory used",
+
+            // placa-mae
+            "cpu fan",                "Ventoinha do processador",   "CPU fan",
+            "system fan",             "Ventoinha do gabinete",      "Case fan",
+            "chassis fan",            "Ventoinha do gabinete",      "Case fan",
+            "motherboard",            "Temperatura da placa-mãe",   "Motherboard temperature",
+            "vrm mos",                "Temperatura do VRM",         "VRM temperature",
+
+            // armazenamento
+            "drive temperature",      "Temperatura do disco",       "Drive temperature",
+            "read activity",          "Atividade de leitura",       "Read activity",
+            "write activity",         "Atividade de escrita",       "Write activity",
+            "total activity",         "Atividade do disco",         "Drive activity",
+            "used space",             "Espaço usado",               "Used space",
+            "total host writes",      "Total gravado",              "Total host writes",
+            "total nand writes",      "Total gravado na NAND",      "Total NAND writes",
+            "drive failure",          "Falha do disco",             "Drive failure",
+            "drive warning",          "Aviso do disco",             "Drive warning",
+
+            // rede
+            "current dl rate",        "Taxa de download",           "Download rate",
+            "current up rate",        "Taxa de upload",             "Upload rate",
+            "total dl",               "Total baixado",              "Total downloaded",
+            "total up",               "Total enviado",              "Total uploaded",
+            "total errors",           "Erros no total",             "Total errors",
+        };
+
+        private static Dictionary<string, string[]> _tabela;
+
+        private static Dictionary<string, string[]> Tabela
+        {
+            get
+            {
+                if (_tabela == null)
+                {
+                    Dictionary<string, string[]> d = new Dictionary<string, string[]>();
+                    for (int i = 0; i + 2 < Bruta.Length; i += 3)
+                        d[Bruta[i]] = new string[] { Bruta[i + 1], Bruta[i + 2] };
+                    _tabela = d;
+                }
+                return _tabela;
+            }
         }
 
         /// <summary>Linha de baixo: categoria e a peca, com o nome ja encurtado.</summary>
         public static string Rodape(SensorEntry s)
         {
             if (s == null) return "";
+            string cat = T.Category(string.IsNullOrEmpty(s.Category) ? "Outros" : s.Category);
             string hw = SystemInfo.Limpar(s.Hardware);
-            return string.IsNullOrEmpty(hw) ? s.Category : s.Category + "  ·  " + hw;
+            return string.IsNullOrEmpty(hw) ? cat : cat + "  ·  " + hw;
         }
+
+        // ---------------- selecao automatica ----------------
 
         private static readonly string[] Ordem = { "CPU", "GPU", "Memória", "Placa-mãe", "Disco" };
 

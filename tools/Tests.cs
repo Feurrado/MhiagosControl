@@ -34,6 +34,8 @@ namespace MhiagosControl
             TodosOsCamposDoPerfil();
             RodizioDePerfis();
             NomesDoSistema();
+            NomesAmigaveis();
+            HistoricoDasMetricas();
             CompletudeDoIdioma();
 
             Console.WriteLine();
@@ -239,6 +241,99 @@ namespace MhiagosControl
             Verdade(at.HasValue && at.Value == 80, "faixa de atencao vale para C sem simbolo");
         }
 
+        /// <summary>
+        /// Titulo do cartao de metrica.
+        ///
+        /// O cartao mostrava o rotulo completo, que traz o dispositivo junto:
+        /// em 176 px sobrava "Enhanced - CPU (Tctl/Tdie) ...", o pedaco do meio
+        /// de uma frase. O que importa aqui, alem da traducao, e que nada
+        /// dependa de constar da tabela - a maquina de outra pessoa tem sensores
+        /// que ninguem previu.
+        /// </summary>
+        private static void NomesAmigaveis()
+        {
+            Secao("nomes amigaveis das metricas");
+
+            string antes = T.Language;
+            try
+            {
+                T.Language = T.PtBr;
+
+                SensorEntry s = new SensorEntry();
+                s.Name = "CPU (Tctl/Tdie)";
+                s.Hardware = "CPU [#0]: AMD Ryzen 5 5600X: Enhanced";
+                s.Label = "CPU [#0]: AMD Ryzen 5 5600X: Enhanced - CPU (Tctl/Tdie) (Temperature, C)";
+                s.Category = "CPU";
+
+                Igual("Temperatura do processador", MetricPicker.Rotulo(s),
+                      "vale o nome da leitura, e nao o rotulo inteiro");
+                Verdade(MetricPicker.Rodape(s).Contains("Ryzen 5 5600X"),
+                        "a peca fica no rodape, encurtada");
+
+                Igual("Ventoinha da GPU", MetricPicker.Amigavel("GPU Fan (ODN)"),
+                      "ventoinha da placa de video");
+                Igual("Temperatura do disco", MetricPicker.Amigavel("Drive Temperature"), "disco");
+                Igual("Taxa de download", MetricPicker.Amigavel("Current DL rate"),
+                      "a tabela ignora a caixa");
+                Igual("Clock do barramento", MetricPicker.Amigavel("CPU [#0]: AMD Ryzen 5 5600X: Bus Clock"),
+                      "enumeracao e grupo saem antes da busca");
+
+                // O sufixo do agregado sai da busca e volta no fim; sem isso
+                // nenhuma media acharia a tabela.
+                string media = MetricPicker.Amigavel("CPU (Tctl/Tdie) · média de 6");
+                Verdade(media.StartsWith("Temperatura do processador"), "o agregado acha a tabela");
+                Verdade(media.EndsWith("média de 6"), "e conserva o sufixo do agregado");
+
+                Igual("Sensor Exotico X9", MetricPicker.Amigavel("Sensor Exotico X9"),
+                      "nome fora da tabela passa inteiro");
+                Igual("", MetricPicker.Amigavel(null), "nulo vira vazio");
+                Igual("", MetricPicker.Rotulo(null), "sensor nulo vira vazio");
+
+                T.Language = T.EnUs;
+                Igual("CPU temperature", MetricPicker.Amigavel("CPU (Tctl/Tdie)"),
+                      "a mesma leitura no outro idioma");
+            }
+            finally { T.Language = antes; }
+        }
+
+        /// <summary>
+        /// Serie temporal das metricas.
+        ///
+        /// Cobre o que nao depende do relogio: o fechamento de baldes precisa de
+        /// cinco segundos reais para acontecer, e uma suite que dorme para
+        /// verificar deixa de ser rodada.
+        /// </summary>
+        private static void HistoricoDasMetricas()
+        {
+            Secao("historico das metricas");
+
+            Igual("10 min", MetricHistory.NomeDaJanela(600), "janela curta em minutos");
+            Igual("1 h", MetricHistory.NomeDaJanela(3600), "janela de uma hora");
+            Igual("6 h", MetricHistory.NomeDaJanela(21600), "janela longa");
+
+            Igual(3600, MetricHistory.JanelaValida(3600), "valor da lista passa");
+            Igual(MetricHistory.JanelaPadrao, MetricHistory.JanelaValida(12345),
+                  "valor fora da lista cai no padrao");
+            Igual(MetricHistory.JanelaPadrao, MetricHistory.JanelaValida(0),
+                  "configuracao antiga sem a chave cai no padrao");
+
+            // Serie que nao existe volta como falha, e nao como zero: um grafico
+            // colado no eixo afirma uma leitura que ninguem fez.
+            float[] buf = null;
+            int n = MetricHistory.Janela("nao-existe", 600, ref buf);
+            Igual(600 / MetricHistory.PassoSeg, n, "um ponto por balde");
+            Verdade(float.IsNaN(buf[0]) && float.IsNaN(buf[n - 1]), "serie ausente vem toda como falha");
+
+            MetricHistory.Seguir(new string[] { "a", "b", "a", "", null });
+            Igual(2, MetricHistory.Seguidos.Count, "repetido e vazio nao entram na lista");
+
+            MetricHistory.Seguir(new string[] { "b" });
+            Igual(1, MetricHistory.Seguidos.Count, "quem sai da grade sai da lista");
+
+            MetricHistory.Seguir(null);
+            Igual(0, MetricHistory.Seguidos.Count, "lista vazia nao acompanha nada");
+        }
+
         private static void IdaEVoltaDaConfiguracao()
         {
             Secao("ida e volta da configuracao");
@@ -263,6 +358,10 @@ namespace MhiagosControl
                 c.IdleBlankMinutes = 15;
                 c.RotateSeconds = 20;
                 c.SidebarCollapsed = true;
+                c.MetricsChosen = true;
+                c.MetricRange = 3600;
+                c.MetricIds.Add("cpu:temp"); c.MetricSizes.Add(2);
+                c.MetricIds.Add("gpu:load"); c.MetricSizes.Add(1);
                 c.SaveTo(arquivo);
 
                 Verdade(File.Exists(arquivo), "gravou no arquivo do teste, e nao no real");
@@ -288,6 +387,12 @@ namespace MhiagosControl
                 Igual(15, lido.IdleBlankMinutes, "minutos ate apagar");
                 Igual(20, lido.RotateSeconds, "segundos do rodizio");
                 Verdade(lido.SidebarCollapsed, "barra lateral recolhida");
+                Verdade(lido.MetricsChosen, "marca de grade ja escolhida");
+                Igual(3600, lido.MetricRange, "janela dos graficos");
+                Igual(2, lido.MetricIds.Count, "cartoes gravados");
+                Igual("cpu:temp", lido.MetricIds[0], "identificador do primeiro cartao");
+                Igual(2, lido.MetricSize(0), "tamanho do primeiro cartao");
+                Igual(1, lido.MetricSize(1), "tamanho do segundo cartao");
 
                 // A roda e derivada da marca de cada perfil, e nao uma segunda
                 // lista: duas listas para a mesma coisa saem de sincronia
