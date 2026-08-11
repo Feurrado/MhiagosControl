@@ -117,7 +117,17 @@ namespace MhiagosControl
         /// marcador em vez de simplesmente sumir do arquivo.
         /// </summary>
         public List<string> MetricIds = new List<string>();
+
+        /// <summary>Tamanho de cada cartao: 0 pequeno, 1 medio, 2 grande.</summary>
+        public List<int> MetricSizes = new List<int>();
+
         public bool MetricsChosen = false;
+
+        /// <summary>Tamanho do cartao i, tolerando lista curta de versao antiga.</summary>
+        public int MetricSize(int i)
+        {
+            return (i >= 0 && i < MetricSizes.Count) ? MetricSizes[i] : 0;
+        }
 
         /// <summary>Perfis marcados para o rodizio. Menos de dois nao e rodizio.</summary>
         public List<Profile> Rotation
@@ -207,7 +217,21 @@ namespace MhiagosControl
                         else if (k == "metricschosen") c.MetricsChosen = (v == "1");
                         else if (k == "metric")
                         {
-                            if (!string.IsNullOrEmpty(v) && !c.MetricIds.Contains(v)) c.MetricIds.Add(v);
+                            // "0|hw:..." - tamanho e identificador. Sem a barra e
+                            // formato antigo, e vale o tamanho pequeno.
+                            if (string.IsNullOrEmpty(v)) continue;
+                            int tam = 0; string id = v;
+                            int barra = v.IndexOf('|');
+                            if (barra > 0)
+                            {
+                                tam = ParseInt(v.Substring(0, barra));
+                                id = v.Substring(barra + 1);
+                            }
+                            if (id.Length > 0 && !c.MetricIds.Contains(id))
+                            {
+                                c.MetricIds.Add(id);
+                                c.MetricSizes.Add(tam < 0 ? 0 : (tam > 2 ? 2 : tam));
+                            }
                         }
                         // chaves legadas (formato antigo, sem seccao)
                         else if (k == "panel1" || k == "panel2" || k == "fahrenheit" || k == "percent")
@@ -286,8 +310,10 @@ namespace MhiagosControl
                 sb.AppendLine("rotateseconds=" + RotateSeconds.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("sidebarcollapsed=" + (SidebarCollapsed ? "1" : "0"));
                 sb.AppendLine("metricschosen=" + (MetricsChosen ? "1" : "0"));
-                foreach (string m in MetricIds)
-                    if (!string.IsNullOrEmpty(m)) sb.AppendLine("metric=" + m);
+                for (int i = 0; i < MetricIds.Count; i++)
+                    if (!string.IsNullOrEmpty(MetricIds[i]))
+                        sb.AppendLine("metric=" + MetricSize(i).ToString(CultureInfo.InvariantCulture) +
+                                      "|" + MetricIds[i]);
                 foreach (Profile p in Profiles) AppendProfile(sb, p);
                 File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
                 Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " + ActiveName + ")");

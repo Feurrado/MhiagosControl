@@ -26,9 +26,9 @@ namespace MhiagosControl
         public string SensorId = "";
 
         /// <summary>Acoes de edicao, disparadas pelos botoes do canto.</summary>
-        public event EventHandler Remover, MoverEsquerda, MoverDireita;
+        public event EventHandler Remover, MoverEsquerda, MoverDireita, TrocarTamanho;
 
-        private Rectangle _bRem, _bEsq, _bDir;
+        private Rectangle _bRem, _bEsq, _bDir, _bTam;
         private int _sobre = -1;
         private bool _mouseDentro = false;
 
@@ -126,6 +126,7 @@ namespace MhiagosControl
             if (_bEsq.Contains(e.Location)) s = 0;
             else if (_bDir.Contains(e.Location)) s = 1;
             else if (_bRem.Contains(e.Location)) s = 2;
+            else if (_bTam.Contains(e.Location)) s = 3;
 
             if (s != _sobre)
             {
@@ -140,6 +141,7 @@ namespace MhiagosControl
         {
             if (_bEsq.Contains(e.Location)) Disparar(MoverEsquerda);
             else if (_bDir.Contains(e.Location)) Disparar(MoverDireita);
+            else if (_bTam.Contains(e.Location)) Disparar(TrocarTamanho);
             else if (_bRem.Contains(e.Location)) Disparar(Remover);
             base.OnMouseDown(e);
         }
@@ -150,18 +152,23 @@ namespace MhiagosControl
         {
             int t = 20, y = 6, x = Width - 8 - t;
             _bRem = new Rectangle(x, y, t, t); x -= t + 2;
+            _bTam = new Rectangle(x, y, t, t); x -= t + 2;
             _bDir = new Rectangle(x, y, t, t); x -= t + 2;
             _bEsq = new Rectangle(x, y, t, t);
 
             if (!_mouseDentro) return;
 
-            // E76B / E76C sao as setas e E711 o "x" da Segoe MDL2, escapados
-            // porque area de uso privada nao sobrevive a toda ferramenta.
-            string[] glifos = { "", "", "" };
-            Rectangle[] areas = { _bEsq, _bDir, _bRem };
+            // ESCAPADOS. Na primeira versao entraram como caracteres literais e
+            // nao sobreviveram a gravacao do arquivo: os botoes apareciam como
+            // caixas vazias. O aviso ja estava escrito no proprio codigo, em
+            // SettingsForm, e mesmo assim foi o que aconteceu.
+            //
+            // E76B seta esquerda, E76C seta direita, E711 o "x" de remover.
+            string[] glifos = { "\uE76B", "\uE76C", "\uE711", "\uE740" };
+            Rectangle[] areas = { _bEsq, _bDir, _bRem, _bTam };
 
             using (Font f = new Font("Segoe MDL2 Assets", 8f))
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < 4; i++)
                 {
                     bool ativo = (_sobre == i);
                     if (ativo)
@@ -198,7 +205,7 @@ namespace MhiagosControl
 
             // O rotulo cede espaco quando os botoes estao a mostra, em vez de
             // ficar por baixo deles.
-            int recuo = _mouseDentro ? 84 : 24;
+            int recuo = _mouseDentro ? 106 : 24;
             TextRenderer.DrawText(g, Titulo, Ui.FontSmall, new Rectangle(12, 8, Width - recuo, 15),
                 Ui.Muted, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
 
@@ -272,6 +279,51 @@ namespace MhiagosControl
     /// </summary>
     public static class MetricPicker
     {
+        /// <summary>
+        /// Larguras em colunas e alturas dos tres tamanhos de cartao.
+        ///
+        /// O grande e mais alto, e nao so mais largo: esticar a curva na
+        /// horizontal aumenta a resolucao no tempo mas achata a variacao, que e
+        /// justamente o que alguem quer ver de perto ao aumentar um grafico.
+        /// </summary>
+        public static int Colunas(int tamanho)
+        {
+            if (tamanho >= 2) return 4;
+            if (tamanho == 1) return 2;
+            return 1;
+        }
+
+        public static int Altura(int tamanho)
+        {
+            if (tamanho >= 2) return 220;
+            if (tamanho == 1) return 140;
+            return 104;
+        }
+
+        /// <summary>
+        /// Rotulo do cartao: so a parte que nomeia a LEITURA.
+        ///
+        /// As fontes publicam "CPU [#0]: AMD Ryzen 5 5600X: Core Temperatures".
+        /// Inteiro, o rotulo era cortado antes de chegar em "Core Temperatures"
+        /// - o cartao dizia de qual peca e nunca dizia de que leitura, que e o
+        /// contrario do util, porque a peca ja esta escrita embaixo.
+        /// </summary>
+        public static string Rotulo(SensorEntry s)
+        {
+            if (s == null || string.IsNullOrEmpty(s.Label)) return "";
+            string t = s.Label;
+            int i = t.LastIndexOf(':');
+            return i >= 0 && i < t.Length - 1 ? t.Substring(i + 1).Trim() : t.Trim();
+        }
+
+        /// <summary>Linha de baixo: categoria e a peca, com o nome ja encurtado.</summary>
+        public static string Rodape(SensorEntry s)
+        {
+            if (s == null) return "";
+            string hw = SystemInfo.Limpar(s.Hardware);
+            return string.IsNullOrEmpty(hw) ? s.Category : s.Category + "  ·  " + hw;
+        }
+
         private static readonly string[] Ordem = { "CPU", "GPU", "Memória", "Placa-mãe", "Disco" };
         private static readonly string[] Grandezas = { "°C", "%", "MHz", "W", "RPM" };
 

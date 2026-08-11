@@ -68,8 +68,8 @@ namespace MhiagosControl
         {
             get
             {
-                return P("Passe o ponteiro sobre um cartão para mover ou remover. Histórico dos últimos 10 minutos.",
-                         "Hover a card to move or remove it. History covers the last 10 minutes.");
+                return P("Passe o ponteiro sobre um cartão para mover, redimensionar ou remover. Histórico dos últimos 10 minutos.",
+                         "Hover a card to move, resize or remove it. History covers the last 10 minutes.");
             }
         }
         public static string NoMetrics

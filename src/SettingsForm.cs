@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -215,7 +215,7 @@ namespace MhiagosControl
 
             NavItem metricas = new NavItem();
             metricas.Text = T.NavMetrics;
-            metricas.Glyph = "";            // grafico de area, Segoe MDL2
+            metricas.Glyph = "\uE9D9";            // grafico de area, Segoe MDL2
             metricas.Page = BuildPageMetricas();
 
             NavItem sobre = new NavItem();
@@ -1056,8 +1056,8 @@ namespace MhiagosControl
             _cards.Clear();
             _cardIds.Clear();
 
-            const int Larg = 176, Alt = 104, Esp = 12, PorLinha = 4;
-            int y = 0, col = 0;
+            const int Larg = 176, Esp = 12, PorLinha = 4;
+            int y = 0, col = 0, alturaDaLinha = 0;
 
             FlatBtn add = new FlatBtn();
             add.Text = T.AddMetric;
@@ -1082,32 +1082,49 @@ namespace MhiagosControl
                 return;
             }
 
-            foreach (string id in new List<string>(_cfg.MetricIds))
+            // Empacotamento por fluxo: cada cartao ocupa 1, 2 ou 4 colunas e
+            // entra na linha corrente se couber; senao a linha fecha e ele
+            // comeca a proxima. A altura da linha e a do cartao mais alto dela,
+            // que e o que evita sobreposicao ao misturar tamanhos.
+            for (int i = 0; i < _cfg.MetricIds.Count; i++)
             {
+                string id = _cfg.MetricIds[i];
                 SensorEntry s = Achar(id);
                 if (s == null) continue;   // sensor sumiu entre sessoes
 
-                if (col >= PorLinha) { col = 0; y += Alt + Esp; }
+                int tam = _cfg.MetricSize(i);
+                int cols = MetricPicker.Colunas(tam);
+                int alt = MetricPicker.Altura(tam);
+
+                if (col + cols > PorLinha && col > 0)
+                {
+                    y += alturaDaLinha + Esp;
+                    col = 0; alturaDaLinha = 0;
+                }
 
                 MetricCard c = new MetricCard();
                 c.SensorId = s.Id;
-                c.Titulo = s.Label;
-                c.Sub = s.Category + "  ·  " + s.Hardware;
+                c.Titulo = MetricPicker.Rotulo(s);
+                c.Sub = MetricPicker.Rodape(s);
                 c.Unidade = s.Unit;
                 float? at, pe;
                 MetricPicker.Faixas(s.Unit, out at, out pe);
                 c.Atencao = at; c.Perigo = pe;
-                c.SetBounds(2 + col * (Larg + Esp), y, Larg, Alt);
+                c.SetBounds(2 + col * (Larg + Esp), y,
+                            cols * Larg + (cols - 1) * Esp, alt);
 
                 string alvo = s.Id;
                 c.Remover += delegate { MexerNaMetrica(alvo, 0); };
                 c.MoverEsquerda += delegate { MexerNaMetrica(alvo, -1); };
                 c.MoverDireita += delegate { MexerNaMetrica(alvo, +1); };
+                c.TrocarTamanho += delegate { RedimensionarMetrica(alvo); };
 
                 _pgMetricas.Controls.Add(c);
                 _cards.Add(c);
                 _cardIds.Add(s.Id);
-                col++;
+
+                col += cols;
+                if (alt > alturaDaLinha) alturaDaLinha = alt;
             }
             _pgMetricas.ResumeLayout();
         }
@@ -1120,6 +1137,7 @@ namespace MhiagosControl
                 string id = d.SelectedId;
                 if (string.IsNullOrEmpty(id) || _cfg.MetricIds.Contains(id)) return;
                 _cfg.MetricIds.Add(id);
+                _cfg.MetricSizes.Add(0);
                 GravarMetricas();
                 MontarMetricas();
             }
@@ -1131,14 +1149,40 @@ namespace MhiagosControl
             int i = _cfg.MetricIds.IndexOf(id);
             if (i < 0) return;
 
-            if (passo == 0) _cfg.MetricIds.RemoveAt(i);
+            if (passo == 0)
+            {
+                _cfg.MetricIds.RemoveAt(i);
+                if (i < _cfg.MetricSizes.Count) _cfg.MetricSizes.RemoveAt(i);
+            }
             else
             {
                 int j = i + passo;
                 if (j < 0 || j >= _cfg.MetricIds.Count) return;
-                _cfg.MetricIds[i] = _cfg.MetricIds[j];
-                _cfg.MetricIds[j] = id;
+                Trocar(_cfg.MetricIds, i, j);
+                if (j < _cfg.MetricSizes.Count) Trocar(_cfg.MetricSizes, i, j);
             }
+            GravarMetricas();
+            MontarMetricas();
+        }
+
+        private static void Trocar<T>(List<T> lista, int i, int j)
+        {
+            T t = lista[i]; lista[i] = lista[j]; lista[j] = t;
+        }
+
+        /// <summary>
+        /// Percorre pequeno, medio e grande e volta ao pequeno.
+        ///
+        /// Um botao ciclico em vez de tres opcoes: sao tres estados e a ordem e
+        /// obvia, entao um menu para escolher entre eles gastaria dois cliques
+        /// para o que um resolve.
+        /// </summary>
+        private void RedimensionarMetrica(string id)
+        {
+            int i = _cfg.MetricIds.IndexOf(id);
+            if (i < 0) return;
+            while (_cfg.MetricSizes.Count <= i) _cfg.MetricSizes.Add(0);
+            _cfg.MetricSizes[i] = (_cfg.MetricSizes[i] + 1) % 3;
             GravarMetricas();
             MontarMetricas();
         }
