@@ -76,6 +76,20 @@ namespace MhiagosControl
         public static string PanelShort(int n) { return P("Painel " + n, "Panel " + n); }
         public static string Scale { get { return P("Escala", "Scale"); } }
         public static string Unit { get { return P("Unidade", "Unit"); } }
+
+        /// <summary>
+        /// O firmware acende sempre um dos dois simbolos do par e nao tem
+        /// estado apagado - varrido e confirmado, veja o README. Sem esta nota
+        /// quem poe RPM ou MHz no mostrador procura o botao que desliga o "W".
+        /// </summary>
+        public static string UnitAlwaysOn
+        {
+            get
+            {
+                return P("O cooler acende sempre um dos dois — não há como apagar.",
+                         "The cooler always lights one of the two — it cannot be blanked.");
+            }
+        }
         public static string Preview { get { return P("Prévia", "Preview"); } }
         public static string NoSensorChosen { get { return P("nenhum sensor escolhido", "no sensor chosen"); } }
         public static string PickSensor1 { get { return P("Sensor do painel 1", "Panel 1 sensor"); } }

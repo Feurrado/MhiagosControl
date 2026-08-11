@@ -230,6 +230,23 @@ isso **na aba Sobre**, em *Fontes de sensores* — não só no log.
 Sem o *CPU TEMP Monitor* instalado e sem uma cópia guardada, a biblioteca só
 vem do instalador que acompanha o produto.
 
+### Por que não a memória compartilhada do HWiNFO
+
+A alternativa óbvia à biblioteca comercial seria a **interface de memória
+compartilhada** do HWiNFO: nada de DLL, o aplicativo lê um mapeamento de
+memória publicado pelo HWiNFO em execução. Resolveria de uma vez o problema de
+licença que impede publicar um instalador.
+
+Foi verificada e **não serve para este caso**: na versão gratuita do HWiNFO a
+interface é limitada a **12 horas de execução**, depois se desativa sozinha e
+precisa ser remarcada à mão. Para um aplicativo de bandeja que fica ligado com a
+máquina, isso é o mostrador morrer todo dia sem aviso. Sem o limite, só com a
+licença Pro.
+
+Ou seja, ela não elimina a dependência — troca uma dependência comercial por
+outra, e ainda transfere para quem usa a tarefa de instalar o HWiNFO e manter a
+opção ligada. Fica registrado para não ser reavaliada do zero.
+
 ### LibreHardwareMonitor (reserva)
 
 Usada apenas quando o HWiNFO não está disponível. Cobre GPU, uso de CPU,

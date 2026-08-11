@@ -236,12 +236,13 @@ namespace MhiagosControl
             c1.Controls.Add(MakeLabel(T.Scale, 14, 142, Ui.FontMed));
             _div1 = MakeDivisorRow(c1, 14, 162, 1);
 
-            c1.Controls.Add(MakeLabel(T.Unit, 14, 200, Ui.FontMed));
+            c1.Controls.Add(MakeLabel(T.Unit, 14, 196, Ui.FontMed));
             _unit1 = new Segmented();
             _unit1.SetItems("°C", "°F");
-            _unit1.SetBounds(14, 220, 140, 30);
+            _unit1.SetBounds(14, 216, 140, 30);
             _unit1.SelectedIndexChanged += delegate { OnChanged(); };
             c1.Controls.Add(_unit1);
+            c1.Controls.Add(NotaDeUnidade(14, 249));
 
             Card c2 = new Card();
             c2.Title = T.Panel2;
@@ -256,12 +257,13 @@ namespace MhiagosControl
             c2.Controls.Add(MakeLabel(T.Scale, 14, 162 - 20, Ui.FontMed));
             _div2 = MakeDivisorRow(c2, 14, 162, 2);
 
-            c2.Controls.Add(MakeLabel(T.Unit, 14, 200, Ui.FontMed));
+            c2.Controls.Add(MakeLabel(T.Unit, 14, 196, Ui.FontMed));
             _unit2 = new Segmented();
             _unit2.SetItems("%", "W");
-            _unit2.SetBounds(14, 220, 140, 30);
+            _unit2.SetBounds(14, 216, 140, 30);
             _unit2.SelectedIndexChanged += delegate { OnChanged(); };
             c2.Controls.Add(_unit2);
+            c2.Controls.Add(NotaDeUnidade(14, 249));
 
 
             Card cp = new Card();
@@ -326,6 +328,19 @@ namespace MhiagosControl
                 btns[i] = b;
             }
             return btns;
+        }
+
+        /// <summary>
+        /// Nota de rodape do seletor de unidade. Cabe nos 268 px do cartao sem
+        /// mexer no resto da pagina: o rotulo e o seletor sobem 4 px e a nota
+        /// ocupa a folga que sobrava embaixo.
+        /// </summary>
+        private static Label NotaDeUnidade(int x, int y)
+        {
+            Label l = MakeLabel(T.UnitAlwaysOn, x, y, Ui.FontSmall);
+            l.SetBounds(x, y, 340, 15);
+            l.ForeColor = Ui.Muted;
+            return l;
         }
 
         private static Label MakeLabel(string text, int x, int y, Font f)
