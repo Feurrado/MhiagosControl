@@ -566,6 +566,12 @@ namespace MhiagosControl
         /// </summary>
         public string Subtitle = "";
 
+        /// <summary>Resumo da maquina, no rodape da barra. Nulo esconde o bloco.</summary>
+        public SystemInfo Specs;
+
+        /// <summary>Legenda do bloco de sistema - "SISTEMA".</summary>
+        public string SpecsCaption = "";
+
         public NavBar()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
@@ -676,6 +682,68 @@ namespace MhiagosControl
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
                 y += RowH + 2;
+            }
+
+            DesenharSistema(g, y);
+        }
+
+        private const int SpecRowH = 21;
+
+        /// <summary>
+        /// Resumo da maquina no rodape da barra lateral.
+        ///
+        /// Fica ancorado embaixo, e nao logo apos os itens: a lista de navegacao
+        /// pode crescer, e um bloco solto no meio da coluna vazia parece um item
+        /// que perdeu o lugar. Encostado na base, le-se como rodape.
+        ///
+        /// Sem glifos de proposito. "CPU", "GPU" e "RAM" ja sao os rotulos que a
+        /// pessoa procura, e um icone de chip ao lado da palavra CPU ocupa 24 px
+        /// para repetir o que a palavra diz.
+        /// </summary>
+        private void DesenharSistema(Graphics g, int fimDosItens)
+        {
+            if (Specs == null || !Specs.Any) return;
+
+            string[][] linhas = new string[][]
+            {
+                new string[] { "CPU", Specs.Cpu },
+                new string[] { "GPU", Specs.Gpu },
+                new string[] { "RAM", Specs.Ram },
+            };
+
+            int n = 0;
+            foreach (string[] l in linhas) if (!string.IsNullOrEmpty(l[1])) n++;
+            if (n == 0) return;
+
+            int alturaBloco = 16 + n * SpecRowH;
+            int topo = Height - 18 - alturaBloco;
+
+            // Se a navegacao crescer a ponto de encostar, o bloco cede o lugar:
+            // navegar e a funcao da barra, e o resumo e informacao de apoio.
+            if (topo < fimDosItens + 16) return;
+
+            using (Pen p = new Pen(Ui.Border))
+                g.DrawLine(p, 18, topo - 12, Width - 18, topo - 12);
+
+            if (!string.IsNullOrEmpty(SpecsCaption))
+                TextRenderer.DrawText(g, SpecsCaption, Ui.FontSmall,
+                    new Rectangle(18, topo, Width - 36, 14), Ui.Faint,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+            int y = topo + 16;
+            foreach (string[] l in linhas)
+            {
+                if (string.IsNullOrEmpty(l[1])) continue;
+
+                TextRenderer.DrawText(g, l[0], Ui.FontSmall,
+                    new Rectangle(18, y, 32, SpecRowH), Ui.Faint,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+
+                TextRenderer.DrawText(g, l[1], Ui.FontSmall,
+                    new Rectangle(52, y, Width - 70, SpecRowH), Ui.Muted,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+                y += SpecRowH;
             }
         }
     }

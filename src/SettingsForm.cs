@@ -115,6 +115,8 @@ namespace MhiagosControl
             _nav.Logo = IconImage();
             _nav.SubtitleCaption = T.ActiveProfile;
             _nav.Subtitle = _current.Name;
+            _nav.SpecsCaption = T.SystemCaption;
+            _nav.Specs = SystemInfo.From(_sensors);
             _nav.SelectionChanged += delegate { ShowPage(); };
             Controls.Add(_nav);
 
@@ -130,13 +132,17 @@ namespace MhiagosControl
             FlatBtn save = new FlatBtn();
             save.Text = T.Save;
             save.Primary = true;
-            save.SetBounds(ClientSize.Width - 210, 14, 96, 32);
+            // Coordenadas relativas ao RODAPE, que agora comeca depois da barra
+            // lateral - e nao a janela. Medir pela janela punha os botoes 210 px
+            // alem da borda direita do proprio rodape.
+            int rodape = ClientSize.Width - _nav.Width;
+            save.SetBounds(rodape - 210, 14, 96, 32);
             save.Click += new EventHandler(OnSave);
             footer.Controls.Add(save);
 
             FlatBtn close = new FlatBtn();
             close.Text = T.Close;
-            close.SetBounds(ClientSize.Width - 106, 14, 96, 32);
+            close.SetBounds(rodape - 106, 14, 96, 32);
             close.Click += delegate { Close(); };
             footer.Controls.Add(close);
 
@@ -151,7 +157,18 @@ namespace MhiagosControl
             _host.BackColor = Ui.Window;
             _host.Padding = new Padding(18, 16, 18, 8);
             Controls.Add(_host);
+
+            // O Windows Forms encaixa os controles do fundo da ordem Z para a
+            // frente: quem esta atras reivindica a borda inteira primeiro. Com
+            // a lateral adicionada ANTES do rodape, era o rodape que atravessava
+            // a janela toda, e a lateral parava logo acima dele - a faixa clara
+            // no canto inferior esquerdo.
+            //
+            // Mandar a lateral para o fundo inverte a ordem: ela toma a coluna
+            // esquerda de cima a baixo, e o rodape se encaixa no que sobra. O
+            // Fill vem na frente de todos, senao nao ganha o espaco restante.
             _host.BringToFront();
+            _nav.SendToBack();
         }
 
         private Image IconImage()

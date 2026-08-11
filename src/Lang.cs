@@ -64,6 +64,7 @@ namespace MhiagosControl
         public static string NavProfiles { get { return P("Perfis", "Profiles"); } }
         public static string NavAbout { get { return P("Sobre", "About"); } }
         public static string ActiveProfile { get { return P("PERFIL ATIVO", "ACTIVE PROFILE"); } }
+        public static string SystemCaption { get { return P("SISTEMA", "SYSTEM"); } }
 
         // ---------------- pagina: paineis ----------------
 
