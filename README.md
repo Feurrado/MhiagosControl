@@ -154,6 +154,17 @@ janela visível, com o comando à mostra. O instalador do Mhiagos Control oferec
 o mesmo numa caixa **desmarcada**, que só aparece quando o RTSS ainda não está
 lá e o `winget` existe.
 
+O comando instala junto o **runtime do Visual C++**
+(`Microsoft.VCRedist.2015+.x64`), que o RTSS exige e o pacote dele não declara —
+sem ele o `RTSSHooksLoader64` para em *"VCRUNTIME140_1.dll não foi encontrado"* e
+o RTSS instalado nunca publica nada. Em máquina que já tem, o `winget` apenas diz
+que já tem.
+
+> Se o runtime estiver **registrado mas com os arquivos ausentes** — acontece
+> depois de um "limpador" ou de uma atualização que falhou —, o `winget` vê a
+> versão instalada e não repõe nada. Aí é preciso forçar uma vez, num terminal de
+> administrador: `winget install --id Microsoft.VCRedist.2015+.x64 -e --force`
+
 O instalador do RTSS **não vem embutido** aqui: é freeware de outra pessoa e a
 licença não dá direito de redistribuir. Baixá-lo de um espelho durante a
 instalação seria pior — sem URL estável nem soma de verificação publicada, seria

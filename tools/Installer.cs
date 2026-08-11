@@ -30,7 +30,7 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.10.0";
+        public const string Versao = "2.10.1";
         public const string TaskName = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
@@ -38,6 +38,14 @@ namespace MhiagosSetup
 
         /// <summary>Pacote oficial do RivaTuner Statistics Server no winget.</summary>
         public const string PacoteRtss = "Guru3D.RTSS";
+
+        /// <summary>
+        /// Runtime do Visual C++, exigido pelo RTSS e nao declarado no pacote dele.
+        ///
+        /// Sem ele o RTSSHooksLoader64 para em "VCRUNTIME140_1.dll nao foi
+        /// encontrado" e o RTSS instalado nunca publica nada.
+        /// </summary>
+        public const string PacoteRuntime = "Microsoft.VCRedist.2015+.x64";
 
         /// <summary>
         /// Se o RTSS ja esta publicando a memoria compartilhada.
@@ -641,6 +649,12 @@ namespace MhiagosSetup
         /// a origem e o repositorio da Microsoft, o pacote e o oficial e a
         /// janela mostra o que aconteceu.
         /// </summary>
+        private static string Chamada(string exe, string pacote)
+        {
+            return "\"" + exe + "\" install --id " + pacote +
+                   " -e --source winget --accept-source-agreements";
+        }
+
         private void InstalarRtss()
         {
             string winget = Setup.Winget();
@@ -648,9 +662,13 @@ namespace MhiagosSetup
 
             try
             {
-                ProcessStartInfo psi = new ProcessStartInfo("cmd.exe",
-                    "/k \"\"" + winget + "\" install --id " + Setup.PacoteRtss +
-                    " -e --source winget --accept-source-agreements\"");
+                // "/s /k": com /s o cmd tira so a primeira e a ultima aspa e leva
+                // o resto ao pe da letra, que e o que permite duas chamadas com
+                // o caminho entre aspas na mesma linha.
+                string linha = Chamada(winget, Setup.PacoteRuntime) + " & " +
+                               Chamada(winget, Setup.PacoteRtss);
+
+                ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", "/s /k \"" + linha + "\"");
                 psi.UseShellExecute = true;
                 Process.Start(psi);
                 Diz("RTSS: instalacao entregue ao winget, numa janela a parte.");

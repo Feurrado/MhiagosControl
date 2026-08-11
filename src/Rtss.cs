@@ -123,6 +123,16 @@ namespace MhiagosControl
         /// <summary>Identificador do pacote oficial no repositorio do winget.</summary>
         public const string PacoteWinget = "Guru3D.RTSS";
 
+        /// <summary>
+        /// Runtime do Visual C++, que o RTSS exige e o pacote dele nao declara.
+        ///
+        /// Sem ele o RTSSHooksLoader64 nem chega a rodar: para com "VCRUNTIME140_1.dll
+        /// nao foi encontrado" e o RTSS instalado nunca publica nada. Vai junto
+        /// no mesmo comando porque instalar o RTSS sem isso e entregar meia
+        /// instalacao. Numa maquina que ja tem, o winget so diz que ja tem.
+        /// </summary>
+        public const string PacoteRuntime = "Microsoft.VCRedist.2015+.x64";
+
         public const string Site = "https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/";
 
         // ---------------- leitura ----------------

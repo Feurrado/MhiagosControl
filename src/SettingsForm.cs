@@ -1082,10 +1082,15 @@ namespace MhiagosControl
 
             try
             {
-                System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo(
-                    "cmd.exe",
-                    "/k \"\"" + winget + "\" install --id " + Rtss.PacoteWinget +
-                    " -e --source winget --accept-source-agreements\"");
+                // "/s /k" e a forma que aguenta duas chamadas com caminho entre
+                // aspas: com /s o cmd tira a primeira e a ultima aspa e leva o
+                // resto ao pe da letra. Sem isso, a regra de aspas do /k embaralha
+                // a linha assim que aparece a segunda.
+                string linha = Winget(winget, Rtss.PacoteRuntime) + " & " +
+                               Winget(winget, Rtss.PacoteWinget);
+
+                System.Diagnostics.ProcessStartInfo psi =
+                    new System.Diagnostics.ProcessStartInfo("cmd.exe", "/s /k \"" + linha + "\"");
                 psi.UseShellExecute = true;
                 System.Diagnostics.Process.Start(psi);
 
@@ -1097,6 +1102,12 @@ namespace MhiagosControl
                 Log.Error("instalacao do RTSS pelo winget", ex);
                 AbrirNoNavegador(Rtss.Site);
             }
+        }
+
+        private static string Winget(string exe, string pacote)
+        {
+            return "\"" + exe + "\" install --id " + pacote +
+                   " -e --source winget --accept-source-agreements";
         }
 
         private static void AbrirNoNavegador(string url)
