@@ -40,6 +40,22 @@ namespace MhiagosControl
 
         private const string Mapa = "RTSSSharedMemoryV2";
 
+        /// <summary>
+        /// Assinatura do cabecalho: o literal multicaractere 'RTSS' do C.
+        ///
+        /// Em memoria little-endian ele fica como S, S, T, R - e nao na ordem em
+        /// que se le o nome. A primeira versao comparava byte a byte com
+        /// 'R','T','S','S' e desistia da leitura sempre, sem erro nenhum no
+        /// registro: o aplicativo dizia "RTSS nao encontrado" com o RTSS aberto
+        /// na bandeja.
+        ///
+        /// O teste nao pegou porque montava o mapeamento com a MESMA ordem
+        /// errada. Um teste escrito a partir da suposicao confirma a suposicao;
+        /// quem desempatou foi despejar o cabecalho da memoria de verdade, onde
+        /// os quatro bytes se leem "SSTR".
+        /// </summary>
+        public const uint Assinatura = ('R' << 24) | ('T' << 16) | ('S' << 8) | 'S';
+
         // Cabecalho
         private const int HdrVersao = 4;
         private const int HdrTamEntrada = 8;
@@ -197,8 +213,7 @@ namespace MhiagosControl
                 mmf = MemoryMappedFile.OpenExisting(Mapa, MemoryMappedFileRights.Read);
                 v = mmf.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
 
-                if (v.ReadByte(0) != (byte)'R' || v.ReadByte(1) != (byte)'T' ||
-                    v.ReadByte(2) != (byte)'S' || v.ReadByte(3) != (byte)'S') return false;
+                if (v.ReadUInt32(0) != Assinatura) return false;
                 if (v.ReadUInt32(HdrVersao) < 0x00020000) return false;
 
                 uint tam = v.ReadUInt32(HdrTamEntrada);

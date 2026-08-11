@@ -352,15 +352,39 @@ namespace MhiagosControl
         {
             Secao("quadros por segundo");
 
-            // Sem mapeamento nenhum: as leituras existem e vem sem valor, em vez
-            // de sumirem da lista e levarem junto o perfil de quem as escolheu.
-            List<SensorEntry> ausente = new Rtss().Ler();
-            Igual(6, ausente.Count, "a fonte publica sempre as mesmas seis leituras");
-            bool todasVazias = true;
-            foreach (SensorEntry s in ausente) if (s.Value.HasValue) todasVazias = false;
-            Verdade(todasVazias, "sem RTSS, nenhuma leitura inventa valor");
-            Igual(T.RtssMissing, ausente[0].Hardware, "e o rodape diz o que falta");
-            Igual(Sensors.CategoriaJogos, ausente[0].Category, "categoria propria");
+            // A ordem dos bytes da assinatura esta AFERIDA contra a memoria de
+            // uma maquina com o RTSS 2.21 no ar, onde o cabecalho se le "SSTR".
+            // O literal multicaractere 'RTSS' do C cai assim em little-endian.
+            // A primeira versao comparava na ordem em que se le o nome e
+            // desistia de toda leitura, sem erro nenhum no registro.
+            byte[] assinatura = BitConverter.GetBytes(Rtss.Assinatura);
+            Igual((byte)'S', assinatura[0], "primeiro byte da assinatura");
+            Igual((byte)'S', assinatura[1], "segundo byte da assinatura");
+            Igual((byte)'T', assinatura[2], "terceiro byte da assinatura");
+            Igual((byte)'R', assinatura[3], "quarto byte da assinatura");
+
+            List<SensorEntry> lista = new Rtss().Ler();
+            Igual(6, lista.Count, "a fonte publica sempre as mesmas seis leituras");
+            Igual(Sensors.CategoriaJogos, lista[0].Category, "categoria propria");
+
+            if (Rtss.Presente())
+            {
+                // Esta maquina tem o RTSS no ar: entao o leitor TEM de reconhecer
+                // o cabecalho. E exatamente a afirmacao que quebrou quando o
+                // teste so sabia conversar com um mapeamento montado por ele
+                // mesmo.
+                Verdade(lista[0].Hardware != T.RtssMissing,
+                        "com o RTSS no ar, o leitor reconhece o cabecalho");
+            }
+            else
+            {
+                // Sem mapeamento: as leituras existem e vem sem valor, em vez de
+                // sumirem da lista e levarem junto o perfil de quem as escolheu.
+                bool todasVazias = true;
+                foreach (SensorEntry s in lista) if (s.Value.HasValue) todasVazias = false;
+                Verdade(todasVazias, "sem RTSS, nenhuma leitura inventa valor");
+                Igual(T.RtssMissing, lista[0].Hardware, "e o rodape diz o que falta");
+            }
 
             const int TamEntrada = 328, Inicio = 64, Quantas = 3;
             MemoryMappedFile mmf = null;
@@ -382,8 +406,7 @@ namespace MhiagosControl
 
                 using (MemoryMappedViewAccessor v = mmf.CreateViewAccessor())
                 {
-                    v.Write(0, (byte)'R'); v.Write(1, (byte)'T');
-                    v.Write(2, (byte)'S'); v.Write(3, (byte)'S');
+                    v.Write(0, Rtss.Assinatura);
                     v.Write(4, (uint)0x00020000);
                     v.Write(8, (uint)TamEntrada);
                     v.Write(12, (uint)Inicio);

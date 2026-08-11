@@ -336,3 +336,44 @@ menos. A única saída de verdade é física: uma fita opaca sobre o símbolo.
 
 ---
 
+
+## Anexo: memória compartilhada do RTSS
+
+Nada disto é do cooler — é a ponte que traz taxa de quadros e tempo de quadro
+para o aplicativo. Fica registrado aqui pelo mesmo motivo do resto: foi aferido
+contra a memória de uma máquina de verdade, e sem isso alguém refaz a conta.
+
+Mapeamento `RTSSSharedMemoryV2`, aberto só para leitura, sem privilégio nenhum.
+Conferido com o **RTSS 2.21** (`dwVersion` = `0x00020015`).
+
+| Campo | Onde | Observado |
+|-------|------|-----------|
+| `dwSignature` | `+0` | `0x52545353` — em memória se lê **`SSTR`** |
+| `dwVersion` | `+4` | `0x00020015` |
+| `dwAppEntrySize` | `+8` | **12416** bytes nesta versão |
+| `dwAppArrOffset` | `+12` | `0x00248FE0` |
+| `dwAppArrSize` | `+16` | 256 posições |
+
+Na entrada, os campos que interessam ficam todos no começo e sobreviveram às
+versões: `dwProcessID` em `+0`, `szName[260]` em `+4`, `dwTime0` em `+268`,
+`dwTime1` em `+272`, `dwFrames` em `+276` e `dwFrameTime` (µs) em `+280`.
+FPS = `dwFrames × 1000 ÷ (dwTime1 − dwTime0)`.
+
+**O tamanho da entrada sai do cabeçalho, nunca de constante nossa.** São 12416
+bytes contra os 328 da estrutura documentada — um passo fixo leria o meio da
+entrada seguinte e produziria números plausíveis e falsos.
+
+> A assinatura é o literal multicaractere `'RTSS'` do C, que em little-endian
+> cai na memória como `S`, `S`, `T`, `R`. Comparar os bytes na ordem em que se
+> lê o nome derruba **toda** leitura, em silêncio — sem exceção e sem linha no
+> registro, o aplicativo apenas diz "RTSS não encontrado" com o RTSS aberto na
+> bandeja. O teste não pegou porque montava o mapeamento com a mesma ordem
+> errada: um teste escrito a partir da suposição confirma a suposição. Quem
+> desempatou foi despejar o cabeçalho de verdade, com o `RtssProbe`.
+
+O diagnóstico está em `tools/RtssProbe.cs` (`tools/build-rtss-probe.ps1`).
+Autônomo de propósito — não depende dos fontes do aplicativo, então pode ser
+levado sozinho a outra máquina para separar as três causas que se parecem: RTSS
+parado, jogo que ele não engancha, e memória invisível para quem lê.
+
+---
