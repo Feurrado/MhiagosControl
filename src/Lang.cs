@@ -67,10 +67,12 @@ namespace MhiagosControl
 
         // ---------------- pagina: paineis ----------------
 
-        public static string Panel1 { get { return P("Painel 1  ·  esquerdo", "Panel 1  ·  left"); } }
-        public static string Panel2 { get { return P("Painel 2  ·  direito", "Panel 2  ·  right"); } }
+        // Os dois mostradores da peca ficam EMPILHADOS, nao lado a lado: o de
+        // temperatura em cima. Conferido contra foto do aparelho ligado.
+        public static string Panel1 { get { return P("Painel 1  ·  cima", "Panel 1  ·  top"); } }
+        public static string Panel2 { get { return P("Painel 2  ·  baixo", "Panel 2  ·  bottom"); } }
 
-        /// <summary>Sem o lado, para linhas de resumo onde ele so ocupa espaco.</summary>
+        /// <summary>Sem a posicao, para linhas de resumo onde ela so ocupa espaco.</summary>
         public static string PanelShort(int n) { return P("Painel " + n, "Panel " + n); }
         public static string Scale { get { return P("Escala", "Scale"); } }
         public static string Unit { get { return P("Unidade", "Unit"); } }
