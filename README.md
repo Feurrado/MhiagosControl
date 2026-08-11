@@ -148,6 +148,18 @@ Vale para o jogo em primeiro plano; sem nenhum em primeiro plano, vale o último
 que desenhou. Trocar de jogo reinicia a janela de 60 segundos, porque o mínimo
 de dois programas diferentes seria um número que nunca aconteceu.
 
+**Instalar o RTSS pelo aplicativo.** Em *Configurações* há um cartão que mostra
+se ele está publicando e um botão que entrega a instalação ao `winget`, numa
+janela visível, com o comando à mostra. O instalador do Mhiagos Control oferece
+o mesmo numa caixa **desmarcada**, que só aparece quando o RTSS ainda não está
+lá e o `winget` existe.
+
+O instalador do RTSS **não vem embutido** aqui: é freeware de outra pessoa e a
+licença não dá direito de redistribuir. Baixá-lo de um espelho durante a
+instalação seria pior — sem URL estável nem soma de verificação publicada, seria
+executar o que viesse. Pelo `winget` a origem é o repositório da Microsoft e o
+pacote é o oficial (`Guru3D.RTSS`).
+
 > As três estatísticas derivadas saem das **nossas** amostras, uma por segundo,
 > e a janela está escrita no próprio rótulo. **Não são "1% low"**: aquilo exige o
 > tempo de cada quadro, e nesta altura os quadros individuais já não existem.

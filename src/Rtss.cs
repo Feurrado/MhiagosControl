@@ -74,6 +74,57 @@ namespace MhiagosControl
         private readonly float[] _serieFt = new float[JanelaSeg];
         private int _n = 0;
 
+        /// <summary>
+        /// Se a memoria compartilhada esta publicada NESTE instante.
+        ///
+        /// Sonda direta, para a interface poder dizer o estado sem depender do
+        /// ciclo de leitura - inclusive logo depois de alguem instalar o RTSS,
+        /// que e exatamente quando a resposta muda.
+        /// </summary>
+        public static bool Presente()
+        {
+            try
+            {
+                using (MemoryMappedFile m = MemoryMappedFile.OpenExisting(Mapa, MemoryMappedFileRights.Read))
+                    return m != null;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Caminho do winget, ou nulo quando ele nao existe na maquina.
+        ///
+        /// Windows 10 sem o App Installer nao tem winget, e nesse caso o botao
+        /// de instalar precisa virar "abrir a pagina" em vez de falhar.
+        /// </summary>
+        public static string Winget()
+        {
+            try
+            {
+                string path = Environment.GetEnvironmentVariable("PATH");
+                if (string.IsNullOrEmpty(path)) return null;
+
+                foreach (string dir in path.Split(';'))
+                {
+                    string d = dir.Trim();
+                    if (d.Length == 0) continue;
+                    try
+                    {
+                        string alvo = Path.Combine(d, "winget.exe");
+                        if (File.Exists(alvo)) return alvo;
+                    }
+                    catch { }   // entrada invalida no PATH nao derruba a busca
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        /// <summary>Identificador do pacote oficial no repositorio do winget.</summary>
+        public const string PacoteWinget = "Guru3D.RTSS";
+
+        public const string Site = "https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/";
+
         // ---------------- leitura ----------------
 
         /// <summary>

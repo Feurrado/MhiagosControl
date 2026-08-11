@@ -30,11 +30,57 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.9.0";
+        public const string Versao = "2.10.0";
         public const string TaskName = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MhiagosControl";
+
+        /// <summary>Pacote oficial do RivaTuner Statistics Server no winget.</summary>
+        public const string PacoteRtss = "Guru3D.RTSS";
+
+        /// <summary>
+        /// Se o RTSS ja esta publicando a memoria compartilhada.
+        ///
+        /// A pergunta e essa, e nao "esta instalado": o que o aplicativo le e a
+        /// memoria, e um RTSS instalado mas parado nao entrega leitura nenhuma.
+        /// </summary>
+        public static bool RtssPresente()
+        {
+            try
+            {
+                using (System.IO.MemoryMappedFiles.MemoryMappedFile m =
+                       System.IO.MemoryMappedFiles.MemoryMappedFile.OpenExisting(
+                           "RTSSSharedMemoryV2",
+                           System.IO.MemoryMappedFiles.MemoryMappedFileRights.Read))
+                    return m != null;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>Caminho do winget, ou nulo quando ele nao existe na maquina.</summary>
+        public static string Winget()
+        {
+            try
+            {
+                string path = Environment.GetEnvironmentVariable("PATH");
+                if (string.IsNullOrEmpty(path)) return null;
+
+                foreach (string dir in path.Split(';'))
+                {
+                    string d = dir.Trim();
+                    if (d.Length == 0) continue;
+                    try
+                    {
+                        string alvo = Path.Combine(d, "winget.exe");
+                        if (File.Exists(alvo)) return alvo;
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return null;
+        }
 
         /// <summary>Recurso embutido -> caminho relativo ao destino.</summary>
         private static readonly string[][] Payload = new string[][]
@@ -363,7 +409,7 @@ namespace MhiagosSetup
         private readonly bool _atualizar;
         private readonly string _jaEm;
         private TextBox _dir;
-        private CheckBox _area, _auto, _abrir, _dados;
+        private CheckBox _area, _auto, _abrir, _dados, _rtss;
         private Button _acao, _fechar;
         private TextBox _log;
         private bool _pronto = false;
@@ -449,7 +495,18 @@ namespace MhiagosSetup
                               _atualizar ? Setup.TemAtalhoNaArea() : true); y += 26;
                 _auto = Check("Iniciar junto com o Windows", 20, y,
                               _atualizar ? Setup.TemAutostart() : true); y += 26;
-                _abrir = Check("Executar ao terminar", 20, y, true); y += 32;
+                _abrir = Check("Executar ao terminar", 20, y, true); y += 26;
+
+                // DESMARCADA, e so aparece quando faz sentido: e software de
+                // outra gente, e ninguem deve descobrir depois que instalou algo
+                // que nao pediu. Some quando o RTSS ja esta publicando, e quando
+                // nao ha winget para instalar por ele.
+                if (!Setup.RtssPresente() && Setup.Winget() != null)
+                {
+                    _rtss = Check("Instalar também o RivaTuner Statistics Server (leituras de FPS)",
+                                  20, y, false); y += 26;
+                }
+                y += 6;
             }
             else
             {
@@ -550,6 +607,8 @@ namespace MhiagosSetup
                 _acao.Text = "Concluir";
                 _acao.Enabled = true;
 
+                if (!_desinstalar && _rtss != null && _rtss.Checked) InstalarRtss();
+
                 if (!_desinstalar && _abrir.Checked)
                 {
                     try
@@ -570,6 +629,33 @@ namespace MhiagosSetup
                 _acao.Enabled = true;
             }
             finally { _fechar.Enabled = true; }
+        }
+
+        /// <summary>
+        /// Entrega o RTSS ao winget, numa janela visivel.
+        ///
+        /// Nao embutimos o instalador dele: e freeware de outra pessoa, e a
+        /// licenca nao nos da direito de redistribuir. Baixar de um espelho
+        /// durante a nossa instalacao seria pior ainda - sem URL estavel e sem
+        /// soma de verificacao publicada, seria executar o que vier. Pelo winget
+        /// a origem e o repositorio da Microsoft, o pacote e o oficial e a
+        /// janela mostra o que aconteceu.
+        /// </summary>
+        private void InstalarRtss()
+        {
+            string winget = Setup.Winget();
+            if (winget == null) { Diz("winget nao encontrado - o RTSS nao foi instalado."); return; }
+
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo("cmd.exe",
+                    "/k \"\"" + winget + "\" install --id " + Setup.PacoteRtss +
+                    " -e --source winget --accept-source-agreements\"");
+                psi.UseShellExecute = true;
+                Process.Start(psi);
+                Diz("RTSS: instalacao entregue ao winget, numa janela a parte.");
+            }
+            catch (Exception ex) { Diz("Nao deu para chamar o winget: " + ex.Message); }
         }
     }
 }

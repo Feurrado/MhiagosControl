@@ -1005,8 +1005,104 @@ namespace MhiagosControl
             };
             c.Controls.Add(abrir);
 
+            // Cartao proprio para a fonte de FPS: e a unica leitura do aplicativo
+            // que depende de um programa de terceiro, e sem um lugar que diga o
+            // estado, "escolhi FPS e nao aparece nada" nao tem onde ser
+            // respondido.
+            Card fps = new Card();
+            fps.Title = T.FramesCard;
+            fps.SetBounds(0, 414, 756, 172);
+            page.Controls.Add(fps);
+
+            _rtssEstado = MakeLabel("", 16, 48, Ui.FontMed);
+            _rtssEstado.Size = new Size(720, 24);
+            fps.Controls.Add(_rtssEstado);
+
+            Label rtssNota = MakeLabel(T.RtssNote, 16, 76, Ui.FontSmall);
+            rtssNota.Size = new Size(720, 48);
+            rtssNota.ForeColor = Ui.Muted;
+            fps.Controls.Add(rtssNota);
+
+            _btRtss = new FlatBtn();
+            _btRtss.Text = T.InstallRtss;
+            _btRtss.Primary = true;
+            _btRtss.SetBounds(16, 128, 180, 32);
+            _btRtss.Click += delegate { InstalarRtss(); };
+            fps.Controls.Add(_btRtss);
+
+            FlatBtn rtssPagina = new FlatBtn();
+            rtssPagina.Text = T.RtssPage;
+            rtssPagina.SetBounds(202, 128, 180, 32);
+            rtssPagina.Click += delegate { AbrirNoNavegador(Rtss.Site); };
+            fps.Controls.Add(rtssPagina);
+
+            FlatBtn rtssConferir = new FlatBtn();
+            rtssConferir.Text = T.Recheck;
+            rtssConferir.SetBounds(388, 128, 160, 32);
+            rtssConferir.Click += delegate { AtualizarRtss(); };
+            fps.Controls.Add(rtssConferir);
+
+            AtualizarRtss();
             AtualizarOcioso();
             return page;
+        }
+
+        private Label _rtssEstado;
+        private FlatBtn _btRtss;
+
+        private void AtualizarRtss()
+        {
+            if (_rtssEstado == null) return;
+
+            bool ok = Rtss.Presente();
+            _rtssEstado.Text = ok ? T.RtssActive : T.RtssAbsent;
+            _rtssEstado.ForeColor = ok ? Ui.Accent : Ui.Warn;
+
+            // Instalado, nao ha o que instalar. Sem winget, o caminho e a pagina.
+            if (_btRtss != null) _btRtss.Enabled = !ok && Rtss.Winget() != null;
+        }
+
+        /// <summary>
+        /// Instala o RTSS pelo winget, numa janela visivel.
+        ///
+        /// Visivel de proposito, e com o comando a mostra: e software de outra
+        /// gente entrando na maquina a pedido de um clique nosso, e o minimo e
+        /// que se veja o que foi executado e o que respondeu. Nada acontece sem
+        /// o clique, e o UAC ainda pergunta depois.
+        /// </summary>
+        private void InstalarRtss()
+        {
+            string winget = Rtss.Winget();
+            if (winget == null)
+            {
+                _rtssEstado.Text = T.RtssNoWinget;
+                _rtssEstado.ForeColor = Ui.Warn;
+                return;
+            }
+
+            try
+            {
+                System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo(
+                    "cmd.exe",
+                    "/k \"\"" + winget + "\" install --id " + Rtss.PacoteWinget +
+                    " -e --source winget --accept-source-agreements\"");
+                psi.UseShellExecute = true;
+                System.Diagnostics.Process.Start(psi);
+
+                _rtssEstado.Text = T.RtssInstalling;
+                _rtssEstado.ForeColor = Ui.Muted;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("instalacao do RTSS pelo winget", ex);
+                AbrirNoNavegador(Rtss.Site);
+            }
+        }
+
+        private static void AbrirNoNavegador(string url)
+        {
+            try { System.Diagnostics.Process.Start(url); }
+            catch (Exception ex) { Log.Error("abrir " + url, ex); }
         }
 
         // ---------------- pagina: Sobre ----------------

@@ -168,6 +168,61 @@ namespace MhiagosControl
         public static string RtssMissing { get { return P("RTSS não encontrado", "RTSS not found"); } }
         public static string RtssIdle { get { return P("nenhum jogo em execução", "no game running"); } }
 
+        public static string FramesCard { get { return P("Quadros por segundo", "Frames per second"); } }
+
+        public static string RtssActive
+        {
+            get
+            {
+                return P("RTSS ativo — as leituras de FPS estão disponíveis.",
+                         "RTSS is running — FPS readings are available.");
+            }
+        }
+
+        public static string RtssAbsent
+        {
+            get
+            {
+                return P("RTSS não encontrado — sem ele não há como medir quadros.",
+                         "RTSS not found — without it there is no way to measure frames.");
+            }
+        }
+
+        public static string RtssNote
+        {
+            get
+            {
+                return P("Quantos quadros um jogo desenha não está em sensor nenhum. Quem mede é o RivaTuner " +
+                         "Statistics Server, gratuito e avulso. A instalação limpa já basta: não há nada para " +
+                         "configurar depois, e as leituras aparecem sozinhas.",
+                         "How many frames a game draws is in no sensor. What measures it is RivaTuner Statistics " +
+                         "Server, free and standalone. A clean install is enough: there is nothing to configure " +
+                         "afterwards, and the readings show up on their own.");
+            }
+        }
+
+        public static string InstallRtss { get { return P("Instalar o RTSS", "Install RTSS"); } }
+        public static string RtssPage { get { return P("Página de download", "Download page"); } }
+        public static string Recheck { get { return P("Conferir de novo", "Check again"); } }
+
+        public static string RtssInstalling
+        {
+            get
+            {
+                return P("Instalando pelo winget, numa janela à parte. Ao terminar, use Conferir de novo.",
+                         "Installing through winget, in a separate window. When it finishes, use Check again.");
+            }
+        }
+
+        public static string RtssNoWinget
+        {
+            get
+            {
+                return P("O winget não existe nesta máquina — use a página de download.",
+                         "winget is not available on this machine — use the download page.");
+            }
+        }
+
         // ---------------- pagina: alertas ----------------
 
         public static string NavSettings { get { return P("Configurações", "Settings"); } }
