@@ -99,6 +99,13 @@ namespace MhiagosControl
                 if (s.EndsWith(x, StringComparison.OrdinalIgnoreCase))
                 { s = s.Substring(0, s.Length - x.Length).Trim(); break; }
 
+            // "Radeon RX 580: Sapphire RX 580 Pulse" - o HWiNFO junta o chip e a
+            // placa do parceiro, e cada metade repete o modelo. Fica o chip, que
+            // e o que responde "que placa e essa"; o nome comercial da montadora
+            // gasta a linha para repetir o numero que ja esta ali.
+            int dp = s.IndexOf(':');
+            if (dp > 0) s = s.Substring(0, dp).Trim();
+
             return s.Length == 0 ? null : s;
         }
 

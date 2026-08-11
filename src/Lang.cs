@@ -63,6 +63,15 @@ namespace MhiagosControl
         public static string NavAlerts { get { return P("Alertas", "Alerts"); } }
         public static string NavProfiles { get { return P("Perfis", "Profiles"); } }
         public static string NavMetrics { get { return P("Métricas", "Metrics"); } }
+        public static string AddMetric { get { return P("Adicionar métrica", "Add metric"); } }
+        public static string MetricsHint
+        {
+            get
+            {
+                return P("Passe o ponteiro sobre um cartão para mover ou remover. Histórico dos últimos 10 minutos.",
+                         "Hover a card to move or remove it. History covers the last 10 minutes.");
+            }
+        }
         public static string NoMetrics
         {
             get

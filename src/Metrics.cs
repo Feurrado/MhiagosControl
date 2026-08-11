@@ -22,10 +22,27 @@ namespace MhiagosControl
         public string Sub = "";
         public string Unidade = "";
 
+        /// <summary>Identificador da leitura, para gravar a escolha.</summary>
+        public string SensorId = "";
+
+        /// <summary>Acoes de edicao, disparadas pelos botoes do canto.</summary>
+        public event EventHandler Remover, MoverEsquerda, MoverDireita;
+
+        private Rectangle _bRem, _bEsq, _bDir;
+        private int _sobre = -1;
+        private bool _mouseDentro = false;
+
         /// <summary>Faixas de cor. Nulo pinta tudo com a cor de enfase.</summary>
         public float? Atencao, Perigo;
 
-        private const int Historico = 90;
+        /// <summary>
+        /// Amostras guardadas por cartao. A 1 s por ciclo, sao 10 minutos.
+        ///
+        /// 90 amostras davam um minuto e meio - tempo suficiente para ver um
+        /// pico, nao para ver se ele foi um evento ou o normal do dia. Dez
+        /// minutos cabem em 2,4 KB por cartao e respondem essa segunda pergunta.
+        /// </summary>
+        private const int Historico = 600;
         private readonly float[] _serie = new float[Historico];
         private int _n = 0;
         private float? _valor;
@@ -82,6 +99,84 @@ namespace MhiagosControl
             return v.ToString("0.0");
         }
 
+        // ---------------- edicao ----------------
+
+        /// <summary>
+        /// Os botoes so aparecem sob o ponteiro.
+        ///
+        /// Tres icones fixos em cada cartao transformariam a grade num painel de
+        /// controle: numa tela com doze cartoes seriam trinta e seis alvos
+        /// disputando atencao com doze numeros, que sao o conteudo. Sob o
+        /// ponteiro, aparecem exatamente onde a pessoa ja esta olhando.
+        /// </summary>
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            _mouseDentro = true; Invalidate(); base.OnMouseEnter(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _mouseDentro = false; _sobre = -1; Cursor = Cursors.Default;
+            Invalidate(); base.OnMouseLeave(e);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            int s = -1;
+            if (_bEsq.Contains(e.Location)) s = 0;
+            else if (_bDir.Contains(e.Location)) s = 1;
+            else if (_bRem.Contains(e.Location)) s = 2;
+
+            if (s != _sobre)
+            {
+                _sobre = s;
+                Cursor = s >= 0 ? Cursors.Hand : Cursors.Default;
+                Invalidate();
+            }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (_bEsq.Contains(e.Location)) Disparar(MoverEsquerda);
+            else if (_bDir.Contains(e.Location)) Disparar(MoverDireita);
+            else if (_bRem.Contains(e.Location)) Disparar(Remover);
+            base.OnMouseDown(e);
+        }
+
+        private void Disparar(EventHandler h) { if (h != null) h(this, EventArgs.Empty); }
+
+        private void DesenharBotoes(Graphics g)
+        {
+            int t = 20, y = 6, x = Width - 8 - t;
+            _bRem = new Rectangle(x, y, t, t); x -= t + 2;
+            _bDir = new Rectangle(x, y, t, t); x -= t + 2;
+            _bEsq = new Rectangle(x, y, t, t);
+
+            if (!_mouseDentro) return;
+
+            // E76B / E76C sao as setas e E711 o "x" da Segoe MDL2, escapados
+            // porque area de uso privada nao sobrevive a toda ferramenta.
+            string[] glifos = { "", "", "" };
+            Rectangle[] areas = { _bEsq, _bDir, _bRem };
+
+            using (Font f = new Font("Segoe MDL2 Assets", 8f))
+                for (int i = 0; i < 3; i++)
+                {
+                    bool ativo = (_sobre == i);
+                    if (ativo)
+                        using (GraphicsPath p = Ui.RoundRect(areas[i], 4))
+                        using (SolidBrush b = new SolidBrush(Ui.Hover))
+                            g.FillPath(b, p);
+
+                    Color c = ativo ? (i == 2 ? Ui.Danger : Ui.Text) : Ui.Faint;
+                    SizeF ts = g.MeasureString(glifos[i], f);
+                    using (SolidBrush b = new SolidBrush(c))
+                        g.DrawString(glifos[i], f, b,
+                            areas[i].X + (t - ts.Width) / 2f, areas[i].Y + (t - ts.Height) / 2f);
+                }
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -101,8 +196,13 @@ namespace MhiagosControl
                 using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, p);
             }
 
-            TextRenderer.DrawText(g, Titulo, Ui.FontSmall, new Rectangle(12, 8, Width - 24, 15),
+            // O rotulo cede espaco quando os botoes estao a mostra, em vez de
+            // ficar por baixo deles.
+            int recuo = _mouseDentro ? 84 : 24;
+            TextRenderer.DrawText(g, Titulo, Ui.FontSmall, new Rectangle(12, 8, Width - recuo, 15),
                 Ui.Muted, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+
+            DesenharBotoes(g);
 
             if (!string.IsNullOrEmpty(Sub))
                 TextRenderer.DrawText(g, Sub, Ui.FontSmall, new Rectangle(12, Height - 20, Width - 24, 15),

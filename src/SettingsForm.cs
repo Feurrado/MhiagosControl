@@ -1011,56 +1011,136 @@ namespace MhiagosControl
         /// Reconstruir controles a cada segundo pisca a tela inteira e joga fora
         /// o historico de cada cartao, que e justamente o que da sentido a ela.
         /// </summary>
+        private Panel _pgMetricas;
+
         private Control BuildPageMetricas()
         {
-            Panel page = new Panel();
-            page.BackColor = Color.Transparent;
-            page.AutoScroll = true;
+            _pgMetricas = new Panel();
+            _pgMetricas.BackColor = Color.Transparent;
+            _pgMetricas.AutoScroll = true;
 
-            List<SensorEntry> escolhidos = MetricPicker.Escolher(_sensors, 5);
-            if (escolhidos.Count == 0)
+            // Primeira abertura: monta uma selecao automatica e grava. A partir
+            // dai a lista e do usuario, inclusive vazia - por isso o marcador
+            // separado, e nao "lista vazia significa recomecar".
+            if (!_cfg.MetricsChosen)
             {
-                Label vazio = MakeLabel(T.NoMetrics, 4, 8, Ui.FontBase);
-                vazio.Size = new Size(700, 40);
-                vazio.ForeColor = Ui.Muted;
-                page.Controls.Add(vazio);
-                return page;
+                _cfg.MetricIds.Clear();
+                foreach (SensorEntry s in MetricPicker.Escolher(_sensors, 5)) _cfg.MetricIds.Add(s.Id);
+                _cfg.MetricsChosen = true;
+                GravarMetricas();
             }
 
+            MontarMetricas();
+            return _pgMetricas;
+        }
+
+        private void GravarMetricas()
+        {
+            try { _cfg.Save(); }
+            catch (Exception ex) { Log.Error("gravar cartoes de metricas", ex); }
+        }
+
+        /// <summary>
+        /// (Re)monta a grade a partir da lista gravada.
+        ///
+        /// Remontar zera o historico dos cartoes, entao so acontece quando a
+        /// composicao muda - adicionar, remover, mover. O ciclo de um segundo
+        /// nunca passa por aqui: ele so empurra valores.
+        /// </summary>
+        private void MontarMetricas()
+        {
+            _pgMetricas.SuspendLayout();
+            List<Control> velhos = new List<Control>();
+            foreach (Control c in _pgMetricas.Controls) velhos.Add(c);
+            foreach (Control c in velhos) { _pgMetricas.Controls.Remove(c); c.Dispose(); }
+            _cards.Clear();
+            _cardIds.Clear();
+
             const int Larg = 176, Alt = 104, Esp = 12, PorLinha = 4;
-            string categoria = null;
             int y = 0, col = 0;
 
-            foreach (SensorEntry s in escolhidos)
+            FlatBtn add = new FlatBtn();
+            add.Text = T.AddMetric;
+            add.Primary = true;
+            add.SetBounds(2, y, 150, 32);
+            add.Click += delegate { AdicionarMetrica(); };
+            _pgMetricas.Controls.Add(add);
+
+            Label dica = MakeLabel(T.MetricsHint, 162, y + 8, Ui.FontSmall);
+            dica.Size = new Size(600, 18);
+            dica.ForeColor = Ui.Faint;
+            _pgMetricas.Controls.Add(dica);
+            y += 44;
+
+            if (_cfg.MetricIds.Count == 0)
             {
-                // Cabecalho quando a categoria muda: sem ele a grade e um mosaico
-                // de numeros sem dono, e "45 °C" nao diz de qual peca.
-                if (s.Category != categoria)
-                {
-                    if (categoria != null) { y += Alt + Esp + 10; col = 0; }
-                    categoria = s.Category;
-                    Label t = MakeLabel(categoria, 2, y, Ui.FontSection);
-                    t.Size = new Size(400, 22);
-                    page.Controls.Add(t);
-                    y += 28;
-                }
-                else if (col >= PorLinha) { col = 0; y += Alt + Esp; }
+                Label vazio = MakeLabel(T.NoMetrics, 4, y + 8, Ui.FontBase);
+                vazio.Size = new Size(700, 40);
+                vazio.ForeColor = Ui.Muted;
+                _pgMetricas.Controls.Add(vazio);
+                _pgMetricas.ResumeLayout();
+                return;
+            }
+
+            foreach (string id in new List<string>(_cfg.MetricIds))
+            {
+                SensorEntry s = Achar(id);
+                if (s == null) continue;   // sensor sumiu entre sessoes
+
+                if (col >= PorLinha) { col = 0; y += Alt + Esp; }
 
                 MetricCard c = new MetricCard();
+                c.SensorId = s.Id;
                 c.Titulo = s.Label;
-                c.Sub = s.Hardware;
+                c.Sub = s.Category + "  ·  " + s.Hardware;
                 c.Unidade = s.Unit;
                 float? at, pe;
                 MetricPicker.Faixas(s.Unit, out at, out pe);
                 c.Atencao = at; c.Perigo = pe;
                 c.SetBounds(2 + col * (Larg + Esp), y, Larg, Alt);
-                page.Controls.Add(c);
 
+                string alvo = s.Id;
+                c.Remover += delegate { MexerNaMetrica(alvo, 0); };
+                c.MoverEsquerda += delegate { MexerNaMetrica(alvo, -1); };
+                c.MoverDireita += delegate { MexerNaMetrica(alvo, +1); };
+
+                _pgMetricas.Controls.Add(c);
                 _cards.Add(c);
                 _cardIds.Add(s.Id);
                 col++;
             }
-            return page;
+            _pgMetricas.ResumeLayout();
+        }
+
+        private void AdicionarMetrica()
+        {
+            using (SensorDialog d = new SensorDialog(Clone(_sensors), null, T.AddMetric))
+            {
+                if (d.ShowDialog(this) != DialogResult.OK) return;
+                string id = d.SelectedId;
+                if (string.IsNullOrEmpty(id) || _cfg.MetricIds.Contains(id)) return;
+                _cfg.MetricIds.Add(id);
+                GravarMetricas();
+                MontarMetricas();
+            }
+        }
+
+        /// <summary>Remove (passo 0) ou desloca o cartao uma posicao.</summary>
+        private void MexerNaMetrica(string id, int passo)
+        {
+            int i = _cfg.MetricIds.IndexOf(id);
+            if (i < 0) return;
+
+            if (passo == 0) _cfg.MetricIds.RemoveAt(i);
+            else
+            {
+                int j = i + passo;
+                if (j < 0 || j >= _cfg.MetricIds.Count) return;
+                _cfg.MetricIds[i] = _cfg.MetricIds[j];
+                _cfg.MetricIds[j] = id;
+            }
+            GravarMetricas();
+            MontarMetricas();
         }
 
         private void AtualizarMetricas(Dictionary<string, float> snap)

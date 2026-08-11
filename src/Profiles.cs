@@ -107,6 +107,18 @@ namespace MhiagosControl
         /// </summary>
         public bool SidebarCollapsed = false;
 
+        /// <summary>
+        /// Cartoes da aba Metricas, na ordem em que aparecem.
+        ///
+        /// Vazio significa "ainda nao escolhido", e nao "nenhum": a primeira
+        /// abertura monta uma selecao automatica e grava. Distinguir os dois
+        /// importa - quem remover todos os cartoes de proposito nao quer ve-los
+        /// voltarem no proximo arranque, e por isso a lista gravada vazia usa um
+        /// marcador em vez de simplesmente sumir do arquivo.
+        /// </summary>
+        public List<string> MetricIds = new List<string>();
+        public bool MetricsChosen = false;
+
         /// <summary>Perfis marcados para o rodizio. Menos de dois nao e rodizio.</summary>
         public List<Profile> Rotation
         {
@@ -192,6 +204,11 @@ namespace MhiagosControl
                         else if (k == "idleblank") c.IdleBlankMinutes = ParseInt(v);
                         else if (k == "rotateseconds") c.RotateSeconds = ParseInt(v);
                         else if (k == "sidebarcollapsed") c.SidebarCollapsed = (v == "1");
+                        else if (k == "metricschosen") c.MetricsChosen = (v == "1");
+                        else if (k == "metric")
+                        {
+                            if (!string.IsNullOrEmpty(v) && !c.MetricIds.Contains(v)) c.MetricIds.Add(v);
+                        }
                         // chaves legadas (formato antigo, sem seccao)
                         else if (k == "panel1" || k == "panel2" || k == "fahrenheit" || k == "percent")
                         {
@@ -268,6 +285,9 @@ namespace MhiagosControl
                 sb.AppendLine("idleblank=" + IdleBlankMinutes.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("rotateseconds=" + RotateSeconds.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("sidebarcollapsed=" + (SidebarCollapsed ? "1" : "0"));
+                sb.AppendLine("metricschosen=" + (MetricsChosen ? "1" : "0"));
+                foreach (string m in MetricIds)
+                    if (!string.IsNullOrEmpty(m)) sb.AppendLine("metric=" + m);
                 foreach (Profile p in Profiles) AppendProfile(sb, p);
                 File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
                 Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " + ActiveName + ")");

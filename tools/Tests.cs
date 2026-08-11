@@ -211,6 +211,8 @@ namespace MhiagosControl
                   "sufixo de frequencia da Intel");
             Igual("GeForce RTX 3060", SystemInfo.Limpar("NVIDIA GeForce RTX 3060"),
                   "fabricante da placa de video");
+            Igual("Radeon RX 580", SystemInfo.Limpar("GPU [#0]: AMD Radeon RX 580: Sapphire RX 580 Pulse"),
+                  "chip e placa do parceiro repetiam o modelo");
 
             // Nao inventar conteudo: nome que nao casa com nenhum padrao passa
             // inteiro, porque um nome estranho ainda identifica a peca melhor
