@@ -97,6 +97,10 @@ namespace MhiagosControl
             BuildPages();
             LoadFromProfile();
 
+            // Depois de BuildPages: a largura leva em conta o texto dos itens de
+            // navegacao, que so existem a partir dali.
+            _nav.AjustarLargura();
+
             Theme.Apply(this);
 
             _tick = new Timer();
@@ -209,10 +213,15 @@ namespace MhiagosControl
             NavItem config = new NavItem();
             config.Text = T.NavSettings; config.Glyph = ""; config.Page = BuildPageConfig();
 
+            NavItem metricas = new NavItem();
+            metricas.Text = T.NavMetrics;
+            metricas.Glyph = "";            // grafico de area, Segoe MDL2
+            metricas.Page = BuildPageMetricas();
+
             NavItem sobre = new NavItem();
             sobre.Text = T.NavAbout; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
 
-            foreach (NavItem it in new NavItem[] { paineis, alertas, perfis, config, sobre })
+            foreach (NavItem it in new NavItem[] { paineis, alertas, metricas, perfis, config, sobre })
             {
                 _nav.Add(it);
                 it.Page.Dock = DockStyle.Fill;
@@ -992,6 +1001,78 @@ namespace MhiagosControl
 
         // ---------------- pagina: Sobre ----------------
 
+        private readonly List<MetricCard> _cards = new List<MetricCard>();
+        private readonly List<string> _cardIds = new List<string>();
+
+        /// <summary>
+        /// Grade de cartoes com as leituras principais da maquina.
+        ///
+        /// A grade e montada uma vez, no arranque, e depois so recebe valores.
+        /// Reconstruir controles a cada segundo pisca a tela inteira e joga fora
+        /// o historico de cada cartao, que e justamente o que da sentido a ela.
+        /// </summary>
+        private Control BuildPageMetricas()
+        {
+            Panel page = new Panel();
+            page.BackColor = Color.Transparent;
+            page.AutoScroll = true;
+
+            List<SensorEntry> escolhidos = MetricPicker.Escolher(_sensors, 5);
+            if (escolhidos.Count == 0)
+            {
+                Label vazio = MakeLabel(T.NoMetrics, 4, 8, Ui.FontBase);
+                vazio.Size = new Size(700, 40);
+                vazio.ForeColor = Ui.Muted;
+                page.Controls.Add(vazio);
+                return page;
+            }
+
+            const int Larg = 176, Alt = 104, Esp = 12, PorLinha = 4;
+            string categoria = null;
+            int y = 0, col = 0;
+
+            foreach (SensorEntry s in escolhidos)
+            {
+                // Cabecalho quando a categoria muda: sem ele a grade e um mosaico
+                // de numeros sem dono, e "45 °C" nao diz de qual peca.
+                if (s.Category != categoria)
+                {
+                    if (categoria != null) { y += Alt + Esp + 10; col = 0; }
+                    categoria = s.Category;
+                    Label t = MakeLabel(categoria, 2, y, Ui.FontSection);
+                    t.Size = new Size(400, 22);
+                    page.Controls.Add(t);
+                    y += 28;
+                }
+                else if (col >= PorLinha) { col = 0; y += Alt + Esp; }
+
+                MetricCard c = new MetricCard();
+                c.Titulo = s.Label;
+                c.Sub = s.Hardware;
+                c.Unidade = s.Unit;
+                float? at, pe;
+                MetricPicker.Faixas(s.Unit, out at, out pe);
+                c.Atencao = at; c.Perigo = pe;
+                c.SetBounds(2 + col * (Larg + Esp), y, Larg, Alt);
+                page.Controls.Add(c);
+
+                _cards.Add(c);
+                _cardIds.Add(s.Id);
+                col++;
+            }
+            return page;
+        }
+
+        private void AtualizarMetricas(Dictionary<string, float> snap)
+        {
+            if (snap == null) return;
+            for (int i = 0; i < _cards.Count; i++)
+            {
+                float v;
+                _cards[i].Push(snap.TryGetValue(_cardIds[i], out v) ? (float?)v : null);
+            }
+        }
+
         private Control BuildPageSobre()
         {
             Panel page = new Panel();
@@ -1345,6 +1426,7 @@ namespace MhiagosControl
                 _pick1.UpdateValues(snap);
                 _pick2.UpdateValues(snap);
                 AtualizarValores(snap);
+                AtualizarMetricas(snap);
                 Refresh0();
                 AtualizarPreviaDoPerfil();
             }

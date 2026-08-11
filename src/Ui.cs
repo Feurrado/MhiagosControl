@@ -601,8 +601,45 @@ namespace MhiagosControl
         private const int HeaderH = 116;
         private const int RowH = 40;
 
-        public const int LarguraAberta = 210;
         public const int LarguraRecolhida = 56;
+        private const int LarguraMinima = 210;
+        private const int LarguraMaxima = 330;
+
+        private int _larguraAberta = LarguraMinima;
+
+        /// <summary>
+        /// Ajusta a largura ao conteudo mais comprido da coluna.
+        ///
+        /// "Radeon RX 580: Sapphire Nitro+" nao cabe em 210 px e era cortado no
+        /// modelo. Encurtar mais o nome nao resolve - o que sobra ja e o nome
+        /// util da peca, e cortar dentro dele e perder informacao. Entao a
+        /// coluna cede.
+        ///
+        /// Com teto: passando de 330 px a barra vira o assunto da janela em vez
+        /// da moldura dela, e um nome absurdo de longo levaria a interface
+        /// junto. Acima do teto, aí sim reticencias - o corte volta a ser a
+        /// resposta certa, mas so no caso extremo.
+        /// </summary>
+        public void AjustarLargura()
+        {
+            int precisa = LarguraMinima;
+
+            foreach (NavItem it in _items)
+                precisa = Math.Max(precisa,
+                    42 + TextRenderer.MeasureText(it.Text, Ui.FontMed).Width + 16);
+
+            precisa = Math.Max(precisa, 60 + TextRenderer.MeasureText(AppName, Ui.FontMed).Width + 46);
+            if (!string.IsNullOrEmpty(Subtitle))
+                precisa = Math.Max(precisa, 18 + TextRenderer.MeasureText(Subtitle, Ui.FontBase).Width + 18);
+
+            if (Specs != null)
+                foreach (string v in new string[] { Specs.Cpu, Specs.Gpu, Specs.Ram })
+                    if (!string.IsNullOrEmpty(v))
+                        precisa = Math.Max(precisa, 52 + TextRenderer.MeasureText(v, Ui.FontSmall).Width + 18);
+
+            _larguraAberta = Math.Min(precisa, LarguraMaxima);
+            if (!_collapsed && _alvo == 0) Width = _larguraAberta;
+        }
 
         /// <summary>
         /// Recolhe a barra para uma faixa so de icones.
@@ -619,9 +656,8 @@ namespace MhiagosControl
             {
                 if (_collapsed == value) return;
                 _collapsed = value;
-                Width = value ? LarguraRecolhida : LarguraAberta;
                 _hover = -1;
-                Invalidate();
+                Animar(value ? LarguraRecolhida : _larguraAberta);
                 if (CollapsedChanged != null) CollapsedChanged(this, EventArgs.Empty);
             }
         }
@@ -629,10 +665,77 @@ namespace MhiagosControl
 
         public event EventHandler CollapsedChanged;
 
+        // ---------------- animacao ----------------
+
+        private Timer _anim;
+        private int _alvo = 0, _origem = 0;
+        private DateTime _inicio;
+        private const int DuracaoMs = 160;
+
+        /// <summary>
+        /// Desliza a largura ate o alvo.
+        ///
+        /// 160 ms com desaceleracao. Instantaneo, a coluna parece piscar e a
+        /// pagina ao lado salta sem explicar de onde veio o espaco; muito mais
+        /// lento, vira espera. Com a desaceleracao o movimento comeca rapido e
+        /// assenta - e o que faz parecer que a barra tem peso em vez de teleporte.
+        ///
+        /// Sem animacao nenhuma se a janela ainda nao tem alca: antes disso
+        /// mudar largura por temporizador nao pinta nada, so atrasa o arranque.
+        /// </summary>
+        private void Animar(int alvo)
+        {
+            if (!IsHandleCreated) { Width = alvo; Invalidate(); return; }
+
+            _origem = Width; _alvo = alvo; _inicio = DateTime.UtcNow;
+
+            if (_anim == null)
+            {
+                _anim = new Timer();
+                _anim.Interval = 15;
+                _anim.Tick += new EventHandler(OnAnim);
+            }
+            _anim.Start();
+        }
+
+        private void OnAnim(object sender, EventArgs e)
+        {
+            double t = (DateTime.UtcNow - _inicio).TotalMilliseconds / DuracaoMs;
+            if (t >= 1)
+            {
+                _anim.Stop();
+                Width = _alvo;
+                _alvo = 0;
+                Invalidate();
+                return;
+            }
+
+            // desaceleracao cubica: rapido no comeco, assenta no fim
+            double e3 = 1 - Math.Pow(1 - t, 3);
+            Width = _origem + (int)Math.Round((_alvo - _origem) * e3);
+            Invalidate();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _anim != null) { _anim.Stop(); _anim.Dispose(); _anim = null; }
+            base.Dispose(disposing);
+        }
+
+        /// <summary>
+        /// Durante o deslize o desenho segue a LARGURA, e nao o estado alvo.
+        ///
+        /// Trocar o conteudo no clique e animar so a moldura faz o texto sumir
+        /// de uma vez e a barra encolher depois, em dois tempos. Decidindo pela
+        /// largura corrente, o conteudo cede quando o espaco acaba - que e o que
+        /// a pessoa espera ver.
+        /// </summary>
+        private bool Estreita { get { return Width < 150; } }
+
         private Rectangle _botao = Rectangle.Empty;
         private bool _sobreBotao = false;
 
-        private int TopoDosItens { get { return _collapsed ? 104 : HeaderH; } }
+        private int TopoDosItens { get { return Estreita ? 104 : HeaderH; } }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
@@ -679,7 +782,7 @@ namespace MhiagosControl
             for (int i = 0; i < _items.Count; i++)
             {
                 NavItem it = _items[i];
-                it.Bounds = new Rectangle(_collapsed ? 6 : 8, y, Width - (_collapsed ? 12 : 16), RowH);
+                it.Bounds = new Rectangle(Estreita ? 6 : 8, y, Width - (Estreita ? 12 : 16), RowH);
 
                 bool sel = (i == _selected);
                 if (sel || i == _hover)
@@ -703,7 +806,7 @@ namespace MhiagosControl
                     {
                         // Recolhida, o glifo e a unica coisa que resta do item:
                         // centraliza, senao fica encostado na esquerda da faixa.
-                        if (_collapsed)
+                        if (Estreita)
                         {
                             SizeF t = g.MeasureString(it.Glyph, f);
                             g.DrawString(it.Glyph, f, b,
@@ -712,7 +815,7 @@ namespace MhiagosControl
                         else g.DrawString(it.Glyph, f, b, it.Bounds.X + 14, it.Bounds.Y + 11);
                     }
                 }
-                if (!_collapsed)
+                if (!Estreita)
                     TextRenderer.DrawText(g, it.Text, sel ? Ui.FontMed : Ui.FontBase,
                         new Rectangle(it.Bounds.X + 42, it.Bounds.Y, it.Bounds.Width - 46, RowH), fore,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
@@ -732,7 +835,7 @@ namespace MhiagosControl
         /// </summary>
         private void DesenharCabecalho(Graphics g)
         {
-            if (_collapsed)
+            if (Estreita)
             {
                 if (Logo != null) g.DrawImage(Logo, (Width - 30) / 2, 18, 30, 30);
                 _botao = new Rectangle((Width - 30) / 2, 60, 30, 30);
@@ -796,7 +899,7 @@ namespace MhiagosControl
         /// </summary>
         private void DesenharSistema(Graphics g, int fimDosItens)
         {
-            if (_collapsed || Specs == null || !Specs.Any) return;
+            if (Estreita || Specs == null || !Specs.Any) return;
 
             string[][] linhas = new string[][]
             {

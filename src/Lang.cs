@@ -62,6 +62,15 @@ namespace MhiagosControl
         public static string NavPanels { get { return P("Painéis", "Panels"); } }
         public static string NavAlerts { get { return P("Alertas", "Alerts"); } }
         public static string NavProfiles { get { return P("Perfis", "Profiles"); } }
+        public static string NavMetrics { get { return P("Métricas", "Metrics"); } }
+        public static string NoMetrics
+        {
+            get
+            {
+                return P("Nenhuma leitura disponível — as fontes de sensores não responderam.",
+                         "No readings available — the sensor sources did not respond.");
+            }
+        }
         public static string NavAbout { get { return P("Sobre", "About"); } }
         public static string ActiveProfile { get { return P("PERFIL ATIVO", "ACTIVE PROFILE"); } }
         public static string SystemCaption { get { return P("SISTEMA", "SYSTEM"); } }
