@@ -114,6 +114,8 @@ namespace MhiagosControl
         /// <summary>Se o ultimo instantaneo saiu de uma leitura dirigida.</summary>
         private bool _dirigida = false;
 
+        private readonly Rtss _rtss = new Rtss();
+
         private const string HwPrefix = "hw:";
 
         private const string SynthPrefix = "synth:";
@@ -280,6 +282,12 @@ namespace MhiagosControl
                     raw.Add(e);
                 }
             }
+
+            // Terceira fonte, independente das outras duas: nao le hardware, le
+            // o que o RTSS mediu no processo que esta apresentando. Entra sempre,
+            // mesmo sem o RTSS instalado - la as leituras vem sem valor, e o
+            // rodape delas diz o porque.
+            raw.AddRange(_rtss.Ler());
             return raw;
         }
 
@@ -322,9 +330,19 @@ namespace MhiagosControl
         /// e nao a ordem em que o hardware foi descoberto, para que a interface
         /// nao mude de arranjo entre maquinas nem entre execucoes.
         /// </summary>
+        /// <summary>
+        /// Categoria das leituras do RTSS.
+        ///
+        /// Separada, e nao dentro de GPU: taxa de quadros nao e uma grandeza da
+        /// placa de video, e do programa que esta apresentando. A mesma placa da
+        /// numeros completamente diferentes conforme o jogo, e junta-los na GPU
+        /// esconderia isso atras de um rotulo de hardware.
+        /// </summary>
+        public const string CategoriaJogos = "Jogos";
+
         public static readonly string[] Categories = new string[]
         {
-            "CPU", "GPU", "Placa-mãe", "Memória", "Disco", "Rede", "Outros"
+            "CPU", "GPU", CategoriaJogos, "Placa-mãe", "Memória", "Disco", "Rede", "Outros"
         };
 
         private static string CategoryOf(HardwareType t)

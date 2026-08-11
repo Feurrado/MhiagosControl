@@ -130,6 +130,33 @@ O custo disso é medido: a leitura restrita ao mostrador visita só os grupos de
 que ele depende, e uma vez a cada balde ela se abre para os grupos dos cartões,
 tira a amostra e volta a fechar. Sem cartão nenhum na grade, nada disso roda.
 
+### Quadros por segundo
+
+Uma categoria **Jogos** com seis leituras: taxa de quadros, tempo de quadro, e
+mínimo, médio e pior caso de cada um numa janela de 60 segundos. Servem tanto
+para os cartões da aba *Métricas* quanto para o mostrador do cooler.
+
+Isso não sai do hardware — quantos quadros um jogo desenhou não está em sensor
+nenhum, está no processo que apresenta. Quem mede é o
+**[RivaTuner Statistics Server](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/)**,
+que publica o resultado num mapeamento de memória. É o mesmo caminho que o
+HWiNFO e o Afterburner usam, e ler dele não exige privilégio nenhum. **Sem o
+RTSS instalado não há FPS** — as leituras continuam na lista, sem valor, e o
+rodapé de cada uma diz o que falta em vez de deixar procurar defeito aqui.
+
+Vale para o jogo em primeiro plano; sem nenhum em primeiro plano, vale o último
+que desenhou. Trocar de jogo reinicia a janela de 60 segundos, porque o mínimo
+de dois programas diferentes seria um número que nunca aconteceu.
+
+> As três estatísticas derivadas saem das **nossas** amostras, uma por segundo,
+> e a janela está escrita no próprio rótulo. **Não são "1% low"**: aquilo exige o
+> tempo de cada quadro, e nesta altura os quadros individuais já não existem.
+
+> No mostrador do cooler, o número aparece certo mas o símbolo ao lado não: o
+> quadro só acende `°C`/`°F` em cima e `%`/`W` embaixo, e
+> [não há como apagá-los](docs/PROTOCOLO.md). 60 FPS embaixo aparece como
+> `060` com o `%` ou o `W` aceso.
+
 ### Tela de carregamento
 
 <img src="docs/carregando.png" width="380" alt="Tela de carregamento">

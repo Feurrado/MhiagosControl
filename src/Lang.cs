@@ -131,6 +131,7 @@ namespace MhiagosControl
             if (Pt || string.IsNullOrEmpty(canonical)) return canonical;
             switch (canonical)
             {
+                case "Jogos": return "Games";
                 case "Placa-mãe": return "Motherboard";
                 case "Memória": return "Memory";
                 case "Disco": return "Disk";
@@ -144,6 +145,28 @@ namespace MhiagosControl
         {
             return P("média de " + n, "average of " + n);
         }
+
+        // ---------------- quadros por segundo (RTSS) ----------------
+
+        /// <summary>
+        /// A janela entra no proprio rotulo.
+        ///
+        /// "FPS mínimo" sozinho nao diz mínimo de quando, e cada monitor de
+        /// hardware usa uma janela diferente. Escrita ali, ninguem precisa
+        /// adivinhar - nem confundir com o "1% low", que e outra conta e exige
+        /// o tempo de cada quadro.
+        /// </summary>
+        private static string Janela { get { return " (" + Rtss.JanelaSeg + " s)"; } }
+
+        public static string MetricFps { get { return P("Taxa de quadros", "Frame rate"); } }
+        public static string MetricFpsMin { get { return P("FPS mínimo", "Min FPS") + Janela; } }
+        public static string MetricFpsAvg { get { return P("FPS médio", "Avg FPS") + Janela; } }
+        public static string MetricFrametime { get { return P("Tempo de quadro", "Frame time"); } }
+        public static string MetricFrametimeAvg { get { return P("Tempo de quadro médio", "Avg frame time") + Janela; } }
+        public static string MetricFrametimeMax { get { return P("Pior tempo de quadro", "Worst frame time") + Janela; } }
+
+        public static string RtssMissing { get { return P("RTSS não encontrado", "RTSS not found"); } }
+        public static string RtssIdle { get { return P("nenhum jogo em execução", "no game running"); } }
 
         // ---------------- pagina: alertas ----------------
 

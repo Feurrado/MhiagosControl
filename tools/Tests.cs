@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.MemoryMappedFiles;
 using System.Reflection;
+using System.Text;
 using LibreHardwareMonitor.Hardware;
 
 namespace MhiagosControl
@@ -36,6 +38,7 @@ namespace MhiagosControl
             NomesDoSistema();
             NomesAmigaveis();
             HistoricoDasMetricas();
+            QuadrosPorSegundo();
             CompletudeDoIdioma();
 
             Console.WriteLine();
@@ -332,6 +335,107 @@ namespace MhiagosControl
 
             MetricHistory.Seguir(null);
             Igual(0, MetricHistory.Seguidos.Count, "lista vazia nao acompanha nada");
+        }
+
+        /// <summary>
+        /// Leitura da memoria compartilhada do RTSS, contra um mapeamento nosso.
+        ///
+        /// Nenhuma maquina de desenvolvimento tem o RTSS rodando com um jogo
+        /// aberto na hora do build, entao o teste monta o mapeamento com o
+        /// layout documentado e confere o que o leitor faz dele. Isso cobre o
+        /// que pode estar errado no nosso lado - deslocamento de campo, passo da
+        /// entrada, escolha de qual programa vale, conversao das unidades. O que
+        /// nao cobre, e nao ha como cobrir aqui, e o RTSS de verdade preencher
+        /// esses campos como se espera.
+        /// </summary>
+        private static void QuadrosPorSegundo()
+        {
+            Secao("quadros por segundo");
+
+            // Sem mapeamento nenhum: as leituras existem e vem sem valor, em vez
+            // de sumirem da lista e levarem junto o perfil de quem as escolheu.
+            List<SensorEntry> ausente = new Rtss().Ler();
+            Igual(6, ausente.Count, "a fonte publica sempre as mesmas seis leituras");
+            bool todasVazias = true;
+            foreach (SensorEntry s in ausente) if (s.Value.HasValue) todasVazias = false;
+            Verdade(todasVazias, "sem RTSS, nenhuma leitura inventa valor");
+            Igual(T.RtssMissing, ausente[0].Hardware, "e o rodape diz o que falta");
+            Igual(Sensors.CategoriaJogos, ausente[0].Category, "categoria propria");
+
+            const int TamEntrada = 328, Inicio = 64, Quantas = 3;
+            MemoryMappedFile mmf = null;
+            try
+            {
+                try
+                {
+                    mmf = MemoryMappedFile.CreateNew("RTSSSharedMemoryV2",
+                                                     Inicio + TamEntrada * Quantas);
+                }
+                catch (Exception)
+                {
+                    // Ja existe: o RTSS de verdade esta rodando nesta maquina.
+                    // Escrever por cima da memoria dele seria muito pior do que
+                    // deixar de rodar esta parte do teste.
+                    Console.WriteLine("  (pulado: RTSSSharedMemoryV2 ja existe nesta maquina)");
+                    return;
+                }
+
+                using (MemoryMappedViewAccessor v = mmf.CreateViewAccessor())
+                {
+                    v.Write(0, (byte)'R'); v.Write(1, (byte)'T');
+                    v.Write(2, (byte)'S'); v.Write(3, (byte)'S');
+                    v.Write(4, (uint)0x00020000);
+                    v.Write(8, (uint)TamEntrada);
+                    v.Write(12, (uint)Inicio);
+                    v.Write(16, (uint)Quantas);
+
+                    // Entrada 0 vazia, para o leitor ter de pular buraco.
+                    Entrada(v, Inicio + TamEntrada * 1, 1111, @"C:\Jogos\alpha.exe", 1000, 2000, 120, 8333);
+                    Entrada(v, Inicio + TamEntrada * 2, 2222, @"D:\Jogos\beta.exe", 1000, 3000, 120, 16666);
+
+                    List<SensorEntry> lidas = new Rtss().Ler();
+                    Igual(6, lidas.Count, "seis leituras tambem com o RTSS presente");
+
+                    SensorEntry fps = Achar(lidas, "rtss:fps");
+                    SensorEntry ft = Achar(lidas, "rtss:frametime");
+
+                    // Nenhuma das duas entradas e o processo em primeiro plano,
+                    // entao vale quem desenhou por ultimo: a beta, com t1 maior.
+                    Verdade(fps.Value.HasValue && Math.Abs(fps.Value.Value - 60f) < 0.01f,
+                            "120 quadros em 2000 ms dao 60 FPS");
+                    Verdade(ft.Value.HasValue && Math.Abs(ft.Value.Value - 16.666f) < 0.01f,
+                            "tempo de quadro vem em microssegundos e sai em ms");
+                    Igual("beta.exe", fps.Hardware, "vence a entrada com o quadro mais recente");
+                    Igual("FPS", fps.Unit, "unidade da taxa");
+                    Igual("ms", ft.Unit, "unidade do tempo de quadro");
+
+                    // Uma amostra so nao autoriza falar em minimo nem em pior caso.
+                    Verdade(!Achar(lidas, "rtss:fps.min").Value.HasValue,
+                            "minimo espera a janela ter amostras suficientes");
+                    Verdade(!Achar(lidas, "rtss:frametime.max").Value.HasValue,
+                            "pior caso espera a mesma coisa");
+                }
+            }
+            finally { if (mmf != null) mmf.Dispose(); }
+        }
+
+        private static void Entrada(MemoryMappedViewAccessor v, long b, uint pid, string nome,
+                                    uint t0, uint t1, uint quadros, uint us)
+        {
+            v.Write(b, pid);
+            byte[] bytes = Encoding.Default.GetBytes(nome);
+            v.WriteArray(b + 4, bytes, 0, bytes.Length);
+            v.Write(b + 4 + bytes.Length, (byte)0);
+            v.Write(b + 268, t0);
+            v.Write(b + 272, t1);
+            v.Write(b + 276, quadros);
+            v.Write(b + 280, us);
+        }
+
+        private static SensorEntry Achar(List<SensorEntry> lista, string id)
+        {
+            foreach (SensorEntry s in lista) if (s.Id == id) return s;
+            return new SensorEntry();
         }
 
         private static void IdaEVoltaDaConfiguracao()
