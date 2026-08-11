@@ -1461,6 +1461,13 @@ namespace MhiagosControl
             if (snap == null) return;
             for (int i = 0; i < _cards.Count; i++)
             {
+                // O rodape das leituras de quadro segue o jogo. Montado uma vez,
+                // ele guardava o texto verdadeiro no instante em que a grade
+                // nasceu - e um cartao chegava a marcar 757 FPS com "nenhum jogo
+                // em execucao" escrito logo abaixo.
+                if (_cardIds[i].StartsWith(Rtss.Prefixo, StringComparison.Ordinal))
+                    _cards[i].Sub = MetricPicker.RodapeJogos();
+
                 float v;
                 _cards[i].Push(snap.TryGetValue(_cardIds[i], out v) ? (float?)v : null);
             }

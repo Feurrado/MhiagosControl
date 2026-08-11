@@ -517,6 +517,18 @@ namespace MhiagosControl
             return string.IsNullOrEmpty(hw) ? cat : cat + "  ·  " + hw;
         }
 
+        /// <summary>
+        /// Rodape das leituras de quadro, refeito a cada ciclo.
+        ///
+        /// A "peca" destas leituras e o jogo, e ele abre e fecha com a janela
+        /// aberta. Todo o resto da grade mede hardware, que nao troca de nome no
+        /// meio da sessao - por isso so esta categoria precisa de rodape vivo.
+        /// </summary>
+        public static string RodapeJogos()
+        {
+            return T.Category(Sensors.CategoriaJogos) + "  ·  " + Rtss.PecaAtual;
+        }
+
         // ---------------- selecao automatica ----------------
 
         private static readonly string[] Ordem = { "CPU", "GPU", "Memória", "Placa-mãe", "Disco" };

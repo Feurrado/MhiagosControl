@@ -86,6 +86,24 @@ namespace MhiagosControl
         private string _app = null;
         private float? _fps, _ft;
 
+        /// <summary>
+        /// Peca do rodape, como a ultima leitura a viu.
+        ///
+        /// Estatica de proposito. O jogo troca enquanto a janela esta aberta, e
+        /// o rodape do cartao e montado uma vez so - dai um cartao marcar 757
+        /// FPS e dizer "nenhum jogo em execucao" logo abaixo, que foi o texto
+        /// verdadeiro no instante em que a grade nasceu. Quem le e quem desenha
+        /// vivem no mesmo processo, entao um campo compartilhado resolve sem
+        /// varrer a lista de sensores inteira a cada segundo por causa de um
+        /// texto.
+        /// </summary>
+        private static volatile string _peca;
+
+        public static string PecaAtual
+        {
+            get { string p = _peca; return string.IsNullOrEmpty(p) ? T.RtssMissing : p; }
+        }
+
         private readonly float[] _serieFps = new float[JanelaSeg];
         private readonly float[] _serieFt = new float[JanelaSeg];
         private int _n = 0;
@@ -332,6 +350,7 @@ namespace MhiagosControl
 
             string peca = !_disponivel ? T.RtssMissing
                         : (string.IsNullOrEmpty(_app) ? T.RtssIdle : _app);
+            _peca = peca;
 
             float? fpsMin = null, fpsMed = null, ftMed = null, ftPior = null;
 

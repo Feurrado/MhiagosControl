@@ -367,6 +367,14 @@ namespace MhiagosControl
             Igual(6, lista.Count, "a fonte publica sempre as mesmas seis leituras");
             Igual(Sensors.CategoriaJogos, lista[0].Category, "categoria propria");
 
+            // O rodape vivo e o da leitura tem de dizer a mesma coisa. Era
+            // exatamente a divergencia entre os dois - um seguindo o jogo, o
+            // outro congelado na montagem da grade - que punha "nenhum jogo em
+            // execucao" debaixo de 757 FPS.
+            Igual(lista[0].Hardware, Rtss.PecaAtual, "o rodape vivo concorda com a leitura");
+            Verdade(MetricPicker.RodapeJogos().Contains(Rtss.PecaAtual),
+                    "e e ele que entra no rodape do cartao");
+
             if (Rtss.Presente())
             {
                 // Esta maquina tem o RTSS no ar: entao o leitor TEM de reconhecer
