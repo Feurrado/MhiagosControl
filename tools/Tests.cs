@@ -33,6 +33,7 @@ namespace MhiagosControl
             IdaEVoltaDaConfiguracao();
             TodosOsCamposDoPerfil();
             RodizioDePerfis();
+            NomesDoSistema();
             CompletudeDoIdioma();
 
             Console.WriteLine();
@@ -188,6 +189,38 @@ namespace MhiagosControl
         /// tem "=" ou acento e o caso que quebraria em silencio: o usuario
         /// perderia o perfil e nao saberia por que.
         /// </summary>
+        /// <summary>
+        /// O encurtamento dos nomes na barra lateral.
+        ///
+        /// Existe porque a primeira versao errou: removia "AMD " do comeco, mas
+        /// o HWiNFO publica "CPU [#0]: AMD Ryzen 5 5600X" e o comeco era o
+        /// prefixo de enumeracao. Nada era removido, e a coluna mostrava
+        /// "CPU [#0]: AMD Ryzen 5 ..." - a linha inteira gasta antes do modelo.
+        /// </summary>
+        private static void NomesDoSistema()
+        {
+            Secao("nomes do sistema na barra lateral");
+
+            Igual("Ryzen 5 5600X", SystemInfo.Limpar("CPU [#0]: AMD Ryzen 5 5600X"),
+                  "prefixo de enumeracao do HWiNFO e fabricante");
+            Igual("Radeon RX 7800 XT", SystemInfo.Limpar("GPU [#0]: AMD Radeon RX 7800 XT"),
+                  "o mesmo na placa de video");
+            Igual("Ryzen 5 5600X", SystemInfo.Limpar("AMD Ryzen 5 5600X 6-Core Processor"),
+                  "formato da LibreHardwareMonitor");
+            Igual("Core i7-12700K", SystemInfo.Limpar("Intel(R) Core i7-12700K CPU @ 3.60GHz"),
+                  "sufixo de frequencia da Intel");
+            Igual("GeForce RTX 3060", SystemInfo.Limpar("NVIDIA GeForce RTX 3060"),
+                  "fabricante da placa de video");
+
+            // Nao inventar conteudo: nome que nao casa com nenhum padrao passa
+            // inteiro, porque um nome estranho ainda identifica a peca melhor
+            // do que um pedaco escolhido por chute.
+            Igual("Alguma Peca Exotica", SystemInfo.Limpar("Alguma Peca Exotica"),
+                  "nome fora dos padroes passa inteiro");
+            Igual(null, SystemInfo.Limpar("   "), "so espaco vira nulo");
+            Igual(null, SystemInfo.Limpar(null), "nulo continua nulo");
+        }
+
         private static void IdaEVoltaDaConfiguracao()
         {
             Secao("ida e volta da configuracao");
@@ -211,6 +244,7 @@ namespace MhiagosControl
                 c.Language = T.EnUs;
                 c.IdleBlankMinutes = 15;
                 c.RotateSeconds = 20;
+                c.SidebarCollapsed = true;
                 c.SaveTo(arquivo);
 
                 Verdade(File.Exists(arquivo), "gravou no arquivo do teste, e nao no real");
@@ -235,6 +269,7 @@ namespace MhiagosControl
                 Verdade(lido.NameExists("padrão"), "nome existente ignora caixa");
                 Igual(15, lido.IdleBlankMinutes, "minutos ate apagar");
                 Igual(20, lido.RotateSeconds, "segundos do rodizio");
+                Verdade(lido.SidebarCollapsed, "barra lateral recolhida");
 
                 // A roda e derivada da marca de cada perfil, e nao uma segunda
                 // lista: duas listas para a mesma coisa saem de sincronia

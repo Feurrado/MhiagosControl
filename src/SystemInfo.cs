@@ -61,29 +61,45 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Encurta o nome do fabricante para caber nos 210 px da lateral.
+        /// Encurta o nome ate sobrar o modelo, que e o que identifica a peca.
         ///
-        /// "AMD Ryzen 5 5600X 6-Core Processor" vira "Ryzen 5 5600X". Sem isso o
-        /// texto e cortado com reticencias justamente no modelo, que e a parte
-        /// que identifica a peca - sobraria "AMD Ryzen 5 56...".
+        /// O HWiNFO publica "CPU [#0]: AMD Ryzen 5 5600X" e a LibreHardwareMonitor
+        /// publica "AMD Ryzen 5 5600X 6-Core Processor". Nos 140 px da coluna,
+        /// os dois eram cortados exatamente sobre o modelo - sobrava
+        /// "CPU [#0]: AMD Ryzen 5 ...", que gasta a linha inteira dizendo o que
+        /// o rotulo ao lado ja diz.
+        ///
+        /// A ordem importa: o prefixo de enumeracao sai primeiro, senao o nome
+        /// do fabricante nunca esta no comeco e a remocao seguinte nao encontra
+        /// nada. Foi exatamente esse o defeito.
         /// </summary>
-        private static string Limpar(string nome)
+        internal static string Limpar(string nome)
         {
             if (string.IsNullOrEmpty(nome)) return null;
             string s = nome.Trim();
 
-            string[] prefixos = { "AMD ", "Intel ", "NVIDIA ", "Advanced Micro Devices " };
+            // "CPU [#0]: ", "GPU [#1]: " - enumeracao do HWiNFO
+            s = System.Text.RegularExpressions.Regex.Replace(
+                    s, @"^[A-Za-z0-9 ]{1,12}\[#\d+\]\s*:\s*", "").Trim();
+
+            string[] prefixos = { "AMD ", "Intel(R) ", "Intel ", "NVIDIA ",
+                                  "Advanced Micro Devices ", "Radeon(TM) " };
             foreach (string p in prefixos)
                 if (s.StartsWith(p, StringComparison.OrdinalIgnoreCase))
-                { s = s.Substring(p.Length); break; }
+                { s = s.Substring(p.Length).Trim(); break; }
 
-            string[] sufixos = { " 6-Core Processor", " 8-Core Processor", " 12-Core Processor",
-                                 " 16-Core Processor", " Processor", " CPU" };
+            // "6-Core Processor", "with Radeon Graphics", "CPU @ 3.70GHz"
+            s = System.Text.RegularExpressions.Regex.Replace(
+                    s, @"\s+\d{1,2}-Core Processor$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            s = System.Text.RegularExpressions.Regex.Replace(
+                    s, @"\s+(CPU\s*)?@\s*[\d.,]+\s*[GM]Hz$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            string[] sufixos = { " Processor", " Graphics Card", " with Radeon Graphics", " CPU" };
             foreach (string x in sufixos)
                 if (s.EndsWith(x, StringComparison.OrdinalIgnoreCase))
-                { s = s.Substring(0, s.Length - x.Length); break; }
+                { s = s.Substring(0, s.Length - x.Length).Trim(); break; }
 
-            return s.Trim();
+            return s.Length == 0 ? null : s;
         }
 
         [StructLayout(LayoutKind.Sequential)]

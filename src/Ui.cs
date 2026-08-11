@@ -601,17 +601,60 @@ namespace MhiagosControl
         private const int HeaderH = 116;
         private const int RowH = 40;
 
+        public const int LarguraAberta = 210;
+        public const int LarguraRecolhida = 56;
+
+        /// <summary>
+        /// Recolhe a barra para uma faixa so de icones.
+        ///
+        /// Recolher em vez de sumir de vez: uma barra escondida por completo
+        /// leva junto o caminho de volta, e sobra procurar onde clicar para
+        /// traze-la. Com a faixa, o botao que reabre fica onde estava o que
+        /// fechou, e navegar continua possivel sem reabrir nada.
+        /// </summary>
+        public bool Collapsed
+        {
+            get { return _collapsed; }
+            set
+            {
+                if (_collapsed == value) return;
+                _collapsed = value;
+                Width = value ? LarguraRecolhida : LarguraAberta;
+                _hover = -1;
+                Invalidate();
+                if (CollapsedChanged != null) CollapsedChanged(this, EventArgs.Empty);
+            }
+        }
+        private bool _collapsed = false;
+
+        public event EventHandler CollapsedChanged;
+
+        private Rectangle _botao = Rectangle.Empty;
+        private bool _sobreBotao = false;
+
+        private int TopoDosItens { get { return _collapsed ? 104 : HeaderH; } }
+
         protected override void OnMouseMove(MouseEventArgs e)
         {
-            int h = HitTest(e.Location);
-            if (h != _hover) { _hover = h; Cursor = h >= 0 ? Cursors.Hand : Cursors.Default; Invalidate(); }
+            bool nb = _botao.Contains(e.Location);
+            int h = nb ? -1 : HitTest(e.Location);
+            if (h != _hover || nb != _sobreBotao)
+            {
+                _hover = h; _sobreBotao = nb;
+                Cursor = (h >= 0 || nb) ? Cursors.Hand : Cursors.Default;
+                Invalidate();
+            }
             base.OnMouseMove(e);
         }
 
-        protected override void OnMouseLeave(EventArgs e) { _hover = -1; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _hover = -1; _sobreBotao = false; Invalidate(); base.OnMouseLeave(e);
+        }
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (_botao.Contains(e.Location)) { Collapsed = !Collapsed; base.OnMouseDown(e); return; }
             int h = HitTest(e.Location);
             if (h >= 0) SelectedIndex = h;
             base.OnMouseDown(e);
@@ -630,31 +673,13 @@ namespace MhiagosControl
             Ui.Smooth(g);
             using (SolidBrush b = new SolidBrush(Ui.Sidebar)) g.FillRectangle(b, ClientRectangle);
 
-            if (Logo != null)
-                g.DrawImage(Logo, 18, 18, 34, 34);
+            DesenharCabecalho(g);
 
-            using (SolidBrush b = new SolidBrush(Ui.Text))
-                g.DrawString(AppName, Ui.FontMed, b, 60, 26);
-
-            // O perfil ocupa a largura toda, abaixo do titulo. TextRenderer com
-            // retangulo delimitado, e nao DrawString: DrawString corta onde o
-            // controle acaba, sem reticencias.
-            int w = Width - 34;
-            if (!string.IsNullOrEmpty(SubtitleCaption))
-                TextRenderer.DrawText(g, SubtitleCaption, Ui.FontSmall,
-                    new Rectangle(18, 62, w, 14), Ui.Faint,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-
-            if (!string.IsNullOrEmpty(Subtitle))
-                TextRenderer.DrawText(g, Subtitle, Ui.FontBase,
-                    new Rectangle(18, 78, w, 18), Ui.Text,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-
-            int y = HeaderH;
+            int y = TopoDosItens;
             for (int i = 0; i < _items.Count; i++)
             {
                 NavItem it = _items[i];
-                it.Bounds = new Rectangle(8, y, Width - 16, RowH);
+                it.Bounds = new Rectangle(_collapsed ? 6 : 8, y, Width - (_collapsed ? 12 : 16), RowH);
 
                 bool sel = (i == _selected);
                 if (sel || i == _hover)
@@ -675,16 +700,85 @@ namespace MhiagosControl
                 {
                     using (Font f = new Font("Segoe MDL2 Assets", 11f))
                     using (SolidBrush b = new SolidBrush(sel ? Ui.Accent : fore))
-                        g.DrawString(it.Glyph, f, b, it.Bounds.X + 14, it.Bounds.Y + 11);
+                    {
+                        // Recolhida, o glifo e a unica coisa que resta do item:
+                        // centraliza, senao fica encostado na esquerda da faixa.
+                        if (_collapsed)
+                        {
+                            SizeF t = g.MeasureString(it.Glyph, f);
+                            g.DrawString(it.Glyph, f, b,
+                                it.Bounds.X + (it.Bounds.Width - t.Width) / 2f, it.Bounds.Y + 11);
+                        }
+                        else g.DrawString(it.Glyph, f, b, it.Bounds.X + 14, it.Bounds.Y + 11);
+                    }
                 }
-                TextRenderer.DrawText(g, it.Text, sel ? Ui.FontMed : Ui.FontBase,
-                    new Rectangle(it.Bounds.X + 42, it.Bounds.Y, it.Bounds.Width - 46, RowH), fore,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                if (!_collapsed)
+                    TextRenderer.DrawText(g, it.Text, sel ? Ui.FontMed : Ui.FontBase,
+                        new Rectangle(it.Bounds.X + 42, it.Bounds.Y, it.Bounds.Width - 46, RowH), fore,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
                 y += RowH + 2;
             }
 
             DesenharSistema(g, y);
+        }
+
+        /// <summary>
+        /// Cabecalho: logotipo, nome, perfil ativo e o botao que recolhe.
+        ///
+        /// Recolhida, sobra o logotipo e o botao. Nome do aplicativo e perfil
+        /// ativo nao encolhem para 56 px - virariam duas reticencias, que ocupam
+        /// espaco sem informar.
+        /// </summary>
+        private void DesenharCabecalho(Graphics g)
+        {
+            if (_collapsed)
+            {
+                if (Logo != null) g.DrawImage(Logo, (Width - 30) / 2, 18, 30, 30);
+                _botao = new Rectangle((Width - 30) / 2, 60, 30, 30);
+            }
+            else
+            {
+                if (Logo != null) g.DrawImage(Logo, 18, 18, 34, 34);
+
+                using (SolidBrush b = new SolidBrush(Ui.Text))
+                    g.DrawString(AppName, Ui.FontMed, b, 60, 26);
+
+                // O perfil ocupa a largura toda, abaixo do titulo. TextRenderer
+                // com retangulo delimitado, e nao DrawString: DrawString corta
+                // onde o controle acaba, sem reticencias.
+                int w = Width - 34;
+                if (!string.IsNullOrEmpty(SubtitleCaption))
+                    TextRenderer.DrawText(g, SubtitleCaption, Ui.FontSmall,
+                        new Rectangle(18, 62, w, 14), Ui.Faint,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+                if (!string.IsNullOrEmpty(Subtitle))
+                    TextRenderer.DrawText(g, Subtitle, Ui.FontBase,
+                        new Rectangle(18, 78, w, 18), Ui.Text,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+                _botao = new Rectangle(Width - 42, 20, 30, 30);
+            }
+
+            if (_sobreBotao)
+            {
+                using (GraphicsPath p = Ui.RoundRect(_botao, 6))
+                using (SolidBrush b = new SolidBrush(Ui.Hover))
+                    g.FillPath(b, p);
+            }
+
+            // E700 e o "hamburguer" da Segoe MDL2 - escapado, e nao colado como
+            // caractere, porque area de uso privado nao sobrevive a toda
+            // ferramenta que passa pelo arquivo.
+            using (Font f = new Font("Segoe MDL2 Assets", 11f))
+            using (SolidBrush b = new SolidBrush(_sobreBotao ? Ui.Text : Ui.Muted))
+            {
+                SizeF t = g.MeasureString("", f);
+                g.DrawString("", f, b,
+                    _botao.X + (_botao.Width - t.Width) / 2f,
+                    _botao.Y + (_botao.Height - t.Height) / 2f);
+            }
         }
 
         private const int SpecRowH = 21;
@@ -702,7 +796,7 @@ namespace MhiagosControl
         /// </summary>
         private void DesenharSistema(Graphics g, int fimDosItens)
         {
-            if (Specs == null || !Specs.Any) return;
+            if (_collapsed || Specs == null || !Specs.Any) return;
 
             string[][] linhas = new string[][]
             {

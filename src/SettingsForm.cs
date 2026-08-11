@@ -117,6 +117,15 @@ namespace MhiagosControl
             _nav.Subtitle = _current.Name;
             _nav.SpecsCaption = T.SystemCaption;
             _nav.Specs = SystemInfo.From(_sensors);
+            _nav.Collapsed = _cfg.SidebarCollapsed;
+            _nav.CollapsedChanged += delegate
+            {
+                // Grava na hora, e nao no Salvar: recolher a barra e escolha de
+                // espaco de tela, nao edicao de perfil, e nao deve ficar refem
+                // de uma gravacao que a pessoa talvez nem faca.
+                try { _cfg.SidebarCollapsed = _nav.Collapsed; _cfg.Save(); }
+                catch (Exception ex) { Log.Error("gravar estado da barra lateral", ex); }
+            };
             _nav.SelectionChanged += delegate { ShowPage(); };
             Controls.Add(_nav);
 
@@ -137,12 +146,16 @@ namespace MhiagosControl
             // alem da borda direita do proprio rodape.
             int rodape = ClientSize.Width - _nav.Width;
             save.SetBounds(rodape - 210, 14, 96, 32);
+            // Ancorados a direita: recolher a barra alarga o rodape, e sem a
+            // ancora os botoes ficariam parados no meio dele.
+            save.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             save.Click += new EventHandler(OnSave);
             footer.Controls.Add(save);
 
             FlatBtn close = new FlatBtn();
             close.Text = T.Close;
             close.SetBounds(rodape - 106, 14, 96, 32);
+            close.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             close.Click += delegate { Close(); };
             footer.Controls.Add(close);
 

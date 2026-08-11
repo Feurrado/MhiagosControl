@@ -98,6 +98,15 @@ namespace MhiagosControl
         /// <summary>Segundos em cada perfil do rodizio; 0 desliga.</summary>
         public int RotateSeconds = 0;
 
+        /// <summary>
+        /// Barra lateral recolhida na faixa de icones.
+        ///
+        /// Guardado porque e escolha de espaco de tela, nao acao pontual: quem
+        /// recolheu quis mais area para o conteudo, e reabrir a janela na
+        /// largura cheia desfaria isso a cada vez.
+        /// </summary>
+        public bool SidebarCollapsed = false;
+
         /// <summary>Perfis marcados para o rodizio. Menos de dois nao e rodizio.</summary>
         public List<Profile> Rotation
         {
@@ -182,6 +191,7 @@ namespace MhiagosControl
                         else if (k == "language") c.Language = v;
                         else if (k == "idleblank") c.IdleBlankMinutes = ParseInt(v);
                         else if (k == "rotateseconds") c.RotateSeconds = ParseInt(v);
+                        else if (k == "sidebarcollapsed") c.SidebarCollapsed = (v == "1");
                         // chaves legadas (formato antigo, sem seccao)
                         else if (k == "panel1" || k == "panel2" || k == "fahrenheit" || k == "percent")
                         {
@@ -257,6 +267,7 @@ namespace MhiagosControl
                 if (!string.IsNullOrEmpty(Language)) sb.AppendLine("language=" + Language);
                 sb.AppendLine("idleblank=" + IdleBlankMinutes.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("rotateseconds=" + RotateSeconds.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("sidebarcollapsed=" + (SidebarCollapsed ? "1" : "0"));
                 foreach (Profile p in Profiles) AppendProfile(sb, p);
                 File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
                 Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " + ActiveName + ")");
