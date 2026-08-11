@@ -1022,16 +1022,31 @@ namespace MhiagosControl
             // Primeira abertura: monta uma selecao automatica e grava. A partir
             // dai a lista e do usuario, inclusive vazia - por isso o marcador
             // separado, e nao "lista vazia significa recomecar".
-            if (!_cfg.MetricsChosen)
-            {
-                _cfg.MetricIds.Clear();
-                foreach (SensorEntry s in MetricPicker.Escolher(_sensors, 5)) _cfg.MetricIds.Add(s.Id);
-                _cfg.MetricsChosen = true;
-                GravarMetricas();
-            }
+            if (!_cfg.MetricsChosen) SelecaoPadrao();
 
             MontarMetricas();
             return _pgMetricas;
+        }
+
+        /// <summary>
+        /// Repoe o conjunto basico: uma leitura de cada grandeza por peca.
+        ///
+        /// Roda sozinha na primeira abertura e fica disponivel num botao. O
+        /// botao nao e conveniencia: quem ja abriu o aplicativo antes tem
+        /// "escolhido" gravado, e sem ele uma correcao na selecao automatica -
+        /// como a temperatura que faltava - nunca chegaria a quem ja usa.
+        /// </summary>
+        private void SelecaoPadrao()
+        {
+            _cfg.MetricIds.Clear();
+            _cfg.MetricSizes.Clear();
+            foreach (SensorEntry s in MetricPicker.Escolher(_sensors, 5))
+            {
+                _cfg.MetricIds.Add(s.Id);
+                _cfg.MetricSizes.Add(0);
+            }
+            _cfg.MetricsChosen = true;
+            GravarMetricas();
         }
 
         private void GravarMetricas()
@@ -1066,7 +1081,13 @@ namespace MhiagosControl
             add.Click += delegate { AdicionarMetrica(); };
             _pgMetricas.Controls.Add(add);
 
-            Label dica = MakeLabel(T.MetricsHint, 162, y + 8, Ui.FontSmall);
+            FlatBtn padrao = new FlatBtn();
+            padrao.Text = T.DefaultMetrics;
+            padrao.SetBounds(158, y, 150, 32);
+            padrao.Click += delegate { SelecaoPadrao(); MontarMetricas(); };
+            _pgMetricas.Controls.Add(padrao);
+
+            Label dica = MakeLabel(T.MetricsHint, 318, y + 8, Ui.FontSmall);
             dica.Size = new Size(600, 18);
             dica.ForeColor = Ui.Faint;
             _pgMetricas.Controls.Add(dica);

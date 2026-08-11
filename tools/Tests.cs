@@ -221,6 +221,22 @@ namespace MhiagosControl
                   "nome fora dos padroes passa inteiro");
             Igual(null, SystemInfo.Limpar("   "), "so espaco vira nulo");
             Igual(null, SystemInfo.Limpar(null), "nulo continua nulo");
+
+            // A selecao automatica exigia "°C" literal e voltava sem nenhuma
+            // temperatura - a leitura mais basica faltando na grade que existe
+            // para dar o basico. As fontes escrevem o grau de formas diferentes.
+            Igual("C", MetricPicker.Normalizar("°C"), "grau com simbolo");
+            Igual("C", MetricPicker.Normalizar("C"), "grau sem simbolo");
+            Igual("C", MetricPicker.Normalizar(" degC "), "grau por extenso");
+            Igual("C", MetricPicker.Normalizar("Â°C"), "grau mastigado pela pagina de codigo");
+            Igual("%", MetricPicker.Normalizar("%"), "porcentagem");
+            Igual("MHZ", MetricPicker.Normalizar("MHz"), "frequencia ignora caixa");
+            Igual("RPM", MetricPicker.Normalizar("rpm"), "rotacao ignora caixa");
+            Igual("", MetricPicker.Normalizar(null), "nulo vira vazio");
+
+            float? at, pe;
+            MetricPicker.Faixas("C", out at, out pe);
+            Verdade(at.HasValue && at.Value == 80, "faixa de atencao vale para C sem simbolo");
         }
 
         private static void IdaEVoltaDaConfiguracao()

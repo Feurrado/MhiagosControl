@@ -325,7 +325,34 @@ namespace MhiagosControl
         }
 
         private static readonly string[] Ordem = { "CPU", "GPU", "Memória", "Placa-mãe", "Disco" };
-        private static readonly string[] Grandezas = { "°C", "%", "MHz", "W", "RPM" };
+
+        /// <summary>
+        /// Grandezas na ordem em que interessam, com a temperatura primeiro.
+        ///
+        /// Comparadas pela forma NORMALIZADA. A primeira versao exigia "°C"
+        /// literal, e o resultado foi uma grade automatica sem nenhuma
+        /// temperatura - a leitura mais basica de todas faltando justamente na
+        /// selecao que existe para dar o basico. As fontes publicam o grau ora
+        /// como "°C", ora como "C", ora com o simbolo mastigado pela conversao
+        /// de pagina de codigo, e exigir uma das formas perde as outras duas.
+        /// </summary>
+        private static readonly string[] Grandezas = { "C", "%", "MHZ", "W", "RPM" };
+
+        /// <summary>Reduz a unidade a uma chave comparavel: "°C" e "C" batem.</summary>
+        public static string Normalizar(string unidade)
+        {
+            if (string.IsNullOrEmpty(unidade)) return "";
+            string s = unidade.Trim().ToUpperInvariant();
+
+            System.Text.StringBuilder sb = new System.Text.StringBuilder(s.Length);
+            foreach (char c in s)
+                if (char.IsLetterOrDigit(c) || c == '%' || c == '/') sb.Append(c);
+
+            s = sb.ToString();
+            if (s == "DEGC" || s == "ÂC") return "C";
+            if (s == "DEGF") return "F";
+            return s;
+        }
 
         public static List<SensorEntry> Escolher(List<SensorEntry> todos, int porCategoria)
         {
@@ -350,7 +377,7 @@ namespace MhiagosControl
             foreach (SensorEntry s in todos)
             {
                 if (s == null || s.Category != categoria) continue;
-                if (!string.Equals(s.Unit, unidade, StringComparison.OrdinalIgnoreCase)) continue;
+                if (Normalizar(s.Unit) != unidade) continue;
                 return s;
             }
             return null;
@@ -366,10 +393,12 @@ namespace MhiagosControl
         public static void Faixas(string unidade, out float? atencao, out float? perigo)
         {
             atencao = null; perigo = null;
-            if (string.IsNullOrEmpty(unidade)) return;
+            string u = Normalizar(unidade);
+            if (u.Length == 0) return;
 
-            if (unidade == "°C") { atencao = 80; perigo = 90; }
-            else if (unidade == "%") { atencao = 85; perigo = 95; }
+            if (u == "C") { atencao = 80; perigo = 90; }
+            else if (u == "F") { atencao = 176; perigo = 194; }
+            else if (u == "%") { atencao = 85; perigo = 95; }
         }
     }
 }

@@ -64,6 +64,7 @@ namespace MhiagosControl
         public static string NavProfiles { get { return P("Perfis", "Profiles"); } }
         public static string NavMetrics { get { return P("Métricas", "Metrics"); } }
         public static string AddMetric { get { return P("Adicionar métrica", "Add metric"); } }
+        public static string DefaultMetrics { get { return P("Conjunto padrão", "Default set"); } }
         public static string MetricsHint
         {
             get
