@@ -30,7 +30,7 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.0.0";
+        public const string Versao = "2.1.0";
         public const string TaskName = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
@@ -60,6 +60,8 @@ namespace MhiagosSetup
 
         public static void Instalar(string destino, bool atalhoArea, bool autostart, Action<string> diz)
         {
+            bool atualizando = File.Exists(Path.Combine(destino, "MhiagosControl.exe"));
+
             diz("Encerrando o aplicativo, se estiver em execução...");
             Encerrar();
 
@@ -90,34 +92,49 @@ namespace MhiagosSetup
 
             diz("Copiando o desinstalador");
             string desinst = Path.Combine(destino, "uninstall.exe");
-            File.Copy(Assembly.GetExecutingAssembly().Location, desinst, true);
+            string eu = Assembly.GetExecutingAssembly().Location;
+            // Numa atualizacao rodada de dentro da propria pasta instalada a
+            // origem e o destino seriam o mesmo arquivo, e File.Copy lanca.
+            if (!string.Equals(Path.GetFullPath(eu), Path.GetFullPath(desinst),
+                               StringComparison.OrdinalIgnoreCase))
+                File.Copy(eu, desinst, true);
 
+            // Os dois itens abaixo seguem a caixa marcada nos dois sentidos.
+            // Numa atualizacao a caixa vem preenchida com o estado atual, entao
+            // desmarcar tem de remover de verdade - senao a caixa mente.
             diz("Criando atalhos");
             string menu = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), AppName + ".lnk");
             Atalho(menu, exe, destino);
-            if (atalhoArea)
-                Atalho(Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
-                    AppName + ".lnk"), exe, destino);
+            string naArea = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
+                AppName + ".lnk");
+            if (atalhoArea) Atalho(naArea, exe, destino);
+            else Apagar(naArea);
 
             diz("Registrando em Aplicativos Instalados");
             Registrar(destino, exe, desinst);
 
+            int rc;
             if (autostart)
             {
                 diz("Configurando o início automático");
                 // Mesma tarefa que o proprio aplicativo cria e remove pelo menu.
                 // Recria-la aqui tambem conserta o caso de ela ter ficado
                 // apontando para um caminho antigo.
-                int rc;
                 Schtasks("/create /tn \"" + TaskName + "\" /tr \"\\\"" + exe +
                          "\\\"\" /sc onlogon /rl highest /f", out rc);
                 if (rc != 0) diz("  aviso: a tarefa agendada não foi criada (código " + rc + ")");
             }
+            else if (TemAutostart())
+            {
+                diz("Removendo o início automático");
+                Schtasks("/delete /tn \"" + TaskName + "\" /f", out rc);
+            }
 
             diz("");
-            diz("Instalado em " + destino);
+            diz((atualizando ? "Atualizado em " : "Instalado em ") + destino);
+            if (atualizando) diz("Os perfis e as configurações foram conservados.");
         }
 
         // ---------------- desinstalar ----------------
@@ -298,6 +315,35 @@ namespace MhiagosSetup
             }
             catch { return null; }
         }
+
+        public static string VersaoInstalada()
+        {
+            try
+            {
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(UninstallKey))
+                    return k == null ? null : k.GetValue("DisplayVersion") as string;
+            }
+            catch { return null; }
+        }
+
+        public static bool TemAtalhoNaArea()
+        {
+            try
+            {
+                return File.Exists(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
+                    AppName + ".lnk"));
+            }
+            catch { return false; }
+        }
+
+        /// <summary>A tarefa de inicio automatico existe? Codigo 0 do schtasks.</summary>
+        public static bool TemAutostart()
+        {
+            int rc;
+            Schtasks("/query /tn \"" + TaskName + "\"", out rc);
+            return rc == 0;
+        }
     }
 
     /// <summary>Janela unica: instala ou desinstala, conforme o argumento.</summary>
@@ -310,6 +356,8 @@ namespace MhiagosSetup
         private static readonly Color Acento = Color.FromArgb(0x2D, 0x7D, 0xF6);
 
         private readonly bool _desinstalar;
+        private readonly bool _atualizar;
+        private readonly string _jaEm;
         private TextBox _dir;
         private CheckBox _area, _auto, _abrir, _dados;
         private Button _acao, _fechar;
@@ -319,8 +367,12 @@ namespace MhiagosSetup
         public Janela(bool desinstalar)
         {
             _desinstalar = desinstalar;
+            _jaEm = Setup.JaInstaladoEm();
+            _atualizar = !desinstalar && !string.IsNullOrEmpty(_jaEm) &&
+                         File.Exists(Path.Combine(_jaEm, "MhiagosControl.exe"));
 
-            Text = Setup.AppName + (desinstalar ? " - desinstalar" : " - instalar");
+            Text = Setup.AppName +
+                   (desinstalar ? " - desinstalar" : _atualizar ? " - atualizar" : " - instalar");
             ClientSize = new Size(600, desinstalar ? 400 : 440);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -343,7 +395,10 @@ namespace MhiagosSetup
             {
                 Text = desinstalar
                     ? "Remove o aplicativo, os atalhos e o início automático."
-                    : "Versão " + Setup.Versao + " · driver alternativo para o painel do cooler.",
+                    : _atualizar
+                        ? "Atualização · " + Descrever(Setup.VersaoInstalada()) + "  →  versão " +
+                          Setup.Versao + ". Os perfis são conservados."
+                        : "Versão " + Setup.Versao + " · driver alternativo para o painel do cooler.",
                 ForeColor = Fraco,
                 Bounds = new Rectangle(20, y, 560, 20)
             });
@@ -351,13 +406,17 @@ namespace MhiagosSetup
 
             if (!desinstalar)
             {
-                Add(new Label { Text = "Instalar em:", ForeColor = Fraco, Bounds = new Rectangle(20, y, 560, 18) });
+                Add(new Label
+                {
+                    Text = _atualizar ? "Atualizar a instalação em:" : "Instalar em:",
+                    ForeColor = Fraco,
+                    Bounds = new Rectangle(20, y, 560, 18)
+                });
                 y += 20;
 
-                string jaEm = Setup.JaInstaladoEm();
                 _dir = new TextBox
                 {
-                    Text = string.IsNullOrEmpty(jaEm) ? Setup.DestinoPadrao : jaEm,
+                    Text = _atualizar ? _jaEm : Setup.DestinoPadrao,
                     Bounds = new Rectangle(20, y, 460, 26),
                     BackColor = Cartao,
                     ForeColor = Texto,
@@ -379,8 +438,13 @@ namespace MhiagosSetup
                 Add(procurar);
                 y += 38;
 
-                _area = Check("Criar atalho na área de trabalho", 20, y, true); y += 26;
-                _auto = Check("Iniciar junto com o Windows", 20, y, true); y += 26;
+                // Numa atualizacao as caixas vem com o estado atual da maquina,
+                // e nao com o padrao - marca-las de novo apagaria a escolha que
+                // o usuario ja tinha feito. Instalar() honra os dois sentidos.
+                _area = Check("Criar atalho na área de trabalho", 20, y,
+                              _atualizar ? Setup.TemAtalhoNaArea() : true); y += 26;
+                _auto = Check("Iniciar junto com o Windows", 20, y,
+                              _atualizar ? Setup.TemAutostart() : true); y += 26;
                 _abrir = Check("Executar ao terminar", 20, y, true); y += 32;
             }
             else
@@ -412,7 +476,7 @@ namespace MhiagosSetup
             };
             Add(_log);
 
-            _acao = Botao(desinstalar ? "Desinstalar" : "Instalar",
+            _acao = Botao(desinstalar ? "Desinstalar" : _atualizar ? "Atualizar" : "Instalar",
                           new Rectangle(360, ClientSize.Height - 46, 110, 32), true);
             _acao.Click += OnAcao;
             Add(_acao);
@@ -423,6 +487,12 @@ namespace MhiagosSetup
         }
 
         private void Add(Control c) { Controls.Add(c); }
+
+        /// <summary>A versao instalada, ou um texto neutro se ela nao constar.</summary>
+        private static string Descrever(string versao)
+        {
+            return string.IsNullOrEmpty(versao) ? "versão instalada" : "versão " + versao;
+        }
 
         private CheckBox Check(string texto, int x, int y, bool marcado)
         {
