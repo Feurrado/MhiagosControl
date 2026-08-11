@@ -465,9 +465,9 @@ certos e o que some é o resto.
 ## Ferramentas
 
 `tools\Probe.cs` — sonda interativa do protocolo, para varrer o que ainda não
-foi mapeado: códigos de dígito acima de `0x0F`, os seis bits sem uso conhecido
-de `report[4]`, os 56 bytes que o software original sempre zera, outros
-ReportIDs e a cadência máxima que o firmware aceita.
+foi mapeado: códigos de dígito acima de `0x0F`, os 56 bytes que o software
+original sempre zera, outros ReportIDs e a cadência máxima que o firmware
+aceita.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\build-probe.ps1
@@ -486,8 +486,36 @@ com o dispositivo não envolve driver.
 | `r <hex...>` | substitui o quadro inteiro |
 | `hz <ms>` | muda a cadência de reenvio |
 | `anim [ms]` | anima os dígitos, para medir o limite de atualização |
+| `un` | percorre os dois nibbles de `report[4]`, um indicador de cada vez |
 | `ids` | tenta outros ReportIDs |
 | `q` | sai |
+
+### Não há como apagar os indicadores de unidade
+
+Um dos dois símbolos de cada par fica **sempre aceso**: `°C` ou `°F` em cima,
+`%` ou `W` embaixo. O protocolo alterna dentro do par e não tem estado apagado.
+Isso foi procurado a fundo e não existe — segue o que foi varrido, para que
+ninguém precise refazer:
+
+| Onde | Como | Resultado |
+|------|------|-----------|
+| Os seis bits sem mapa de `report[4]` | os 16 valores de cada nibble, com os dígitos fixos em `123`/`456` | só `bit0` e `bit4` fazem alguma coisa; os outros seis são inertes |
+| Outros ReportIDs | `ids`, os 255 | só o `0x07` é aceito |
+| Códigos de dígito de `0x10` a `0xFF` | sondagem nas posições `1` e `5` | nenhum apaga os símbolos |
+| Os 56 bytes que o software original zera | sondagem em `8`, `9` e `10` | nada muda |
+
+A explicação mais simples para o conjunto é que o firmware acende um dos dois
+símbolos incondicionalmente, sem terceiro caso — e se os dois forem um par
+complementar no mesmo pino, é impossível eletricamente, não só no protocolo.
+
+Vale registrar a ausência com o mesmo cuidado de um achado: é a diferença entre
+"ninguém tentou" e "foi tentado e não está aí", e só a segunda dispensa tentar
+de novo.
+
+**Consequência para quem usa o aplicativo:** ao pôr no mostrador uma métrica que
+não é temperatura nem porcentagem — RPM, MHz, vazão — um símbolo errado vai
+ficar aceso do lado do número, e a escolha possível é qual dos dois incomoda
+menos. A única saída de verdade é física: uma fita opaca sobre o símbolo.
 
 ---
 

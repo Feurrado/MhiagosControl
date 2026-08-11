@@ -10,7 +10,6 @@ namespace MhiagosControl
     ///
     ///   - codigos de digito acima de 0x0F (0..9 = numeros, 0x0A..0x0F = apagado;
     ///     0x10..0xFF nunca foram testados)
-    ///   - os seis bits sem uso conhecido de report[4]
     ///   - os 56 bytes que o software original sempre zera
     ///   - outros ReportIDs alem do 0x07
     ///   - a cadencia maxima que o firmware aceita
@@ -36,6 +35,11 @@ namespace MhiagosControl
                 return 1;
             }
             Console.WriteLine("aberto: " + panel.DevicePath);
+            // O quadro de teste sobe antes de qualquer comando, e uma thread o
+            // reenvia sem parar. Sem dizer isso aqui, o painel parado em 123/456
+            // parece defeito - foi o que aconteceu na primeira vez.
+            Console.WriteLine("o painel vai mostrar 123 °C / 456 W - e o quadro de teste, nao defeito.");
+            Console.WriteLine("'un' mapeia os indicadores de unidade; 'q' apaga e sai.");
 
             lock (_lock)
             {
@@ -114,6 +118,10 @@ namespace MhiagosControl
                     Animar(p.Length > 1 ? int.Parse(p[1]) : 80);
                     return true;
 
+                case "un":                                  // mapeia os indicadores de unidade
+                    Unidades();
+                    return true;
+
                 case "ids":                                 // procura outros ReportIDs
                     Ids(panel);
                     return true;
@@ -160,6 +168,64 @@ namespace MhiagosControl
             }
             Set(idx, original);
             Console.WriteLine("\nfim; byte[" + idx + "] restaurado para 0x" + original.ToString("X2"));
+        }
+
+        /// <summary>
+        /// Mapeia os dois indicadores de unidade, um nibble de cada vez.
+        ///
+        /// De report[4] so bit0 (°F) e bit4 (%) foram levantados. A simetria -
+        /// um bit conhecido em cada nibble - sugere que cada nibble comanda um
+        /// indicador, com tres bits sem mapa em cada. Se existir um codigo que
+        /// apaga o simbolo, em vez de so alternar entre os dois, e ali.
+        ///
+        /// Anda passo a passo esperando Enter porque a resposta e visual: o que
+        /// importa e qual simbolo esta aceso, ou nenhum.
+        /// </summary>
+        private static void Unidades()
+        {
+            byte original;
+            lock (_lock)
+            {
+                original = _frame[4];
+                // Digitos visiveis de proposito: com o mostrador apagado nao da
+                // para distinguir "o indicador apagou" de "o quadro inteiro caiu".
+                _frame[1] = 1; _frame[2] = 2; _frame[3] = 3;
+                _frame[5] = 4; _frame[6] = 5; _frame[7] = 6;
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("Olhe o cooler a cada passo e anote: °C, °F, os dois, ou nenhum?");
+            Console.WriteLine("Os digitos ficam em 123 e 456 - se eles sumirem, o quadro caiu.");
+            Console.WriteLine("Enter avanca, 'x' encerra.");
+
+            if (Nibble("de cima  (°C / °F)  - nibble baixo", 0))
+                Nibble("de baixo (%  / W )  - nibble alto", 4);
+
+            Set(4, original);
+            Console.WriteLine();
+            Console.WriteLine("fim; report[4] restaurado para 0x" + original.ToString("X2"));
+        }
+
+        private static bool Nibble(string qual, int deslocamento)
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- indicador " + qual + " ---");
+            for (int v = 0; v <= 15; v++)
+            {
+                byte b = (byte)(v << deslocamento);
+                Set(4, b);
+                Console.Write("  report[4] = 0x" + b.ToString("X2") + "   bits " + Bits(v) + "   -> ");
+                string s = Console.ReadLine();
+                if (s != null && s.Trim() == "x") return false;
+            }
+            return true;
+        }
+
+        private static string Bits(int v)
+        {
+            char[] c = new char[4];
+            for (int i = 0; i < 4; i++) c[i] = ((v >> (3 - i)) & 1) == 1 ? '1' : '0';
+            return new string(c);
         }
 
         /// <summary>
@@ -238,13 +304,14 @@ namespace MhiagosControl
             Console.WriteLine("  r <hex...>    quadro inteiro do zero       (r 07 08 08 08 11 08 08 08)");
             Console.WriteLine("  hz <ms>       cadencia do reenvio          (hz 100)");
             Console.WriteLine("  anim [ms]     contador nos seis digitos    (anim 60)");
+            Console.WriteLine("  un            mapeia os indicadores °C/°F e %/W");
             Console.WriteLine("  ids           procura outros ReportIDs");
             Console.WriteLine("  <enter>       mostra o quadro atual");
             Console.WriteLine("  q             sai e apaga o painel");
             Console.WriteLine();
             Console.WriteLine("  mapa: [0]=ReportID  [1..3]=painel 1  [4]=flags  [5..7]=painel 2");
             Console.WriteLine("        digitos 00..09 = numero, 0A..0F = apagado, 10..FF = ?");
-            Console.WriteLine("        flags bit0=Fahrenheit bit4=%, os outros seis = ?");
+            Console.WriteLine("        flags bit0=Fahrenheit bit4=%, os outros seis nao fazem nada");
         }
     }
 }

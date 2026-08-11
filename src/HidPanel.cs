@@ -13,6 +13,9 @@ namespace MhiagosControl
     ///   [0]     0x07
     ///   [1..3]  centena, dezena, unidade  -> painel 1 (000-999)
     ///   [4]     flags: bit0 (0x01) = Fahrenheit ; bit4 (0x10) = porcentagem
+    ///           os outros seis bits foram varridos e nao fazem nada. Nao ha
+    ///           como APAGAR os indicadores por aqui, so alternar dentro de
+    ///           cada par - veja "Os seis bits inertes" no README.
     ///   [5..7]  centena, dezena, unidade  -> painel 2 (000-999)
     ///   [8..63] zeros
     ///
