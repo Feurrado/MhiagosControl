@@ -30,7 +30,7 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.10.3";
+        public const string Versao = "2.11.0";
         public const string TaskName = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
@@ -511,7 +511,7 @@ namespace MhiagosSetup
                 // nao ha winget para instalar por ele.
                 if (!Setup.RtssPresente() && Setup.Winget() != null)
                 {
-                    _rtss = Check("Instalar também o RivaTuner Statistics Server (leituras de FPS)",
+                    _rtss = Check("Instalar o RivaTuner Statistics Server (FPS) e iniciá-lo com o Windows, minimizado",
                                   20, y, false); y += 26;
                 }
                 y += 6;
@@ -665,8 +665,14 @@ namespace MhiagosSetup
                 // "/s /k": com /s o cmd tira so a primeira e a ultima aspa e leva
                 // o resto ao pe da letra, que e o que permite duas chamadas com
                 // o caminho entre aspas na mesma linha.
+                // Runtime, RTSS e por fim o aplicativo recem-instalado ligando o
+                // "iniciar com o Windows" do RTSS. Encadeado na linha de comando
+                // porque o winget roda numa janela a parte e daqui nao ha como
+                // saber quando ele terminou - o "&" do cmd sabe.
+                string app = Path.Combine(_dir.Text.Trim(), "MhiagosControl.exe");
                 string linha = Chamada(winget, Setup.PacoteRuntime) + " & " +
-                               Chamada(winget, Setup.PacoteRtss);
+                               Chamada(winget, Setup.PacoteRtss) + " & " +
+                               "\"" + app + "\" --config-rtss";
 
                 ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", "/s /k \"" + linha + "\"");
                 psi.UseShellExecute = true;

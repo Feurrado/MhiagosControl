@@ -394,6 +394,8 @@ namespace MhiagosControl
                 Igual(T.RtssMissing, lista[0].Hardware, "e o rodape diz o que falta");
             }
 
+            AjusteDoConfigDoRtss();
+
             const int TamEntrada = 328, Inicio = 64, Quantas = 3;
             MemoryMappedFile mmf = null;
             try
@@ -448,6 +450,63 @@ namespace MhiagosControl
                 }
             }
             finally { if (mmf != null) mmf.Dispose(); }
+        }
+
+        /// <summary>
+        /// Ajuste do Config do RTSS.
+        ///
+        /// A funcao e pura, entao aqui da para cobrir de verdade o que no resto
+        /// da ponte depende da maquina. E o que precisa ser coberto: o arquivo
+        /// nao e nosso, guarda tambem o cache de deslocamentos que o RTSS levou
+        /// tempo descobrindo, e uma linha perdida ali custa a ele redescobrir
+        /// tudo.
+        /// </summary>
+        private static void AjusteDoConfigDoRtss()
+        {
+            // Caso real desta maquina: as duas chaves existem, uma desligada.
+            string real =
+                "[FnOffsetCache]\r\nDDRAW.DLL=00083C00 4E70C42F\r\nVersion=0000000A\r\n" +
+                "[Settings]\r\nSkin=default.usf\r\nStartMinimized=1\r\nStartWithWindows=0\r\nShowTooltips=1\r\n" +
+                "[Shared]\r\nFlags=00000001\r\n";
+
+            string saida = Rtss.AjustarIni(real);
+            Verdade(saida.Contains("StartWithWindows=1"), "liga o inicio com o Windows");
+            Verdade(saida.Contains("StartMinimized=1"), "e conserva o inicio minimizado");
+            Verdade(!saida.Contains("StartWithWindows=0"), "o valor antigo nao fica para tras");
+            Verdade(saida.Contains("DDRAW.DLL=00083C00 4E70C42F"), "o cache de deslocamentos sobrevive");
+            Verdade(saida.Contains("Skin=default.usf") && saida.Contains("ShowTooltips=1"),
+                    "as outras preferencias sobrevivem");
+            Verdade(saida.Contains("[Shared]") && saida.Contains("Flags=00000001"),
+                    "as outras secoes sobrevivem");
+
+            // Idempotente: rodar de novo nao duplica nem muda mais nada.
+            Igual(saida, Rtss.AjustarIni(saida), "aplicar duas vezes da o mesmo arquivo");
+
+            // Chaves ausentes entram DENTRO da secao, e nao no fim do arquivo -
+            // no fim cairiam em [Shared] e nao valeriam nada.
+            string semChaves = "[Settings]\r\nSkin=default.usf\r\n\r\n[Shared]\r\nFlags=1\r\n";
+            string comChaves = Rtss.AjustarIni(semChaves);
+            int posInicio = comChaves.IndexOf("StartWithWindows=1", StringComparison.Ordinal);
+            int posShared = comChaves.IndexOf("[Shared]", StringComparison.Ordinal);
+            Verdade(posInicio > 0 && posShared > posInicio, "a chave nova fica antes da proxima secao");
+            Verdade(comChaves.Contains("StartMinimized=1"), "as duas chaves entram");
+
+            // Sem a secao, ela nasce - arquivo novo ou truncado nao pode virar
+            // um ajuste que nao acontece.
+            string semSecao = Rtss.AjustarIni("[Outra]\r\nX=1\r\n");
+            Verdade(semSecao.Contains("[Settings]"), "a secao nasce quando falta");
+            Verdade(semSecao.Contains("StartWithWindows=1") && semSecao.Contains("StartMinimized=1"),
+                    "com as duas chaves");
+            Verdade(semSecao.Contains("[Outra]") && semSecao.Contains("X=1"), "sem perder o que havia");
+
+            string vazio = Rtss.AjustarIni("");
+            Verdade(vazio.Contains("[Settings]") && vazio.Contains("StartWithWindows=1"),
+                    "arquivo vazio tambem vira um Config valido");
+
+            // Nome de secao com caixa diferente continua sendo a mesma secao.
+            string caixa = Rtss.AjustarIni("[SETTINGS]\r\nstartwithwindows=0\r\n");
+            Verdade(caixa.Contains("StartWithWindows=1"), "a secao e a chave ignoram a caixa");
+            Verdade(!caixa.Contains("startwithwindows=0"), "e o valor antigo sai");
         }
 
         private static void Entrada(MemoryMappedViewAccessor v, long b, uint pid, string nome,

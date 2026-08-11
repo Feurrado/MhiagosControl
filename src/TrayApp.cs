@@ -901,6 +901,18 @@ namespace MhiagosControl
 
     public static class Program
     {
+        private static bool TemArgumento(string alvo)
+        {
+            try
+            {
+                string[] args = Environment.GetCommandLineArgs();
+                for (int i = 1; i < args.Length; i++)
+                    if (string.Equals(args[i].Trim(), alvo, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            catch { }
+            return false;
+        }
+
         [STAThread]
         public static void Main()
         {
@@ -908,6 +920,22 @@ namespace MhiagosControl
             // O idioma do Windows vale ate a configuracao ser lida: a checagem
             // de instancia unica acontece antes disso e ja fala com o usuario.
             T.Language = T.Detect();
+
+            // Modo de servico: ajusta o RTSS e sai, sem bandeja e sem tocar no
+            // mostrador. Existe para poder ser encadeado depois do winget, na
+            // mesma linha de comando - so assim o ajuste acontece com o RTSS ja
+            // instalado, que e a unica hora em que ele faz sentido. Antes do
+            // mutex de instancia unica de proposito: e uma tarefa curta, e ela
+            // nao disputa o painel com a instancia que ja estiver rodando.
+            if (TemArgumento(Rtss.ArgConfigurar))
+            {
+                string erro;
+                bool ok = Rtss.ConfigurarInicio(out erro);
+                if (!ok)
+                    MessageBox.Show(T.RtssConfigFailed(erro), T.AppName,
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             bool createdNew;
             using (Mutex mutex = new Mutex(true, "Local\\MhiagosControl_SingleInstance", out createdNew))

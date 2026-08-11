@@ -154,6 +154,16 @@ janela visível, com o comando à mostra. O instalador do Mhiagos Control oferec
 o mesmo numa caixa **desmarcada**, que só aparece quando o RTSS ainda não está
 lá e o `winget` existe.
 
+Nos dois casos o passo final liga, no `Profiles\Config` do RTSS,
+`StartWithWindows=1` e `StartMinimized=1` — ele passa a subir com o Windows
+direto para a bandeja, e o FPS existe desde o primeiro jogo do dia sem ninguém
+abrir nada. O arquivo é preservado linha a linha: ele guarda também o
+`FnOffsetCache`, e reescrevê-lo custaria ao RTSS redescobrir tudo.
+
+> O ajuste **encerra e reabre o RTSS**, porque ele reescreve esse arquivo ao
+> sair — editar com ele no ar seria escrever para ser desfeito. Por isso só
+> acontece a pedido, nunca sozinho: derrubar o RTSS desengancha o jogo aberto.
+
 O comando instala junto o **runtime do Visual C++**
 (`Microsoft.VCRedist.2015+.x64`), que o RTSS exige e o pacote dele não declara —
 sem ele o `RTSSHooksLoader64` para em *"VCRUNTIME140_1.dll não foi encontrado"* e

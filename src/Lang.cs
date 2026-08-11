@@ -214,6 +214,12 @@ namespace MhiagosControl
             }
         }
 
+        public static string RtssConfigFailed(string erro)
+        {
+            return P("Não deu para ajustar o RTSS: " + erro,
+                     "Could not adjust RTSS: " + erro);
+        }
+
         public static string RtssNoWinget
         {
             get

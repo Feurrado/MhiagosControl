@@ -1086,8 +1086,13 @@ namespace MhiagosControl
                 // aspas: com /s o cmd tira a primeira e a ultima aspa e leva o
                 // resto ao pe da letra. Sem isso, a regra de aspas do /k embaralha
                 // a linha assim que aparece a segunda.
+                // Runtime, RTSS e por fim o nosso proprio executavel ligando o
+                // "iniciar com o Windows" do RTSS. Encadeado aqui, e nao feito
+                // em codigo depois: o winget roda numa janela a parte, e daqui
+                // nao ha como saber quando ele terminou. O "&" do cmd sabe.
                 string linha = Winget(winget, Rtss.PacoteRuntime) + " & " +
-                               Winget(winget, Rtss.PacoteWinget);
+                               Winget(winget, Rtss.PacoteWinget) + " & " +
+                               "\"" + Application.ExecutablePath + "\" " + Rtss.ArgConfigurar;
 
                 System.Diagnostics.ProcessStartInfo psi =
                     new System.Diagnostics.ProcessStartInfo("cmd.exe", "/s /k \"" + linha + "\"");

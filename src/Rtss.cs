@@ -169,6 +169,202 @@ namespace MhiagosControl
 
         public const string Site = "https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/";
 
+        // ---------------- iniciar com o Windows ----------------
+
+        /// <summary>Argumento que poe o aplicativo no modo "so ajustar o RTSS".</summary>
+        public const string ArgConfigurar = "--config-rtss";
+
+        private const string ChaveInstalacao = @"SOFTWARE\WOW6432Node\Unwinder\RTSS";
+
+        /// <summary>Onde o RTSS mora, segundo o proprio registro dele.</summary>
+        public static string PastaDoRtss()
+        {
+            try
+            {
+                using (Microsoft.Win32.RegistryKey k =
+                       Microsoft.Win32.Registry.LocalMachine.OpenSubKey(ChaveInstalacao))
+                {
+                    if (k != null)
+                    {
+                        string dir = k.GetValue("InstallDir") as string;
+                        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir)) return dir;
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Error("pasta do RTSS no registro", ex); }
+
+            // Recuo para o caminho de fabrica: registro de 32 bits ausente nao
+            // significa RTSS ausente.
+            try
+            {
+                string padrao = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                    "RivaTuner Statistics Server");
+                if (Directory.Exists(padrao)) return padrao;
+            }
+            catch { }
+            return null;
+        }
+
+        public static string CaminhoDoConfig()
+        {
+            string dir = PastaDoRtss();
+            return dir == null ? null : Path.Combine(dir, "Profiles", "Config");
+        }
+
+        /// <summary>
+        /// Liga "iniciar com o Windows" e "iniciar minimizado" no Config do RTSS.
+        ///
+        /// Funcao pura, e o arquivo e preservado linha a linha. Nao e frescura:
+        /// o Config guarda tambem o FnOffsetCache - os deslocamentos das funcoes
+        /// de apresentacao que o RTSS descobriu sondando as DLLs do sistema.
+        /// Reescrever o arquivo do zero faria ele redescobrir tudo, e nada disso
+        /// e assunto nosso.
+        /// </summary>
+        public static string AjustarIni(string texto)
+        {
+            List<string> linhas = new List<string>(
+                (texto ?? "").Replace("\r\n", "\n").Split('\n'));
+
+            int secao = -1;
+            for (int i = 0; i < linhas.Count; i++)
+                if (EhSecao(linhas[i], "Settings")) { secao = i; break; }
+
+            if (secao < 0)
+            {
+                // Sem a secao, ela nasce no fim. Nao no comeco: acima dela pode
+                // estar uma secao sem cabecalho, e um par de chaves solto la em
+                // cima seria lido como parte de outra coisa.
+                if (linhas.Count > 0 && linhas[linhas.Count - 1].Trim().Length != 0) linhas.Add("");
+                linhas.Add("[Settings]");
+                linhas.Add("StartWithWindows=1");
+                linhas.Add("StartMinimized=1");
+                return string.Join("\r\n", linhas.ToArray());
+            }
+
+            int fim = linhas.Count;
+            for (int i = secao + 1; i < linhas.Count; i++)
+                if (EhSecaoQualquer(linhas[i])) { fim = i; break; }
+
+            bool temInicio = false, temMin = false;
+            for (int i = secao + 1; i < fim; i++)
+            {
+                string chave = Chave(linhas[i]);
+                if (chave == "startwithwindows") { linhas[i] = "StartWithWindows=1"; temInicio = true; }
+                else if (chave == "startminimized") { linhas[i] = "StartMinimized=1"; temMin = true; }
+            }
+
+            // O que faltar entra DENTRO da secao, antes do proximo cabecalho -
+            // no fim do arquivo cairia em outra secao e nao valeria nada.
+            int onde = fim;
+            while (onde > secao + 1 && linhas[onde - 1].Trim().Length == 0) onde--;
+            if (!temMin) linhas.Insert(onde, "StartMinimized=1");
+            if (!temInicio) linhas.Insert(onde, "StartWithWindows=1");
+
+            return string.Join("\r\n", linhas.ToArray());
+        }
+
+        private static bool EhSecaoQualquer(string linha)
+        {
+            string l = (linha ?? "").Trim();
+            return l.Length >= 2 && l[0] == '[' && l[l.Length - 1] == ']';
+        }
+
+        private static bool EhSecao(string linha, string nome)
+        {
+            string l = (linha ?? "").Trim();
+            return string.Equals(l, "[" + nome + "]", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string Chave(string linha)
+        {
+            string l = (linha ?? "").Trim();
+            int ig = l.IndexOf('=');
+            return ig <= 0 ? "" : l.Substring(0, ig).Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Aplica o ajuste no arquivo, com o RTSS parado.
+        ///
+        /// A ordem importa: o RTSS reescreve o Config ao sair, entao editar com
+        /// ele no ar seria escrever para ser desfeito no proximo fechamento.
+        /// Por isso ele e encerrado antes e aberto de novo depois - e por isso
+        /// esta operacao so acontece a pedido, nunca sozinha: derrubar o RTSS
+        /// desengancha o jogo que estiver aberto.
+        /// </summary>
+        public static bool ConfigurarInicio(out string erro)
+        {
+            erro = null;
+            string caminho = CaminhoDoConfig();
+            if (caminho == null) { erro = "RTSS nao encontrado"; return false; }
+
+            string exe = null;
+            try
+            {
+                string dir = PastaDoRtss();
+                if (dir != null) exe = Path.Combine(dir, "RTSS.exe");
+            }
+            catch { }
+
+            bool estava = Encerrar();
+
+            try
+            {
+                string antes = File.Exists(caminho) ? File.ReadAllText(caminho) : "";
+                string depois = AjustarIni(antes);
+                if (depois != antes) File.WriteAllText(caminho, depois);
+                Log.Write("RTSS: inicio com o Windows ligado em " + caminho);
+            }
+            catch (Exception ex)
+            {
+                erro = ex.Message;
+                Log.Error("ajuste do Config do RTSS", ex);
+                return false;
+            }
+            finally
+            {
+                if (estava && exe != null && File.Exists(exe))
+                {
+                    try
+                    {
+                        System.Diagnostics.ProcessStartInfo psi =
+                            new System.Diagnostics.ProcessStartInfo(exe);
+                        psi.UseShellExecute = true;
+                        psi.WorkingDirectory = Path.GetDirectoryName(exe);
+                        System.Diagnostics.Process.Start(psi);
+                    }
+                    catch (Exception ex) { Log.Error("religar o RTSS", ex); }
+                }
+            }
+            return true;
+        }
+
+        /// <summary>Encerra o RTSS, com prazo. Devolve se ele estava rodando.</summary>
+        private static bool Encerrar()
+        {
+            bool achou = false;
+            try
+            {
+                foreach (System.Diagnostics.Process p in
+                         System.Diagnostics.Process.GetProcessesByName("RTSS"))
+                {
+                    achou = true;
+                    try
+                    {
+                        // Fechar pela janela primeiro: o RTSS grava o Config ao
+                        // sair, e matar de saida perderia o que ele ainda nao
+                        // tinha escrito - inclusive coisas que nao sao nossas.
+                        if (!p.CloseMainWindow() || !p.WaitForExit(5000)) p.Kill();
+                        p.WaitForExit(3000);
+                    }
+                    catch (Exception ex) { Log.Error("encerrar o RTSS", ex); }
+                    finally { p.Dispose(); }
+                }
+            }
+            catch (Exception ex) { Log.Error("procurar o RTSS", ex); }
+            return achou;
+        }
+
         // ---------------- leitura ----------------
 
         /// <summary>
