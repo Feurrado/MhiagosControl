@@ -1,7 +1,7 @@
 # Mhiagos Control
 
-Driver alternativo para o painel do **air cooler Rise Mode Temp 6 Pro Black**,
-substituindo o software original *CPU TEMP Monitor*
+Driver alternativo para o painel dos **air coolers Rise Mode Temp 6, Temp 6 Pro
+e Temp 8**, substituindo o software original *CPU TEMP Monitor*
 (SHENZHEN SHINETEK / marca Ocypus).
 
 Permite exibir **qualquer sensor** do sistema nos dois painéis de 3 dígitos,
@@ -11,6 +11,35 @@ automático quando ninguém está usando o computador.
 
 > A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
 > Windows na primeira execução e trocável em *Configurações*.
+
+---
+
+## Aparelhos compatíveis
+
+| Modelo | Situação |
+|--------|----------|
+| **Temp 6 Pro Black** | **verificado** — o protocolo foi levantado neste aparelho e tudo aqui foi testado nele |
+| **Temp 6** | deve funcionar |
+| **Temp 8** | deve funcionar |
+
+A distinção é honesta e vale a pena entender antes de instalar. O aplicativo
+identifica o painel pelo fabricante (**VID `1A2C`**, Shenzhen Shinetek) somado à
+coleção HID *vendor-defined* `FF01`, que nenhum dispositivo comum expõe. Não
+exige mais o PID exato do Temp 6 Pro: a mesma placa controladora sai em vários
+modelos da linha, e exigir o identificador exato faria o aplicativo ignorar um
+aparelho que ele saberia comandar.
+
+O que **não** dá para afirmar sem ter a peça em mãos: se o Temp 6 e o Temp 8
+usam o mesmo quadro de 64 bytes, com os dígitos nas mesmas posições. Se usarem —
+o mais provável, sendo a mesma controladora e o mesmo software de fábrica —
+funciona sem ajuste. Se não usarem, o mostrador vai acender com os números
+trocados de lugar, e não há como isso danificar nada: o protocolo só escreve
+dígitos.
+
+Se você tem um desses dois, o *Sobre* mostra o `VID / PID` do painel encontrado
+e o log registra quando o modelo não é o testado. Abrir uma
+[issue](https://github.com/Feurrado/MhiagosControl/issues) com essa linha, dizendo
+se funcionou, é o que transforma "deve funcionar" em "verificado".
 
 ---
 

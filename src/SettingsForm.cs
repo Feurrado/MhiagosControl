@@ -974,7 +974,7 @@ namespace MhiagosControl
 
             Card c = new Card();
             c.Title = T.NavAbout;
-            c.SetBounds(0, 0, 736, 222);
+            c.SetBounds(0, 0, 736, 250);
             page.Controls.Add(c);
 
             Label t = MakeLabel(T.AppName, 16, 50, Ui.FontTitle);
@@ -1000,9 +1000,17 @@ namespace MhiagosControl
             fontes.ForeColor = SemHwInfo() ? Ui.Warn : Ui.Muted;
             c.Controls.Add(fontes);
 
+            // Qual painel respondeu. So o Temp 6 Pro Black foi testado; nos
+            // outros modelos do fabricante o aplicativo comanda assim mesmo, e
+            // esta linha e o que a pessoa copia para relatar que funcionou.
+            Label painel = MakeLabel(TextoDoPainel(), 16, 212, Ui.FontSmall);
+            painel.Size = new Size(716, 20);
+            painel.ForeColor = Ui.Muted;
+            c.Controls.Add(painel);
+
             Card cr = new Card();
             cr.Title = T.ProjectAndCredits;
-            cr.SetBounds(0, 234, 736, 140);
+            cr.SetBounds(0, 262, 736, 140);
             page.Controls.Add(cr);
 
             Label autor = MakeLabel(T.CreatedBy, 16, 48, Ui.FontMed);
@@ -1029,7 +1037,7 @@ namespace MhiagosControl
 
             Card cd = new Card();
             cd.Title = T.DisclaimerTitle;
-            cd.SetBounds(0, 386, 736, 278);
+            cd.SetBounds(0, 414, 736, 278);
             page.Controls.Add(cd);
 
             Label disc = MakeLabel(T.Disclaimer, 16, 46, Ui.FontSmall);
@@ -1083,6 +1091,13 @@ namespace MhiagosControl
 
             string linha = T.SensorsFrom("HWiNFO", hw) + "   ·   " + T.SensorsFrom("LibreHardwareMonitor", lhm);
             return hw == 0 ? linha + "\n" + T.EngineMissing : linha;
+        }
+
+        private static string TextoDoPainel()
+        {
+            string id = HidPanel.UltimoIdentificado;
+            if (string.IsNullOrEmpty(id)) return T.PanelNotFound;
+            return T.PanelFound(id) + (id == "VID 1A2C / PID 4984" ? "" : "   ·   " + T.PanelUntested);
         }
 
         private bool SemHwInfo()

@@ -469,6 +469,27 @@ namespace MhiagosControl
         public static string TagOver { get { return P("  [excede 999]", "  [over 999]"); } }
         public static string TagNoDevice { get { return P("  [painel ausente]", "  [panel missing]"); } }
 
+        // Identificacao do painel na aba Sobre. So o Temp 6 Pro Black foi
+        // testado; quem tiver outro modelo do fabricante copia esta linha para
+        // relatar que funcionou.
+        public static string PanelNotFound
+        {
+            get { return P("Painel: nenhum encontrado", "Panel: none found"); }
+        }
+
+        public static string PanelFound(string id)
+        {
+            return P("Painel: " + id, "Panel: " + id);
+        }
+
+        public static string PanelUntested
+        {
+            get
+            {
+                return P("modelo diferente do testado", "model other than the tested one");
+            }
+        }
+
         public static string AlertReached(int panel, int value, int threshold)
         {
             return P("Painel " + panel + " atingiu " + value + " (limiar " + threshold + ")",

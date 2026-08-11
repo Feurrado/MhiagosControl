@@ -24,8 +24,18 @@ namespace MhiagosControl
     public class HidPanel
     {
         public const ushort VID = 0x1A2C;
+
+        /// <summary>
+        /// O PID do Temp 6 Pro Black, o aparelho em que o protocolo foi
+        /// levantado. E preferido quando existe, mas nao e mais exigido: veja
+        /// FindDevicePath.
+        /// </summary>
         public const ushort PID = 0x4984;
+
         public const ushort USAGE_PAGE = 0xFF01;
+
+        /// <summary>VID:PID do painel encontrado, para a aba Sobre e o log.</summary>
+        public static string UltimoIdentificado { get; private set; }
 
         public const byte FLAG_FAHRENHEIT = 0x01;
         public const byte FLAG_PERCENT = 0x10;
@@ -74,7 +84,20 @@ namespace MhiagosControl
         public string DevicePath { get { return _path; } }
         public bool IsConnected { get { return _handle.ToInt64() != -1; } }
 
-        /// <summary>Localiza a coleccao vendor-defined FF01 do cooler.</summary>
+        /// <summary>
+        /// Localiza a coleccao vendor-defined FF01 do cooler.
+        ///
+        /// Aceita QUALQUER PID do fabricante (VID 1A2C, Shenzhen Shinetek), e
+        /// nao so o 4984 do Temp 6 Pro Black. A mesma placa controladora sai em
+        /// varios modelos da linha, e exigir o PID exato faria o aplicativo nao
+        /// enxergar um aparelho que ele saberia comandar. O que identifica o
+        /// painel de verdade e a coleccao FF01: nenhum dispositivo comum a expoe.
+        ///
+        /// O PID conhecido continua tendo preferencia - se ele estiver presente,
+        /// e esse que vai. So na ausencia dele um irmao e adotado, e o VID:PID
+        /// encontrado fica no log e na aba Sobre, que e o que permite alguem
+        /// relatar um modelo novo.
+        /// </summary>
         public static string FindDevicePath()
         {
             Guid g; HidD_GetHidGuid(out g);
@@ -82,6 +105,8 @@ namespace MhiagosControl
             if (set.ToInt64() == -1) return null;
 
             string found = null;
+            string alternativo = null;
+            string idAlternativo = null;
             try
             {
                 for (int i = 0; found == null; i++)
@@ -108,15 +133,22 @@ namespace MhiagosControl
                             HIDD_ATTRIBUTES attr = new HIDD_ATTRIBUTES();
                             attr.Size = Marshal.SizeOf(attr);
                             if (!HidD_GetAttributes(h, ref attr)) continue;
-                            if (attr.VendorID != VID || attr.ProductID != PID) continue;
+                            if (attr.VendorID != VID) continue;
 
                             IntPtr pp;
                             if (!HidD_GetPreparsedData(h, out pp)) continue;
                             try
                             {
                                 HIDP_CAPS caps;
-                                if (HidP_GetCaps(pp, out caps) == 0x110000 && caps.UsagePage == USAGE_PAGE)
-                                    found = path;
+                                if (HidP_GetCaps(pp, out caps) != 0x110000 || caps.UsagePage != USAGE_PAGE)
+                                    continue;
+
+                                if (attr.ProductID == PID) found = path;
+                                else if (alternativo == null)
+                                {
+                                    alternativo = path;
+                                    idAlternativo = Identificar(attr.VendorID, attr.ProductID);
+                                }
                             }
                             finally { HidD_FreePreparsedData(pp); }
                         }
@@ -126,7 +158,28 @@ namespace MhiagosControl
                 }
             }
             finally { SetupDiDestroyDeviceInfoList(set); }
-            return found;
+
+            if (found != null)
+            {
+                UltimoIdentificado = Identificar(VID, PID);
+                return found;
+            }
+            if (alternativo != null)
+            {
+                UltimoIdentificado = idAlternativo;
+                // Nao e o aparelho em que o protocolo foi levantado. Registrar
+                // qual e o unico jeito de alguem relatar um modelo que funciona.
+                Log.Write("painel: mesmo fabricante, modelo diferente do testado (" +
+                          idAlternativo + ") - comandando assim mesmo");
+                return alternativo;
+            }
+            UltimoIdentificado = null;
+            return null;
+        }
+
+        private static string Identificar(ushort vid, ushort pid)
+        {
+            return "VID " + vid.ToString("X4") + " / PID " + pid.ToString("X4");
         }
 
         /// <summary>Abre o dispositivo. Retorna false se o cooler nao estiver presente.</summary>
