@@ -24,9 +24,13 @@ if ($LASTEXITCODE -ne 0) { Write-Output "FALHOU: o aplicativo nao compilou"; exi
 
 $app = Join-Path $bin 'MhiagosControl.exe'
 $lhm = Join-Path $bin 'LibreHardwareMonitorLib.dll'
+$lic = Join-Path $root 'lib\LibreHardwareMonitor-LICENSE.txt'
 $eng = Join-Path $bin 'engine\api-ms-win-core-sysinfo-825-64.dll'
 
-foreach ($f in @($app, $lhm)) {
+# A licenca entra na lista obrigatoria: a MPL 2.0 exige que o texto acompanhe a
+# distribuicao do binario. Faltar aqui e defeito de licenciamento, nao descuido
+# cosmetico, entao falha a compilacao em vez de avisar.
+foreach ($f in @($app, $lhm, $lic)) {
     if (-not (Test-Path $f)) { Write-Output "ERRO: falta $f"; exit 1 }
 }
 
@@ -34,7 +38,8 @@ New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
 $recursos = @(
     ('/resource:' + $app + ',payload.MhiagosControl.exe'),
-    ('/resource:' + $lhm + ',payload.LibreHardwareMonitorLib.dll')
+    ('/resource:' + $lhm + ',payload.LibreHardwareMonitorLib.dll'),
+    ('/resource:' + $lic + ',payload.lhm-license.txt')
 )
 
 if ($SemMotor) {

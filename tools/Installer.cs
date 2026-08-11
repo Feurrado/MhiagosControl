@@ -41,6 +41,10 @@ namespace MhiagosSetup
         {
             new string[] { "payload.MhiagosControl.exe",         "MhiagosControl.exe" },
             new string[] { "payload.LibreHardwareMonitorLib.dll", "LibreHardwareMonitorLib.dll" },
+            // A MPL 2.0 exige que o texto da licenca acompanhe a distribuicao
+            // do binario, e nao so do codigo. O repositorio ja o tinha; o
+            // instalador nao levava, e passou a levar quando virou Release.
+            new string[] { "payload.lhm-license.txt",             "LibreHardwareMonitor-LICENSE.txt" },
             new string[] { "payload.engine.dll",                  @"engine\api-ms-win-core-sysinfo-825-64.dll" },
         };
 
