@@ -263,9 +263,9 @@ namespace MhiagosControl
             get
             {
                 return P(
-                    "Driver alternativo para o painel do cooler Rise Mode Temp 6 Pro Black.\n" +
+                    "Driver alternativo para o painel dos coolers Rise Mode Temp 6, Temp 6 Pro e Temp 8.\n" +
                     "Protocolo levantado por engenharia reversa; qualquer sensor pode ir para qualquer mostrador.",
-                    "An alternative driver for the LED panel of the Rise Mode Temp 6 Pro Black cooler.\n" +
+                    "An alternative driver for the LED panel of the Rise Mode Temp 6, Temp 6 Pro and Temp 8 coolers.\n" +
                     "Protocol recovered by reverse engineering; any sensor can go to either display.");
             }
         }
@@ -304,9 +304,9 @@ namespace MhiagosControl
             {
                 return P(
                     "Código deste projeto sob licença MIT · sensores pela LibreHardwareMonitor (MPL 2.0)\n" +
-                    "e pela biblioteca cliente do HWiNFO, © REALiX s.r.o., não redistribuída com o projeto.",
+                    "e pela biblioteca cliente do HWiNFO, © REALiX s.r.o.",
                     "This project's code is MIT licensed · sensors by LibreHardwareMonitor (MPL 2.0)\n" +
-                    "and by the HWiNFO client library, © REALiX s.r.o., not redistributed with the project.");
+                    "and by the HWiNFO client library, © REALiX s.r.o.");
             }
         }
         public static string DisclaimerTitle { get { return P("Isenção de responsabilidade", "Disclaimer"); } }
@@ -410,9 +410,9 @@ namespace MhiagosControl
             {
                 return P(
                     "Sem a biblioteca do HWiNFO em engine\\, temperatura, potência e clock real da CPU não são lidos.\n" +
-                    "Copie api-ms-win-core-sysinfo-825-64.dll da instalação do CPU TEMP Monitor para a pasta engine\\.",
+                    "Reinstalar pelo instalador oficial repõe a pasta engine\\ completa.",
                     "Without the HWiNFO library in engine\\, CPU temperature, power and real clock are not read.\n" +
-                    "Copy api-ms-win-core-sysinfo-825-64.dll from the CPU TEMP Monitor installation into engine\\.");
+                    "Reinstalling with the official installer restores the full engine\\ folder.");
             }
         }
 
@@ -486,7 +486,8 @@ namespace MhiagosControl
         {
             get
             {
-                return P("modelo diferente do testado", "model other than the tested one");
+                return P("inclua esta linha ao relatar um problema",
+                         "include this line when reporting an issue");
             }
         }
 
