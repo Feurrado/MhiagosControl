@@ -26,6 +26,13 @@ namespace MhiagosControl
         public string Gpu;
         public string Ram;
 
+        // Detalhe da tela de bordo. A barra lateral nao usa nada disto - la
+        // cabem tres linhas e o que importa e o modelo.
+        public string CpuNucleos;   // "6 nucleos - 12 threads"
+        public string GpuMemoria;   // "8 GB"
+        public string Placa;        // nulo quando a fonte nao publica a placa
+        public string Sistema;      // "Windows 11 Pro - 25H2 (26200.8973)"
+
         /// <summary>Ha pelo menos uma linha para mostrar?</summary>
         public bool Any
         {
@@ -44,9 +51,134 @@ namespace MhiagosControl
                 s.Cpu = Limpar(PrimeiroDaCategoria(sensores, "CPU"));
                 s.Gpu = Limpar(PrimeiroDaCategoria(sensores, "GPU"));
                 s.Ram = MemoriaInstalada();
+
+                s.CpuNucleos = ContagemDeNucleos(sensores);
+                s.GpuMemoria = MemoriaDeVideo(sensores);
+                s.Placa = NomeDePlaca(Limpar(PrimeiroDaCategoria(sensores, "Placa-mãe")));
+                s.Sistema = VersaoDoWindows();
             }
             catch (Exception ex) { Log.Error("resumo do sistema", ex); }
             return s;
+        }
+
+        /// <summary>
+        /// Nucleos e threads, tirados do que ja esta na lista.
+        ///
+        /// Os threads o proprio .NET responde. Os nucleos FISICOS nao: seriam
+        /// uma consulta WMI, que custa centenas de milissegundos. Mas a contagem
+        /// ja passou por aqui - o Condense junta as leituras por nucleo num
+        /// agregado e guarda quantas eram, e a de clock e publicada por nucleo
+        /// fisico. Num 5600X da 6, com 12 threads, que e o que a peca e.
+        ///
+        /// Quando as duas batem, so os threads sao mostrados: "12 nucleos - 12
+        /// threads" nao informa nada que "12 threads" ja nao diga.
+        /// </summary>
+        private static string ContagemDeNucleos(List<SensorEntry> sensores)
+        {
+            int threads = Environment.ProcessorCount;
+            if (threads <= 0) return null;
+
+            int nucleos = 0;
+            if (sensores != null)
+                foreach (SensorEntry e in sensores)
+                {
+                    if (e == null || e.Category != "CPU" || e.Members <= 1) continue;
+                    if (e.Type != LibreHardwareMonitor.Hardware.SensorType.Clock) continue;
+                    if (e.Members > threads) continue;   // agregado que nao e por nucleo
+                    nucleos = e.Members;
+                    break;
+                }
+
+            if (nucleos > 1 && nucleos < threads)
+                return T.CoresAndThreads(nucleos, threads);
+            return T.ThreadsOnly(threads);
+        }
+
+        /// <summary>
+        /// Aceita o nome da placa-mae so quando ele identifica alguma placa.
+        ///
+        /// Sem o filtro, a linha saia "Placa-mãe: ACPI" - que e o nome do
+        /// BARRAMENTO onde a LibreHardwareMonitor achou o sensor, nao o da peca.
+        /// O mesmo vale para o que a propria placa grava quando o montador nao
+        /// preencheu nada: "To Be Filled By O.E.M." e literalmente o texto de
+        /// exemplo do formulario. Um rotulo apontando para isso e pior que a
+        /// ausencia da linha, porque parece informacao.
+        /// </summary>
+        private static string NomeDePlaca(string nome)
+        {
+            if (string.IsNullOrEmpty(nome)) return null;
+
+            string[] lixo =
+            {
+                "ACPI", "Motherboard", "Generic", "Unknown", "System",
+                "Default string", "To Be Filled By O.E.M.", "None", "N/A",
+                "SMBIOS", "LPC", "Chipset",
+            };
+            foreach (string x in lixo)
+                if (string.Equals(nome, x, StringComparison.OrdinalIgnoreCase)) return null;
+
+            // Um nome de placa tem fabricante e modelo: "B550M Steel Legend",
+            // "PRIME X570-P". Menos de cinco caracteres nunca e um deles.
+            return nome.Trim().Length < 5 ? null : nome;
+        }
+
+        /// <summary>Memoria da placa de video, em GB, quando a fonte publica o total.</summary>
+        private static string MemoriaDeVideo(List<SensorEntry> sensores)
+        {
+            if (sensores == null) return null;
+            foreach (SensorEntry e in sensores)
+            {
+                if (e == null || e.Category != "GPU" || e.Name == null) continue;
+                if (!e.Name.Equals("GPU Memory Total", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!e.Value.HasValue || e.Value.Value <= 0) continue;
+
+                // Publicada em MB. 8192 vira 8 GB.
+                double gb = e.Value.Value / 1024.0;
+                return (gb >= 1 ? Math.Round(gb).ToString("0") : gb.ToString("0.0")) + " GB";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Nome e versao do Windows.
+        ///
+        /// O ProductName do registro MENTE: numa maquina com build 26200 ele
+        /// responde "Windows 10 Pro". A Microsoft nunca o atualizou na virada
+        /// para o 11, e quem le so ele mostra a versao errada. O numero da
+        /// compilacao e que decide - 22000 e a primeira do Windows 11.
+        ///
+        /// Environment.OSVersion tambem nao serve: sem entrada de compatibilidade
+        /// no manifesto ele para em 6.2 (Windows 8), que e a resposta que o
+        /// Windows da a quem nao declarou conhecer nada mais novo.
+        /// </summary>
+        private static string VersaoDoWindows()
+        {
+            try
+            {
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.LocalMachine
+                    .OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
+                {
+                    if (k == null) return null;
+
+                    string nome = Convert.ToString(k.GetValue("ProductName"));
+                    if (string.IsNullOrEmpty(nome)) return null;
+
+                    int build = 0;
+                    int.TryParse(Convert.ToString(k.GetValue("CurrentBuild")), out build);
+                    if (build >= 22000) nome = nome.Replace("Windows 10", "Windows 11");
+
+                    string versao = Convert.ToString(k.GetValue("DisplayVersion"));
+                    if (!string.IsNullOrEmpty(versao)) nome += "  ·  " + versao;
+
+                    if (build > 0)
+                    {
+                        string ubr = Convert.ToString(k.GetValue("UBR"));
+                        nome += " (" + build + (string.IsNullOrEmpty(ubr) ? "" : "." + ubr) + ")";
+                    }
+                    return nome;
+                }
+            }
+            catch (Exception ex) { Log.Error("versao do Windows", ex); return null; }
         }
 
         private static string PrimeiroDaCategoria(List<SensorEntry> sensores, string categoria)

@@ -2,6 +2,9 @@
 bin/
 tools/*.exe
 
+# rascunho de anotacoes fora do Worklog
+A.txt
+
 # Instalador gerado. Fica de fora porque carrega a biblioteca comercial do
 # HWiNFO embutida quando ela existe em lib\ - veja tools\build-installer.ps1.
 dist/

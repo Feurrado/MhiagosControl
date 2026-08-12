@@ -59,6 +59,7 @@ namespace MhiagosControl
 
         // ---------------- barra lateral ----------------
 
+        public static string NavOverview { get { return P("Visão geral", "Overview"); } }
         public static string NavPanels { get { return P("Painéis", "Panels"); } }
         public static string NavAlerts { get { return P("Alertas", "Alerts"); } }
         public static string NavProfiles { get { return P("Perfis", "Profiles"); } }
@@ -66,6 +67,12 @@ namespace MhiagosControl
         public static string AddMetric { get { return P("Adicionar métrica", "Add metric"); } }
         public static string DefaultMetrics { get { return P("Conjunto padrão", "Default set"); } }
         public static string HistoryWindow { get { return P("Histórico", "History"); } }
+
+        // Extremos e media da janela desenhada. Abreviados porque dividem uma
+        // linha so, dentro de um cartao que pode ter 350 px.
+        public static string StatMin { get { return P("mín", "min"); } }
+        public static string StatAvg { get { return P("méd", "avg"); } }
+        public static string StatMax { get { return P("máx", "max"); } }
         public static string MetricsHint
         {
             get
@@ -85,6 +92,37 @@ namespace MhiagosControl
         public static string NavAbout { get { return P("Sobre", "About"); } }
         public static string ActiveProfile { get { return P("PERFIL ATIVO", "ACTIVE PROFILE"); } }
         public static string SystemCaption { get { return P("SISTEMA", "SYSTEM"); } }
+
+        // ---------------- tela de bordo ----------------
+
+        public static string ThisMachine { get { return P("Esta máquina", "This machine"); } }
+        public static string RightNow { get { return P("Agora", "Right now"); } }
+        public static string CoolerCard { get { return P("Cooler", "Cooler"); } }
+
+        public static string SpecCpu { get { return P("Processador", "Processor"); } }
+        public static string SpecGpu { get { return P("Vídeo", "Graphics"); } }
+        public static string SpecRam { get { return P("Memória", "Memory"); } }
+        public static string SpecBoard { get { return P("Placa-mãe", "Motherboard"); } }
+        public static string SpecOs { get { return P("Sistema", "System"); } }
+
+        public static string CoresAndThreads(int nucleos, int threads)
+        {
+            return P(nucleos + " núcleos  ·  " + threads + " threads",
+                     nucleos + " cores  ·  " + threads + " threads");
+        }
+
+        public static string ThreadsOnly(int threads)
+        {
+            return P(threads + " threads", threads + " threads");
+        }
+
+        public static string OnPanel(string qual) { return P("Mostrador " + qual, "Display " + qual); }
+
+        public static string Top { get { return P("de cima", "top"); } }
+        public static string Bottom { get { return P("de baixo", "bottom"); } }
+
+        public static string PanelLabel { get { return P("Painel", "Panel"); } }
+
 
         // ---------------- pagina: paineis ----------------
 

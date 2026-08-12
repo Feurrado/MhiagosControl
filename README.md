@@ -108,6 +108,26 @@ limiares que mudassem a cada volta travariam e destravariam sozinhos, e um aviso
 que aparece conforme a hora do relógio não é aviso. Girar é sobre o mostrador,
 não sobre a vigilância.
 
+### Visão geral
+
+A tela que abre. Em cima, cinco leituras em destaque — temperatura e uso do
+processador e da placa de vídeo, e uso da memória — cada uma com a série recente
+desenhada atrás e a linha de máximo e média embaixo. Um número sozinho não diz se
+é alto: 72 °C é rotina sob carga e alarme em repouso, e é a curva que separa os
+dois casos.
+
+No centro, o mostrador do cooler ao vivo, do lado do perfil ativo e do painel
+encontrado; ao lado dele, as duas leituras que vão para a peça, com o histórico
+de cada uma. Embaixo, uma tira com o retrato da máquina: processador com núcleos
+e threads, placa de vídeo com a memória dela, memória instalada e a versão do
+Windows.
+
+Nada aqui é editável — cada bloco tem a sua aba, a um clique. As especificações
+saem do que a lista de sensores já publicou mais o que o próprio sistema
+responde: nenhuma consulta WMI, que custaria centenas de milissegundos na
+abertura. A linha da placa-mãe só aparece quando a fonte publica um nome que
+identifique alguma placa.
+
 ### Métricas
 
 Uma grade de cartões com as leituras da máquina, cada um com o número grande e o

@@ -233,7 +233,7 @@ namespace MhiagosControl
             // configuracao: e la que a grade de metricas se monta e passa a
             // acompanhar leituras.
             MetricHistory.Carregar();
-            MetricHistory.Seguir(_cfg.MetricIds);
+            MetricHistory.Seguir(IdsAcompanhados());
 
             Profile act = _cfg.Active;
             if (_sensorsOk && (string.IsNullOrEmpty(act.Panel1Id) || string.IsNullOrEmpty(act.Panel2Id)))
@@ -406,6 +406,35 @@ namespace MhiagosControl
         /// grupo. Uma vez a cada balde a leitura se abre, tira a amostra e volta
         /// a fechar.
         /// </summary>
+        /// <summary>
+        /// Tudo que precisa de historico: os cartoes da aba Metricas MAIS os
+        /// blocos da tela de bordo.
+        ///
+        /// Os segundos nao sao escolhidos por ninguem - saem de uma regra fixa -
+        /// e por isso era facil esquece-los aqui. Foi o que aconteceu: os blocos
+        /// abriam sem curva, porque a serie deles nunca chegou a ser gravada.
+        /// A gravacao acontece no ciclo do mostrador, com a janela fechada, entao
+        /// nao adianta a janela saber quais sao; quem tem de saber e isto.
+        /// </summary>
+        private List<string> IdsAcompanhados()
+        {
+            List<string> ids = new List<string>(_cfg.MetricIds);
+
+            foreach (SensorEntry s in MetricPicker.Destaques(_cache))
+                if (s != null && !string.IsNullOrEmpty(s.Id) && !ids.Contains(s.Id))
+                    ids.Add(s.Id);
+
+            // E as duas leituras que vao para a peca: a tela de bordo desenha a
+            // curva delas ao lado do mostrador, e sem historico as duas maiores
+            // areas de grafico da tela ficariam em branco.
+            Profile a = _cfg.Active;
+            if (a != null)
+                foreach (string id in new string[] { a.Panel1Id, a.Panel2Id })
+                    if (!string.IsNullOrEmpty(id) && !ids.Contains(id)) ids.Add(id);
+
+            return ids;
+        }
+
         private List<string> Foco(bool comMetricas)
         {
             if (_janelaAberta) return null;
@@ -812,7 +841,7 @@ namespace MhiagosControl
                 _janelaAberta = false;   // antes de Publicar, que reaplica o foco
 
                 if (r != DialogResult.OK) _cfg = Config.Load();   // descarta edicoes
-                MetricHistory.Seguir(_cfg.MetricIds);
+                MetricHistory.Seguir(IdsAcompanhados());
                 Publicar();
                 RebuildProfileMenu();
                 ResetAlerts();

@@ -1,0 +1,97 @@
+- Possibilidade de movimentar os cards livremente e "encaixar" nos slots
+- [x] Mostrar Max e min nas métricas nos gráficos
+      Vira uma linha so, com a MEDIA no meio: "mín 38,2  méd 44,1  máx 61,0",
+      da janela selecionada. Antes eram dois numeros nas pontas do eixo, que
+      serviam de escala e nao diziam o que aconteceu - a media e o que separa
+      "chegou a 84" de "vive em 84". Some quando nao cabe na largura.
+- [x] Ajustar nome de todas as métricas para ficar amigável
+- [x] Como por exemplo "Clock - média de 6"
+      Era bug de regex: o ramo "Core \d+" da CoreIndex levava a palavra Core
+      junto com o indice, e o agregado saia "Clock - media de 6". Nasceu a
+      Sensors.NomeExibido (preserva o substantivo) so para exibir; a Normalize
+      ficou intocada porque alimenta o GroupKey, que vira o Id gravado no
+      perfil - mexer nela apagaria os sensores de todo perfil salvo, calado.
+- [EM HIATO] Adicionar velocidade das ventoinhas do system na lista de métricas
+      Nao ha filtro por tipo de sensor em lugar nenhum: se a fonte publica, a
+      lista mostra. A sonda sem elevacao so viu a ventoinha da GPU; com o app
+      elevado elas tambem nao apareceram. Ou a placa nao expoe pelo LPC que a
+      LibreHardwareMonitor le, ou o chip super-I/O dela nao esta na lista de
+      suportados. Proximo passo, quando voltar: rodar a sonda ELEVADA e ver se
+      o grupo da placa-mae aparece com alguma leitura.
+- [x] Adicionar métrica de clock da GPU
+      Ja existia, com nome de temperatura. A Radeon publica DUAS leituras
+      chamadas "GPU Core" - temperatura e clock - e a tabela de nomes era
+      consultada so pelo nome: as duas respondiam "Temperatura da GPU". Pior que
+      faltar, porque quem procurava desistia depois de achar. A busca agora tenta
+      "clock:gpu core" antes da chave nua. Mesmo caso em "GPU Memory".
+- Montar layouts de métricas "padrão" para o usuário escolher um ponto de partida
+- [x] Garantir que o riva tuner está aberto quando inicializar e colocar para
+      abrir automaticamente no boot
+      O instalador chama o winget (runtime do VC++ antes, senao o RTSS sobe sem
+      a VCRUNTIME140_1) e o app grava StartWithWindows e StartMinimized no
+      Profiles\Config do RTSS. O RTSS materializa isso como TAREFA AGENDADA com
+      gatilho de logon - nao como chave Run, que foi onde procuramos primeiro.
+- Opção de verificar se há um jogo rodando, verificar qual é o jogo e aplicar perfil de acordo com jogo
+- [x] Achar melhor local para botão salvar e só mostrar se já não tiver salvo
+      Ja existia um _dirty de verdade, so nao governava a interface. Virou
+      propriedade: e atribuido em uma duzia de lugares e com campo cada um
+      teria de lembrar de avisar o rodape - o que fosse esquecido deixaria o
+      botao mentindo. Salvar foi para a ESQUERDA do rodape, com o aviso
+      "Alteracoes nao salvas" ao lado; Fechar continua na direita. Colados no
+      canto direito os dois se liam como OK/Cancelar de dialogo, e esta janela
+      nao e dialogo: Salvar nao fecha, e Fechar e a saida, nao o oposto.
+- [x] Utilizar espaço vazio quando fechar painel lateral   (falta conferir na tela)
+      Nao era da barra lateral: TODA pagina fora a de Metricas estava em
+      coordenadas fixas de 756 px, entao o vao aparecia so de alargar a janela.
+      SettingsForm.Esticar reparte a sobra entre os cartoes da fileira na
+      proporcao das larguras, com os vaos constantes, e centraliza depois de
+      1100 px. Geometria coberta por teste; o resultado visual, nao.
+      Isso expos um engasgo que ja existia: a previa reescalava o cooler.png de
+      900x900 em bicubica de alta qualidade A CADA pintura, e agora ela pintava
+      dez vezes durante o deslize da lateral. Medido: 12,78 ms de um quadro de
+      15 ms - 85% do orcamento numa foto so, antes de qualquer cartao. Como o
+      encaixe e pela ALTURA, que nao muda ao recolher a lateral, o bitmap
+      reduzido e identico em todos os quadros: cache simples, 0,19 ms. As
+      paginas tambem passaram a ter buffer duplo (classe Ui.Pagina).
+- [x] Permitir ver detalhe da métrica ao passar mouse sobre a linha dos gráficos
+      Linha vertical, ponto e balao com valor e hora, so no cartao grande.
+      Balde sem leitura nao mostra nada - a falha ja aparece como quebra na
+      linha, e inventar numero para ela desmentiria o desenho.
+- [x] Adicionar tela de especificações para ver detalhes do sistema (CPU, GPU,
+      RAM, Placa mãe) Tipo GPU-Z e CPU-Z
+      Primeira leva, toda sem WMI - o que ja passou pela lista de sensores mais
+      o que o proprio sistema responde: modelo da CPU com nucleos e threads,
+      modelo da GPU com VRAM, RAM instalada, placa-mae e versao do Windows.
+      Nucleos FISICOS saem da contagem do agregado de clock (o Condense guarda
+      quantos eram); threads do ProcessorCount. Num 5600X da 6 e 12, correto.
+      A placa-mae so aparece se a fonte publicar - a linha some, nao fica vazia.
+      FALTA (2a leva, cada uma custa coleta nova): stepping, microcodigo,
+      timings por pente (SPD), largura de barramento da GPU, versao do driver.
+- [x] Fazer tela de métricas e especificações como princial ou elaborar uma
+      tela principal
+      Tela de bordo nova, primeira da navegacao e a que abre. Tres blocos: o
+      retrato da maquina (item acima), cinco leituras em destaque (temperatura
+      e uso de CPU e GPU, uso da memoria) e o estado do cooler - painel achado,
+      perfil ativo e o que esta em cada mostrador. Nada editavel: cada bloco
+      aponta para a pagina que edita, e os cartoes vao com Editavel=false para
+      nao mostrarem botoes que nao fariam nada.
+      A escolha das cinco e fixa de proposito. A aba Metricas responde "o que EU
+      quero acompanhar"; esta responde "esta tudo bem?", e essa e a mesma
+      pergunta em qualquer maquina.
+
+      REFEITA na segunda tentativa. A primeira ficou vazia e sem vida, e com
+      razao - eu tinha invertido a hierarquia. O que aprendi pesquisando:
+        - especificacao e REFERENCIA, nao monitoramento: nao pode abrir a tela
+          no topo-esquerda, que e onde o olho cai. Virou tira discreta embaixo.
+        - "todo numero precisa passar no teste do comparado a que": cada bloco
+          tem serie atras e a linha "max - med" embaixo.
+        - faltava o que SO este app faz. O mostrador do cooler ao vivo virou o
+          centro da tela; antes o cooler era uma linha de texto com VID e PID.
+        - o vazio sumiu por construcao: as duas pontas sao fixas e o cartao do
+          cooler fica com toda a altura que sobrar, em qualquer janela.
+      Bugs que a captura revelou: as linhas do cooler nasciam com valor nulo,
+      nao avancavam o y e ficavam as quatro empilhadas na mesma altura; a
+      placa-mae mostrava "ACPI"; e a escolha por "primeiro do tipo" pegava
+      "D3D 3D" no lugar do uso da GPU e deixava "Memory" sem traducao.
+- [DESCARTADO] Deixar tela para painéis do CPU em tela separada da principal
+      Os paineis ficam onde estao.

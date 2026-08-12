@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
@@ -29,8 +29,15 @@ namespace MhiagosControl
         public static Color Text { get { return Dark ? C(0xF0, 0xF0, 0xF3) : C(0x1B, 0x1D, 0x21); } }
         public static Color Muted { get { return Dark ? C(0x96, 0x99, 0xA3) : C(0x6B, 0x70, 0x7B); } }
 
-        /// <summary>Um degrau abaixo de Muted, para nota de rodape sem sumir.</summary>
-        public static Color Faint { get { return Dark ? C(0x6C, 0x6F, 0x79) : C(0x94, 0x99, 0xA3); } }
+        /// <summary>
+        /// Um degrau abaixo de Muted, para nota de rodape sem sumir.
+        ///
+        /// Estava em 6C6F79 no tema escuro - perto demais do fundo. Somado ao
+        /// corpo de 8,25 pt, o resultado nao lia como "secundario", lia como
+        /// apagado. Hierarquia se faz com contraste suficiente para SER LIDO,
+        /// e nao com texto no limite de desaparecer.
+        /// </summary>
+        public static Color Faint { get { return Dark ? C(0x8A, 0x8E, 0x99) : C(0x7C, 0x82, 0x8D); } }
 
         /// <summary>Polegar da barra de rolagem. Precisa se destacar do trilho
         /// sem competir com o texto: Border era escuro demais e sumia nele.</summary>
@@ -50,7 +57,38 @@ namespace MhiagosControl
         public static readonly Font FontMed = new Font("Segoe UI", 9f, FontStyle.Bold);
         public static readonly Font FontTitle = new Font("Segoe UI", 14f, FontStyle.Regular);
         public static readonly Font FontSection = new Font("Segoe UI", 10.5f, FontStyle.Bold);
-        public static readonly Font FontSmall = new Font("Segoe UI", 8.25f);
+        /// <summary>
+        /// O corpo pequeno, usado em rotulo de apoio e nota.
+        ///
+        /// Era 8,25 pt. Nesse tamanho, em cinza, sobre fundo escuro, o texto nao
+        /// e discreto - e fino: os tracos da Segoe UI ficam com menos de um pixel
+        /// cheio e o antisserrilhado apaga o que sobra. Um ponto a mais devolve
+        /// peso sem tirar a hierarquia, que continua vindo da COR.
+        /// </summary>
+        public static readonly Font FontSmall = new Font("Segoe UI", 9f);
+
+        /// <summary>
+        /// Seminegrito, para o valor que precisa ter presenca sem virar titulo.
+        ///
+        /// "Segoe UI Semibold" e uma familia propria no Windows, e nao um estilo
+        /// da "Segoe UI": pedir FontStyle.Bold daria o negrito cheio, que num
+        /// rotulo de tres palavras pesa demais.
+        /// </summary>
+        public static readonly Font FontSemi = Semi(9f);
+
+        private static Font Semi(float tamanho)
+        {
+            try
+            {
+                Font f = new Font("Segoe UI Semibold", tamanho);
+                // Quando a familia nao existe, o GDI+ devolve a substituta e o
+                // nome nao bate: melhor cair no negrito do que num tipo alheio.
+                if (f.Name.IndexOf("Semibold", StringComparison.OrdinalIgnoreCase) >= 0) return f;
+                f.Dispose();
+            }
+            catch { }
+            return new Font("Segoe UI", tamanho, FontStyle.Bold);
+        }
 
         /// <summary>Leitura em destaque - o numero e o assunto do cartao.</summary>
         public static readonly Font FontValue = new Font("Segoe UI", 16f, FontStyle.Bold);
@@ -80,6 +118,45 @@ namespace MhiagosControl
         }
     }
 
+    /// <summary>
+    /// Painel de pagina, com buffer duplo.
+    ///
+    /// As paginas mudam de largura enquanto a barra lateral desliza, e a cada
+    /// quadro os cartoes sao reposicionados. Sem o buffer, cada movimento pinta
+    /// o fundo e so depois o cartao no lugar novo, e o intervalo entre as duas
+    /// coisas aparece como tremor - dez vezes em 160 ms.
+    /// </summary>
+    public class Pagina : Panel
+    {
+        public Pagina()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.UserPaint, true);
+            BackColor = Ui.Window;
+        }
+
+        /// <summary>
+        /// Fundo opaco, pintado aqui e nao herdado do hospedeiro.
+        ///
+        /// Com BackColor transparente o Windows Forms nao tem transparencia de
+        /// verdade: antes de cada pintura ele manda o PAI desenhar o fundo dentro
+        /// do filho. Como os cartoes tambem eram transparentes, cada cartao
+        /// repintado custava tres desenhos - hospedeiro, pagina e cartao - e na
+        /// animacao da lateral isso acontecia com todos eles, dez vezes.
+        ///
+        /// A cor sai do Ui na hora da pintura, e nao do BackColor guardado na
+        /// construcao: assim uma troca de tema nao deixa a pagina com o fundo
+        /// antigo.
+        /// </summary>
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            using (SolidBrush b = new SolidBrush(Ui.Window))
+                e.Graphics.FillRectangle(b, e.ClipRectangle);
+            base.OnPaint(e);
+        }
+    }
+
     /// <summary>Painel com cantos arredondados e borda sutil.</summary>
     public class Card : Panel
     {
@@ -88,19 +165,29 @@ namespace MhiagosControl
 
         public Card()
         {
-            // SupportsTransparentBackColor e obrigatorio: sem ele, atribuir
-            // Color.Transparent lanca "o controle nao da suporte a cores da
-            // tela de fundo transparente".
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
-                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
-                     ControlStyles.SupportsTransparentBackColor, true);
-            BackColor = Color.Transparent;
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            // Opaco, e nao Color.Transparent.
+            //
+            // O cartao pinta cada pixel seu - os cantos com a cor da pagina, o
+            // miolo com a da superficie - entao a transparencia nunca chegou a
+            // aparecer. O que ela fazia era obrigar o PAI a redesenhar o fundo
+            // dentro do cartao a cada pintura, e com o ResizeRedraw isso e uma
+            // vez por quadro de animacao, por cartao.
+            BackColor = Ui.Window;
             Font = Ui.FontBase;
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
+
+            // Os cantos: o que fica FORA do retangulo arredondado. Antes vinha
+            // da transparencia; agora e pintado aqui, com a cor lida do Ui na
+            // hora para acompanhar troca de tema.
+            using (SolidBrush b = new SolidBrush(Ui.Window))
+                g.FillRectangle(b, e.ClipRectangle);
+
             Ui.Smooth(g);
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
             using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))

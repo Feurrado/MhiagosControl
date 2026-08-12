@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.IO.MemoryMappedFiles;
@@ -37,6 +38,8 @@ namespace MhiagosControl
             RodizioDePerfis();
             NomesDoSistema();
             NomesAmigaveis();
+            LarguraDasPaginas();
+            RetratoDaMaquina();
             HistoricoDasMetricas();
             QuadrosPorSegundo();
             CompletudeDoIdioma();
@@ -287,6 +290,63 @@ namespace MhiagosControl
                 Verdade(media.StartsWith("Temperatura do processador"), "o agregado acha a tabela");
                 Verdade(media.EndsWith("média de 6"), "e conserva o sufixo do agregado");
 
+                // O indice do nucleo sai; o substantivo fica. Antes disso o ramo
+                // "Core \d+" da CoreIndex levava a palavra Core junto, e o
+                // agregado do HWiNFO saia como "Clock - media de 6": um clock de
+                // coisa nenhuma, que ainda por cima nao achava a tabela.
+                Igual("Core Clock", Sensors.NomeExibido("Core 0 Clock"),
+                      "o indice sai e Core fica");
+                Igual("Core Clock", Sensors.NomeExibido("Core 12 Clock (perf #3/4)"),
+                      "o sufixo de perf sai junto");
+                Igual("Core Usage", Sensors.NomeExibido("Core 0 T1 Usage"),
+                      "a marca de thread sai e nao deixa espaco duplo");
+                Igual("CPU Core", Sensors.NomeExibido("CPU Core #3"),
+                      "a nomenclatura da LibreHardwareMonitor ja preservava Core");
+
+                Igual("Clock dos núcleos", MetricPicker.Amigavel("Core Clock"),
+                      "e com o substantivo de volta a tabela acha");
+                Igual("Uso dos núcleos", MetricPicker.Amigavel("Core Usage"), "uso por nucleo");
+
+                // Desambiguacao pelo tipo. A Radeon publica DUAS leituras
+                // chamadas "GPU Core": temperatura e clock. Sem isto, o clock
+                // aparecia na lista com nome de temperatura - pior do que
+                // faltar, porque quem procurava desistia depois de achar.
+                Igual("Temperatura da GPU", MetricPicker.Amigavel("GPU Core", "Temperature"),
+                      "GPU Core como temperatura");
+                Igual("Clock da GPU", MetricPicker.Amigavel("GPU Core", "Clock"),
+                      "e o MESMO nome como clock");
+                Igual("Clock da memória de vídeo", MetricPicker.Amigavel("GPU Memory", "Clock"),
+                      "idem para a memoria de video");
+
+                // A LibreHardwareMonitor nomeia o grupo por nucleo so de "Core":
+                // o indice e um "#1" que sai inteiro, e sobra uma palavra que
+                // nao diz que grandeza e. Aqui quem diz e o tipo.
+                Igual("Clock dos núcleos", MetricPicker.Amigavel("Core", "Clock"),
+                      "Core solto, desambiguado por clock");
+                Igual("Multiplicador dos núcleos", MetricPicker.Amigavel("Core", "Factor"),
+                      "o mesmo Core solto como multiplicador");
+                Igual("Uso dos núcleos", MetricPicker.Amigavel("CPU Core", "Load"),
+                      "CPU Core como uso, e nao como temperatura");
+                Igual("Temperatura dos núcleos", MetricPicker.Amigavel("CPU Core", "Temperature"),
+                      "CPU Core como temperatura");
+
+                // Tipo desconhecido nao pode atrapalhar: cai na busca pelo nome.
+                Igual("Temperatura do disco", MetricPicker.Amigavel("Drive Temperature", "Temperature"),
+                      "chave sem tipo continua valendo quando o tipo nao casa");
+
+                // A trava da migracao. Normalize alimenta o GroupKey, que vira o
+                // Id sintetico gravado no perfil e a chave da serie no
+                // history.dat. Se alguem "consertar" a Normalize junto com a
+                // NomeExibido, todo perfil salvo perde os sensores em silencio -
+                // cartao em branco, painel vazio, nenhum erro na tela. Estas
+                // quatro linhas sao o alarme.
+                Igual("Clock", Sensors.Normalize("Core 0 Clock"),
+                      "a chave de agrupamento NAO muda");
+                Igual("Clock", Sensors.Normalize("Core 12 Clock (perf #3/4)"),
+                      "membros do mesmo grupo continuam caindo na mesma chave");
+                Igual("Usage", Sensors.Normalize("Core 0 T1 Usage"), "idem para uso");
+                Igual("CPU Core", Sensors.Normalize("CPU Core #3"), "idem para a LHM");
+
                 Igual("Sensor Exotico X9", MetricPicker.Amigavel("Sensor Exotico X9"),
                       "nome fora da tabela passa inteiro");
                 Igual("", MetricPicker.Amigavel(null), "nulo vira vazio");
@@ -306,6 +366,125 @@ namespace MhiagosControl
         /// cinco segundos reais para acontecer, e uma suite que dorme para
         /// verificar deixa de ser rodada.
         /// </summary>
+        /// <summary>
+        /// A esticada das paginas.
+        ///
+        /// Erro de geometria nao aparece na maquina de quem escreveu: aparece na
+        /// janela do tamanho que ninguem testou. Estes casos sao os que passam
+        /// despercebidos no olho - a borda direita depois da divisao inteira, a
+        /// pagina que nao pode encolher, a fileira de larguras desiguais.
+        /// </summary>
+        private static void LarguraDasPaginas()
+        {
+            Secao("largura das paginas");
+
+            // A pagina de Paineis: dois cartoes em cima, um atravessado embaixo.
+            Rectangle[] paineis = new Rectangle[]
+            {
+                new Rectangle(0,   0, 370, 268),
+                new Rectangle(386, 0, 370, 268),
+                new Rectangle(0, 280, 756, 532),
+            };
+
+            Rectangle[] r = SettingsForm.Esticar(paineis, 920, 1100);
+            Igual(920, r[2].Right, "o cartao de baixo alcanca a borda");
+            Igual(920, r[1].Right, "e a fileira de cima termina junto com ele");
+            Igual(0, r[0].Left, "a primeira coluna continua encostada na esquerda");
+            Igual(16, r[1].Left - r[0].Right, "o vao entre os dois nao estica junto");
+            Igual(r[0].Width, r[1].Width, "cartoes iguais crescem igual");
+            Igual(268, r[0].Height, "a altura nao e assunto desta conta");
+
+            // Larguras desiguais: a lista de perfis e menor que a previa, e tem
+            // de continuar menor - a diferenca de tamanho e o que diz onde olhar.
+            Rectangle[] perfis = new Rectangle[]
+            {
+                new Rectangle(0,   0, 330, 566),
+                new Rectangle(346, 0, 410, 566),
+            };
+            r = SettingsForm.Esticar(perfis, 916, 1100);
+            Igual(916, r[1].Right, "a fileira desigual tambem fecha na borda");
+            Verdade(r[1].Width > r[0].Width, "a previa continua maior que a lista");
+            Igual(16, r[1].Left - r[0].Right, "vao preservado");
+
+            // Estreita demais: nunca encolher. Os controles dentro dos cartoes
+            // estao em coordenadas fixas e seriam cortados na borda direita.
+            r = SettingsForm.Esticar(paineis, 500, 1100);
+            Igual(756, r[2].Width, "abaixo do projeto a pagina para de encolher");
+            Igual(0, r[0].Left, "e nao ganha margem negativa");
+
+            // Acima do maximo: para de crescer e passa a centralizar.
+            r = SettingsForm.Esticar(paineis, 1900, 1100);
+            Igual(1100, r[2].Width, "o conteudo trava na largura maxima");
+            Igual(400, r[2].Left, "e a sobra vira margem dos dois lados");
+            Igual(1500, r[2].Right, "com o mesmo tanto sobrando de cada lado");
+
+            // Larguras que nao dividem redondo. Sem o ultimo absorvendo o resto,
+            // a fileira fecharia um ou dois pixels antes da borda e o cartao de
+            // baixo apareceria desalinhado dos de cima.
+            Rectangle[] tres = new Rectangle[]
+            {
+                new Rectangle(0,   0, 100, 50),
+                new Rectangle(107, 0, 100, 50),
+                new Rectangle(214, 0, 100, 50),
+                new Rectangle(0,  60, 314, 50),
+            };
+            for (int disp = 314; disp <= 360; disp++)
+            {
+                Rectangle[] t = SettingsForm.Esticar(tres, disp, 1100);
+                Igual(t[3].Right, t[2].Right,
+                      "em " + disp + " px as duas fileiras terminam no mesmo x");
+            }
+
+            Verdade(SettingsForm.Esticar(null, 900, 1100) == null, "sem retangulos, nada a fazer");
+            Verdade(SettingsForm.Esticar(new Rectangle[0], 900, 1100) == null, "vetor vazio idem");
+        }
+
+        /// <summary>
+        /// O retrato da maquina na tela de bordo.
+        ///
+        /// Sao dados derivados, e derivacao errada aqui nao quebra nada: so
+        /// mostra a maquina errada, calada, para sempre.
+        /// </summary>
+        private static void RetratoDaMaquina()
+        {
+            Secao("retrato da maquina");
+
+            SystemInfo s = SystemInfo.From(null);
+
+            // Sem lista de sensores nao ha peca nenhuma, mas o que vem do
+            // proprio sistema tem de vir assim mesmo.
+            Verdade(s.Cpu == null, "sem sensores, nenhum processador nomeado");
+            Verdade(!string.IsNullOrEmpty(s.Ram), "a memoria instalada nao depende de sensor");
+            Verdade(!string.IsNullOrEmpty(s.CpuNucleos), "a contagem de threads tambem nao");
+            Verdade(s.CpuNucleos.IndexOf(Environment.ProcessorCount.ToString()) >= 0,
+                    "e ela traz o numero que o proprio .NET responde");
+            Verdade(s.Placa == null, "sem sensores da placa-mae, a linha nao existe");
+
+            // O ProductName do registro responde "Windows 10" numa maquina com
+            // build 26200. Quem le so ele mostra a versao errada; o numero da
+            // compilacao e que decide.
+            if (!string.IsNullOrEmpty(s.Sistema))
+            {
+                Verdade(s.Sistema.IndexOf("Windows") >= 0, "o sistema se identifica");
+
+                int build = 0;
+                try
+                {
+                    using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.LocalMachine
+                        .OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
+                        if (k != null)
+                            int.TryParse(Convert.ToString(k.GetValue("CurrentBuild")), out build);
+                }
+                catch { }
+
+                if (build >= 22000)
+                    Verdade(s.Sistema.IndexOf("Windows 10") < 0,
+                            "build " + build + " nao pode se chamar Windows 10 (obtido: " + s.Sistema + ")");
+                if (build > 0)
+                    Verdade(s.Sistema.IndexOf(build.ToString()) >= 0, "a compilacao aparece");
+            }
+        }
+
         private static void HistoricoDasMetricas()
         {
             Secao("historico das metricas");
@@ -335,6 +514,24 @@ namespace MhiagosControl
 
             MetricHistory.Seguir(null);
             Igual(0, MetricHistory.Seguidos.Count, "lista vazia nao acompanha nada");
+
+            // O relogio da janela, que e o que o balao do cartao mostra. Um erro
+            // de um balde aqui vira um horario errado por cinco segundos - nada
+            // que salte aos olhos numa curva, e por isso mesmo o tipo de coisa
+            // que fica errada para sempre.
+            DateTime fim = MetricHistory.FimDaJanela();
+            Verdade(fim.Kind == DateTimeKind.Local, "hora local, que e a do relogio de quem le");
+
+            double atraso = (DateTime.Now - fim).TotalSeconds;
+            Verdade(atraso >= 0, "o ultimo balde ja fechou, entao nao esta no futuro");
+            Verdade(atraso < 2 * MetricHistory.PassoSeg + 5,
+                    "e nao esta mais que um passo atras (obtido: " + (int)atraso + " s)");
+
+            // O balde alinha no passo: sem isso o horario do balao andaria
+            // sozinho conforme a hora em que a janela foi aberta.
+            long seg = (long)(fim.ToUniversalTime() -
+                              new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+            Igual(0L, seg % MetricHistory.PassoSeg, "o instante cai na grade dos baldes");
         }
 
         /// <summary>
@@ -752,7 +949,10 @@ namespace MhiagosControl
             // sigla ou simbolo - listados para que o resto seja cobrado.
             List<string> iguais = new List<string>(new string[]
             {
-                "AppName", "Ok", "PtBr", "EnUs", "Language"
+                // "Cooler" e a palavra usada nos dois idiomas: em portugues e
+                // emprestimo consagrado, e traduzir por "resfriador" nomearia a
+                // peca de um jeito que ninguem usa para procura-la.
+                "AppName", "Ok", "PtBr", "EnUs", "Language", "CoolerCard"
             });
 
             string antes = T.Language;

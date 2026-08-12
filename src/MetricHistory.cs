@@ -230,6 +230,24 @@ namespace MhiagosControl
             return n;
         }
 
+        /// <summary>
+        /// Instante local do ultimo balde devolvido por Janela.
+        ///
+        /// Depois de Fechar, V[Baldes-1] guarda a media do balde que acabou de
+        /// se encerrar - o de indice _balde - 1, e nao o corrente, que ainda
+        /// esta acumulando. Quem desenha precisa disto para dizer a que horas
+        /// aconteceu o que esta sob o ponteiro: contar para tras a partir de
+        /// DateTime.Now erraria por ate um passo, e erraria mais ainda quando o
+        /// ciclo de leitura atrasa.
+        /// </summary>
+        public static DateTime FimDaJanela()
+        {
+            long b;
+            lock (_trava) { b = _balde > 0 ? _balde - 1 : BaldeAgora() - 1; }
+            return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                   .AddSeconds((double)b * PassoSeg).ToLocalTime();
+        }
+
         /// <summary>Nome da janela para a interface: "10 min", "1 h", "6 h".</summary>
         public static string NomeDaJanela(int segundos)
         {

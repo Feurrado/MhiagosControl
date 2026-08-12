@@ -497,11 +497,43 @@ namespace MhiagosControl
             return result;
         }
 
-        /// <summary>Nome sem o indice do nucleo: "Core #3 (SMU)" -> "Core (SMU)".</summary>
-        private static string Normalize(string name)
+        /// <summary>
+        /// Nome sem o indice do nucleo, para AGRUPAR: "Core #3 (SMU)" -> "Core (SMU)".
+        ///
+        /// Esta e a forma que entra no GroupKey e, por ele, no Id sintetico que
+        /// vai gravado no perfil e e a chave das series no history.dat. Mudar o
+        /// que sai daqui renomeia sensores que ja estao salvos: os cartoes
+        /// ficariam em branco e os paineis perderiam a escolha, sem erro nenhum
+        /// na tela. Por isso ela nao muda - quem quiser um nome melhor usa a
+        /// NomeExibido, logo abaixo.
+        /// </summary>
+        internal static string Normalize(string name)
         {
             string n = CoreIndex.Replace(name ?? "", "");
             return Regex.Replace(n, @"\s{2,}", " ").Trim();
+        }
+
+        /// <summary>
+        /// Nome sem o indice do nucleo, para LER: "Core 0 Clock" -> "Core Clock".
+        ///
+        /// O ramo "\bCore\s+\d+\b" da CoreIndex leva a palavra Core junto com o
+        /// numero, e e o certo para agrupar - o que distingue um membro do outro
+        /// e so o indice. Mas para exibir sobrava "Clock", e o agregado saia
+        /// como "Clock - media de 6": um clock de coisa nenhuma. Pior, "clock"
+        /// sozinho nao e uma leitura nomeavel, entao a tabela de traducao nao
+        /// achava nada e o nome ainda passava cru.
+        ///
+        /// Aqui o indice sai e o substantivo fica.
+        /// </summary>
+        internal static string NomeExibido(string name)
+        {
+            string n = CoreIndex.Replace(name ?? "", new MatchEvaluator(SoOIndice));
+            return Regex.Replace(n, @"\s{2,}", " ").Trim();
+        }
+
+        private static string SoOIndice(Match m)
+        {
+            return m.Value.StartsWith("Core", StringComparison.OrdinalIgnoreCase) ? "Core" : "";
         }
 
         private static bool IsPerCore(string name)
@@ -547,7 +579,7 @@ namespace MhiagosControl
                 agg.Unit = members[0].Unit;
                 agg.Source = members[0].Source;
                 agg.Members = members.Count;
-                agg.Name = Normalize(members[0].Name) + " · " + T.AverageOf(members.Count);
+                agg.Name = NomeExibido(members[0].Name) + " · " + T.AverageOf(members.Count);
                 agg.Label = Describe(agg.Hardware, agg.Name, agg.Type);
                 agg.Value = Average(members);
                 keep.Add(agg);

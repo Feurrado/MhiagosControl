@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -15,6 +15,33 @@ namespace MhiagosControl
     /// </summary>
     public class SettingsForm : Form
     {
+        private const int WS_EX_COMPOSITED = 0x02000000;
+
+        /// <summary>
+        /// Compoe a janela inteira fora da tela antes de mostra-la.
+        ///
+        /// Cada controle daqui ja tem buffer duplo proprio, e isso resolve o
+        /// tremor DE UM controle se repintando. Nao resolve o de varios se
+        /// movendo juntos: sem composicao, cada um limpa o seu retangulo e
+        /// desenha no lugar novo por conta propria, e o intervalo entre um e
+        /// outro fica visivel. Enquanto a barra lateral desliza sao tres
+        /// cartoes, a previa e os filhos ancorados de cada um, todos mudando de
+        /// posicao no mesmo quadro - e o que se via nao era falta de quadros,
+        /// era a janela sendo remontada em pedacos na frente de quem olha.
+        ///
+        /// Aqui a montagem acontece num buffer so e a tela recebe o resultado
+        /// pronto.
+        /// </summary>
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= WS_EX_COMPOSITED;
+                return cp;
+            }
+        }
+
         private readonly Config _cfg;
         private readonly Func<Dictionary<string, float>> _snapshot;
         private List<SensorEntry> _sensors;
@@ -27,6 +54,7 @@ namespace MhiagosControl
         private Timer _tick;
         private Label _footerNote;
         private Timer _noteTimer;
+        private FlatBtn _btSave;
 
         // pagina Paineis
         private SensorPicker _pick1, _pick2;
@@ -51,8 +79,26 @@ namespace MhiagosControl
         private Label _idleNote, _rotNote;
         private Segmented _lang;
 
-        /// <summary>Ha edicao ainda nao gravada. Governa o aviso ao fechar.</summary>
-        private bool _dirty = false;
+        /// <summary>
+        /// Ha edicao ainda nao gravada. Governa o aviso ao fechar E o rodape.
+        ///
+        /// Propriedade, e nao campo, porque o valor e atribuido em uma duzia de
+        /// lugares - renomear perfil, importar, mexer num limiar, trocar de
+        /// sensor. Com campo, cada um deles teria de lembrar de avisar o rodape,
+        /// e o que fosse esquecido deixaria o botao Salvar mentindo sobre haver
+        /// ou nao o que gravar. Aqui nao ha o que esquecer.
+        /// </summary>
+        private bool _dirty
+        {
+            get { return _temEdicao; }
+            set
+            {
+                if (_temEdicao == value) return;
+                _temEdicao = value;
+                AtualizarRodape();
+            }
+        }
+        private bool _temEdicao = false;
 
         /// <summary>
         /// Alguma gravacao ja aconteceu nesta sessao da janela.
@@ -133,46 +179,61 @@ namespace MhiagosControl
             _nav.SelectionChanged += delegate { ShowPage(); };
             Controls.Add(_nav);
 
-            Panel footer = new Panel();
-            footer.Dock = DockStyle.Bottom;
-            footer.Height = 58;
-            footer.BackColor = Ui.Window;
-            Controls.Add(footer);
+            // A barra de acoes no ALTO, e nao no rodape.
+            //
+            // No rodape ela ficava do lado oposto ao conteudo que comanda: a
+            // pagina comeca em cima, e Salvar - que grava o que esta na pagina -
+            // estava a oitocentos pixels dali, no canto mais distante do
+            // percurso do olho. E o rodape gastava 58 px de altura em duas
+            // linhas de botao, altura que a tela de bordo usa para dado.
+            Panel barra = new Panel();
+            barra.Dock = DockStyle.Top;
+            barra.Height = 52;
+            barra.BackColor = Ui.Window;
+            Controls.Add(barra);
+
+            int larguraUtil = ClientSize.Width - _nav.Width;
+
+            FlatBtn close = new FlatBtn();
+            close.Text = T.Close;
+            close.SetBounds(larguraUtil - 114, 11, 96, 32);
+            // Ancorado a direita: recolher a barra lateral alarga esta, e sem a
+            // ancora o botao ficaria parado no meio dela.
+            close.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            close.Click += delegate { Close(); };
+            barra.Controls.Add(close);
 
             // Salvar grava e FICA. Fechar a janela a cada gravacao obrigava a
             // reabri-la para o ajuste seguinte, e um ajuste de painel quase
             // nunca vem sozinho.
-            FlatBtn save = new FlatBtn();
-            save.Text = T.Save;
-            save.Primary = true;
-            // Coordenadas relativas ao RODAPE, que agora comeca depois da barra
-            // lateral - e nao a janela. Medir pela janela punha os botoes 210 px
-            // alem da borda direita do proprio rodape.
-            int rodape = ClientSize.Width - _nav.Width;
-            save.SetBounds(rodape - 210, 14, 96, 32);
-            // Ancorados a direita: recolher a barra alarga o rodape, e sem a
-            // ancora os botoes ficariam parados no meio dele.
-            save.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            save.Click += new EventHandler(OnSave);
-            footer.Controls.Add(save);
+            //
+            // ESMAECIDO quando nao ha o que gravar, e nao escondido. Sumindo, ele
+            // levava junto a informacao de que existe - e a barra mudava de forma
+            // a cada tecla digitada num campo. Apagado, o lugar dele continua
+            // sendo o lugar dele, e o estado se le sem clicar.
+            _btSave = new FlatBtn();
+            _btSave.Text = T.Save;
+            _btSave.Primary = true;
+            _btSave.SetBounds(larguraUtil - 220, 11, 96, 32);
+            _btSave.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _btSave.Enabled = false;
+            _btSave.Click += new EventHandler(OnSave);
+            barra.Controls.Add(_btSave);
 
-            FlatBtn close = new FlatBtn();
-            close.Text = T.Close;
-            close.SetBounds(rodape - 106, 14, 96, 32);
-            close.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            close.Click += delegate { Close(); };
-            footer.Controls.Add(close);
-
-            _footerNote = MakeLabel("", 18, 22, Ui.FontSmall);
-            _footerNote.Size = new Size(320, 18);
+            _footerNote = MakeLabel("", 18, 17, Ui.FontSmall);
+            _footerNote.Size = new Size(larguraUtil - 250, 20);
+            _footerNote.TextAlign = ContentAlignment.MiddleRight;
+            _footerNote.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _footerNote.ForeColor = Ui.Accent;
             _footerNote.Visible = false;
-            footer.Controls.Add(_footerNote);
+            barra.Controls.Add(_footerNote);
+
+            AtualizarRodape();
 
             _host = new Panel();
             _host.Dock = DockStyle.Fill;
             _host.BackColor = Ui.Window;
-            _host.Padding = new Padding(18, 16, 18, 8);
+            _host.Padding = new Padding(18, 4, 18, 14);
             Controls.Add(_host);
 
             // O Windows Forms encaixa os controles do fundo da ordem Z para a
@@ -197,6 +258,12 @@ namespace MhiagosControl
 
         private void BuildPages()
         {
+            // Glifo ESCAPADO, como o da engrenagem logo abaixo: E80F e a "casa"
+            // da Segoe MDL2, um caractere da area de uso privado, e colado no
+            // fonte ele depende de sobreviver a toda ferramenta que passar pelo
+            // arquivo. Ja nao sobreviveu antes.
+            NavItem visao = new NavItem();
+            visao.Text = T.NavOverview; visao.Glyph = "\uE80F"; visao.Page = BuildPageVisaoGeral();
             NavItem paineis = new NavItem();
             paineis.Text = T.NavPanels; paineis.Glyph = ""; paineis.Page = BuildPagePaineis();
 
@@ -221,12 +288,17 @@ namespace MhiagosControl
             NavItem sobre = new NavItem();
             sobre.Text = T.NavAbout; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
 
-            foreach (NavItem it in new NavItem[] { paineis, alertas, metricas, perfis, config, sobre })
+            foreach (NavItem it in new NavItem[] { visao, paineis, alertas, metricas, perfis, config, sobre })
             {
                 _nav.Add(it);
                 it.Page.Dock = DockStyle.Fill;
                 it.Page.Visible = false;
                 _host.Controls.Add(it.Page);
+
+                // Copia local: o delegate guarda a variavel, e nao o valor dela
+                // no instante em que foi escrito.
+                Control pg = it.Page;
+                pg.Resize += delegate { ArranjarPagina(pg); };
             }
             ShowPage();
         }
@@ -245,8 +317,665 @@ namespace MhiagosControl
                 // janela pulava justamente as paginas de tras, e a barra de
                 // rolagem delas saia branca na primeira visita.
                 Theme.ApplyScrollbars(sel.Page);
+
+                // Pelo mesmo motivo: sem HWND nao houve Resize, e a pagina
+                // estreava com a largura de projeto e a faixa morta do lado.
+                //
+                // E tambem porque os dois arranjos desistem de pagina escondida:
+                // o que foi pulado enquanto ela estava atras e cobrado aqui,
+                // agora que ela e a que aparece.
+                ArranjarPagina(sel.Page);
             }
             if (_profileList != null) RefreshProfileList();
+        }
+
+        /// <summary>Rearranja a pagina que esta a mostra, seja ela qual for.</summary>
+        private void ArranjarPaginaVisivel()
+        {
+            NavItem sel = _nav != null ? _nav.Selected : null;
+            if (sel == null || sel.Page == null) return;
+            ArranjarPagina(sel.Page);
+        }
+
+        /// <summary>
+        /// Cada pagina pelo seu arranjo.
+        ///
+        /// Metricas e Visao geral tem o seu proprio - a primeira porque empacota
+        /// cartoes em fluxo, a segunda porque reparte a ALTURA, coisa que o
+        /// Elastico nao faz. Deixa-las passar pelo Elastico junto seria duas
+        /// rotinas disputando os mesmos controles a cada Resize.
+        /// </summary>
+        private void ArranjarPagina(Control pagina)
+        {
+            if (pagina == null) return;
+            if (pagina == _pgMetricas) { ArranjarMetricas(); return; }
+            if (pagina == _pgVisao) { if (pagina.Visible) ArranjarVisaoGeral(); return; }
+            Elastico(pagina);
+        }
+
+
+        // ---------------- largura das paginas ----------------
+
+        /// <summary>Largura util maxima de uma pagina.</summary>
+        ///
+        /// Passando disto o conteudo para de crescer e passa a ser centralizado.
+        /// Uma pagina de 1900 px nao fica melhor por espalhar seis campos de
+        /// formulario por toda a mesa: a linha de texto vira uma travessia e o
+        /// olho perde o comeco da seguinte. Centralizado, o que sobra virou
+        /// margem dos dois lados - que se le como decisao, e nao como o vao
+        /// torto de um lado so.
+        private const int LarguraMaxDaPagina = 1100;
+
+        /// <summary>Medidas de projeto dos cartoes, antes de qualquer esticada.</summary>
+        ///
+        /// Recalcular a partir do que esta na tela acumularia erro: a segunda
+        /// esticada partiria da largura ja esticada, e a pagina cresceria a cada
+        /// arrasto da borda.
+        private readonly Dictionary<Control, Rectangle> _projeto =
+            new Dictionary<Control, Rectangle>();
+
+        private Rectangle Projeto(Control c)
+        {
+            Rectangle r;
+            if (!_projeto.TryGetValue(c, out r)) { r = c.Bounds; _projeto[c] = r; }
+            return r;
+        }
+
+        /// <summary>
+        /// Estica os cartoes de uma pagina para ocupar a largura que sobrou.
+        ///
+        /// As paginas nasceram em coordenadas absolutas medidas para 756 px, que
+        /// era a largura util com a barra lateral aberta. Recolher a barra - ou
+        /// so alargar a janela - passou a deixar uma faixa morta a direita,
+        /// exatamente do tamanho do que a lateral devolveu.
+        ///
+        /// So cresce, nunca encolhe. Os controles DENTRO de cada cartao seguem
+        /// em coordenadas fixas, e uma pagina mais estreita que o projeto
+        /// cortaria o que esta encostado na borda direita deles.
+        ///
+        /// Os vaos entre cartoes ficam constantes e a sobra e repartida na
+        /// proporcao das larguras. Dividir a sobra em partes iguais engordaria o
+        /// cartao estreito no mesmo tanto que o largo, e a pagina de Perfis
+        /// existe justamente com a lista menor que a previa - em duas ou tres
+        /// esticadas as duas teriam quase o mesmo tamanho e a hierarquia entre
+        /// elas, que e o que diz onde olhar primeiro, se perderia.
+        /// </summary>
+        private void Elastico(Control pagina)
+        {
+            if (pagina == null || pagina.Width <= 0) return;
+
+            // Ja foi tentado adiar o arranjo para o fim do deslize da lateral -
+            // um reposicionamento em vez de dez. Ficou pior: o conteudo parado
+            // durante a animacao e um salto no fim incomoda mais que acompanhar
+            // com tremor. A pagina segue a largura quadro a quadro.
+
+            // Pagina escondida nao se arruma agora.
+            //
+            // As seis paginas sao filhas do mesmo hospedeiro, todas em
+            // DockStyle.Fill: o Windows Forms redimensiona TODAS a cada mudanca
+            // de largura, apareca ou nao. Enquanto a barra lateral desliza isso
+            // era seis arranjos completos por quadro, com a cascata de layout de
+            // cada cartao e de cada filho ancorado - e cinco deles para paginas
+            // que ninguem esta vendo. Quem estreia entra pelo ShowPage, que
+            // chama isto de novo.
+            if (!pagina.Visible) return;
+
+            // O Card e a assinatura de uma pagina em coordenadas de projeto. A de
+            // Metricas nao tem nenhum - ela ja se arranja sozinha, e as duas
+            // rotinas mexendo nos mesmos controles brigariam a cada Resize.
+            bool temCartao = false;
+            foreach (Control c in pagina.Controls)
+                if (c is Card) { temCartao = true; break; }
+            if (!temCartao) return;
+
+            // Daqui em diante vale todo filho direto, e nao so os cartoes: o
+            // rodape da pagina de Perfis e um rotulo solto, e deixa-lo parado
+            // enquanto os cartoes se deslocam so trocaria de lugar o
+            // desalinhamento. Ancorado ou encaixado, o proprio Windows Forms ja
+            // cuida - mexer seria desfazer o que a ancora acabou de fazer.
+            List<Control> alvos = new List<Control>();
+            foreach (Control c in pagina.Controls)
+            {
+                if (c.Dock != DockStyle.None) continue;
+                if ((c.Anchor & AnchorStyles.Right) != 0) continue;
+                alvos.Add(c);
+            }
+            if (alvos.Count == 0) return;
+
+            Rectangle[] projeto = new Rectangle[alvos.Count];
+            for (int i = 0; i < alvos.Count; i++) projeto[i] = Projeto(alvos[i]);
+
+            // A largura da barra de rolagem sai da conta sempre que a pagina
+            // possa rolar, apareca ela ou nao: medir a area de cliente faria o
+            // conteudo encolher quando a barra surge e alargar quando ela some,
+            // e cada troca dispara um novo arranjo - dois estados que se chamam
+            // em circulo.
+            int disp = pagina.Width - 4;
+            ScrollableControl rolavel = pagina as ScrollableControl;
+            if (rolavel != null && rolavel.AutoScroll)
+                disp -= System.Windows.Forms.SystemInformation.VerticalScrollBarWidth;
+
+            Rectangle[] destino = Esticar(projeto, disp, LarguraMaxDaPagina);
+            if (destino == null) return;
+
+            pagina.SuspendLayout();
+            try
+            {
+                for (int i = 0; i < alvos.Count; i++) alvos[i].Bounds = destino[i];
+            }
+            finally { pagina.ResumeLayout(); }
+        }
+
+        /// <summary>
+        /// A conta da esticada, sem tocar em controle nenhum.
+        ///
+        /// Separada porque geometria e o tipo de coisa que erra por um pixel e
+        /// so aparece na tela de quem tem a janela do tamanho errado. Aqui ela e
+        /// entrada e saida, e a suite verifica os casos que ninguem repara
+        /// olhando: a borda direita depois da divisao inteira, a pagina estreita
+        /// que nao pode encolher, a fileira de larguras desiguais.
+        ///
+        /// Devolve os retangulos na mesma ordem em que entraram, ou nulo quando
+        /// nao ha o que fazer.
+        /// </summary>
+        internal static Rectangle[] Esticar(Rectangle[] projeto, int disponivel, int maximo)
+        {
+            if (projeto == null || projeto.Length == 0) return null;
+
+            // A largura de projeto sai do proprio conteudo: a borda direita mais
+            // distante. Guardar 756 aqui e 736 ali como constante daria uma
+            // pagina desalinhada no dia em que um cartao mudasse de tamanho e
+            // ninguem se lembrasse deste metodo.
+            int larguraBase = 0;
+            foreach (Rectangle p in projeto)
+                if (p.Right > larguraBase) larguraBase = p.Right;
+            if (larguraBase <= 0) return null;
+
+            int alvo = disponivel;
+            if (alvo > maximo) alvo = maximo;
+            if (alvo < larguraBase) alvo = larguraBase;
+
+            int margem = (disponivel - alvo) / 2;
+            if (margem < 0) margem = 0;
+
+            int extra = alvo - larguraBase;
+
+            // Fileiras pelo topo: mesma coordenada de topo, mesma fileira.
+            Dictionary<int, List<int>> linhas = new Dictionary<int, List<int>>();
+            for (int i = 0; i < projeto.Length; i++)
+            {
+                int topo = projeto[i].Top;
+                if (!linhas.ContainsKey(topo)) linhas[topo] = new List<int>();
+                linhas[topo].Add(i);
+            }
+
+            Rectangle[] destino = new Rectangle[projeto.Length];
+            Array.Copy(projeto, destino, projeto.Length);
+
+            foreach (KeyValuePair<int, List<int>> kv in linhas)
+            {
+                List<int> fila = kv.Value;
+                Rectangle[] pr = projeto;
+                fila.Sort(delegate(int a, int b) { return pr[a].Left.CompareTo(pr[b].Left); });
+
+                int somaW = 0;
+                foreach (int i in fila) somaW += projeto[i].Width;
+                if (somaW <= 0) continue;
+
+                int x = margem + projeto[fila[0]].Left;
+                int dado = 0;
+                for (int k = 0; k < fila.Count; k++)
+                {
+                    Rectangle p = projeto[fila[k]];
+
+                    // O ultimo absorve o resto da divisao inteira, senao a borda
+                    // direita ficaria a um ou dois pixels do lugar - e um cartao
+                    // desalinhado dos de cima e visivel.
+                    int cresce = (k == fila.Count - 1)
+                        ? extra - dado
+                        : (int)((long)extra * p.Width / somaW);
+                    dado += cresce;
+
+                    destino[fila[k]] = new Rectangle(x, p.Top, p.Width + cresce, p.Height);
+
+                    if (k + 1 < fila.Count)
+                        x += p.Width + cresce + (projeto[fila[k + 1]].Left - p.Right);
+                }
+            }
+            return destino;
+        }
+
+        // ---------------- pagina: Visao geral ----------------
+
+        private Pagina _pgVisao;
+        private readonly List<MetricCard> _vgTiles = new List<MetricCard>();
+        private readonly List<string> _vgIds = new List<string>();
+
+        private Card _cardCooler, _cardSpecs;
+        private PanelPreview _vgPreview;
+        private Label _vgPerfil, _vgPainel;
+        private Label[] _vgSpecCap, _vgSpecVal;
+        private MetricCard _vgP1, _vgP2;
+
+        /// <summary>
+        /// A tela que abre: o que e a maquina, como ela esta e o que o cooler
+        /// esta mostrando.
+        ///
+        /// Ate aqui a janela abria em Paineis, que e a pagina de AJUSTAR o
+        /// aparelho - e ajustar e coisa que se faz uma vez. O que se olha todo
+        /// dia e o estado, e para chegar nele era preciso navegar. A ordem agora
+        /// e a do uso: primeiro o retrato, e a configuracao a um clique.
+        ///
+        /// Nada aqui e editavel de proposito. Cada bloco aponta para a pagina que
+        /// o edita, e uma tela que so responde perguntas nao precisa ser
+        /// defendida de cliques errados.
+        /// </summary>
+        private Control BuildPageVisaoGeral()
+        {
+            _pgVisao = new Pagina();
+
+            // Sem rolagem: esta pagina e desenhada para caber, e a altura que
+            // sobra vai para o cartao do cooler em vez de virar vao. Uma barra de
+            // rolagem aqui so reservaria a largura dela sem nunca aparecer.
+            MontarDestaques();
+
+            _cardCooler = new Card();
+            _cardCooler.Title = T.CoolerCard;
+            _pgVisao.Controls.Add(_cardCooler);
+
+            // A previa DE VERDADE, a mesma peca que a pagina de Paineis usa.
+            //
+            // E a unica coisa nesta tela que nenhum outro monitor de hardware
+            // mostra, e por isso ela e o centro: responde "esta funcionando?" sem
+            // ler uma palavra. A primeira versao desta pagina resumia o cooler a
+            // uma linha de texto com VID e PID - o dado mais tecnico e menos util
+            // que havia para escolher.
+            _vgPreview = new PanelPreview();
+            _cardCooler.Controls.Add(_vgPreview);
+
+            // Duas linhas, e nao quatro.
+            //
+            // "Mostrador de cima" e "de baixo" estavam aqui E na coluna da
+            // direita, onde cada um tem um grafico inteiro com nome, valor e
+            // historico. Repetidos numa coluna de 320 px eles nao cabiam - saiam
+            // como "Temperatura do..." - e o que se perdia no corte era
+            // exatamente o que o cartao ao lado ja dizia por extenso.
+            _vgPerfil = LinhaDoCooler(T.ActiveProfile);
+            _vgPainel = LinhaDoCooler(T.PanelLabel);
+
+            // A HISTORIA dos dois mostradores, ao lado do estado deles.
+            //
+            // A coluna da direita existia como sobra: o cartao do cooler crescia
+            // para ocupar a altura e o conteudo dele ficava boiando no meio, o
+            // que so mudou o vazio de lugar. Duas curvas grandes das leituras que
+            // vao para a peca preenchem com dado, nao com ar - e respondem o que
+            // a linha "Mostrador de cima - 54,5 C" nao responde: se 54,5 e o de
+            // sempre ou se subiu agora.
+            _vgP1 = MostradorEmCurva();
+            _vgP2 = MostradorEmCurva();
+
+            _cardSpecs = new Card();
+            _cardSpecs.Title = null;    // tira sozinho: e uma tira de referencia
+            _pgVisao.Controls.Add(_cardSpecs);
+
+            MontarSpecs();
+
+            AtualizarVisaoGeral(null);
+            return _pgVisao;
+        }
+
+        /// <summary>
+        /// Uma linha do cartao do cooler: rotulo a esquerda, valor a direita.
+        ///
+        /// Devolve o rotulo do VALOR. O do titulo vai no Tag, para os dois
+        /// sumirem juntos quando nao ha o que dizer - e a posicao vertical sai do
+        /// arranjo, e nao da ordem de criacao: na primeira versao as linhas
+        /// nasciam com valor nulo, nao avancavam o y, e as quatro acabavam
+        /// empilhadas na mesma altura.
+        /// </summary>
+        private Label LinhaDoCooler(string titulo)
+        {
+            Label cap = MakeLabel(titulo, 0, 0, Ui.FontSmall);
+            cap.ForeColor = Ui.Muted;
+            _cardCooler.Controls.Add(cap);
+
+            Label val = MakeLabel("", 0, 0, Ui.FontMed);
+            val.TextAlign = ContentAlignment.MiddleRight;
+            val.Tag = cap;
+            _cardCooler.Controls.Add(val);
+            return val;
+        }
+
+        private MetricCard MostradorEmCurva()
+        {
+            MetricCard c = new MetricCard();
+            c.Editavel = false;
+            c.Janela = MetricHistory.JanelaValida(_cfg.MetricRange);
+            _pgVisao.Controls.Add(c);
+            return c;
+        }
+
+        /// <summary>Aponta um cartao de curva para o sensor que esta num mostrador.</summary>
+        private void ApontarMostrador(MetricCard c, string id, string titulo)
+        {
+            if (c == null) return;
+
+            SensorEntry s = null;
+            if (!string.IsNullOrEmpty(id) && _sensors != null)
+                foreach (SensorEntry e in _sensors)
+                    if (e != null && e.Id == id) { s = e; break; }
+
+            if (s == null)
+            {
+                c.Visible = false;
+                return;
+            }
+
+            c.Visible = true;
+            c.SensorId = s.Id;
+            c.Titulo = titulo + "  ·  " + MetricPicker.RotuloCurto(s);
+            c.Unidade = s.Unit;
+            c.Sub = SystemInfo.Limpar(s.Hardware);
+
+            float? at, pe;
+            MetricPicker.Faixas(s.Unit, out at, out pe);
+            c.Atencao = at; c.Perigo = pe;
+        }
+
+        /// <summary>
+        /// A tira de especificacoes, embaixo e discreta.
+        ///
+        /// Especificacao e material de REFERENCIA: consultada uma vez, nao
+        /// monitorada. Ela abria esta pagina, no topo e em corpo grande, que e
+        /// onde o olho cai primeiro - o lugar do que muda, nao do que e fixo
+        /// desde que a maquina foi montada.
+        /// </summary>
+        private void MontarSpecs()
+        {
+            SystemInfo info = SystemInfo.From(_sensors);
+
+            List<string[]> linhas = new List<string[]>();
+            linhas.Add(new string[] { T.SpecCpu, Junta(info.Cpu, info.CpuNucleos) });
+            linhas.Add(new string[] { T.SpecGpu, Junta(info.Gpu, info.GpuMemoria) });
+            linhas.Add(new string[] { T.SpecRam, info.Ram });
+            if (!string.IsNullOrEmpty(info.Placa))
+                linhas.Add(new string[] { T.SpecBoard, info.Placa });
+            linhas.Add(new string[] { T.SpecOs, info.Sistema });
+
+            List<Label> caps = new List<Label>();
+            List<Label> vals = new List<Label>();
+            foreach (string[] l in linhas)
+            {
+                if (string.IsNullOrEmpty(l[1])) continue;
+
+                Label cap = MakeLabel(l[0], 0, 0, Ui.FontSmall);
+                cap.ForeColor = Ui.Faint;
+                _cardSpecs.Controls.Add(cap);
+                caps.Add(cap);
+
+                Label val = MakeLabel(l[1], 0, 0, Ui.FontSemi);
+                _cardSpecs.Controls.Add(val);
+                vals.Add(val);
+            }
+            _vgSpecCap = caps.ToArray();
+            _vgSpecVal = vals.ToArray();
+        }
+
+        /// <summary>
+        /// As leituras em destaque: temperatura e uso das duas pecas que aquecem,
+        /// mais o uso da memoria.
+        ///
+        /// Escolha fixa e automatica, e nao o conjunto que a pessoa montou na aba
+        /// Metricas. Sao perguntas diferentes: la e "o que EU quero acompanhar",
+        /// aqui e "esta tudo bem?" - e essa se responde com as mesmas cinco
+        /// leituras em qualquer maquina.
+        ///
+        /// Os blocos tem 140 px de altura de proposito: dai para cima o MetricCard
+        /// desenha grade e a linha de maximo e media. Um numero sozinho nao diz se
+        /// e alto - 72 graus e rotina sob carga e alarme em repouso - e a serie
+        /// atras e a linha embaixo sao o "comparado a que" que falta a ele.
+        /// </summary>
+        private void MontarDestaques()
+        {
+            foreach (SensorEntry s in MetricPicker.Destaques(_sensors))
+            {
+                MetricCard c = new MetricCard();
+                c.Editavel = false;
+                c.Titulo = MetricPicker.RotuloCurto(s);
+                c.Sub = SystemInfo.Limpar(s.Hardware);
+                c.Unidade = s.Unit;
+                c.SensorId = s.Id;
+                c.Janela = MetricHistory.JanelaValida(_cfg.MetricRange);
+                float? at, pe;
+                MetricPicker.Faixas(s.Unit, out at, out pe);
+                c.Atencao = at; c.Perigo = pe;
+
+                _pgVisao.Controls.Add(c);
+                _vgTiles.Add(c);
+                _vgIds.Add(s.Id);
+            }
+        }
+
+        /// <summary>
+        /// O arranjo desta pagina, largura E altura.
+        ///
+        /// A altura entra na conta porque foi a falta dela que deixou a primeira
+        /// versao "vazia": tres cartoes de altura fixa acabavam no meio da tela e
+        /// o resto era fundo. Aqui as duas pontas sao fixas - a fileira de blocos
+        /// em cima, a tira de especificacoes embaixo - e o cartao do cooler fica
+        /// com tudo que sobrar. Assim nao existe sobra, em nenhum tamanho de
+        /// janela.
+        /// </summary>
+        private void ArranjarVisaoGeral()
+        {
+            if (_pgVisao == null || _cardCooler == null) return;
+            if (_pgVisao.Width <= 0 || _pgVisao.Height <= 0) return;
+
+            const int Esp = 10;
+            const int AlturaBloco = 148;
+            const int AlturaSpecs = 56;
+            const int MeioMin = 240;
+
+            int disp = _pgVisao.Width - 4;
+            int alvo = disp > LarguraMaxDaPagina ? LarguraMaxDaPagina : disp;
+            if (alvo < 560) alvo = 560;
+            int x0 = (disp - alvo) / 2;
+            if (x0 < 0) x0 = 0;
+
+            _pgVisao.SuspendLayout();
+            try
+            {
+                int n = _vgTiles.Count;
+                if (n > 0)
+                {
+                    int larg = (alvo - (n - 1) * Esp) / n;
+                    int usado = 0;
+                    for (int i = 0; i < n; i++)
+                    {
+                        int w = (i == n - 1) ? alvo - usado : larg;
+                        _vgTiles[i].SetBounds(x0 + usado, 0, w, AlturaBloco);
+                        usado += w + Esp;
+                    }
+                }
+
+                int yMeio = (n > 0 ? AlturaBloco + Esp : 0);
+                int ySpecs = _pgVisao.Height - AlturaSpecs;
+                int hMeio = ySpecs - Esp - yMeio;
+                if (hMeio < MeioMin) { hMeio = MeioMin; ySpecs = yMeio + hMeio + Esp; }
+
+                // Duas colunas na faixa do meio. A esquerda e mais estreita: o
+                // que ela guarda e uma foto quadrada e quatro linhas curtas, e
+                // dar-lhe metade da tela era o que espalhava tudo - a previa
+                // ficava perdida no meio de um cartao vazio, com o texto a meio
+                // metro de distancia.
+                int wEsq = alvo * 42 / 100;
+                if (wEsq < 300) wEsq = 300;
+                if (wEsq > alvo - 260) wEsq = alvo - 260;
+                int wDir = alvo - wEsq - Esp;
+
+                _cardCooler.SetBounds(x0, yMeio, wEsq, hMeio);
+
+                int hCurva = (hMeio - Esp) / 2;
+                if (_vgP1 != null) _vgP1.SetBounds(x0 + wEsq + Esp, yMeio, wDir, hCurva);
+                if (_vgP2 != null)
+                    _vgP2.SetBounds(x0 + wEsq + Esp, yMeio + hCurva + Esp, wDir, hMeio - hCurva - Esp);
+
+                _cardSpecs.SetBounds(x0, ySpecs, alvo, AlturaSpecs);
+
+                ArranjarCooler();
+                ArranjarSpecs();
+            }
+            finally { _pgVisao.ResumeLayout(); }
+        }
+
+        /// <summary>
+        /// Previa em cima, as quatro linhas embaixo.
+        ///
+        /// Empilhado, e nao lado a lado: numa coluna estreita a foto quadrada nao
+        /// deixa largura util para o texto ao lado, e foi assim que "Perfil
+        /// ativo" acabou encostado na borda direita da janela, longe da peca que
+        /// ele descreve. Um embaixo do outro os dois ficam no mesmo eixo.
+        /// </summary>
+        private void ArranjarCooler()
+        {
+            int w = _cardCooler.Width, h = _cardCooler.Height;
+
+            Label[] linhas = { _vgPerfil, _vgPainel };
+            int vis = 0;
+            foreach (Label l in linhas) if (l != null && l.Visible) vis++;
+
+            const int AlturaLinha = 26;
+            int hTexto = vis * AlturaLinha;
+
+            // A previa fica com o que sobra, sempre quadrada: ela encaixa a foto
+            // pela altura, entao largura a mais so viraria fundo preto ao lado.
+            int lado = Math.Min(w - 32, h - 52 - hTexto - 12);
+            if (lado < 80) lado = 80;
+
+            _vgPreview.SetBounds((w - lado) / 2, 46, lado, lado);
+
+            int y = 46 + lado + 14;
+            foreach (Label val in linhas)
+            {
+                if (val == null || !val.Visible) continue;
+                Label cap = val.Tag as Label;
+                // Rotulo curto a esquerda, valor com TODO o resto: com 150 px
+                // reservados a um rotulo de uma palavra, o que sobrava para o
+                // valor nao dava nem para o nome do perfil.
+                if (cap != null) cap.SetBounds(16, y + 3, 92, 17);
+                val.SetBounds(112, y, w - 128, 20);
+                y += AlturaLinha;
+            }
+        }
+
+        /// <summary>
+        /// A tira de referencia, com as colunas coladas ao conteudo.
+        ///
+        /// Antes a largura era repartida em partes iguais: "16 GB" recebia o
+        /// mesmo espaco que "Ryzen 5 5600X - 6 nucleos - 12 threads", e o que
+        /// sobrava virava um vao entre os dois. Quatro dados curtos espalhados
+        /// por novecentos pixels nao se leem como uma tira - leem-se como quatro
+        /// coisas soltas. Cada coluna toma o que precisa, e o resto fica no fim,
+        /// onde e margem em vez de buraco.
+        /// </summary>
+        private void ArranjarSpecs()
+        {
+            if (_vgSpecVal == null || _vgSpecVal.Length == 0) return;
+
+            const int Vao = 26;
+            int n = _vgSpecVal.Length;
+
+            int[] larg = new int[n];
+            int soma = 0;
+            for (int i = 0; i < n; i++)
+            {
+                int a = TextRenderer.MeasureText(_vgSpecCap[i].Text, Ui.FontSmall).Width;
+                int b = TextRenderer.MeasureText(_vgSpecVal[i].Text, Ui.FontSemi).Width;
+                larg[i] = Math.Max(a, b) + 4;
+                soma += larg[i];
+            }
+
+            // Se nao couber, todas encolhem na proporcao: cortar so a ultima
+            // deixaria justamente o sistema operacional sem nome.
+            int disp = _cardSpecs.Width - 32 - (n - 1) * Vao;
+            if (soma > disp && soma > 0)
+                for (int i = 0; i < n; i++) larg[i] = larg[i] * disp / soma;
+
+            int x = 16;
+            for (int i = 0; i < n; i++)
+            {
+                _vgSpecCap[i].SetBounds(x, 11, larg[i], 15);
+                _vgSpecVal[i].SetBounds(x, 28, larg[i], 18);
+                x += larg[i] + Vao;
+            }
+        }
+
+        /// <summary>Estado do cooler e das duas leituras que ele mostra.</summary>
+        private void AtualizarVisaoGeral(Dictionary<string, float> snap)
+        {
+            if (_cardCooler == null) return;
+
+            string id1 = _current != null ? _current.Panel1Id : null;
+            string id2 = _current != null ? _current.Panel2Id : null;
+
+            PorLinha(_vgPerfil, _current != null ? _current.Name : null);
+            PorLinha(_vgPainel, IdDoPainel());
+
+            ApontarMostrador(_vgP1, id1, T.OnPanel(T.Top));
+            ApontarMostrador(_vgP2, id2, T.OnPanel(T.Bottom));
+            if (snap != null)
+            {
+                float pv;
+                if (_vgP1 != null && _vgP1.Visible)
+                    _vgP1.Push(snap.TryGetValue(_vgP1.SensorId, out pv) ? (float?)pv : null);
+                if (_vgP2 != null && _vgP2.Visible)
+                    _vgP2.Push(snap.TryGetValue(_vgP2.SensorId, out pv) ? (float?)pv : null);
+            }
+
+            if (snap == null) return;
+            for (int i = 0; i < _vgTiles.Count; i++)
+            {
+                float v;
+                _vgTiles[i].Push(snap.TryGetValue(_vgIds[i], out v) ? (float?)v : null);
+            }
+        }
+
+        private static void PorLinha(Label val, string texto)
+        {
+            if (val == null) return;
+            bool tem = !string.IsNullOrEmpty(texto);
+            val.Text = texto ?? "";
+            val.Visible = tem;
+            Label cap = val.Tag as Label;
+            if (cap != null) cap.Visible = tem;
+        }
+
+        private static string Junta(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a)) return b;
+            if (string.IsNullOrEmpty(b)) return a;
+            return a + "  ·  " + b;
+        }
+
+        /// <summary>"Temperatura do processador  ·  56 °C", ou so o nome sem leitura.</summary>
+        private string LeituraDoMostrador(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+
+            SensorEntry achado = null;
+            if (_sensors != null)
+                foreach (SensorEntry s in _sensors)
+                    if (s != null && s.Id == id) { achado = s; break; }
+
+            if (achado == null) return NomeDoSensor(id);
+
+            string nome = MetricPicker.Rotulo(achado);
+            if (!achado.Value.HasValue || float.IsNaN(achado.Value.Value)) return nome;
+
+            string v = Math.Abs(achado.Value.Value) >= 100
+                ? achado.Value.Value.ToString("0")
+                : achado.Value.Value.ToString("0.0");
+            return nome + "  ·  " + v + (string.IsNullOrEmpty(achado.Unit) ? "" : " " + achado.Unit);
         }
 
         // ---------------- pagina: Paineis ----------------
@@ -262,8 +991,8 @@ namespace MhiagosControl
         /// </summary>
         private Control BuildPagePaineis()
         {
-            Panel page = new Panel();
-            page.BackColor = Color.Transparent;
+            Panel page = new Pagina();
+            // fundo opaco vem da propria Pagina
 
             // Os seletores continuam sendo o estado da escolha; so nao aparecem
             // na pagina. Quem os edita e o dialogo.
@@ -279,6 +1008,10 @@ namespace MhiagosControl
 
             _slot1 = new SensorSlot();
             _slot1.SetBounds(12, 48, 346, 80);
+            // Ancorado nos dois lados: com o cartao esticado, o nome do sensor e
+            // a leitura ganham a largura junto, em vez de deixar um degrau branco
+            // dentro de um cartao maior.
+            _slot1.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _slot1.Button.Click += delegate { TrocarSensor(_pick1, T.PickSensor1); };
             c1.Controls.Add(_slot1);
 
@@ -300,6 +1033,7 @@ namespace MhiagosControl
 
             _slot2 = new SensorSlot();
             _slot2.SetBounds(12, 48, 346, 80);
+            _slot2.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _slot2.Button.Click += delegate { TrocarSensor(_pick2, T.PickSensor2); };
             c2.Controls.Add(_slot2);
 
@@ -322,6 +1056,8 @@ namespace MhiagosControl
 
             _preview = new PanelPreview();
             _preview.SetBounds(12, 44, 732, 476);
+            _preview.Anchor = AnchorStyles.Top | AnchorStyles.Bottom |
+                              AnchorStyles.Left | AnchorStyles.Right;
             cp.Controls.Add(_preview);
 
             return page;
@@ -424,16 +1160,27 @@ namespace MhiagosControl
 
         private Control BuildPageAlertas()
         {
-            Panel page = new Panel();
-            page.BackColor = Color.Transparent;
+            Panel page = new Pagina();
+            // fundo opaco vem da propria Pagina
 
             Card c = new Card();
             c.Title = T.Thresholds;
             c.SetBounds(0, 0, 756, 288);
             page.Controls.Add(c);
 
-            MakeLimiar(c, T.Panel1, 16, 58, out _alert1, out _alert1Low, out _alertInfo1);
-            MakeLimiar(c, T.Panel2, 386, 58, out _alert2, out _alert2Low, out _alertInfo2);
+            // Uma coluna por mostrador, cada uma num painel proprio.
+            //
+            // Soltas dentro do cartao, as duas ficavam presas em x=16 e x=386: o
+            // cartao esticado deixava a segunda coluna parada no meio e um vao
+            // do tamanho da esticada a direita dela - o mesmo defeito que esta
+            // pagina veio consertar, so que agora dentro do cartao. Agrupadas,
+            // uma se ancora a esquerda e a outra a direita, e as duas se afastam
+            // com o cartao, como os dois cartoes da pagina de Paineis.
+            Panel col1 = MakeLimiar(c, T.Panel1, 16, 58, out _alert1, out _alert1Low, out _alertInfo1);
+            col1.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+
+            Panel col2 = MakeLimiar(c, T.Panel2, 386, 58, out _alert2, out _alert2Low, out _alertInfo2);
+            col2.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
             // Aviso de faixa impossivel. Fica sempre no mesmo lugar, e nao num
             // balao ao salvar: e uma observacao sobre o que esta na tela, e
@@ -441,31 +1188,52 @@ namespace MhiagosControl
             // e valida, so nao faz o que parece fazer.
             _alertCross = MakeLabel("", 16, 182, Ui.FontSmall);
             _alertCross.Size = new Size(720, 20);
+            _alertCross.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _alertCross.ForeColor = Ui.Warn;
             _alertCross.Visible = false;
             c.Controls.Add(_alertCross);
 
             Label note = MakeLabel(T.AlertsNote, 16, 210, Ui.FontSmall);
             note.Size = new Size(720, 56);
+            note.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             note.ForeColor = Ui.Muted;
             c.Controls.Add(note);
 
             return page;
         }
 
-        /// <summary>Titulo, leitura atual e os dois limiares de um mostrador.</summary>
-        private void MakeLimiar(Control host, string titulo, int x, int y,
-                                out NumberBox alto, out NumberBox baixo, out Label info)
+        /// <summary>Gruda o controle na borda direita do que o hospeda.</summary>
+        private static FlatBtn ADireita(FlatBtn b)
         {
-            host.Controls.Add(MakeLabel(titulo, x, y, Ui.FontMed));
+            b.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            return b;
+        }
 
-            info = MakeLabel("", x, y + 24, Ui.FontSmall);
+        /// <summary>
+        /// Titulo, leitura atual e os dois limiares de um mostrador, numa coluna.
+        ///
+        /// Devolve o painel que embrulha a coluna: e por ele que quem chama a
+        /// ancora, e sem o embrulho nao havia o que ancorar - eram cinco
+        /// controles avulsos, cada um com o seu x fixo.
+        /// </summary>
+        private Panel MakeLimiar(Control host, string titulo, int x, int y,
+                                 out NumberBox alto, out NumberBox baixo, out Label info)
+        {
+            Panel col = new Panel();
+            col.SetBounds(x, y, 330, 108);
+            col.BackColor = Color.Transparent;
+            host.Controls.Add(col);
+
+            col.Controls.Add(MakeLabel(titulo, 0, 0, Ui.FontMed));
+
+            info = MakeLabel("", 0, 24, Ui.FontSmall);
             info.Size = new Size(330, 18);
             info.ForeColor = Ui.Muted;
-            host.Controls.Add(info);
+            col.Controls.Add(info);
 
-            alto = MakeCampoLimiar(host, T.AboveOf, x, y + 50);
-            baixo = MakeCampoLimiar(host, T.BelowOf, x + 152, y + 50);
+            alto = MakeCampoLimiar(col, T.AboveOf, 0, 50);
+            baixo = MakeCampoLimiar(col, T.BelowOf, 152, 50);
+            return col;
         }
 
         private NumberBox MakeCampoLimiar(Control host, string legenda, int x, int y)
@@ -496,8 +1264,8 @@ namespace MhiagosControl
         /// </summary>
         private Control BuildPagePerfis()
         {
-            Panel page = new Panel();
-            page.BackColor = Color.Transparent;
+            Panel page = new Pagina();
+            // fundo opaco vem da propria Pagina
 
             Card c = new Card();
             c.Title = T.SavedProfiles;
@@ -506,20 +1274,24 @@ namespace MhiagosControl
 
             _profileList = new ProfileList();
             _profileList.SetBounds(12, 44, 306, 350);
+            _profileList.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _profileList.Resolve = NomeDoSensor;
             _profileList.ActiveName = _cfg.ActiveName;
             _profileList.SelectionChanged += new EventHandler(OnProfileSelected);
             _profileList.ItemActivated += delegate { AplicarPerfil(); };
             c.Controls.Add(_profileList);
 
+            // Grade de dois por tres. A coluna da esquerda fica na esquerda e a
+            // da direita na direita, senao o cartao esticado abre um vao a
+            // direita dos seis botoes e a grade some para um canto.
             c.Controls.Add(MakeSideButton(T.New, 12, 406, 145, new EventHandler(OnNewProfile)));
-            c.Controls.Add(MakeSideButton(T.Rename, 173, 406, 145, new EventHandler(OnRenameProfile)));
+            c.Controls.Add(ADireita(MakeSideButton(T.Rename, 173, 406, 145, new EventHandler(OnRenameProfile))));
             c.Controls.Add(MakeSideButton(T.Duplicate, 12, 446, 145, new EventHandler(OnDuplicateProfile)));
-            FlatBtn del = MakeSideButton(T.Delete, 173, 446, 145, new EventHandler(OnDeleteProfile));
+            FlatBtn del = ADireita(MakeSideButton(T.Delete, 173, 446, 145, new EventHandler(OnDeleteProfile)));
             del.Danger = true;
             c.Controls.Add(del);
             c.Controls.Add(MakeSideButton(T.Export, 12, 486, 145, new EventHandler(OnExportProfile)));
-            c.Controls.Add(MakeSideButton(T.Import, 173, 486, 145, new EventHandler(OnImportProfile)));
+            c.Controls.Add(ADireita(MakeSideButton(T.Import, 173, 486, 145, new EventHandler(OnImportProfile))));
 
             Card cv = new Card();
             cv.Title = T.ProfilePreview;
@@ -528,10 +1300,12 @@ namespace MhiagosControl
 
             _profilePreview = new PanelPreview();
             _profilePreview.SetBounds(12, 44, 386, 372);
+            _profilePreview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             cv.Controls.Add(_profilePreview);
 
             _profileInfo = MakeLabel("", 16, 428, Ui.FontSmall);
             _profileInfo.Size = new Size(378, 66);
+            _profileInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _profileInfo.ForeColor = Ui.Muted;
             cv.Controls.Add(_profileInfo);
 
@@ -539,6 +1313,7 @@ namespace MhiagosControl
             _btnApply.Text = T.ApplyProfile;
             _btnApply.Primary = true;
             _btnApply.SetBounds(12, 508, 386, 40);
+            _btnApply.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _btnApply.Click += delegate { AplicarPerfil(); };
             cv.Controls.Add(_btnApply);
 
@@ -894,16 +1669,43 @@ namespace MhiagosControl
         {
             if (_footerNote == null) return;
             _footerNote.Text = texto;
+            _footerNote.ForeColor = Ui.Accent;
             _footerNote.Visible = true;
 
             if (_noteTimer == null)
             {
                 _noteTimer = new Timer();
                 _noteTimer.Interval = 2600;
-                _noteTimer.Tick += delegate { _noteTimer.Stop(); _footerNote.Visible = false; };
+                // Volta ao estado, e nao ao vazio: se o aviso apareceu por causa
+                // de algo que deixou edicao pendente, quem some e a confirmacao,
+                // nao o alerta de que ainda ha o que gravar.
+                _noteTimer.Tick += delegate { _noteTimer.Stop(); AtualizarRodape(); };
             }
             _noteTimer.Stop();
             _noteTimer.Start();
+        }
+
+        /// <summary>
+        /// Poe o rodape de acordo com haver ou nao edicao pendente.
+        ///
+        /// Um aviso no ar tem precedencia: ele dura 2,6 s e ja esta dizendo algo
+        /// mais especifico ("Salvo", "Perfil aplicado"). Sobrescreve-lo aqui
+        /// apagaria a confirmacao no instante em que ela apareceu, e o clique
+        /// pareceria nao ter feito nada. Quando o tempo dele vence, o Tick chama
+        /// este metodo e o estado volta.
+        /// </summary>
+        private void AtualizarRodape()
+        {
+            if (_btSave != null) _btSave.Enabled = _dirty;
+            if (_footerNote == null) return;
+            if (_noteTimer != null && _noteTimer.Enabled) return;
+
+            // Mesmo texto do dialogo de fechar, de proposito: a barra avisa e o
+            // dialogo cobra a mesma coisa, e duas redacoes para o mesmo estado
+            // fariam parecer dois estados.
+            _footerNote.Text = _dirty ? T.UnsavedTitle : "";
+            _footerNote.ForeColor = Ui.Warn;
+            _footerNote.Visible = _dirty;
         }
 
         // ---------------- pagina: Configuracoes ----------------
@@ -919,8 +1721,8 @@ namespace MhiagosControl
         /// </summary>
         private Control BuildPageConfig()
         {
-            Panel page = new Panel();
-            page.BackColor = Color.Transparent;
+            Panel page = new Pagina();
+            // fundo opaco vem da propria Pagina
 
             Card c = new Card();
             c.Title = T.NavSettings;
@@ -991,6 +1793,7 @@ namespace MhiagosControl
 
             Label onde = MakeLabel(T.DataPathLabel + "  " + Paths.DataDir, 16, 356, Ui.FontSmall);
             onde.Size = new Size(560, 30);
+            onde.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             onde.TextAlign = ContentAlignment.MiddleLeft;
             onde.ForeColor = Ui.Faint;
             c.Controls.Add(onde);
@@ -998,6 +1801,7 @@ namespace MhiagosControl
             FlatBtn abrir = new FlatBtn();
             abrir.Text = T.OpenFolder;
             abrir.SetBounds(600, 354, 140, 32);
+            abrir.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             abrir.Click += delegate
             {
                 try { System.Diagnostics.Process.Start("explorer.exe", Paths.DataDir); }
@@ -1143,8 +1947,8 @@ namespace MhiagosControl
 
         private Control BuildPageMetricas()
         {
-            _pgMetricas = new Panel();
-            _pgMetricas.BackColor = Color.Transparent;
+            _pgMetricas = new Pagina();
+            // fundo opaco vem da propria Pagina
 
             // Rolagem so na vertical.
             //
@@ -1306,6 +2110,11 @@ namespace MhiagosControl
         private void ArranjarMetricas()
         {
             if (_pgMetricas == null || _arranjando) return;
+
+            // Mesmo motivo do Elastico: escondida, ela ainda recebe Resize a cada
+            // quadro da animacao da lateral, e reposicionar dezenas de cartoes
+            // que ninguem ve custa o mesmo que reposicionar os que se ve.
+            if (!_pgMetricas.Visible) return;
             _arranjando = true;
             _pgMetricas.SuspendLayout();
             try
@@ -1401,6 +2210,11 @@ namespace MhiagosControl
             _cfg.MetricRange = MetricHistory.Janelas[i];
             GravarMetricas();
             foreach (MetricCard c in _cards) { c.Janela = _cfg.MetricRange; c.Invalidate(); }
+            // Os destaques da tela de bordo desenham a mesma serie e tem de
+            // mostrar a mesma janela: dois graficos do mesmo sensor em escalas de
+            // tempo diferentes, na mesma janela, e um convite a comparar o que
+            // nao se compara.
+            foreach (MetricCard c in _vgTiles) { c.Janela = _cfg.MetricRange; c.Invalidate(); }
         }
 
         private void AdicionarMetrica()
@@ -1480,8 +2294,8 @@ namespace MhiagosControl
 
         private Control BuildPageSobre()
         {
-            Panel page = new Panel();
-            page.BackColor = Color.Transparent;
+            Panel page = new Pagina();
+            // fundo opaco vem da propria Pagina
 
             // Continua rolando: mesmo sem as preferencias, identidade, fontes,
             // creditos e isencao passam dos 818 px, e cortar a isencao para
@@ -1614,6 +2428,19 @@ namespace MhiagosControl
             string id = HidPanel.UltimoIdentificado;
             if (string.IsNullOrEmpty(id)) return T.PanelNotFound;
             return T.PanelFound(id) + (id == "VID 1A2C / PID 4984" ? "" : "   ·   " + T.PanelUntested);
+        }
+
+        /// <summary>
+        /// So o identificador, sem o prefixo "Painel:".
+        ///
+        /// Na tela de bordo o rotulo da linha ja diz "Painel", e o texto vinha
+        /// com o prefixo embutido: sobrava "Painel  Painel: VID 1A2C / PID 4984",
+        /// que ainda por cima nao cabia e saia cortado no meio do PID.
+        /// </summary>
+        private static string IdDoPainel()
+        {
+            string id = HidPanel.UltimoIdentificado;
+            return string.IsNullOrEmpty(id) ? T.PanelNotFound : id;
         }
 
         private bool SemHwInfo()
@@ -1764,6 +2591,20 @@ namespace MhiagosControl
             _preview.Alert2 = Fora(v2, _alert2.Value, _alert2Low.Value);
             _preview.Invalidate();
 
+            // A previa da tela de bordo e a MESMA leitura, e nao um calculo
+            // paralelo: duas contas para o mesmo mostrador acabariam divergindo
+            // no dia em que alguem mexesse numa e esquecesse a outra.
+            if (_vgPreview != null)
+            {
+                _vgPreview.Value1 = v1.Value;
+                _vgPreview.Value2 = v2.Value;
+                _vgPreview.Fahrenheit = Fahrenheit;
+                _vgPreview.Percent = Percent;
+                _vgPreview.Alert1 = _preview.Alert1;
+                _vgPreview.Alert2 = _preview.Alert2;
+                _vgPreview.Invalidate();
+            }
+
             if (_alertInfo1 != null)
             {
                 _alertInfo1.Text = T.Current + Show(v1) + Desligado(_alert1.Value, _alert1Low.Value);
@@ -1832,6 +2673,7 @@ namespace MhiagosControl
                 _pick2.UpdateValues(snap);
                 AtualizarValores(snap);
                 AtualizarMetricas(snap);
+                AtualizarVisaoGeral(snap);
                 Refresh0();
                 AtualizarPreviaDoPerfil();
             }
@@ -1932,13 +2774,25 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// As barras de rolagem so aceitam tema depois que o controle tem
-        /// handle - por isso aqui, e nao no construtor.
+        /// O que so pode acontecer depois que a janela esta de fato na tela.
+        ///
+        /// As barras de rolagem so aceitam tema depois que o controle tem handle
+        /// - por isso aqui, e nao no construtor.
+        ///
+        /// E o primeiro arranjo de largura, pelo mesmo tipo de motivo:
+        /// Control.Visible nao devolve o sinalizador do proprio controle, devolve
+        /// se ele esta EFETIVAMENTE visivel, e um filho de janela que ainda nao
+        /// apareceu responde falso mesmo tendo sido marcado como visivel. Como o
+        /// arranjo desiste de pagina escondida - para nao refazer cinco paginas
+        /// de fundo a cada quadro da animacao da lateral - o unico arranjo
+        /// anterior a qualquer interacao era justamente o que se perdia, e a
+        /// pagina estreava na largura de projeto com a faixa morta ao lado.
         /// </summary>
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
             Theme.ApplyScrollbars(this);
+            ArranjarPaginaVisivel();
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)

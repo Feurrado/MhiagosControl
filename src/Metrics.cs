@@ -35,9 +35,22 @@ namespace MhiagosControl
         /// <summary>Acoes de edicao, disparadas pelos botoes do canto.</summary>
         public event EventHandler Remover, MoverEsquerda, MoverDireita, TrocarTamanho;
 
+        /// <summary>
+        /// O cartao aceita ser movido, redimensionado e removido.
+        ///
+        /// Falso na tela de bordo, onde a selecao e automatica: os botoes
+        /// apareceriam sob o ponteiro e nao fariam nada, que e pior do que nao
+        /// existirem - um controle que nao responde ensina que o programa esta
+        /// quebrado.
+        /// </summary>
+        public bool Editavel = true;
+
         private Rectangle _bRem, _bEsq, _bDir, _bTam;
         private int _sobre = -1;
         private bool _mouseDentro = false;
+
+        /// <summary>Coluna sob o ponteiro, ou -1 quando nao ha o que detalhar.</summary>
+        private int _hoverX = -1;
 
         /// <summary>Faixas de cor. Nulo pinta tudo com a cor de enfase.</summary>
         public float? Atencao, Perigo;
@@ -48,9 +61,11 @@ namespace MhiagosControl
         public MetricCard()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
-                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
-                     ControlStyles.SupportsTransparentBackColor, true);
-            BackColor = Color.Transparent;
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            // Opaco: o cartao ja pinta cada pixel seu, e a transparencia so
+            // servia para obrigar a pagina a redesenhar o fundo aqui dentro a
+            // cada pintura - numa grade de doze cartoes, doze vezes.
+            BackColor = Ui.Window;
             Font = Ui.FontBase;
             Size = new Size(172, 104);
         }
@@ -108,21 +123,33 @@ namespace MhiagosControl
 
         protected override void OnMouseLeave(EventArgs e)
         {
-            _mouseDentro = false; _sobre = -1; Cursor = Cursors.Default;
+            _mouseDentro = false; _sobre = -1; _hoverX = -1; Cursor = Cursors.Default;
             Invalidate(); base.OnMouseLeave(e);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
             int s = -1;
-            if (_bEsq.Contains(e.Location)) s = 0;
-            else if (_bDir.Contains(e.Location)) s = 1;
-            else if (_bRem.Contains(e.Location)) s = 2;
-            else if (_bTam.Contains(e.Location)) s = 3;
+            if (Editavel)
+            {
+                if (_bEsq.Contains(e.Location)) s = 0;
+                else if (_bDir.Contains(e.Location)) s = 1;
+                else if (_bRem.Contains(e.Location)) s = 2;
+                else if (_bTam.Contains(e.Location)) s = 3;
+            }
 
-            if (s != _sobre)
+            // Detalhe so no cartao alto, e so fora dos botoes.
+            //
+            // No pequeno o balao cobriria o proprio numero que ele explica, e a
+            // curva ali tem quatro pixels de altura util - apontar um instante
+            // nela seria adivinhacao. Sobre um botao, quem esta mirando o botao
+            // nao quer uma leitura de dois minutos atras no caminho.
+            int hx = (s < 0 && Height >= 140) ? e.X : -1;
+
+            if (s != _sobre || hx != _hoverX)
             {
                 _sobre = s;
+                _hoverX = hx;
                 Cursor = s >= 0 ? Cursors.Hand : Cursors.Default;
                 Invalidate();
             }
@@ -131,6 +158,7 @@ namespace MhiagosControl
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (!Editavel) { base.OnMouseDown(e); return; }
             if (_bEsq.Contains(e.Location)) Disparar(MoverEsquerda);
             else if (_bDir.Contains(e.Location)) Disparar(MoverDireita);
             else if (_bTam.Contains(e.Location)) Disparar(TrocarTamanho);
@@ -148,7 +176,7 @@ namespace MhiagosControl
             _bDir = new Rectangle(x, y, t, t); x -= t + 2;
             _bEsq = new Rectangle(x, y, t, t);
 
-            if (!_mouseDentro) return;
+            if (!_mouseDentro || !Editavel) return;
 
             // ESCAPADOS. Na primeira versao entraram como caracteres literais e
             // nao sobreviveram a gravacao do arquivo: os botoes apareciam como
@@ -179,6 +207,12 @@ namespace MhiagosControl
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
+
+            // Os cantos, que ficam fora do retangulo arredondado. Lido do Ui na
+            // hora, para acompanhar troca de tema.
+            using (SolidBrush fundo = new SolidBrush(Ui.Window))
+                g.FillRectangle(fundo, e.ClipRectangle);
+
             Ui.Smooth(g);
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
             Color cor = Cor;
@@ -202,7 +236,7 @@ namespace MhiagosControl
 
             // O rotulo cede espaco quando os botoes estao a mostra, em vez de
             // ficar por baixo deles.
-            int recuo = _mouseDentro ? 106 : 24;
+            int recuo = (_mouseDentro && Editavel) ? 106 : 24;
             TextRenderer.DrawText(g, Titulo, Ui.FontSmall, new Rectangle(12, 8, Width - recuo, 15),
                 Ui.Muted, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
 
@@ -239,16 +273,19 @@ namespace MhiagosControl
             int n = MetricHistory.Janela(SensorId, Janela, ref _buf);
 
             float min = float.MaxValue, max = float.MinValue;
+            double soma = 0;
             int lidos = 0;
             for (int i = 0; i < n; i++)
             {
                 float v = _buf[i];
                 if (float.IsNaN(v)) continue;
                 lidos++;
+                soma += v;
                 if (v < min) min = v;
                 if (v > max) max = v;
             }
             if (lidos < 2) return;
+            float media = (float)(soma / lidos);
 
             float faixa = max - min;
             float baixo = min, alto = max;
@@ -275,7 +312,75 @@ namespace MhiagosControl
             }
             Traco(g, seg, cor);
 
-            if (detalhado) DesenharEixo(g, topo, alt, min, max);
+            if (detalhado) DesenharEixo(g, topo, alt, min, media, max);
+            if (detalhado && _hoverX >= 0)
+                DesenharDetalhe(g, cor, topo, alt, n, baixo, faixa);
+        }
+
+        /// <summary>
+        /// O ponto sob o ponteiro: valor e hora do balde apontado.
+        ///
+        /// A curva responde "isso e normal?" pela forma. A partir dai vem sempre
+        /// a segunda pergunta - "normal quando, e quanto exatamente?" - e ate
+        /// aqui ela nao tinha resposta: dava para ver que houve um pico, nao a
+        /// que horas nem de quanto.
+        ///
+        /// Balde sem leitura nao mostra nada. A falha ja aparece como quebra na
+        /// linha, e inventar um numero para ela seria desmentir o proprio
+        /// desenho.
+        /// </summary>
+        private void DesenharDetalhe(Graphics g, Color cor, int topo, int alt,
+                                     int n, float baixo, float faixa)
+        {
+            if (n < 2) return;
+
+            int i = (int)Math.Round((double)_hoverX / Width * (n - 1));
+            if (i < 0) i = 0;
+            if (i > n - 1) i = n - 1;
+
+            float v = _buf[i];
+            if (float.IsNaN(v)) return;
+
+            float x = (float)i / (n - 1) * Width;
+            float y = topo + alt - (v - baixo) / faixa * alt;
+
+            using (Pen p = new Pen(Color.FromArgb(70, cor)))
+                g.DrawLine(p, x, topo, x, topo + alt);
+
+            using (SolidBrush b = new SolidBrush(cor))
+                g.FillEllipse(b, x - 3f, y - 3f, 6f, 6f);
+            using (Pen p = new Pen(Ui.Surface, 1.5f))
+                g.DrawEllipse(p, x - 3f, y - 3f, 6f, 6f);
+
+            // Segundos so na janela curta: em seis horas cada balde e um ponto de
+            // menos de um pixel, e anunciar o segundo exato prometeria uma
+            // precisao que a largura da tela nao tem.
+            DateTime t = MetricHistory.FimDaJanela().AddSeconds(-(double)(n - 1 - i) * MetricHistory.PassoSeg);
+            string txt = Formatar(v) + (string.IsNullOrEmpty(Unidade) ? "" : " " + Unidade) +
+                         "   " + t.ToString(Janela <= 600 ? "HH:mm:ss" : "HH:mm");
+
+            Size ts = TextRenderer.MeasureText(g, txt, Ui.FontSmall);
+            int w = ts.Width + 14, h = ts.Height + 8;
+
+            // Acima do ponto por padrao; abaixo quando nao cabe. Grudado na
+            // borda de cima, o balao sairia do desenho e tamparia o rotulo.
+            int bx = (int)Math.Round(x) - w / 2;
+            int by = (int)Math.Round(y) - h - 10;
+            if (by < topo + 2) by = (int)Math.Round(y) + 10;
+            // A faixa de baixo e do rodape do cartao, que e desenhado DEPOIS
+            // desta rotina: encostar ali poria o rodape por cima do balao.
+            if (by + h > Height - 22) by = Height - 22 - h;
+            if (bx < 2) bx = 2;
+            if (bx + w > Width - 2) bx = Width - 2 - w;
+
+            Rectangle balao = new Rectangle(bx, by, w, h);
+            using (GraphicsPath gp = Ui.RoundRect(balao, 4))
+            {
+                using (SolidBrush b = new SolidBrush(Ui.Window)) g.FillPath(b, gp);
+                using (Pen p = new Pen(Ui.Border)) g.DrawPath(p, gp);
+            }
+            TextRenderer.DrawText(g, txt, Ui.FontSmall, balao, Ui.Text,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
 
         private void Traco(Graphics g, List<PointF> seg, Color cor)
@@ -305,16 +410,47 @@ namespace MhiagosControl
                 }
         }
 
-        /// <summary>Extremos da janela, para a curva ter escala e nao so forma.</summary>
-        private void DesenharEixo(Graphics g, int topo, int alt, float min, float max)
+        /// <summary>
+        /// Minimo, media e maximo da janela desenhada.
+        ///
+        /// Antes eram dois numeros soltos, um em cada ponta do eixo, que serviam
+        /// de escala: diziam ate onde a curva sobe, nao o que aconteceu. A media
+        /// e o que separa "chegou a 84" de "vive em 84" - e a diferenca entre um
+        /// pico e um problema.
+        ///
+        /// Numa linha so, e nao nas duas pontas: os tres numeros juntos se leem
+        /// de uma vez e se comparam entre si, que e para o que servem. Como min
+        /// e max continuam ali, a escala do desenho tambem continua legivel - a
+        /// curva vai de um ao outro, com 5% de folga.
+        ///
+        /// Somem quando nao cabem. Meia linha de estatistica nao informa nada e
+        /// ainda atravessa o desenho.
+        /// </summary>
+        private void DesenharEixo(Graphics g, int topo, int alt, float min, float media, float max)
         {
-            TextRenderer.DrawText(g, Formatar(max), Ui.FontSmall,
-                new Rectangle(Width - 78, topo + 2, 70, 14), Ui.Faint,
-                TextFormatFlags.Right | TextFormatFlags.NoPadding);
+            // Tres formas, da mais completa a mais curta. Um bloco de 140 px na
+            // tela de bordo nao comporta os tres numeros, e desistir de todos
+            // por causa disso seria jogar fora o que caberia: o maximo e a media
+            // sozinhos ja respondem "chegou aonde" e "vive onde".
+            string[] formas = new string[]
+            {
+                T.StatMin + " " + Formatar(min) + "    " +
+                T.StatAvg + " " + Formatar(media) + "    " +
+                T.StatMax + " " + Formatar(max),
 
-            TextRenderer.DrawText(g, Formatar(min), Ui.FontSmall,
-                new Rectangle(Width - 78, topo + alt - 18, 70, 14), Ui.Faint,
-                TextFormatFlags.Right | TextFormatFlags.NoPadding);
+                T.StatMax + " " + Formatar(max) + "  ·  " + T.StatAvg + " " + Formatar(media),
+
+                T.StatMax + " " + Formatar(max),
+            };
+
+            foreach (string txt in formas)
+            {
+                if (TextRenderer.MeasureText(g, txt, Ui.FontSmall).Width > Width - 20) continue;
+                TextRenderer.DrawText(g, txt, Ui.FontSmall,
+                    new Rectangle(10, topo + 2, Width - 20, 14), Ui.Faint,
+                    TextFormatFlags.Right | TextFormatFlags.NoPadding);
+                return;
+            }
         }
     }
 
@@ -369,10 +505,131 @@ namespace MhiagosControl
         {
             if (s == null) return "";
             string bruto = string.IsNullOrEmpty(s.Name) ? s.Label : s.Name;
-            return Amigavel(bruto);
+            return Amigavel(bruto, s.Type.ToString());
         }
 
+        /// <summary>
+        /// As leituras em destaque da tela de bordo.
+        ///
+        /// Mora aqui, e nao na janela, porque quem precisa saber quais sao NAO e
+        /// so quem desenha: o historico e alimentado pelo ciclo do mostrador, com
+        /// a janela fechada, e so grava serie de leitura acompanhada. Enquanto a
+        /// escolha viveu dentro do formulario, os blocos abriam sem curva atras -
+        /// ninguem tinha dito ao MetricHistory que aquelas leituras interessavam,
+        /// e o "comparado a que" que justifica a tela inteira nao existia.
+        ///
+        /// A ordem das preferencias importa mais que parece. Pegar a primeira do
+        /// tipo dava resultado errado onde mais doi: numa Radeon a primeira
+        /// leitura de uso e "D3D 3D", que mede o que o Direct3D pediu, nao o que
+        /// a placa fez.
+        /// </summary>
+        private static readonly string[][] Preferencias = new string[][]
+        {
+            new string[] { "CPU",     "Temperature", "tctl", "package", "core" },
+            new string[] { "CPU",     "Load",        "total", "cpu core" },
+            new string[] { "GPU",     "Temperature", "gpu core", "gpu temperature", "hot spot" },
+
+            // "GPU Core" e a leitura certa - a atividade do nucleo, que a NVIDIA
+            // publica bem. Em Radeon antiga ela sai zerada quando a camada ADL
+            // nao responde, e ai quem mede o trabalho e o contador do Direct3D.
+            new string[] { "GPU",     "Load",        "gpu core", "d3d 3d", "gpu utilization" },
+
+            // Categoria "*": vale qualquer uma. As duas fontes classificam a
+            // memoria em grupos diferentes, e exigir "Memória" fazia o bloco
+            // simplesmente nao existir quando o HWiNFO estava no comando.
+            new string[] { "*",       "Load",        "physical memory", "memory load", "memory" },
+        };
+
+        public static List<SensorEntry> Destaques(List<SensorEntry> lista)
+        {
+            List<SensorEntry> saida = new List<SensorEntry>();
+            if (lista == null) return saida;
+
+            foreach (string[] alvo in Preferencias)
+            {
+                SensorEntry achado = Melhor(lista, alvo, saida);
+                if (achado != null) saida.Add(achado);
+            }
+            return saida;
+        }
+
+        private static SensorEntry Melhor(List<SensorEntry> lista, string[] alvo,
+                                          List<SensorEntry> jaEscolhidos)
+        {
+            // Duas passadas pela lista de preferencia: a primeira so aceita quem
+            // esta REPORTANDO, a segunda aceita zero.
+            //
+            // "GPU Core" e a leitura certa do uso da placa, e numa Radeon antiga
+            // ela sai zerada porque a camada ADL nao responde - enquanto o
+            // contador do Direct3D, logo atras na lista, marcava 32%. Preferir
+            // cegamente a primeira punha um bloco parado em 0,0% no lugar mais
+            // visivel da tela, ao lado de quatro que se mexiam.
+            //
+            // Se TUDO estiver zerado a placa esta mesmo parada, e ai a primeira
+            // preferencia volta a valer - que e o comportamento certo.
+            for (int exigente = 1; exigente >= 0; exigente--)
+                for (int p = 2; p < alvo.Length; p++)
+                    foreach (SensorEntry s in lista)
+                    {
+                        if (!Casa(s, alvo[0], alvo[1]) || jaEscolhidos.Contains(s)) continue;
+                        if (s.Name == null || !s.Value.HasValue) continue;
+                        if (exigente == 1 && s.Value.Value == 0f) continue;
+                        if (s.Name.IndexOf(alvo[p], StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        return s;
+                    }
+
+            foreach (SensorEntry s in lista)
+                if (Casa(s, alvo[0], alvo[1]) && !jaEscolhidos.Contains(s) && s.Value.HasValue)
+                    return s;
+
+            return null;
+        }
+
+        private static bool Casa(SensorEntry s, string categoria, string tipo)
+        {
+            if (s == null) return false;
+            if (categoria != "*" && s.Category != categoria) return false;
+            return string.Equals(s.Type.ToString(), tipo, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Rotulo sem o sufixo do agregado, para cartao estreito.
+        ///
+        /// Num bloco de 140 px, "Uso dos nucleos · media de 12" sai cortado em
+        /// "Uso dos nucleos · media d..." - o pedaco que ficou e o que menos
+        /// importa, e o que foi cortado tambem. Sem o sufixo o nome inteiro
+        /// cabe, e quantos nucleos foram somados nao e o que se pergunta numa
+        /// tela de relance.
+        /// </summary>
+        public static string RotuloCurto(SensorEntry s)
+        {
+            string r = Rotulo(s);
+            int i = r.IndexOf(" · ", StringComparison.Ordinal);
+            return i > 0 ? r.Substring(0, i) : r;
+        }
+
+        /// <summary>Sem o tipo em maos: so a busca pelo nome.</summary>
         public static string Amigavel(string bruto)
+        {
+            return Amigavel(bruto, null);
+        }
+
+        /// <summary>
+        /// Nome amigavel, desambiguado pelo tipo da leitura.
+        ///
+        /// O nome sozinho nao identifica a grandeza. Uma Radeon publica DUAS
+        /// leituras chamadas "GPU Core" - a temperatura do nucleo e o clock dele
+        /// - e a tabela, consultada so pelo nome, respondia "Temperatura da GPU"
+        /// para as duas. O clock da GPU estava na lista o tempo todo, com nome
+        /// de temperatura, o que e pior do que faltar: quem procurava desistia
+        /// depois de achar.
+        ///
+        /// A busca tenta primeiro a chave com o tipo na frente ("clock:gpu
+        /// core") e so entao a chave nua. Assim o caso ambiguo se resolve sem
+        /// obrigar as outras cinquenta entradas a declarar um tipo que nunca
+        /// precisaram.
+        /// </summary>
+        public static string Amigavel(string bruto, string tipo)
         {
             if (string.IsNullOrEmpty(bruto)) return "";
 
@@ -392,8 +649,14 @@ namespace MhiagosControl
             int sep = n.IndexOf(" · ", StringComparison.Ordinal);
             if (sep > 0) { sufixo = n.Substring(sep); n = n.Substring(0, sep); }
 
+            string chave = n.ToLowerInvariant();
             string[] par;
-            if (Tabela.TryGetValue(n.ToLowerInvariant(), out par))
+
+            if (!string.IsNullOrEmpty(tipo) &&
+                Tabela.TryGetValue(tipo.ToLowerInvariant() + ":" + chave, out par))
+                return (T.Pt ? par[0] : par[1]) + sufixo;
+
+            if (Tabela.TryGetValue(chave, out par))
                 return (T.Pt ? par[0] : par[1]) + sufixo;
 
             return n + sufixo;
@@ -427,6 +690,39 @@ namespace MhiagosControl
             "core clocks",            "Clock dos núcleos",          "Core clock",
             "core clock",             "Clock dos núcleos",          "Core clock",
             "cpu clock",              "Clock do processador",       "CPU clock",
+
+            // Nucleos ja agregados. O Condense junta as dezenas de leituras por
+            // nucleo numa media so, e o nome que sobra e o do grupo, sem indice.
+            //
+            // Quase todos precisam do tipo na chave: a LibreHardwareMonitor
+            // chama de "Core" tanto o clock quanto o multiplicador, e de "CPU
+            // Core" tanto a temperatura quanto o uso. Sem o tipo, a primeira
+            // entrada da tabela responderia por todas - foi assim que um clock
+            // de GPU virou temperatura.
+            "clock:core",             "Clock dos núcleos",          "Core clock",
+            "clock:cpu core",         "Clock dos núcleos",          "Core clock",
+            "factor:core",            "Multiplicador dos núcleos",  "Core ratio",
+            "load:core",              "Uso dos núcleos",            "Core usage",
+            "load:cpu core",          "Uso dos núcleos",            "Core usage",
+            "temperature:core",       "Temperatura dos núcleos",    "Core temperature",
+            "temperature:cpu core",   "Temperatura dos núcleos",    "Core temperature",
+            "power:core",             "Consumo dos núcleos",        "Core power",
+            "power:core (smu)",       "Consumo dos núcleos",        "Core power",
+            "voltage:core",           "Tensão dos núcleos",         "Core voltage",
+            "voltage:core (smu)",     "Tensão dos núcleos",         "Core voltage",
+            "voltage:core vid",       "VID dos núcleos",            "Core VID",
+
+            "core effective clock",   "Clock efetivo dos núcleos",  "Core effective clock",
+            "core temperature",       "Temperatura dos núcleos",    "Core temperature",
+            "core temperatures",      "Temperatura dos núcleos",    "Core temperature",
+            "core usage",             "Uso dos núcleos",            "Core usage",
+            "core utility",           "Utilização dos núcleos",     "Core utility",
+            "core power",             "Consumo dos núcleos",        "Core power",
+            "core voltage",           "Tensão dos núcleos",         "Core voltage",
+            "core vid",               "VID dos núcleos",            "Core VID",
+            "core ratio",             "Multiplicador dos núcleos",  "Core ratio",
+            "core distance to tjmax", "Distância do TjMAX",         "Distance to TjMAX",
+            "cpu core distance to tjmax", "Distância do TjMAX",     "Distance to TjMAX",
             "vcore",                  "Tensão do núcleo",           "Core voltage",
             "cpu vcore",              "Tensão do núcleo",           "Core voltage",
             "thermal throttling (prochot ext)", "Limitação térmica", "Thermal throttling",
@@ -434,7 +730,15 @@ namespace MhiagosControl
             // video
             "gpu temperature",        "Temperatura da GPU",         "GPU temperature",
             "gpu thermal diode",      "Temperatura da GPU",         "GPU temperature",
-            "gpu core",               "Temperatura da GPU",         "GPU temperature",
+            // "GPU Core" e "GPU Memory" saem duas vezes cada na Radeon: uma como
+            // temperatura, outra como clock. Sem o tipo na chave o clock herdava
+            // o nome da temperatura e sumia da lista sem sair dela.
+            "temperature:gpu core",   "Temperatura da GPU",         "GPU temperature",
+            "clock:gpu core",         "Clock da GPU",               "GPU clock",
+            "load:gpu core",          "Uso da GPU",                 "GPU usage",
+            "load:d3d 3d",            "Uso da GPU (3D)",            "GPU usage (3D)",
+            "temperature:gpu memory", "Temperatura da memória de vídeo", "GPU memory temperature",
+            "clock:gpu memory",       "Clock da memória de vídeo",  "GPU memory clock",
             "gpu hot spot temperature", "Ponto quente da GPU",      "GPU hot spot",
             "gpu memory temperature", "Temperatura da memória de vídeo", "GPU memory temperature",
             "gpu clock",              "Clock da GPU",               "GPU clock",
@@ -457,6 +761,8 @@ namespace MhiagosControl
             "gpu memory usage",       "Uso da memória de vídeo",    "GPU memory usage",
 
             // memoria
+            "load:memory",            "Uso da memória",             "Memory usage",
+            "load:virtual memory",    "Uso da memória virtual",     "Virtual memory usage",
             "memory clock",           "Clock da memória",           "Memory clock",
             "memory used",            "Memória em uso",             "Memory used",
             "memory available",       "Memória livre",              "Memory available",

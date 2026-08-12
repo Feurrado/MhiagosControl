@@ -119,6 +119,50 @@ namespace MhiagosControl
             return p;
         }
 
+        private Image _fonteDoCache;
+        private Bitmap _cache;
+        private int _cacheW, _cacheH;
+
+        /// <summary>
+        /// A foto do cooler ja no tamanho em que vai ser desenhada.
+        ///
+        /// O arquivo tem 900x900 e chega na tela com menos de metade disso. Feita
+        /// a cada pintura, essa reducao em bicubica de alta qualidade custa mais
+        /// do que todo o resto do desenho junto - e a pintura acontece a cada
+        /// mudanca de tamanho, por causa do ResizeRedraw.
+        ///
+        /// Enquanto a barra lateral desliza, ela roda uma vez a cada 15 ms e a
+        /// animacao engasga. O que salva o cache e o encaixe ser pela ALTURA:
+        /// recolher a lateral muda a largura do controle, nao a altura, entao o
+        /// bitmap reduzido e identico em todos os quadros - so o X em que ele e
+        /// pousado muda. Cem por cento de acerto justamente quando importa.
+        /// </summary>
+        private Bitmap Escalado(Image origem, int w, int h)
+        {
+            if (_cache != null && _fonteDoCache == origem && _cacheW == w && _cacheH == h)
+                return _cache;
+
+            if (_cache != null) { _cache.Dispose(); _cache = null; }
+
+            Bitmap b = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using (Graphics gb = Graphics.FromImage(b))
+            {
+                gb.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                gb.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                gb.CompositingQuality = CompositingQuality.HighQuality;
+                gb.DrawImage(origem, new Rectangle(0, 0, w, h));
+            }
+
+            _cache = b; _fonteDoCache = origem; _cacheW = w; _cacheH = h;
+            return _cache;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _cache != null) { _cache.Dispose(); _cache = null; }
+            base.Dispose(disposing);
+        }
+
         private void Render(Graphics g)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -145,7 +189,7 @@ namespace MhiagosControl
                 int h = Height, w = (int)Math.Round(h * ratio);
                 if (w > Width) { w = Width; h = (int)Math.Round(w / ratio); }
                 Rectangle img = new Rectangle((Width - w) / 2, (Height - h) / 2, w, h);
-                g.DrawImage(cooler, img);
+                g.DrawImageUnscaled(Escalado(cooler, w, h), img.X, img.Y);
 
                 plate = new RectangleF(
                     img.X + img.Width * PlateL,
