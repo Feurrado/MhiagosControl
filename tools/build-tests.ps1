@@ -1,4 +1,4 @@
-# Compila e roda a suite de testes. Console, nao winexe: como winexe a saida
+﻿# Compila e roda a suite de testes. Console, nao winexe: como winexe a saida
 # some e uma falha vira apenas um codigo de saida negativo.
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $fw   = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
@@ -15,6 +15,7 @@ $refs = @(
     (Join-Path $fw 'System.Core.dll'),
     (Join-Path $fw 'System.Drawing.dll'),
     (Join-Path $fw 'System.Windows.Forms.dll'),
+    (Join-Path $fw 'System.Management.dll'),
     (Join-Path $root 'lib\LibreHardwareMonitorLib.dll')
 )
 

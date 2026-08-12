@@ -55,6 +55,95 @@ namespace MhiagosControl
         public static string Use { get { return P("Usar", "Use"); } }
         public static string NoReading { get { return P("sem leitura", "no reading"); } }
         public static string Off { get { return P("desligado", "off"); } }
+        public static string On { get { return P("ligado", "on"); } }
+
+        // ---------------- folha de especificacoes ----------------
+
+        public static string NavSpecs { get { return P("Especificações", "Specs"); } }
+
+        public static string SpecModel { get { return P("Modelo", "Model"); } }
+        public static string SpecVendor { get { return P("Fabricante", "Vendor"); } }
+        public static string SpecSpecification { get { return P("Especificação", "Specification"); } }
+        public static string SpecFamily { get { return P("Família", "Family"); } }
+        public static string SpecModelNum { get { return P("Modelo (nº)", "Model (num)"); } }
+        public static string SpecStepping { get { return P("Stepping", "Stepping"); } }
+        public static string SpecSocket { get { return P("Soquete", "Socket"); } }
+        public static string SpecCores { get { return P("Núcleos", "Cores"); } }
+        public static string SpecThreads { get { return P("Threads", "Threads"); } }
+        public static string SpecMaxClock { get { return P("Clock máximo", "Max clock"); } }
+        public static string SpecBusClock { get { return P("Barramento", "Bus clock"); } }
+        public static string SpecL1 { get { return P("Cache L1", "L1 cache"); } }
+        public static string SpecL2 { get { return P("Cache L2", "L2 cache"); } }
+        public static string SpecL3 { get { return P("Cache L3", "L3 cache"); } }
+        public static string SpecVirtualization { get { return P("Virtualização", "Virtualization"); } }
+
+        public static string SpecRevision { get { return P("Revisão", "Revision"); } }
+        public static string SpecBiosVendor { get { return P("BIOS", "BIOS"); } }
+        public static string SpecBiosVersion { get { return P("Versão da BIOS", "BIOS version"); } }
+        public static string SpecBiosDate { get { return P("Data da BIOS", "BIOS date"); } }
+
+        public static string SpecTotal { get { return P("Total", "Total"); } }
+        public static string SpecType { get { return P("Tipo", "Type"); } }
+        public static string SpecMemSpeed { get { return P("Velocidade", "Speed"); } }
+        public static string SpecChannels { get { return P("Canais", "Channels"); } }
+        public static string SpecModules { get { return P("Pentes", "Modules"); } }
+
+        public static string SpecChip { get { return P("Processador gráfico", "Graphics processor"); } }
+        public static string SpecVram { get { return P("Memória de vídeo", "Video memory"); } }
+        public static string SpecDeviceId { get { return P("ID do dispositivo", "Device ID"); } }
+        public static string SpecVendorId { get { return P("ID do fabricante", "Vendor ID"); } }
+        public static string SpecDriver { get { return P("Driver", "Driver"); } }
+        public static string SpecDriverDate { get { return P("Data do driver", "Driver date"); } }
+        public static string SpecResolution { get { return P("Resolução", "Resolution"); } }
+        public static string SpecVbios { get { return P("VBIOS", "VBIOS"); } }
+        public static string SpecMonitor { get { return P("Monitor", "Display"); } }
+
+        public static string SpecSlots { get { return P("Slots", "Slots"); } }
+        public static string SpecMaxRam { get { return P("Máximo suportado", "Max supported"); } }
+        public static string SpecSlotsUsed(int usados, int total)
+        {
+            return P(usados + " de " + total + " ocupados", usados + " of " + total + " used");
+        }
+
+        public static string SpecNetwork { get { return P("Rede", "Network"); } }
+        public static string SpecLinkSpeed { get { return P("Velocidade do link", "Link speed"); } }
+
+        public static string SpecStorage { get { return P("Armazenamento", "Storage"); } }
+        public static string SpecUptime { get { return P("Ligado há", "Up for"); } }
+        public static string SpecInstalled { get { return P("Instalado em", "Installed on"); } }
+        public static string SpecSecureBoot { get { return P("Inicialização segura", "Secure Boot"); } }
+        public static string SpecTpm { get { return P("TPM", "TPM"); } }
+
+        /// <summary>"3 d 4 h" ou "4 h 12 min" - a maior unidade e a seguinte.</summary>
+        public static string Duracao(TimeSpan t)
+        {
+            if (t.TotalDays >= 1)
+                return P((int)t.TotalDays + " d " + t.Hours + " h",
+                         (int)t.TotalDays + "d " + t.Hours + "h");
+            if (t.TotalHours >= 1)
+                return P(t.Hours + " h " + t.Minutes + " min",
+                         t.Hours + "h " + t.Minutes + "m");
+            return P(t.Minutes + " min", t.Minutes + "m");
+        }
+        public static string SpecVersion { get { return P("Versão", "Version"); } }
+        public static string SpecArch { get { return P("Arquitetura", "Architecture"); } }
+
+        public static string SpecsLoading
+        {
+            get { return P("Consultando o sistema…", "Querying the system…"); }
+        }
+
+        public static string SpecsCopy { get { return P("Copiar tudo", "Copy all"); } }
+        public static string SpecsCopied { get { return P("Especificações copiadas", "Specs copied"); } }
+
+        public static string SpecsNote
+        {
+            get
+            {
+                return P("Coletado uma vez por sessão, porque a consulta ao Windows leva alguns segundos. Não inclui nome da máquina nem do usuário.",
+                         "Collected once per session, because querying Windows takes a few seconds. Machine and user names are not included.");
+            }
+        }
         public static string Saved { get { return P("alterações salvas", "changes saved"); } }
 
         // ---------------- barra lateral ----------------
@@ -65,7 +154,37 @@ namespace MhiagosControl
         public static string NavProfiles { get { return P("Perfis", "Profiles"); } }
         public static string NavMetrics { get { return P("Métricas", "Metrics"); } }
         public static string AddMetric { get { return P("Adicionar métrica", "Add metric"); } }
-        public static string DefaultMetrics { get { return P("Conjunto padrão", "Default set"); } }
+        public static string DefaultMetrics { get { return P("Conjuntos", "Presets"); } }
+
+        /// <summary>
+        /// Nome de cada conjunto pronto. Chave, e nao indice: a ordem da lista
+        /// pode mudar, e um switch por posicao renomearia tudo em silencio.
+        /// </summary>
+        public static string NomeDoConjunto(string chave)
+        {
+            switch (chave)
+            {
+                case "auto":        return P("Automático (por peça)", "Automatic (per device)");
+                case "jogos":       return P("Jogos", "Gaming");
+                case "termico":     return P("Térmico", "Thermal");
+                case "silencioso":  return P("Silencioso", "Acoustic");
+            }
+            return chave;
+        }
+
+        public static string PresetEmpty
+        {
+            get
+            {
+                return P("Este conjunto não encontrou leituras nesta máquina.",
+                         "This preset found no readings on this machine.");
+            }
+        }
+
+        public static string PresetApplied(string nome, int n)
+        {
+            return P(nome + ": " + n + " cartões", nome + ": " + n + " cards");
+        }
         public static string HistoryWindow { get { return P("Histórico", "History"); } }
 
         // Extremos e media da janela desenhada. Abreviados porque dividem uma
@@ -122,6 +241,48 @@ namespace MhiagosControl
         public static string Bottom { get { return P("de baixo", "bottom"); } }
 
         public static string PanelLabel { get { return P("Painel", "Panel"); } }
+
+        // ---------------- perfil por jogo ----------------
+
+        public static string GameProfilesCard
+        {
+            get { return P("Perfil por jogo", "Profile per game"); }
+        }
+
+        public static string GameProfilesOn
+        {
+            get { return P("Trocar de perfil sozinho quando um jogo abrir",
+                           "Switch profile automatically when a game starts"); }
+        }
+
+        public static string GameProfilesNote
+        {
+            get
+            {
+                return P("Depende do RivaTuner Statistics Server, que é quem identifica o jogo em primeiro plano. Ao fechar o jogo, o perfil anterior volta.",
+                         "Requires the RivaTuner Statistics Server, which identifies the foreground game. The previous profile returns when the game closes.");
+            }
+        }
+
+        public static string BindGame { get { return P("Vincular jogo atual", "Bind current game"); } }
+        public static string UnbindGame { get { return P("Desvincular", "Unbind"); } }
+
+        public static string NoGameToBind
+        {
+            get { return P("nenhum jogo detectado agora", "no game detected right now"); }
+        }
+
+        public static string GameBound(string jogo, string perfil)
+        {
+            return P(jogo + " → " + perfil, jogo + " → " + perfil);
+        }
+
+        public static string GamesBoundCount(int n)
+        {
+            if (n == 0) return P("nenhum jogo vinculado", "no games bound");
+            if (n == 1) return P("1 jogo vinculado", "1 game bound");
+            return P(n + " jogos vinculados", n + " games bound");
+        }
 
 
         // ---------------- pagina: paineis ----------------

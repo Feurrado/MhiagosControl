@@ -123,8 +123,15 @@ namespace MhiagosControl
 
         protected override void OnMouseLeave(EventArgs e)
         {
-            _mouseDentro = false; _sobre = -1; _hoverX = -1; Cursor = Cursors.Default;
+            _mouseDentro = false; _sobre = -1; _hoverX = -1; _armado = false;
+            Cursor = Cursors.Default;
             Invalidate(); base.OnMouseLeave(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            _armado = false;
+            base.OnMouseUp(e);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -144,6 +151,16 @@ namespace MhiagosControl
             // curva ali tem quatro pixels de altura util - apontar um instante
             // nela seria adivinhacao. Sobre um botao, quem esta mirando o botao
             // nao quer uma leitura de dois minutos atras no caminho.
+            // Botao segurado e ponteiro andou: vira arraste, e quem cuida disso e
+            // a grade - so ela sabe onde ficam os vizinhos.
+            if (_armado && e.Button == MouseButtons.Left && PassouDoLimiar(e.Location))
+            {
+                _armado = false;
+                _hoverX = -1;
+                Disparar(Arrastar);
+                return;
+            }
+
             int hx = (s < 0 && Height >= 140) ? e.X : -1;
 
             if (s != _sobre || hx != _hoverX)
@@ -163,10 +180,50 @@ namespace MhiagosControl
             else if (_bDir.Contains(e.Location)) Disparar(MoverDireita);
             else if (_bTam.Contains(e.Location)) Disparar(TrocarTamanho);
             else if (_bRem.Contains(e.Location)) Disparar(Remover);
+            else if (e.Button == MouseButtons.Left) ComecarArraste(e.Location);
             base.OnMouseDown(e);
         }
 
         private void Disparar(EventHandler h) { if (h != null) h(this, EventArgs.Empty); }
+
+        // ---------------- arraste ----------------
+
+        /// <summary>Pedido de arraste: o cartao quer ir para onde o ponteiro esta.</summary>
+        public event EventHandler Arrastar;
+
+        private Point _pegou = Point.Empty;
+        private bool _armado = false;
+
+        /// <summary>Quantos pixels o ponteiro anda antes de virar arraste.</summary>
+        private const int Limiar = 6;
+
+        /// <summary>
+        /// Onde o cartao foi pego, em coordenadas dele.
+        ///
+        /// Quem move precisa disso para o cartao nao dar um salto ao colar no
+        /// ponteiro: sem o deslocamento, ele pularia com o canto superior
+        /// esquerdo sob o cursor, e a pessoa perderia de vista o ponto que
+        /// escolheu segurar.
+        /// </summary>
+        public Point Pegada { get { return _pegou; } }
+
+        private void ComecarArraste(Point p)
+        {
+            _pegou = p;
+            _armado = true;
+        }
+
+        /// <summary>
+        /// Um clique so nao e um arraste.
+        ///
+        /// Sem o limiar, qualquer clique no cartao - inclusive o que a pessoa deu
+        /// para ver o detalhe da curva - iniciaria uma movimentacao, e a grade se
+        /// reorganizaria sozinha por causa de um tremor de mao de dois pixels.
+        /// </summary>
+        private bool PassouDoLimiar(Point p)
+        {
+            return Math.Abs(p.X - _pegou.X) >= Limiar || Math.Abs(p.Y - _pegou.Y) >= Limiar;
+        }
 
         private void DesenharBotoes(Graphics g)
         {
@@ -590,6 +647,148 @@ namespace MhiagosControl
             if (s == null) return false;
             if (categoria != "*" && s.Category != categoria) return false;
             return string.Equals(s.Type.ToString(), tipo, StringComparison.Ordinal);
+        }
+
+        // ---------------- conjuntos prontos ----------------
+
+        /// <summary>
+        /// Uma regra de conjunto: o que pescar da lista de sensores.
+        ///
+        /// Tres formas, porque as perguntas sao de tres naturezas. "A taxa de
+        /// quadros" e uma leitura especifica, com identificador fixo. "A
+        /// temperatura da CPU" e uma entre varias candidatas, e a preferencia
+        /// decide qual. "Todas as ventoinhas" nao tem candidata: sao todas.
+        /// </summary>
+        public class Regra
+        {
+            public string Id;            // leitura fixa, como rtss:fps
+            public string Categoria;     // "CPU", "GPU", "*"
+            public string Tipo;          // "Temperature", "Fan", ...
+            public bool Todas;           // pega todas as que casarem
+            public string[] Preferidas;  // desempate quando ha varias
+
+            public static Regra Fixa(string id)
+            {
+                Regra r = new Regra(); r.Id = id; return r;
+            }
+
+            public static Regra Uma(string cat, string tipo, params string[] pref)
+            {
+                Regra r = new Regra();
+                r.Categoria = cat; r.Tipo = tipo; r.Preferidas = pref;
+                return r;
+            }
+
+            public static Regra Todos(string cat, string tipo)
+            {
+                Regra r = new Regra();
+                r.Categoria = cat; r.Tipo = tipo; r.Todas = true;
+                return r;
+            }
+        }
+
+        /// <summary>Um ponto de partida com nome.</summary>
+        public class Conjunto
+        {
+            public readonly string Chave;
+            public readonly Regra[] Regras;
+            public Conjunto(string chave, Regra[] regras) { Chave = chave; Regras = regras; }
+            public string Nome { get { return T.NomeDoConjunto(Chave); } }
+        }
+
+        /// <summary>
+        /// Os conjuntos oferecidos, cada um respondendo a uma pergunta diferente.
+        ///
+        /// Nao sao variacoes de gosto: sao recortes. "Jogos" pergunta se o jogo
+        /// esta fluido e o que esta segurando; "Termico" pergunta o que esquenta
+        /// e quanto; "Silencioso" pergunta por que a ventoinha esta acelerando.
+        /// Dois conjuntos que respondem a mesma pergunta com a mesma lista nao
+        /// sao dois conjuntos - sao um, com dois nomes.
+        /// </summary>
+        public static readonly Conjunto[] Conjuntos = new Conjunto[]
+        {
+            new Conjunto("auto", null),   // a selecao automatica, por peca
+
+            new Conjunto("jogos", new Regra[]
+            {
+                Regra.Fixa(Rtss.Prefixo + "fps"),
+                Regra.Fixa(Rtss.Prefixo + "fps.min"),
+                Regra.Fixa(Rtss.Prefixo + "frametime"),
+                Regra.Uma("GPU", "Load", "gpu core", "d3d 3d"),
+                Regra.Uma("GPU", "Temperature", "gpu core", "hot spot"),
+                Regra.Uma("GPU", "Clock", "gpu core"),
+                Regra.Uma("CPU", "Load", "total"),
+                Regra.Uma("CPU", "Temperature", "tctl", "package"),
+            }),
+
+            // Termico: o que esquenta e o quanto de energia entra para tanto. A
+            // potencia esta aqui porque e a CAUSA da temperatura - ver os dois
+            // juntos e o que distingue "esquentou porque esta trabalhando" de
+            // "esquentou parado", que e defeito.
+            new Conjunto("termico", new Regra[]
+            {
+                Regra.Todos("*", "Temperature"),
+                Regra.Uma("CPU", "Power", "package", "core"),
+                Regra.Uma("GPU", "Power"),
+            }),
+
+            // Silencioso: a ventoinha e o que ela obedece. Sem as temperaturas
+            // que a comandam, a rotacao e um numero sem causa.
+            new Conjunto("silencioso", new Regra[]
+            {
+                Regra.Todos("*", "Fan"),
+                Regra.Todos("*", "Control"),
+                Regra.Uma("CPU", "Temperature", "tctl", "package"),
+                Regra.Uma("GPU", "Temperature", "gpu core"),
+            }),
+        };
+
+        /// <summary>Quantos cartoes um conjunto pode trazer.</summary>
+        public const int TetoDoConjunto = 12;
+
+        /// <summary>
+        /// Aplica um conjunto sobre a lista de sensores desta maquina.
+        ///
+        /// O teto existe porque uma regra "todas as temperaturas" numa maquina
+        /// com quatro discos e duas placas devolve trinta cartoes, e trinta
+        /// cartoes nao sao um painel - sao a mesma lista de sempre, com cores.
+        /// </summary>
+        public static List<SensorEntry> Montar(Conjunto c, List<SensorEntry> lista)
+        {
+            List<SensorEntry> saida = new List<SensorEntry>();
+            if (lista == null) return saida;
+            if (c == null || c.Regras == null) return Escolher(lista, 5);
+
+            foreach (Regra r in c.Regras)
+            {
+                if (saida.Count >= TetoDoConjunto) break;
+
+                if (!string.IsNullOrEmpty(r.Id))
+                {
+                    foreach (SensorEntry s in lista)
+                        if (s != null && s.Id == r.Id && !saida.Contains(s)) { saida.Add(s); break; }
+                    continue;
+                }
+
+                if (r.Todas)
+                {
+                    foreach (SensorEntry s in lista)
+                    {
+                        if (saida.Count >= TetoDoConjunto) break;
+                        if (Casa(s, r.Categoria, r.Tipo) && !saida.Contains(s) && s.Value.HasValue)
+                            saida.Add(s);
+                    }
+                    continue;
+                }
+
+                string[] alvo = new string[2 + (r.Preferidas == null ? 0 : r.Preferidas.Length)];
+                alvo[0] = r.Categoria; alvo[1] = r.Tipo;
+                if (r.Preferidas != null) r.Preferidas.CopyTo(alvo, 2);
+
+                SensorEntry achado = Melhor(lista, alvo, saida);
+                if (achado != null) saida.Add(achado);
+            }
+            return saida;
         }
 
         /// <summary>

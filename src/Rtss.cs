@@ -104,6 +104,18 @@ namespace MhiagosControl
             get { string p = _peca; return string.IsNullOrEmpty(p) ? T.RtssMissing : p; }
         }
 
+        /// <summary>
+        /// So o executavel do jogo em primeiro plano, ou nulo.
+        ///
+        /// Separado do PecaAtual porque aquele devolve TEXTO DE ESTADO - "RTSS
+        /// nao encontrado", "nenhum jogo em execucao" - proprio para um rodape e
+        /// impossivel de comparar. Quem casa perfil com jogo precisa do nome do
+        /// arquivo, e precisa que a ausencia seja nulo e nao uma frase.
+        /// </summary>
+        private static volatile string _jogo;
+
+        public static string JogoAtual { get { return _jogo; } }
+
         private readonly float[] _serieFps = new float[JanelaSeg];
         private readonly float[] _serieFt = new float[JanelaSeg];
         private int _n = 0;
@@ -547,6 +559,7 @@ namespace MhiagosControl
             string peca = !_disponivel ? T.RtssMissing
                         : (string.IsNullOrEmpty(_app) ? T.RtssIdle : _app);
             _peca = peca;
+            _jogo = (_disponivel && !string.IsNullOrEmpty(_app)) ? _app : null;
 
             float? fpsMin = null, fpsMed = null, ftMed = null, ftPior = null;
 

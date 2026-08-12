@@ -1,4 +1,4 @@
-# Compila o Mhiagos Control com o csc.exe do .NET Framework (nao exige SDK).
+﻿# Compila o Mhiagos Control com o csc.exe do .NET Framework (nao exige SDK).
 param([switch]$Assets)
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -40,6 +40,7 @@ $refs = @(
     (Join-Path $fw 'System.Core.dll'),
     (Join-Path $fw 'System.Drawing.dll'),
     (Join-Path $fw 'System.Windows.Forms.dll'),
+    (Join-Path $fw 'System.Management.dll'),
     (Join-Path $root 'lib\LibreHardwareMonitorLib.dll')
 )
 $srcs = Get-ChildItem (Join-Path $root 'src') -Filter *.cs | ForEach-Object { $_.FullName }

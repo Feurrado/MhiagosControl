@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
@@ -104,7 +104,7 @@ namespace MhiagosControl
         /// exemplo do formulario. Um rotulo apontando para isso e pior que a
         /// ausencia da linha, porque parece informacao.
         /// </summary>
-        private static string NomeDePlaca(string nome)
+        internal static string NomeDePlaca(string nome)
         {
             if (string.IsNullOrEmpty(nome)) return null;
 
@@ -122,21 +122,66 @@ namespace MhiagosControl
             return nome.Trim().Length < 5 ? null : nome;
         }
 
-        /// <summary>Memoria da placa de video, em GB, quando a fonte publica o total.</summary>
+        /// <summary>
+        /// Memoria da placa de video, em GB.
+        ///
+        /// Cada fonte batiza esse total de um jeito, e exigir um nome so fazia a
+        /// informacao existir ou nao conforme quem tivesse respondido primeiro.
+        /// A lista vai do mais especifico ao mais generico.
+        ///
+        /// O ultimo recurso e somar o usado com o livre: quando nenhuma publica o
+        /// total, as duas metades quase sempre estao la, e a soma delas E o total
+        /// - com erro de arredondamento de alguns megabytes, que desaparece na
+        /// conversao para gigabytes inteiros.
+        /// </summary>
         private static string MemoriaDeVideo(List<SensorEntry> sensores)
         {
             if (sensores == null) return null;
+
+            string[] nomes =
+            {
+                "GPU Memory Total", "GPU D3D Memory Total", "D3D Dedicated Memory Total",
+                "Memory Total", "GPU Memory Size", "VRAM",
+            };
+
+            foreach (string alvo in nomes)
+                foreach (SensorEntry e in sensores)
+                {
+                    if (!DaGpu(e) || e.Name == null) continue;
+                    if (!e.Name.Equals(alvo, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!e.Value.HasValue || e.Value.Value <= 0) continue;
+                    return EmGigabytes(e.Value.Value);
+                }
+
+            float usado = 0, livre = 0;
             foreach (SensorEntry e in sensores)
             {
-                if (e == null || e.Category != "GPU" || e.Name == null) continue;
-                if (!e.Name.Equals("GPU Memory Total", StringComparison.OrdinalIgnoreCase)) continue;
-                if (!e.Value.HasValue || e.Value.Value <= 0) continue;
-
-                // Publicada em MB. 8192 vira 8 GB.
-                double gb = e.Value.Value / 1024.0;
-                return (gb >= 1 ? Math.Round(gb).ToString("0") : gb.ToString("0.0")) + " GB";
+                if (!DaGpu(e) || e.Name == null || !e.Value.HasValue) continue;
+                if (e.Name.Equals("GPU Memory Used", StringComparison.OrdinalIgnoreCase)) usado = e.Value.Value;
+                else if (e.Name.Equals("GPU Memory Free", StringComparison.OrdinalIgnoreCase)) livre = e.Value.Value;
             }
+            if (usado > 0 && livre > 0) return EmGigabytes(usado + livre);
+
             return null;
+        }
+
+        private static bool DaGpu(SensorEntry e)
+        {
+            return e != null && e.Category == "GPU";
+        }
+
+        /// <summary>
+        /// Converte o total publicado em MB para gigabytes redondos.
+        ///
+        /// Acima de 64 GB o numero nao era megabyte: alguma fonte publica em
+        /// bytes, e uma RTX de 12 GB apareceria com cinco digitos de gigabyte.
+        /// </summary>
+        internal static string EmGigabytes(double mb)
+        {
+            double gb = mb / 1024.0;
+            if (gb > 1024) gb = mb / 1073741824.0;   // vinha em bytes
+            if (gb <= 0) return null;
+            return (gb >= 1 ? Math.Round(gb).ToString("0") : gb.ToString("0.0")) + " GB";
         }
 
         /// <summary>

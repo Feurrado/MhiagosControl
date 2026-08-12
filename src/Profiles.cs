@@ -126,6 +126,64 @@ namespace MhiagosControl
         /// <summary>Janela de tempo dos graficos, em segundos.</summary>
         public int MetricRange = MetricHistory.JanelaPadrao;
 
+        /// <summary>
+        /// Tamanho da janela de configuracao, em pixels de area util.
+        ///
+        /// Zero significa "nunca foi ajustada" e vale o padrao. Redimensionar sem
+        /// lembrar seria trabalho refeito a cada abertura, que e a metade chata
+        /// de uma janela redimensionavel.
+        /// </summary>
+        public int WindowW = 0, WindowH = 0;
+
+        /// <summary>
+        /// Trocar de perfil sozinho quando um jogo abre.
+        ///
+        /// Desligado por padrao, e nao e timidez: isto mexe no que aparece na
+        /// peca sem ninguem pedir. Um recurso que age sozinho tem de ser
+        /// escolhido, nao descoberto.
+        /// </summary>
+        public bool GameProfiles = false;
+
+        /// <summary>
+        /// Mapa executavel -> nome do perfil, em duas listas paralelas.
+        ///
+        /// Casa pelo EXECUTAVEL e nao pelo titulo da janela: o titulo muda com
+        /// patch, idioma e placar, e um casamento que quebra quando o jogo
+        /// atualiza quebra justamente quando ninguem esta olhando para isso.
+        /// </summary>
+        public List<string> GameKeys = new List<string>();
+        public List<string> GameProfileNames = new List<string>();
+
+        /// <summary>Perfil casado com o executavel, ou nulo.</summary>
+        public string PerfilDoJogo(string exe)
+        {
+            if (string.IsNullOrEmpty(exe)) return null;
+            for (int i = 0; i < GameKeys.Count && i < GameProfileNames.Count; i++)
+                if (string.Equals(GameKeys[i], exe, StringComparison.OrdinalIgnoreCase))
+                    return GameProfileNames[i];
+            return null;
+        }
+
+        /// <summary>Casa um executavel com um perfil, substituindo o casamento anterior.</summary>
+        public void MapearJogo(string exe, string perfil)
+        {
+            if (string.IsNullOrEmpty(exe) || string.IsNullOrEmpty(perfil)) return;
+            DesmapearJogo(exe);
+            GameKeys.Add(exe.Trim());
+            GameProfileNames.Add(perfil.Trim());
+        }
+
+        public void DesmapearJogo(string exe)
+        {
+            if (string.IsNullOrEmpty(exe)) return;
+            for (int i = GameKeys.Count - 1; i >= 0; i--)
+                if (string.Equals(GameKeys[i], exe, StringComparison.OrdinalIgnoreCase))
+                {
+                    GameKeys.RemoveAt(i);
+                    if (i < GameProfileNames.Count) GameProfileNames.RemoveAt(i);
+                }
+        }
+
         /// <summary>Tamanho do cartao i, tolerando lista curta de versao antiga.</summary>
         public int MetricSize(int i)
         {
@@ -219,6 +277,16 @@ namespace MhiagosControl
                         else if (k == "sidebarcollapsed") c.SidebarCollapsed = (v == "1");
                         else if (k == "metricschosen") c.MetricsChosen = (v == "1");
                         else if (k == "metricrange") c.MetricRange = MetricHistory.JanelaValida(ParseInt(v));
+                        else if (k == "windoww") c.WindowW = ParseInt(v);
+                        else if (k == "windowh") c.WindowH = ParseInt(v);
+                        else if (k == "gameprofiles") c.GameProfiles = (v == "1");
+                        else if (k == "gamemap")
+                        {
+                            // "jogo.exe|Nome do perfil"
+                            int barra = v.IndexOf('|');
+                            if (barra <= 0 || barra >= v.Length - 1) continue;
+                            c.MapearJogo(v.Substring(0, barra), v.Substring(barra + 1));
+                        }
                         else if (k == "metric")
                         {
                             // "0|hw:..." - tamanho e identificador. Sem a barra e
@@ -315,6 +383,12 @@ namespace MhiagosControl
                 sb.AppendLine("sidebarcollapsed=" + (SidebarCollapsed ? "1" : "0"));
                 sb.AppendLine("metricschosen=" + (MetricsChosen ? "1" : "0"));
                 sb.AppendLine("metricrange=" + MetricRange.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("windoww=" + WindowW.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("windowh=" + WindowH.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("gameprofiles=" + (GameProfiles ? "1" : "0"));
+                for (int i = 0; i < GameKeys.Count && i < GameProfileNames.Count; i++)
+                    if (!string.IsNullOrEmpty(GameKeys[i]) && !string.IsNullOrEmpty(GameProfileNames[i]))
+                        sb.AppendLine("gamemap=" + GameKeys[i] + "|" + GameProfileNames[i]);
                 for (int i = 0; i < MetricIds.Count; i++)
                     if (!string.IsNullOrEmpty(MetricIds[i]))
                         sb.AppendLine("metric=" + MetricSize(i).ToString(CultureInfo.InvariantCulture) +

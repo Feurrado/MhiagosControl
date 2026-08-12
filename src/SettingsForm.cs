@@ -54,7 +54,7 @@ namespace MhiagosControl
         private Timer _tick;
         private Label _footerNote;
         private Timer _noteTimer;
-        private FlatBtn _btSave;
+        private FlatBtn _btSave, _btClose;
 
         // pagina Paineis
         private SensorPicker _pick1, _pick2;
@@ -132,10 +132,25 @@ namespace MhiagosControl
 
             Text = T.AppName;
             Icon = Assets.AppIcon;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
-            MaximizeBox = false;
+            // Redimensionavel.
+            //
+            // Era FixedSingle desde quando cada pagina vivia em coordenadas
+            // absolutas: deixar arrastar a borda teria mostrado cartoes parados
+            // no canto de uma janela maior. Agora que as paginas repartem a
+            // largura - e a de bordo reparte tambem a altura - a janela fixa e
+            // que virou a limitacao, num aplicativo cuja tela principal e um
+            // painel de leituras que so melhora com espaco.
+            FormBorderStyle = FormBorderStyle.Sizable;
+            MaximizeBox = true;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(1010, 900);
+
+            // O minimo e onde o projeto ainda fecha: 756 px de conteudo, a barra
+            // lateral recolhida e as margens do hospedeiro. Abaixo disso os
+            // cartoes parariam de encolher e passariam a ser cortados.
+            MinimumSize = new Size(880, 660);
+
+            Size guardado = TamanhoGuardado();
+            ClientSize = guardado != Size.Empty ? guardado : new Size(1010, 900);
             BackColor = Ui.Window;
             Font = Ui.FontBase;
 
@@ -179,55 +194,39 @@ namespace MhiagosControl
             _nav.SelectionChanged += delegate { ShowPage(); };
             Controls.Add(_nav);
 
-            // A barra de acoes no ALTO, e nao no rodape.
+            // Salvar e Fechar moram na BARRA LATERAL.
             //
-            // No rodape ela ficava do lado oposto ao conteudo que comanda: a
-            // pagina comeca em cima, e Salvar - que grava o que esta na pagina -
-            // estava a oitocentos pixels dali, no canto mais distante do
-            // percurso do olho. E o rodape gastava 58 px de altura em duas
-            // linhas de botao, altura que a tela de bordo usa para dado.
-            Panel barra = new Panel();
-            barra.Dock = DockStyle.Top;
-            barra.Height = 52;
-            barra.BackColor = Ui.Window;
-            Controls.Add(barra);
-
-            int larguraUtil = ClientSize.Width - _nav.Width;
-
-            FlatBtn close = new FlatBtn();
-            close.Text = T.Close;
-            close.SetBounds(larguraUtil - 114, 11, 96, 32);
-            // Ancorado a direita: recolher a barra lateral alarga esta, e sem a
-            // ancora o botao ficaria parado no meio dela.
-            close.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            close.Click += delegate { Close(); };
-            barra.Controls.Add(close);
-
-            // Salvar grava e FICA. Fechar a janela a cada gravacao obrigava a
-            // reabri-la para o ajuste seguinte, e um ajuste de painel quase
-            // nunca vem sozinho.
+            // Ja passaram pelo rodape e por uma barra no alto. O problema dos
+            // dois lugares era o mesmo: uma faixa horizontal atravessando a
+            // janela inteira, gasta com dois botoes, num aplicativo cuja tela
+            // principal e um painel de leituras que so melhora com espaco. A
+            // lateral ja existe, ja e a coluna de comandos - e tinha um vao
+            // vazio entre a navegacao e o resumo do sistema exatamente do
+            // tamanho deles.
             //
-            // ESMAECIDO quando nao ha o que gravar, e nao escondido. Sumindo, ele
-            // levava junto a informacao de que existe - e a barra mudava de forma
-            // a cada tecla digitada num campo. Apagado, o lugar dele continua
-            // sendo o lugar dele, e o estado se le sem clicar.
+            // Recolhida, os dois viram icone. O glifo so entra quando o texto
+            // nao cabe, entao expandida a barra continua mostrando as palavras.
             _btSave = new FlatBtn();
             _btSave.Text = T.Save;
+            _btSave.Glyph = "\uE74E";          // disquete, Segoe MDL2
             _btSave.Primary = true;
-            _btSave.SetBounds(larguraUtil - 220, 11, 96, 32);
-            _btSave.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _btSave.Enabled = false;
             _btSave.Click += new EventHandler(OnSave);
-            barra.Controls.Add(_btSave);
+            _nav.Controls.Add(_btSave);
 
-            _footerNote = MakeLabel("", 18, 17, Ui.FontSmall);
-            _footerNote.Size = new Size(larguraUtil - 250, 20);
-            _footerNote.TextAlign = ContentAlignment.MiddleRight;
-            _footerNote.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _btClose = new FlatBtn();
+            _btClose.Text = T.Close;
+            _btClose.Glyph = "\uE711";         // o mesmo "x" ja usado nos cartoes
+            _btClose.Click += delegate { Close(); };
+            _nav.Controls.Add(_btClose);
+
+            _footerNote = MakeLabel("", 0, 0, Ui.FontSmall);
             _footerNote.ForeColor = Ui.Accent;
             _footerNote.Visible = false;
-            barra.Controls.Add(_footerNote);
+            _nav.Controls.Add(_footerNote);
 
+            _nav.Resize += delegate { ArranjarAcoes(); };
+            ArranjarAcoes();
             AtualizarRodape();
 
             _host = new Panel();
@@ -285,10 +284,13 @@ namespace MhiagosControl
             metricas.Glyph = "\uE9D9";            // grafico de area, Segoe MDL2
             metricas.Page = BuildPageMetricas();
 
+            // E7C1 e a "etiqueta" da Segoe MDL2. ESCAPADO, como todos.
+            NavItem specs = new NavItem();
+            specs.Text = T.NavSpecs; specs.Glyph = "\uE7C1"; specs.Page = BuildPageSpecs();
             NavItem sobre = new NavItem();
             sobre.Text = T.NavAbout; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
 
-            foreach (NavItem it in new NavItem[] { visao, paineis, alertas, metricas, perfis, config, sobre })
+            foreach (NavItem it in new NavItem[] { visao, paineis, alertas, metricas, specs, perfis, config, sobre })
             {
                 _nav.Add(it);
                 it.Page.Dock = DockStyle.Fill;
@@ -325,8 +327,94 @@ namespace MhiagosControl
                 // o que foi pulado enquanto ela estava atras e cobrado aqui,
                 // agora que ela e a que aparece.
                 ArranjarPagina(sel.Page);
+
+                // A coleta so comeca quando a aba estreia: quem nunca abrir as
+                // especificacoes nao paga os segundos de WMI.
+                if (sel.Page == _pgSpecs) GarantirSpecs();
             }
             if (_profileList != null) RefreshProfileList();
+        }
+
+        /// <summary>
+        /// Salvar, Fechar e o aviso, encaixados no vao da barra lateral.
+        ///
+        /// Ancorados na BASE, logo acima do resumo do sistema: a navegacao cresce
+        /// para baixo conforme as abas, e presos ao topo eles seriam empurrados
+        /// no dia em que uma pagina nova entrasse. Embaixo, ficam onde estao.
+        /// </summary>
+        private void ArranjarAcoes()
+        {
+            if (_nav == null || _btSave == null || _btClose == null) return;
+
+            const int Alt = 32;
+            const int Esp = 8;
+
+            bool estreita = _nav.Width < 120;
+            int margem = estreita ? 8 : 18;
+            int larg = _nav.Width - margem * 2;
+
+            // Uma nota de duas linhas exige largura; recolhida, a barra nao tem.
+            bool cabeNota = !estreita;
+            int alturaNota = cabeNota ? 32 : 0;
+
+            int baixo = _nav.Height - _nav.AlturaDoSistema - 14;
+            int y = baixo - alturaNota - Alt - Esp - Alt;
+
+            _btSave.SetBounds(margem, y, larg, Alt);
+            _btClose.SetBounds(margem, y + Alt + Esp, larg, Alt);
+
+            if (_footerNote != null)
+            {
+                _footerNote.Visible = _footerNote.Visible && cabeNota;
+                _footerNote.SetBounds(margem, y + (Alt + Esp) * 2 + 4, larg, alturaNota);
+                _footerNote.TextAlign = ContentAlignment.TopLeft;
+            }
+        }
+
+        /// <summary>
+        /// O tamanho da ultima vez, se couber nesta tela.
+        ///
+        /// Guardar tamanho tem uma armadilha: quem gravou numa tela de 2560 e
+        /// depois abre num notebook de 1366 receberia uma janela maior que o
+        /// monitor, com o rodape e os botoes fora do alcance. Por isso a
+        /// conferencia contra a area de trabalho atual, e nao so contra o minimo.
+        /// </summary>
+        private Size TamanhoGuardado()
+        {
+            int w = _cfg.WindowW, h = _cfg.WindowH;
+            if (w <= 0 || h <= 0) return Size.Empty;
+
+            Rectangle tela = Screen.FromPoint(Cursor.Position).WorkingArea;
+            if (w > tela.Width - 40) w = tela.Width - 40;
+            if (h > tela.Height - 40) h = tela.Height - 40;
+            if (w < MinimumSize.Width || h < MinimumSize.Height) return Size.Empty;
+
+            return new Size(w, h);
+        }
+
+        /// <summary>
+        /// Grava o tamanho ao terminar o arraste, e nao a cada pixel.
+        ///
+        /// O Resize dispara dezenas de vezes durante um arraste de borda, e cada
+        /// gravacao e um arquivo escrito em disco.
+        /// </summary>
+        protected override void OnResizeEnd(EventArgs e)
+        {
+            base.OnResizeEnd(e);
+            GuardarTamanho();
+        }
+
+        private void GuardarTamanho()
+        {
+            if (WindowState != FormWindowState.Normal) return;
+            if (_cfg.WindowW == ClientSize.Width && _cfg.WindowH == ClientSize.Height) return;
+            try
+            {
+                _cfg.WindowW = ClientSize.Width;
+                _cfg.WindowH = ClientSize.Height;
+                _cfg.Save();
+            }
+            catch (Exception ex) { Log.Error("gravar tamanho da janela", ex); }
         }
 
         /// <summary>Rearranja a pagina que esta a mostra, seja ela qual for.</summary>
@@ -350,6 +438,7 @@ namespace MhiagosControl
             if (pagina == null) return;
             if (pagina == _pgMetricas) { ArranjarMetricas(); return; }
             if (pagina == _pgVisao) { if (pagina.Visible) ArranjarVisaoGeral(); return; }
+            if (pagina == _pgSpecs) { if (pagina.Visible) ArranjarSpecsPagina(); return; }
             Elastico(pagina);
         }
 
@@ -445,14 +534,25 @@ namespace MhiagosControl
             Rectangle[] projeto = new Rectangle[alvos.Count];
             for (int i = 0; i < alvos.Count; i++) projeto[i] = Projeto(alvos[i]);
 
-            // A largura da barra de rolagem sai da conta sempre que a pagina
-            // possa rolar, apareca ela ou nao: medir a area de cliente faria o
-            // conteudo encolher quando a barra surge e alargar quando ela some,
-            // e cada troca dispara um novo arranjo - dois estados que se chamam
-            // em circulo.
+            // A largura da barra de rolagem sai da conta quando a pagina VAI
+            // rolar - e nao sempre que ela puder.
+            //
+            // Reservar incondicionalmente evitava um circulo: medir a area de
+            // cliente faria o conteudo encolher quando a barra surge e alargar
+            // quando ela some, e cada troca dispara um novo arranjo. Mas o preco
+            // era uma faixa clara de dezessete pixels em toda pagina rolavel,
+            // aparecesse a barra ou nao.
+            //
+            // Nao ha circulo se a decisao vier da ALTURA: as alturas dos cartoes
+            // sao fixas, entao o que a pagina precisa nao muda com a largura, e a
+            // resposta e a mesma antes e depois de esticar.
+            int alturaNecessaria = 0;
+            foreach (Rectangle p in projeto)
+                if (p.Bottom > alturaNecessaria) alturaNecessaria = p.Bottom;
+
             int disp = pagina.Width - 4;
             ScrollableControl rolavel = pagina as ScrollableControl;
-            if (rolavel != null && rolavel.AutoScroll)
+            if (rolavel != null && rolavel.AutoScroll && alturaNecessaria > pagina.Height)
                 disp -= System.Windows.Forms.SystemInformation.VerticalScrollBarWidth;
 
             Rectangle[] destino = Esticar(projeto, disp, LarguraMaxDaPagina);
@@ -978,6 +1078,182 @@ namespace MhiagosControl
             return nome + "  ·  " + v + (string.IsNullOrEmpty(achado.Unit) ? "" : " " + achado.Unit);
         }
 
+        // ---------------- pagina: Especificacoes ----------------
+
+        private Pagina _pgSpecs;
+        private Label _lbSpecsEstado;
+        private FlatBtn _btCopiarSpecs;
+        private bool _coletando = false;
+
+        /// <summary>
+        /// A folha de especificacoes, no espirito do CPU-Z.
+        ///
+        /// Nasce vazia, com um aviso de que esta consultando: a coleta usa WMI e
+        /// custa segundos - o Win32_Processor sozinho levou 1427 ms medidos - e
+        /// montar isso no construtor faria a janela inteira demorar para abrir
+        /// por causa de uma aba que a pessoa talvez nem visite.
+        /// </summary>
+        private Control BuildPageSpecs()
+        {
+            _pgSpecs = new Pagina();
+            _pgSpecs.RolarNaVertical();
+
+            _lbSpecsEstado = MakeLabel(T.SpecsLoading, 2, 6, Ui.FontBase);
+            _lbSpecsEstado.Size = new Size(400, 22);
+            _lbSpecsEstado.ForeColor = Ui.Muted;
+            _pgSpecs.Controls.Add(_lbSpecsEstado);
+
+            _btCopiarSpecs = new FlatBtn();
+            _btCopiarSpecs.Text = T.SpecsCopy;
+            _btCopiarSpecs.SetBounds(2, 34, 150, 32);
+            _btCopiarSpecs.Enabled = false;
+            _btCopiarSpecs.Click += delegate { CopiarSpecs(); };
+            _pgSpecs.Controls.Add(_btCopiarSpecs);
+
+            Label nota = MakeLabel(T.SpecsNote, 166, 38, Ui.FontSmall);
+            nota.Size = new Size(560, 32);
+            nota.ForeColor = Ui.Faint;
+            _pgSpecs.Controls.Add(nota);
+
+            return _pgSpecs;
+        }
+
+        /// <summary>
+        /// Dispara a coleta, uma vez, quando a aba estreia.
+        ///
+        /// Em thread propria e com retorno por BeginInvoke: WMI na thread da
+        /// interface trava a bomba de mensagens, e alguns segundos travado sao
+        /// suficientes para o Windows escurecer a janela e chama-la de "nao
+        /// responde".
+        /// </summary>
+        private void GarantirSpecs()
+        {
+            if (_pgSpecs == null || _coletando) return;
+            if (SpecSheet.Folha != null) { MostrarSpecs(); return; }
+
+            _coletando = true;
+            List<SensorEntry> copia = _sensors;
+
+            // Qualificado: importar System.Threading deixaria "Timer" ambiguo
+            // entre o de threading e o do Windows Forms, e esta classe usa o
+            // segundo. O TrayApp resolve a mesma colisao do mesmo jeito.
+            System.Threading.Thread t = new System.Threading.Thread(delegate()
+            {
+                try { SpecSheet.Coletar(copia); }
+                catch (Exception ex) { Log.Error("coleta de especificacoes", ex); }
+
+                try
+                {
+                    if (IsHandleCreated) BeginInvoke(new MethodInvoker(MostrarSpecs));
+                }
+                catch (Exception ex) { Log.Error("retorno da coleta", ex); }
+            });
+            t.IsBackground = true;
+            t.Name = "SpecSheet";
+            t.Start();
+        }
+
+        private void MostrarSpecs()
+        {
+            _coletando = false;
+
+            List<SpecGrupo> folha = SpecSheet.Folha;
+            if (_pgSpecs == null || folha == null) return;
+
+            // Ja montada: a folha nao muda enquanto a maquina esta ligada.
+            if (_specCards.Count > 0) return;
+
+            _pgSpecs.SuspendLayout();
+            try
+            {
+                _lbSpecsEstado.Visible = false;
+                _btCopiarSpecs.Enabled = true;
+
+                foreach (SpecGrupo g in folha)
+                {
+                    Card c = new Card();
+                    c.Title = g.Titulo;
+                    _pgSpecs.Controls.Add(c);
+                    _specCards.Add(c);
+
+                    List<Label> vals = new List<Label>();
+                    int y = 46;
+                    foreach (string[] l in g.Linhas)
+                    {
+                        Label cap = MakeLabel(l[0], 16, y + 2, Ui.FontSmall);
+                        cap.Size = new Size(150, 17);
+                        cap.ForeColor = Ui.Muted;
+                        c.Controls.Add(cap);
+
+                        Label val = MakeLabel(l[1], 172, y, Ui.FontSemi);
+                        val.Size = new Size(200, 19);
+                        val.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+                        c.Controls.Add(val);
+                        vals.Add(val);
+
+                        y += 24;
+                    }
+                    c.Height = y + 10;
+                    c.Tag = vals;
+                }
+            }
+            finally { _pgSpecs.ResumeLayout(); }
+
+            ArranjarSpecsPagina();
+        }
+
+        private readonly List<Card> _specCards = new List<Card>();
+
+        /// <summary>
+        /// Duas colunas de cartoes, empacotadas na mais curta.
+        ///
+        /// Empilhar tudo numa coluna daria uma pagina de tres metros com metade
+        /// da largura vazia. Duas colunas com o proximo cartao indo sempre para a
+        /// mais BAIXA e o que mantem as duas parelhas quando os cartoes tem
+        /// alturas muito diferentes - e tem: "Sistema" sao tres linhas e
+        /// "Processador" sao treze.
+        /// </summary>
+        private void ArranjarSpecsPagina()
+        {
+            if (_pgSpecs == null || _specCards.Count == 0) return;
+
+            const int Esp = 12;
+            const int Topo = 78;
+
+            int disp = _pgSpecs.Width - 4 -
+                       System.Windows.Forms.SystemInformation.VerticalScrollBarWidth;
+            if (disp > LarguraMaxDaPagina) disp = LarguraMaxDaPagina;
+            if (disp < 460) disp = 460;
+
+            bool duas = disp >= 700;
+            int larg = duas ? (disp - Esp) / 2 : disp;
+
+            int yEsq = Topo, yDir = Topo;
+            foreach (Card c in _specCards)
+            {
+                bool naEsquerda = !duas || yEsq <= yDir;
+                int x = naEsquerda ? 2 : 2 + larg + Esp;
+                int y = naEsquerda ? yEsq : yDir;
+
+                c.SetBounds(x, y, larg, c.Height);
+
+                if (naEsquerda) yEsq += c.Height + Esp;
+                else yDir += c.Height + Esp;
+            }
+        }
+
+        private void CopiarSpecs()
+        {
+            try
+            {
+                string t = SpecSheet.EmTexto();
+                if (string.IsNullOrEmpty(t)) return;
+                Clipboard.SetText(t);
+                Aviso(T.SpecsCopied);
+            }
+            catch (Exception ex) { Log.Error("copiar especificacoes", ex); }
+        }
+
         // ---------------- pagina: Paineis ----------------
 
         /// <summary>
@@ -992,6 +1268,7 @@ namespace MhiagosControl
         private Control BuildPagePaineis()
         {
             Panel page = new Pagina();
+            ((Pagina)page).RolarNaVertical();
             // fundo opaco vem da propria Pagina
 
             // Os seletores continuam sendo o estado da escolha; so nao aparecem
@@ -1161,6 +1438,7 @@ namespace MhiagosControl
         private Control BuildPageAlertas()
         {
             Panel page = new Pagina();
+            ((Pagina)page).RolarNaVertical();
             // fundo opaco vem da propria Pagina
 
             Card c = new Card();
@@ -1265,6 +1543,7 @@ namespace MhiagosControl
         private Control BuildPagePerfis()
         {
             Panel page = new Pagina();
+            ((Pagina)page).RolarNaVertical();
             // fundo opaco vem da propria Pagina
 
             Card c = new Card();
@@ -1345,12 +1624,52 @@ namespace MhiagosControl
             _rotNote.ForeColor = Ui.Muted;
             cg.Controls.Add(_rotNote);
 
-            Label note = MakeLabel(T.ProfilesNote, 2, 740, Ui.FontSmall);
+            // Perfil por jogo. Mora aqui, junto do rodizio, porque as duas coisas
+            // decidem QUAL perfil vai para a peca - uma pelo relogio, a outra
+            // pelo que esta aberto - e quem procura por uma vai procurar no mesmo
+            // lugar que a outra.
+            Card cj = new Card();
+            cj.Title = T.GameProfilesCard;
+            cj.SetBounds(0, 738, 756, 168);
+            page.Controls.Add(cj);
+
+            _tgJogo = new Toggle();
+            _tgJogo.Label = T.GameProfilesOn;
+            _tgJogo.SetBounds(16, 48, 560, 26);
+            _tgJogo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _tgJogo.CheckedChanged += new EventHandler(OnToggleJogo);
+            cj.Controls.Add(_tgJogo);
+
+            _lbJogoAtual = MakeLabel("", 16, 82, Ui.FontMed);
+            _lbJogoAtual.Size = new Size(720, 20);
+            _lbJogoAtual.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            cj.Controls.Add(_lbJogoAtual);
+
+            _btVincular = new FlatBtn();
+            _btVincular.Text = T.BindGame;
+            _btVincular.SetBounds(16, 110, 180, 32);
+            _btVincular.Click += delegate { VincularJogo(); };
+            cj.Controls.Add(_btVincular);
+
+            _btDesvincular = new FlatBtn();
+            _btDesvincular.Text = T.UnbindGame;
+            _btDesvincular.SetBounds(202, 110, 130, 32);
+            _btDesvincular.Click += delegate { DesvincularJogo(); };
+            cj.Controls.Add(_btDesvincular);
+
+            _lbJogoNota = MakeLabel(T.GameProfilesNote, 348, 110, Ui.FontSmall);
+            _lbJogoNota.Size = new Size(390, 44);
+            _lbJogoNota.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _lbJogoNota.ForeColor = Ui.Faint;
+            cj.Controls.Add(_lbJogoNota);
+
+            Label note = MakeLabel(T.ProfilesNote, 2, 918, Ui.FontSmall);
             note.Size = new Size(750, 40);
             note.ForeColor = Ui.Muted;
             page.Controls.Add(note);
 
             AtualizarRodizio();
+            AtualizarJogo();
             return page;
         }
 
@@ -1378,6 +1697,82 @@ namespace MhiagosControl
             _cfg.RotateSeconds = _rotSecs.Value;
             _dirty = true;
             AtualizarRodizio();
+        }
+
+        // ---------------- perfil por jogo ----------------
+
+        private Toggle _tgJogo;
+        private Label _lbJogoAtual, _lbJogoNota;
+        private FlatBtn _btVincular, _btDesvincular;
+
+        private void OnToggleJogo(object sender, EventArgs e)
+        {
+            if (_loading) return;
+            _cfg.GameProfiles = _tgJogo.Checked;
+            _dirty = true;
+            AtualizarJogo();
+        }
+
+        /// <summary>
+        /// O jogo detectado agora e o vinculo dele, se houver.
+        ///
+        /// Diz na cara quando o RTSS nao esta publicando. Um interruptor ligado
+        /// que nunca age e a pior forma de recurso quebrado: parece configurado,
+        /// nao reclama, e so nao funciona.
+        /// </summary>
+        private void AtualizarJogo()
+        {
+            if (_lbJogoAtual == null) return;
+
+            _loading = true;
+            _tgJogo.Checked = _cfg.GameProfiles;
+            _loading = false;
+
+            string jogo = Rtss.JogoAtual;
+            bool temJogo = !string.IsNullOrEmpty(jogo);
+            bool temRtss = Rtss.Presente();
+
+            string linha;
+            if (!temRtss) linha = T.RtssMissing;
+            else if (!temJogo) linha = T.NoGameToBind;
+            else
+            {
+                string casado = _cfg.PerfilDoJogo(jogo);
+                linha = string.IsNullOrEmpty(casado) ? jogo : T.GameBound(jogo, casado);
+            }
+
+            _lbJogoAtual.Text = linha + "   ·   " + T.GamesBoundCount(_cfg.GameKeys.Count);
+            _lbJogoAtual.ForeColor = temRtss ? Ui.Text : Ui.Warn;
+
+            _btVincular.Enabled = _cfg.GameProfiles && temJogo;
+            _btDesvincular.Enabled = _cfg.GameProfiles && temJogo &&
+                                     !string.IsNullOrEmpty(_cfg.PerfilDoJogo(jogo));
+            _tgJogo.Enabled = temRtss;
+        }
+
+        /// <summary>Casa o jogo detectado com o perfil SELECIONADO na lista.</summary>
+        private void VincularJogo()
+        {
+            string jogo = Rtss.JogoAtual;
+            if (string.IsNullOrEmpty(jogo)) return;
+
+            Profile p = _profileList != null && _profileList.Selected != null
+                      ? _profileList.Selected : _current;
+            if (p == null) return;
+
+            _cfg.MapearJogo(jogo, p.Name);
+            _dirty = true;
+            AtualizarJogo();
+            Aviso(T.GameBound(jogo, p.Name));
+        }
+
+        private void DesvincularJogo()
+        {
+            string jogo = Rtss.JogoAtual;
+            if (string.IsNullOrEmpty(jogo)) return;
+            _cfg.DesmapearJogo(jogo);
+            _dirty = true;
+            AtualizarJogo();
         }
 
         private void AtualizarRodizio()
@@ -1670,7 +2065,7 @@ namespace MhiagosControl
             if (_footerNote == null) return;
             _footerNote.Text = texto;
             _footerNote.ForeColor = Ui.Accent;
-            _footerNote.Visible = true;
+            _footerNote.Visible = _nav == null || _nav.Width >= 120;
 
             if (_noteTimer == null)
             {
@@ -1705,7 +2100,7 @@ namespace MhiagosControl
             // fariam parecer dois estados.
             _footerNote.Text = _dirty ? T.UnsavedTitle : "";
             _footerNote.ForeColor = Ui.Warn;
-            _footerNote.Visible = _dirty;
+            _footerNote.Visible = _dirty && _nav != null && _nav.Width >= 120;
         }
 
         // ---------------- pagina: Configuracoes ----------------
@@ -1722,6 +2117,7 @@ namespace MhiagosControl
         private Control BuildPageConfig()
         {
             Panel page = new Pagina();
+            ((Pagina)page).RolarNaVertical();
             // fundo opaco vem da propria Pagina
 
             Card c = new Card();
@@ -1988,21 +2384,206 @@ namespace MhiagosControl
         /// </summary>
         private void SelecaoPadrao()
         {
+            AplicarConjunto(null);
+        }
+
+        /// <summary>
+        /// O menu de conjuntos, aberto sob o botao.
+        ///
+        /// Menu, e nao quatro botoes na fileira: aplicar um conjunto e um ato
+        /// raro - dia da instalacao, e de vez em quando - e quatro alvos
+        /// permanentes disputando a barra com "Adicionar metrica" e a escolha da
+        /// janela dariam a esse ato o peso de uma acao cotidiana.
+        /// </summary>
+        private void MenuDeConjuntos()
+        {
+            // ContextMenu, e nao ContextMenuStrip: e o mesmo tipo que o menu da
+            // bandeja ja usa. Um menu nativo nao aceita o tema desenhado do
+            // aplicativo, mas dois menus com aparencias diferentes no mesmo
+            // programa e pior do que um so, coerente com o sistema.
+            ContextMenu m = new ContextMenu();
+
+            foreach (MetricPicker.Conjunto c in MetricPicker.Conjuntos)
+            {
+                MetricPicker.Conjunto alvo = c;   // copia local para o delegate
+                m.MenuItems.Add(new MenuItem(c.Nome, delegate { AplicarConjunto(alvo); }));
+            }
+
+            m.Show(_btPadraoMetrica, new Point(0, _btPadraoMetrica.Height));
+        }
+
+        /// <summary>
+        /// Troca a grade pelo conjunto escolhido. Nulo significa o automatico.
+        ///
+        /// Conjunto que nao acha nada NAO limpa a grade: numa maquina sem RTSS o
+        /// conjunto de jogos traria duas leituras, e numa sem sensor de ventoinha
+        /// o silencioso traria zero - e trocar o que a pessoa montou por uma tela
+        /// vazia e destruir trabalho para nao entregar nada.
+        /// </summary>
+        private void AplicarConjunto(MetricPicker.Conjunto c)
+        {
+            List<SensorEntry> escolhidos = MetricPicker.Montar(c, _sensors);
+            if (escolhidos.Count == 0) { Aviso(T.PresetEmpty); return; }
+
             _cfg.MetricIds.Clear();
             _cfg.MetricSizes.Clear();
-            foreach (SensorEntry s in MetricPicker.Escolher(_sensors, 5))
+            foreach (SensorEntry s in escolhidos)
             {
                 _cfg.MetricIds.Add(s.Id);
                 _cfg.MetricSizes.Add(0);
             }
             _cfg.MetricsChosen = true;
             GravarMetricas();
+            MontarMetricas();
+
+            // A grade nova precisa de historico: sem avisar quem grava, os
+            // cartoes recem-criados ficariam sem curva ate alguem reabrir o
+            // aplicativo.
+            if (Applied != null) Applied(this, EventArgs.Empty);
+
+            if (c != null) Aviso(T.PresetApplied(c.Nome, escolhidos.Count));
         }
 
         private void GravarMetricas()
         {
             try { _cfg.Save(); }
             catch (Exception ex) { Log.Error("gravar cartoes de metricas", ex); }
+        }
+
+        // ---------------- arrastar cartoes ----------------
+
+        private MetricCard _arrastado;
+        private int _origemDoArraste = -1;
+        private int _destinoDoArraste = -1;
+        private Point _pegadaNoCartao;
+
+        /// <summary>
+        /// Segue o cartao arrastado ate a soltura.
+        ///
+        /// O cartao sai do fluxo e passa a acompanhar o ponteiro; a grade se
+        /// reorganiza ao vivo em volta dele, mostrando onde ele vai cair. Um
+        /// indicador fino no lugar de destino resolveria menos: a pergunta que se
+        /// faz arrastando nao e "onde ele entra", e sim "como a grade fica" - e
+        /// isso so se responde mostrando a grade como ficaria.
+        ///
+        /// Capture no proprio formulario, e nao no cartao: solto sobre outro
+        /// controle, o cartao pararia de receber o movimento no meio do gesto.
+        /// </summary>
+        private void ComecarArrasteDeCartao(MetricCard c)
+        {
+            int i = _cards.IndexOf(c);
+            if (i < 0) return;
+
+            _arrastado = c;
+            _origemDoArraste = i;
+            _destinoDoArraste = i;
+            _pegadaNoCartao = c.Pegada;
+
+            c.BringToFront();
+            Cursor = Cursors.SizeAll;
+            Capture = true;
+
+            _pgMetricas.MouseMove += new MouseEventHandler(OnArrastando);
+            _pgMetricas.MouseUp += new MouseEventHandler(OnSoltouCartao);
+            MouseMove += new MouseEventHandler(OnArrastando);
+            MouseUp += new MouseEventHandler(OnSoltouCartao);
+        }
+
+        private void OnArrastando(object sender, MouseEventArgs e)
+        {
+            if (_arrastado == null) return;
+
+            Point p = _pgMetricas.PointToClient(Cursor.Position);
+            _arrastado.Location = new Point(p.X - _pegadaNoCartao.X, p.Y - _pegadaNoCartao.Y);
+
+            int alvo = IndiceSob(p);
+            if (alvo >= 0 && alvo != _destinoDoArraste)
+            {
+                _destinoDoArraste = alvo;
+                ReordenarPara(alvo);
+            }
+        }
+
+        /// <summary>
+        /// Qual posicao da grade esta sob o ponteiro.
+        ///
+        /// Mede pelo CENTRO de cada cartao, e nao pela area dele: com areas, o
+        /// cartao arrastado - que esta por cima e no lugar do ponteiro - seria
+        /// sempre o alvo de si mesmo, e nada trocaria de lugar.
+        /// </summary>
+        private int IndiceSob(Point p)
+        {
+            int melhor = -1;
+            long menor = long.MaxValue;
+
+            for (int i = 0; i < _cards.Count; i++)
+            {
+                if (_cards[i] == _arrastado) continue;
+                Rectangle r = _cards[i].Bounds;
+                long dx = p.X - (r.Left + r.Width / 2);
+                long dy = p.Y - (r.Top + r.Height / 2);
+                long d = dx * dx + dy * dy;
+                if (d < menor) { menor = d; melhor = i; }
+            }
+
+            if (melhor < 0) return -1;
+
+            // So troca quando o ponteiro passa do centro do vizinho, senao a
+            // grade ficaria oscilando entre duas ordens a cada pixel.
+            Rectangle rv = _cards[melhor].Bounds;
+            if (!rv.Contains(p)) return -1;
+            return melhor;
+        }
+
+        /// <summary>Move o cartao arrastado para a posicao alvo e rearranja.</summary>
+        private void ReordenarPara(int destino)
+        {
+            int atual = _cards.IndexOf(_arrastado);
+            if (atual < 0 || destino < 0 || destino >= _cards.Count || destino == atual) return;
+
+            MetricCard c = _cards[atual];
+            string id = _cardIds[atual];
+            int tam = _cardTamanhos[atual];
+
+            _cards.RemoveAt(atual); _cardIds.RemoveAt(atual); _cardTamanhos.RemoveAt(atual);
+            _cards.Insert(destino, c); _cardIds.Insert(destino, id); _cardTamanhos.Insert(destino, tam);
+
+            ArranjarMetricas();
+            _arrastado.BringToFront();
+        }
+
+        private void OnSoltouCartao(object sender, MouseEventArgs e)
+        {
+            if (_arrastado == null) return;
+
+            _pgMetricas.MouseMove -= new MouseEventHandler(OnArrastando);
+            _pgMetricas.MouseUp -= new MouseEventHandler(OnSoltouCartao);
+            MouseMove -= new MouseEventHandler(OnArrastando);
+            MouseUp -= new MouseEventHandler(OnSoltouCartao);
+
+            Capture = false;
+            Cursor = Cursors.Default;
+
+            bool mudou = _destinoDoArraste != _origemDoArraste;
+            _arrastado = null;
+            _origemDoArraste = -1;
+            _destinoDoArraste = -1;
+
+            ArranjarMetricas();
+
+            // Grava so quando a ordem mudou de fato: um arraste que voltou ao
+            // lugar nao e uma edicao, e marcar a configuracao como suja obrigaria
+            // a pessoa a salvar algo que ela nao fez.
+            if (!mudou) return;
+
+            _cfg.MetricIds.Clear();
+            _cfg.MetricSizes.Clear();
+            for (int i = 0; i < _cardIds.Count; i++)
+            {
+                _cfg.MetricIds.Add(_cardIds[i]);
+                _cfg.MetricSizes.Add(_cardTamanhos[i]);
+            }
+            GravarMetricas();
         }
 
         /// <summary>
@@ -2031,7 +2612,7 @@ namespace MhiagosControl
 
             _btPadraoMetrica = new FlatBtn();
             _btPadraoMetrica.Text = T.DefaultMetrics;
-            _btPadraoMetrica.Click += delegate { SelecaoPadrao(); MontarMetricas(); };
+            _btPadraoMetrica.Click += delegate { MenuDeConjuntos(); };
             _pgMetricas.Controls.Add(_btPadraoMetrica);
 
             // Janela de tempo dos graficos. Vale para a grade inteira: comparar
@@ -2080,6 +2661,11 @@ namespace MhiagosControl
                 c.MoverEsquerda += delegate { MexerNaMetrica(alvo, -1); };
                 c.MoverDireita += delegate { MexerNaMetrica(alvo, +1); };
                 c.TrocarTamanho += delegate { RedimensionarMetrica(alvo); };
+
+                // Copia local: o delegate guarda a variavel do laco, e nao o
+                // valor dela no instante em que foi escrito.
+                MetricCard esteCartao = c;
+                c.Arrastar += delegate { ComecarArrasteDeCartao(esteCartao); };
 
                 _pgMetricas.Controls.Add(c);
                 _cards.Add(c);
@@ -2172,8 +2758,15 @@ namespace MhiagosControl
                         col = 0; alturaDaLinha = 0;
                     }
 
-                    _cards[i].SetBounds(2 + col * (larg + Esp), y,
-                                        cols * larg + (cols - 1) * Esp, alt);
+                    // O cartao na mao consome o lugar dele na conta, mas NAO e
+                    // reposicionado: quem manda na posicao dele e o ponteiro.
+                    // Sem esta excecao ele voltaria para a grade a cada
+                    // movimento, e o arraste viraria um piscar.
+                    if (_cards[i] != _arrastado)
+                        _cards[i].SetBounds(2 + col * (larg + Esp), y,
+                                            cols * larg + (cols - 1) * Esp, alt);
+                    else
+                        _cards[i].Size = new Size(cols * larg + (cols - 1) * Esp, alt);
 
                     col += cols;
                     if (alt > alturaDaLinha) alturaDaLinha = alt;
@@ -2674,6 +3267,7 @@ namespace MhiagosControl
                 AtualizarValores(snap);
                 AtualizarMetricas(snap);
                 AtualizarVisaoGeral(snap);
+                AtualizarJogo();
                 Refresh0();
                 AtualizarPreviaDoPerfil();
             }

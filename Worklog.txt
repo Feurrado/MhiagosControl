@@ -1,4 +1,14 @@
-- Possibilidade de movimentar os cards livremente e "encaixar" nos slots
+- [x] Possibilidade de movimentar os cards livremente e "encaixar" nos slots
+      Segurar e arrastar. O cartao sai do fluxo e acompanha o ponteiro; a grade
+      se reorganiza AO VIVO em volta dele. Um indicador fino no destino
+      resolveria menos: a pergunta que se faz arrastando nao e "onde ele entra",
+      e sim "como a grade fica", e isso so se responde mostrando a grade.
+      Limiar de 6 px para clique nao virar arraste - sem ele, o clique que a
+      pessoa da para ver o detalhe da curva reorganizaria a grade.
+      O alvo e medido pelo CENTRO dos vizinhos: por area, o cartao arrastado
+      (que esta por cima, sob o ponteiro) seria sempre alvo de si mesmo.
+      Grava so quando a ordem mudou de fato - arraste que voltou ao lugar nao e
+      edicao.
 - [x] Mostrar Max e min nas métricas nos gráficos
       Vira uma linha so, com a MEDIA no meio: "mín 38,2  méd 44,1  máx 61,0",
       da janela selecionada. Antes eram dois numeros nas pontas do eixo, que
@@ -24,14 +34,41 @@
       consultada so pelo nome: as duas respondiam "Temperatura da GPU". Pior que
       faltar, porque quem procurava desistia depois de achar. A busca agora tenta
       "clock:gpu core" antes da chave nua. Mesmo caso em "GPU Memory".
-- Montar layouts de métricas "padrão" para o usuário escolher um ponto de partida
+- [x] Montar layouts de métricas "padrão" para o usuário escolher um ponto de partida
+      Quatro: Automatico (por peca, o que ja existia), Jogos, Termico e
+      Silencioso, num menu sob o botao Conjuntos. Cada um responde a uma
+      pergunta diferente - jogos: "esta fluido e o que segura"; termico: "o que
+      esquenta e quanta energia entra"; silencioso: "por que a ventoinha
+      acelerou". Dois que respondem a mesma pergunta seriam um so com dois
+      nomes, e o teste cobra isso.
+      Teto de 12 cartoes: "todas as temperaturas" numa maquina com quatro
+      discos devolve trinta, e trinta cartoes nao sao painel.
+      Conjunto que nao acha nada NAO limpa a grade - trocar o que a pessoa
+      montou por uma tela vazia e destruir trabalho sem entregar nada.
 - [x] Garantir que o riva tuner está aberto quando inicializar e colocar para
       abrir automaticamente no boot
       O instalador chama o winget (runtime do VC++ antes, senao o RTSS sobe sem
       a VCRUNTIME140_1) e o app grava StartWithWindows e StartMinimized no
       Profiles\Config do RTSS. O RTSS materializa isso como TAREFA AGENDADA com
       gatilho de logon - nao como chave Run, que foi onde procuramos primeiro.
-- Opção de verificar se há um jogo rodando, verificar qual é o jogo e aplicar perfil de acordo com jogo
+- [x] Opção de verificar se há um jogo rodando, verificar qual é o jogo e
+      aplicar perfil de acordo com jogo
+      OPT-IN, desligado por padrao: isto mexe no que aparece na peca sem ninguem
+      pedir, e recurso que age sozinho tem de ser escolhido, nao descoberto.
+      Casa pelo EXECUTAVEL, nao pelo titulo da janela - titulo muda com patch,
+      idioma e placar, e quebraria quando ninguem esta olhando.
+      Ao fechar o jogo VOLTA para o perfil anterior. Guarda o de origem so na
+      PRIMEIRA troca: pular de um jogo para outro sem passar pela area de
+      trabalho nao pode fazer o retorno apontar para o perfil do jogo anterior.
+      Escolha manual de perfil cancela o retorno - quem trocou na mao quer
+      aquele perfil.
+      Toda troca automatica vai para o log com o motivo: o app mudou o
+      mostrador sem pedir, e quem for procurar por que tem de achar escrito.
+      Vigia na thread da INTERFACE, nao na do mostrador: trocar de perfil mexe
+      no menu da bandeja e no arquivo de configuracao.
+      Depende do RTSS. Sem ele o cartao diz isso na cara e desabilita o
+      interruptor - interruptor ligado que nunca age e a pior forma de recurso
+      quebrado: parece configurado, nao reclama, e so nao funciona.
 - [x] Achar melhor local para botão salvar e só mostrar se já não tiver salvo
       Ja existia um _dirty de verdade, so nao governava a interface. Virou
       propriedade: e atribuido em uma duzia de lugares e com campo cada um

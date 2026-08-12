@@ -108,6 +108,22 @@ limiares que mudassem a cada volta travariam e destravariam sozinhos, e um aviso
 que aparece conforme a hora do relógio não é aviso. Girar é sobre o mostrador,
 não sobre a vigilância.
 
+### Perfil por jogo
+
+Ligado, o aplicativo **troca de perfil sozinho** quando um jogo abre e devolve o
+anterior quando ele fecha. Vem desligado: isto mexe no que aparece na peça sem
+ninguém pedir, e um recurso que age sozinho tem de ser escolhido, não descoberto.
+
+O casamento é pelo **executável**, não pelo título da janela — título muda com
+patch, idioma e placar, e quebraria justamente quando ninguém está olhando. Toda
+troca automática vai para o log com o motivo, porque quem for procurar por que o
+mostrador mudou tem de achar a resposta escrita. Escolher um perfil na mão
+cancela o retorno automático: quem trocou quer aquele perfil.
+
+Depende do RivaTuner Statistics Server, que é quem identifica o jogo em primeiro
+plano — sem ele o cartão diz isso e desabilita o interruptor, em vez de deixar
+ligada uma opção que nunca age.
+
 ### Visão geral
 
 A tela que abre. Em cima, cinco leituras em destaque — temperatura e uso do
@@ -128,13 +144,43 @@ responde: nenhuma consulta WMI, que custaria centenas de milissegundos na
 abertura. A linha da placa-mãe só aparece quando a fonte publica um nome que
 identifique alguma placa.
 
+### Especificações
+
+O retrato completo da máquina, no espírito do CPU-Z: processador com família,
+modelo, stepping, soquete, cache L1/L2/L3 e virtualização; placa-mãe e BIOS com
+versão e data; memória com tipo, velocidade, canais, slots ocupados e um pente
+por linha, com fabricante e número de peça; placa de vídeo com VRAM, VBIOS,
+device ID e driver; discos com SSD ou HDD e NVMe ou SATA; rede, monitores e o
+sistema. Um botão copia tudo em texto, para colar num relatório.
+
+Esta é a única parte do programa que usa WMI, e a coleta acontece **uma vez por
+sessão, numa thread própria, quando a aba estreia** — `Win32_Processor` sozinho
+custa cerca de 1,4 s, e quem nunca abrir a aba não paga nada. Nome de máquina e
+de usuário ficam de fora de propósito: esta tela existe para ser colada em
+relatório público.
+
+Duas leituras vêm de onde talvez não se espere, e o motivo é o mesmo nos dois
+casos — a fonte óbvia mente. A memória de vídeo sai do registro do driver, e não
+de `AdapterRAM`: aquele campo é de 32 bits e devolve 4 GiB em qualquer placa
+maior que isso. O tipo de disco sai do `MSFT_PhysicalDisk`, e não do
+`Win32_DiskDrive`, que chama todo disco de "Fixed hard disk media" e classifica
+um NVMe como SCSI.
+
 ### Métricas
 
 Uma grade de cartões com as leituras da máquina, cada um com o número grande e o
-histórico desenhado atrás. A primeira abertura monta um conjunto automático —
-uma leitura de cada grandeza por peça, temperatura primeiro — e o botão
-*Conjunto padrão* repõe esse conjunto a qualquer momento. Qualquer sensor pode
-virar cartão, em três tamanhos que se reorganizam sozinhos na largura
+histórico desenhado atrás. Os cartões se **arrastam** para reordenar: a grade se
+reorganiza ao vivo em volta do que está na mão, porque a pergunta que se faz
+arrastando não é "onde ele entra" e sim "como a grade fica".
+
+O botão *Conjuntos* oferece quatro pontos de partida, cada um respondendo a uma
+pergunta diferente — **Automático** pega uma leitura de cada grandeza por peça;
+**Jogos** pergunta se está fluido e o que segura; **Térmico**, o que esquenta e
+quanta energia entra para tanto; **Silencioso**, por que a ventoinha acelerou.
+Um conjunto que não encontra nada nesta máquina avisa e não mexe na grade: trocar
+o que a pessoa montou por uma tela vazia seria destruir trabalho sem entregar
+nada. Qualquer sensor pode virar cartão, em três tamanhos que se reorganizam
+sozinhos na largura
 disponível.
 
 O histórico **não vive na janela**: é gravado em disco e alimentado pelo mesmo

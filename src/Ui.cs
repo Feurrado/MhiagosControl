@@ -155,6 +155,24 @@ namespace MhiagosControl
                 e.Graphics.FillRectangle(b, e.ClipRectangle);
             base.OnPaint(e);
         }
+
+        /// <summary>
+        /// Liga a rolagem, so na vertical.
+        ///
+        /// A barra horizontal aparecia sem ter o que rolar de lado - bastava um
+        /// rotulo largo demais para a pagina ganhar uma faixa clara atravessada
+        /// no rodape. A ordem abaixo e a que funciona: desligar, zerar a rolagem
+        /// horizontal e so entao religar; com AutoScroll ligado, o painel
+        /// restaura os valores sozinho.
+        /// </summary>
+        public void RolarNaVertical()
+        {
+            AutoScroll = false;
+            HorizontalScroll.Enabled = false;
+            HorizontalScroll.Visible = false;
+            HorizontalScroll.Maximum = 0;
+            AutoScroll = true;
+        }
     }
 
     /// <summary>Painel com cantos arredondados e borda sutil.</summary>
@@ -213,6 +231,17 @@ namespace MhiagosControl
     {
         public bool Primary = false;
         public bool Danger = false;
+
+        /// <summary>
+        /// Glifo da Segoe MDL2 usado quando o botao fica estreito demais para o
+        /// texto - na barra lateral recolhida, por exemplo.
+        ///
+        /// ESCAPADO no chamador, sempre. Caractere da area de uso privado colado
+        /// no fonte depende de sobreviver a toda ferramenta que passar pelo
+        /// arquivo, e neste projeto ja nao sobreviveu quatro vezes.
+        /// </summary>
+        public string Glyph = null;
+
         private bool _hover, _down;
 
         public FlatBtn()
@@ -281,6 +310,17 @@ namespace MhiagosControl
                 if (fill != Color.Transparent)
                     using (SolidBrush b = new SolidBrush(fill)) g.FillPath(b, p);
                 using (Pen pen = new Pen(border)) g.DrawPath(pen, p);
+            }
+
+            // Estreito demais para o texto: vale o glifo, quando ha um. Sem ele,
+            // o rotulo sairia como "Sa..." - tres pixels de informacao.
+            bool cabe = TextRenderer.MeasureText(g, Text, Font).Width <= Width - 12;
+            if (!cabe && !string.IsNullOrEmpty(Glyph))
+            {
+                using (Font f = new Font("Segoe MDL2 Assets", 10f))
+                    TextRenderer.DrawText(g, Glyph, f, r, fore,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                return;
             }
 
             TextRenderer.DrawText(g, Text, Font, r, fore,
@@ -972,6 +1012,31 @@ namespace MhiagosControl
         }
 
         private const int SpecRowH = 21;
+
+        /// <summary>
+        /// Altura reservada pelo rodape de sistema, para quem posiciona controles
+        /// acima dele.
+        ///
+        /// Repete a conta do DesenharSistema de proposito: quem desenha e quem
+        /// posiciona precisam concordar, e a alternativa - guardar o valor num
+        /// campo durante a pintura - so funcionaria depois da primeira pintura,
+        /// que e justamente quando o arranjo ja aconteceu.
+        /// </summary>
+        public int AlturaDoSistema
+        {
+            get
+            {
+                if (Estreita || Specs == null || !Specs.Any) return 0;
+
+                int n = 0;
+                if (!string.IsNullOrEmpty(Specs.Cpu)) n++;
+                if (!string.IsNullOrEmpty(Specs.Gpu)) n++;
+                if (!string.IsNullOrEmpty(Specs.Ram)) n++;
+                if (n == 0) return 0;
+
+                return 18 + 16 + n * SpecRowH + 12;   // margem + rotulo + linhas + risco
+            }
+        }
 
         /// <summary>
         /// Resumo da maquina no rodape da barra lateral.

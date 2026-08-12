@@ -39,7 +39,9 @@ namespace MhiagosControl
             NomesDoSistema();
             NomesAmigaveis();
             LarguraDasPaginas();
+            ConjuntosDeMetricas();
             RetratoDaMaquina();
+            FolhaDeEspecificacoes();
             HistoricoDasMetricas();
             QuadrosPorSegundo();
             CompletudeDoIdioma();
@@ -445,6 +447,121 @@ namespace MhiagosControl
         /// Sao dados derivados, e derivacao errada aqui nao quebra nada: so
         /// mostra a maquina errada, calada, para sempre.
         /// </summary>
+        /// <summary>
+        /// Os conjuntos prontos, contra uma maquina inventada.
+        ///
+        /// Inventada de proposito: o que precisa ser verificado e a REGRA, e uma
+        /// lista real so tem os sensores desta maquina. Aqui da para montar a
+        /// maquina sem ventoinha, a sem RTSS e a de trinta temperaturas - que sao
+        /// justamente os casos onde a selecao erra.
+        /// </summary>
+        private static void ConjuntosDeMetricas()
+        {
+            Secao("conjuntos de metricas");
+
+            List<SensorEntry> m = new List<SensorEntry>();
+            m.Add(Sensor("cpu.t", "CPU", SensorType.Temperature, "CPU (Tctl/Tdie)", 55));
+            m.Add(Sensor("cpu.l", "CPU", SensorType.Load, "CPU Total", 30));
+            m.Add(Sensor("cpu.w", "CPU", SensorType.Power, "CPU Package Power", 47));
+            m.Add(Sensor("gpu.t", "GPU", SensorType.Temperature, "GPU Core", 44));
+            m.Add(Sensor("gpu.l", "GPU", SensorType.Load, "GPU Core", 12));
+            m.Add(Sensor("gpu.c", "GPU", SensorType.Clock, "GPU Core", 1340));
+            m.Add(Sensor("gpu.w", "GPU", SensorType.Power, "GPU Power", 120));
+            m.Add(Sensor("mb.t", "Placa-mãe", SensorType.Temperature, "Motherboard", 38));
+            m.Add(Sensor("f1", "Placa-mãe", SensorType.Fan, "CPU Fan", 900));
+            m.Add(Sensor("f2", "Placa-mãe", SensorType.Fan, "System Fan", 700));
+            m.Add(Sensor("pwm", "Placa-mãe", SensorType.Control, "CPU Fan PWM", 40));
+            m.Add(Sensor(Rtss.Prefixo + "fps", Sensors.CategoriaJogos, SensorType.Factor, "FPS", 144));
+            m.Add(Sensor(Rtss.Prefixo + "frametime", Sensors.CategoriaJogos, SensorType.Factor, "Frametime", 6.9f));
+
+            Igual(4, MetricPicker.Conjuntos.Length, "quatro pontos de partida");
+
+            List<SensorEntry> jogos = MetricPicker.Montar(Achar2("jogos"), m);
+            Verdade(Tem(jogos, Rtss.Prefixo + "fps"), "jogos comeca pela taxa de quadros");
+            Verdade(Tem(jogos, "gpu.l") && Tem(jogos, "gpu.t"), "e traz uso e temperatura da GPU");
+            Verdade(!Tem(jogos, "f1"), "ventoinha nao e assunto de jogo");
+
+            List<SensorEntry> termico = MetricPicker.Montar(Achar2("termico"), m);
+            Verdade(Tem(termico, "cpu.t") && Tem(termico, "gpu.t") && Tem(termico, "mb.t"),
+                    "termico pega TODAS as temperaturas, inclusive a da placa");
+            Verdade(Tem(termico, "cpu.w"), "e a potencia, que e a causa delas");
+            Verdade(!Tem(termico, "cpu.l"), "uso nao entra: nao e temperatura nem energia");
+
+            List<SensorEntry> silencioso = MetricPicker.Montar(Achar2("silencioso"), m);
+            Verdade(Tem(silencioso, "f1") && Tem(silencioso, "f2"), "silencioso pega as ventoinhas");
+            Verdade(Tem(silencioso, "pwm"), "e o controle em porcentagem");
+            Verdade(Tem(silencioso, "cpu.t"), "com a temperatura que as comanda");
+
+            // Cada conjunto e um recorte diferente. Dois que devolvem a mesma
+            // lista nao sao dois conjuntos.
+            Verdade(!MesmaLista(jogos, termico), "jogos e termico nao se confundem");
+            Verdade(!MesmaLista(termico, silencioso), "termico e silencioso tambem nao");
+
+            // Maquina sem RTSS: o conjunto de jogos perde as leituras de quadro e
+            // continua util com o que sobrou, em vez de vir vazio.
+            List<SensorEntry> semRtss = new List<SensorEntry>();
+            foreach (SensorEntry s in m)
+                if (!s.Id.StartsWith(Rtss.Prefixo, StringComparison.Ordinal)) semRtss.Add(s);
+            List<SensorEntry> jogos2 = MetricPicker.Montar(Achar2("jogos"), semRtss);
+            Verdade(jogos2.Count >= 4, "sem RTSS o conjunto de jogos ainda traz o hardware");
+            Verdade(!Tem(jogos2, Rtss.Prefixo + "fps"), "e nao inventa a leitura que falta");
+
+            // O teto: uma regra "todas as temperaturas" numa maquina com muitos
+            // discos devolveria uma lista que nao e painel, e sim a lista de
+            // sempre com cores.
+            List<SensorEntry> muitos = new List<SensorEntry>(m);
+            for (int i = 0; i < 40; i++)
+                muitos.Add(Sensor("d" + i, "Disco", SensorType.Temperature, "Drive Temperature", 40));
+            List<SensorEntry> cheio = MetricPicker.Montar(Achar2("termico"), muitos);
+            Verdade(cheio.Count <= MetricPicker.TetoDoConjunto,
+                    "o teto de " + MetricPicker.TetoDoConjunto + " segura (obtido: " + cheio.Count + ")");
+
+            // Sem sensor nenhum, nada e devolvido - e quem chama decide nao
+            // apagar a grade que ja existe.
+            Igual(0, MetricPicker.Montar(Achar2("silencioso"), new List<SensorEntry>()).Count,
+                  "maquina sem sensores devolve lista vazia");
+
+            // Repetido nunca entra duas vezes: "GPU Core" existe como
+            // temperatura, uso e clock, e as tres regras poderiam pescar a mesma.
+            foreach (List<SensorEntry> lst in new List<SensorEntry>[] { jogos, termico, silencioso })
+            {
+                List<string> vistos = new List<string>();
+                foreach (SensorEntry s in lst)
+                {
+                    Verdade(!vistos.Contains(s.Id), "sem cartao repetido: " + s.Id);
+                    vistos.Add(s.Id);
+                }
+            }
+        }
+
+        private static SensorEntry Sensor(string id, string cat, SensorType tipo, string nome, float v)
+        {
+            SensorEntry s = new SensorEntry();
+            s.Id = id; s.Category = cat; s.Type = tipo; s.Name = nome;
+            s.Hardware = cat; s.Label = nome; s.Value = v; s.Unit = "";
+            return s;
+        }
+
+        private static MetricPicker.Conjunto Achar2(string chave)
+        {
+            foreach (MetricPicker.Conjunto c in MetricPicker.Conjuntos)
+                if (c.Chave == chave) return c;
+            return null;
+        }
+
+        private static bool Tem(List<SensorEntry> l, string id)
+        {
+            foreach (SensorEntry s in l) if (s.Id == id) return true;
+            return false;
+        }
+
+        private static bool MesmaLista(List<SensorEntry> a, List<SensorEntry> b)
+        {
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (a[i].Id != b[i].Id) return false;
+            return true;
+        }
+
         private static void RetratoDaMaquina()
         {
             Secao("retrato da maquina");
@@ -459,6 +576,26 @@ namespace MhiagosControl
             Verdade(s.CpuNucleos.IndexOf(Environment.ProcessorCount.ToString()) >= 0,
                     "e ela traz o numero que o proprio .NET responde");
             Verdade(s.Placa == null, "sem sensores da placa-mae, a linha nao existe");
+
+            // A placa-mae so entra quando o nome identifica alguma placa. "ACPI"
+            // e o nome do BARRAMENTO onde a LibreHardwareMonitor achou o sensor,
+            // e "To Be Filled By O.E.M." e o texto de exemplo que o montador nao
+            // preencheu - os dois parecem informacao e nao sao.
+            Igual(null, SystemInfo.NomeDePlaca("ACPI"), "o barramento nao e a placa");
+            Igual(null, SystemInfo.NomeDePlaca("To Be Filled By O.E.M."),
+                  "o formulario em branco tambem nao");
+            Igual(null, SystemInfo.NomeDePlaca("LPC"), "nem o nome do controlador");
+            Igual(null, SystemInfo.NomeDePlaca("X570"), "nome curto demais nao passa");
+            Igual("B550M Steel Legend", SystemInfo.NomeDePlaca("B550M Steel Legend"),
+                  "uma placa de verdade passa");
+
+            // A memoria de video: publicada em MB pelas fontes conhecidas, e em
+            // bytes por alguma. Sem a segunda escala, uma RTX de 12 GB apareceria
+            // com cinco digitos de gigabyte.
+            Igual("8 GB", SystemInfo.EmGigabytes(8192), "8192 MB viram 8 GB");
+            Igual("12 GB", SystemInfo.EmGigabytes(12288), "12288 MB viram 12 GB");
+            Igual("24 GB", SystemInfo.EmGigabytes(25769803776d),
+                  "o total vindo em bytes tambem e reconhecido");
 
             // O ProductName do registro responde "Windows 10" numa maquina com
             // build 26200. Quem le so ele mostra a versao errada; o numero da
@@ -483,6 +620,103 @@ namespace MhiagosControl
                 if (build > 0)
                     Verdade(s.Sistema.IndexOf(build.ToString()) >= 0, "a compilacao aparece");
             }
+        }
+
+        /// <summary>
+        /// A decodificacao do que o WMI devolve.
+        ///
+        /// Tudo aqui e string crua virando numero ou data. E o tipo de codigo que
+        /// erra em silencio: uma data fora de ordem vira outra data valida, um
+        /// campo hexadecimal lido errado vira outro hexadecimal - nada explode,
+        /// so fica errado na tela para sempre.
+        /// </summary>
+        private static void FolhaDeEspecificacoes()
+        {
+            Secao("folha de especificacoes");
+
+            // "AMD64 Family 25 Model 33 Stepping 2", o que o Win32_Processor
+            // devolve nesta maquina.
+            string fam, mod, step;
+            Verdade(SpecSheet.Repartir("AMD64 Family 25 Model 33 Stepping 2",
+                                       out fam, out mod, out step), "a descricao se reparte");
+            Igual("25", fam, "familia");
+            Igual("33", mod, "modelo");
+            Igual("2", step, "stepping");
+
+            Verdade(SpecSheet.Repartir("Intel64 Family 6 Model 158 Stepping 10",
+                                       out fam, out mod, out step), "e a da Intel tambem");
+            Igual("6", fam, "familia Intel");
+            Igual("158", mod, "modelo Intel");
+
+            Verdade(!SpecSheet.Repartir("processador exotico", out fam, out mod, out step),
+                    "descricao sem os campos nao inventa numeros");
+            Verdade(!SpecSheet.Repartir(null, out fam, out mod, out step), "nulo idem");
+
+            // "PCI\VEN_1002&DEV_67DF&SUBSYS_E3531DA2&REV_E7"
+            string pnp = @"PCI\VEN_1002&DEV_67DF&SUBSYS_E3531DA2&REV_E7\4&1FC990D7&0&0019";
+            Igual("67DF", SpecSheet.IdDePci(pnp, "DEV"), "id do dispositivo");
+            Igual("1002", SpecSheet.IdDePci(pnp, "VEN"), "id do fabricante");
+            Igual("E7", SpecSheet.IdDePci(pnp, "REV"), "revisao");
+            Igual(null, SpecSheet.IdDePci(pnp, "XYZ"), "campo ausente devolve nulo");
+            Igual(null, SpecSheet.IdDePci(null, "DEV"), "sem identificador, nada");
+
+            // "20251028000000.000000+000" - ano, mes e dia grudados.
+            Igual(new DateTime(2025, 10, 28).ToShortDateString(),
+                  SpecSheet.DataWmi("20251028000000.000000+000"), "data da BIOS");
+            Igual(new DateTime(2026, 5, 20).ToShortDateString(),
+                  SpecSheet.DataWmi("20260520000000.000000-000"), "data do driver");
+            Igual(null, SpecSheet.DataWmi("20251345000000.000000+000"), "mes 13 nao passa");
+            Igual(null, SpecSheet.DataWmi("abc"), "texto curto nao passa");
+            Igual(null, SpecSheet.DataWmi(null), "nulo nao passa");
+
+            // O WMI publica cache em KB. L3 de 32768 KB dito assim obriga quem le
+            // a dividir de cabeca para reconhecer os 32 MB da peca.
+            Igual("32 MB", SpecSheet.EmMegabytes(32768), "L3 de um 5600X");
+            Igual("3 MB", SpecSheet.EmMegabytes(3072), "L2 de um 5600X");
+            Igual("512 KB", SpecSheet.EmMegabytes(512), "abaixo de um mega continua em KB");
+            Igual(null, SpecSheet.EmMegabytes(0), "zero nao vira linha");
+
+            Igual("8 GB", SpecSheet.EmGigabytes(8589934592UL),
+                  "um pente de 8 GB, sem a decimal vazia");
+            Igual("16 GB", SpecSheet.EmGigabytes(17179869184UL), "acima de dez, sem decimal");
+            Igual("932 GB", SpecSheet.EmGigabytes(1000202273280UL),
+                  "o disco de 1 TB comercial tem 932 GiB de verdade");
+            Igual(null, SpecSheet.EmGigabytes(0), "tamanho zero nao vira linha");
+
+            // "20260808204115.694344-180" - o instante tem hora, ao contrario da
+            // data da BIOS. Sem a hora, "ligado ha" erraria por ate um dia.
+            DateTime b = SpecSheet.InstanteWmi("20260808204115.694344-180");
+            Igual(new DateTime(2026, 8, 8, 20, 41, 15), b, "instante do ultimo boot");
+            Igual(DateTime.MinValue, SpecSheet.InstanteWmi("20260899204115.694344-180"),
+                  "dia 99 nao passa");
+            Igual(DateTime.MinValue, SpecSheet.InstanteWmi("20260808994115.000000-180"),
+                  "hora 99 nao passa");
+            Igual(DateTime.MinValue, SpecSheet.InstanteWmi("2026"), "texto curto nao passa");
+
+            // A duracao mostra a maior unidade e a seguinte: "3 d 2 h" responde
+            // melhor que "74 h" e que "3 d 2 h 17 min 4 s".
+            string antesIdioma = T.Language;
+            try
+            {
+                T.Language = T.PtBr;
+                Igual("3 d 2 h", T.Duracao(new TimeSpan(3, 2, 17, 4)), "dias e horas");
+                Igual("4 h 12 min", T.Duracao(new TimeSpan(0, 4, 12, 30)), "horas e minutos");
+                Igual("7 min", T.Duracao(new TimeSpan(0, 0, 7, 30)), "so minutos");
+            }
+            finally { T.Language = antesIdioma; }
+
+            Igual("DDR4", SpecSheet.TipoDeMemoria(26), "codigo SMBIOS do DDR4");
+            Igual("DDR5", SpecSheet.TipoDeMemoria(34), "e do DDR5");
+            Igual(null, SpecSheet.TipoDeMemoria(0), "codigo desconhecido nao inventa tipo");
+
+            // Grupo descarta linha vazia: campo que o WMI nao preencheu nao pode
+            // virar um rotulo apontando para nada.
+            SpecGrupo g = new SpecGrupo("teste");
+            g.Por("cheio", "valor");
+            g.Por("vazio", null);
+            g.Por("branco", "");
+            Igual(1, g.Linhas.Count, "so a linha com valor entra");
+            Igual("valor", g.Linhas[0][1], "e com o valor certo");
         }
 
         private static void HistoricoDasMetricas()
@@ -753,6 +987,10 @@ namespace MhiagosControl
                 c.MetricRange = 3600;
                 c.MetricIds.Add("cpu:temp"); c.MetricSizes.Add(2);
                 c.MetricIds.Add("gpu:load"); c.MetricSizes.Add(1);
+                c.WindowW = 1280; c.WindowH = 940;
+                c.GameProfiles = true;
+                c.MapearJogo("cyberpunk2077.exe", "CPU = GPU");
+                c.MapearJogo("LeagueClientUxRender.exe", "Padrão");
                 c.SaveTo(arquivo);
 
                 Verdade(File.Exists(arquivo), "gravou no arquivo do teste, e nao no real");
@@ -784,6 +1022,34 @@ namespace MhiagosControl
                 Igual("cpu:temp", lido.MetricIds[0], "identificador do primeiro cartao");
                 Igual(2, lido.MetricSize(0), "tamanho do primeiro cartao");
                 Igual(1, lido.MetricSize(1), "tamanho do segundo cartao");
+
+                Igual(1280, lido.WindowW, "largura da janela");
+                Igual(940, lido.WindowH, "altura da janela");
+
+                // O mapa de jogos: e o unico ajuste que faz o aplicativo AGIR
+                // sozinho, entao perde-lo em silencio na gravacao seria trocar o
+                // mostrador sem motivo aparente - ou deixar de trocar.
+                Verdade(lido.GameProfiles, "perfil por jogo ligado");
+                Igual(2, lido.GameKeys.Count, "dois jogos vinculados");
+                Igual("CPU = GPU", lido.PerfilDoJogo("cyberpunk2077.exe"), "casamento do primeiro");
+                Igual("Padrão", lido.PerfilDoJogo("LeagueClientUxRender.exe"), "casamento do segundo");
+
+                // O executavel vem do RTSS e a caixa nao e garantida.
+                Igual("CPU = GPU", lido.PerfilDoJogo("Cyberpunk2077.EXE"),
+                      "o casamento ignora a caixa das letras");
+                Igual(null, lido.PerfilDoJogo("outro.exe"), "jogo sem vinculo nao casa");
+                Igual(null, lido.PerfilDoJogo(null), "nulo nao casa");
+
+                // Vincular de novo TROCA, e nao duplica: duas linhas para o mesmo
+                // executavel fariam o resultado depender da ordem de leitura.
+                lido.MapearJogo("cyberpunk2077.exe", "Padrão");
+                Igual(2, lido.GameKeys.Count, "revincular nao cria linha nova");
+                Igual("Padrão", lido.PerfilDoJogo("cyberpunk2077.exe"), "e o vinculo novo vale");
+
+                lido.DesmapearJogo("cyberpunk2077.exe");
+                Igual(1, lido.GameKeys.Count, "desvincular remove");
+                Igual(1, lido.GameProfileNames.Count, "e as duas listas continuam do mesmo tamanho");
+                Igual(null, lido.PerfilDoJogo("cyberpunk2077.exe"), "e o casamento some");
 
                 // A roda e derivada da marca de cada perfil, e nao uma segunda
                 // lista: duas listas para a mesma coisa saem de sincronia
@@ -952,7 +1218,15 @@ namespace MhiagosControl
                 // "Cooler" e a palavra usada nos dois idiomas: em portugues e
                 // emprestimo consagrado, e traduzir por "resfriador" nomearia a
                 // peca de um jeito que ninguem usa para procura-la.
-                "AppName", "Ok", "PtBr", "EnUs", "Language", "CoolerCard"
+                "AppName", "Ok", "PtBr", "EnUs", "Language", "CoolerCard",
+
+                // Folha de especificacoes: sigla (BIOS), cognato exato (Total) e
+                // emprestimos que o portugues tecnico usa sem traduzir. Traduzir
+                // "Stepping" por "passo" ou "Threads" por "linhas de execucao"
+                // afastaria o rotulo do termo que a pessoa vai procurar em
+                // qualquer outra ferramenta.
+                "SpecStepping", "SpecThreads", "SpecBiosVendor", "SpecTotal", "SpecDriver",
+                "SpecVbios", "SpecSlots", "SpecTpm",
             });
 
             string antes = T.Language;

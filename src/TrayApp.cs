@@ -246,6 +246,8 @@ namespace MhiagosControl
 
             Microsoft.Win32.SystemEvents.SessionEnding += new Microsoft.Win32.SessionEndingEventHandler(OnSessionEnding);
 
+            IniciarVigiaDeJogo();
+
             Publicar();   // antes de a thread comecar, senao o primeiro ciclo nao tem perfil
             _worker = new Thread(new ThreadStart(WorkerLoop));
             _worker.IsBackground = true;
@@ -334,12 +336,92 @@ namespace MhiagosControl
             Profile p = mi.Tag as Profile;
             if (p == null) return;
 
+            // Escolha manual cancela o retorno automatico: se a pessoa trocou de
+            // perfil com o jogo aberto, ela quer ESTE perfil, e devolver o antigo
+            // quando o jogo fechar seria desfazer o que ela acabou de mandar.
+            _perfilAntesDoJogo = null;
+
             _cfg.ActiveName = p.Name;
             _cfg.Save();
             Publicar();
             RebuildProfileMenu();
             ResetAlerts();
             Log.Write("perfil ativo: " + p.Name);
+        }
+
+        // ---------------- perfil por jogo ----------------
+
+        private System.Windows.Forms.Timer _relogioDoJogo;
+        private string _jogoVisto;            // o executavel do ciclo anterior
+        private string _perfilAntesDoJogo;    // para onde voltar quando o jogo fechar
+
+        /// <summary>
+        /// Vigia qual jogo esta em primeiro plano e troca o perfil conforme o
+        /// mapa.
+        ///
+        /// Um segundo e de sobra: abrir um jogo leva dezenas deles, e um
+        /// intervalo mais curto so gastaria ciclos comparando duas strings
+        /// iguais. Na THREAD DA INTERFACE de proposito - trocar de perfil mexe no
+        /// menu da bandeja e na configuracao em disco, e faze-lo a partir da
+        /// thread do mostrador seria corrida com a janela aberta.
+        /// </summary>
+        private void IniciarVigiaDeJogo()
+        {
+            _relogioDoJogo = new System.Windows.Forms.Timer();
+            _relogioDoJogo.Interval = 1000;
+            _relogioDoJogo.Tick += new EventHandler(OnVigiaDeJogo);
+            _relogioDoJogo.Start();
+        }
+
+        private void OnVigiaDeJogo(object sender, EventArgs e)
+        {
+            try
+            {
+                string agora = _cfg.GameProfiles ? Rtss.JogoAtual : null;
+                if (string.Equals(agora, _jogoVisto, StringComparison.OrdinalIgnoreCase)) return;
+
+                string antes = _jogoVisto;
+                _jogoVisto = agora;
+
+                if (!string.IsNullOrEmpty(agora))
+                {
+                    string alvo = _cfg.PerfilDoJogo(agora);
+                    if (string.IsNullOrEmpty(alvo) || alvo == _cfg.ActiveName) return;
+                    if (!_cfg.NameExists(alvo)) return;    // perfil apagado depois de casado
+
+                    // Guarda de onde veio, mas so na PRIMEIRA troca: pular de um
+                    // jogo para outro sem passar pela area de trabalho nao pode
+                    // fazer o retorno apontar para o perfil do jogo anterior.
+                    if (string.IsNullOrEmpty(_perfilAntesDoJogo)) _perfilAntesDoJogo = _cfg.ActiveName;
+
+                    TrocarPorJogo(alvo, "jogo " + agora);
+                    return;
+                }
+
+                // O jogo fechou: volta para onde estava, se houver para onde.
+                if (!string.IsNullOrEmpty(_perfilAntesDoJogo))
+                {
+                    string volta = _perfilAntesDoJogo;
+                    _perfilAntesDoJogo = null;
+                    if (_cfg.NameExists(volta) && volta != _cfg.ActiveName)
+                        TrocarPorJogo(volta, "fim de " + (antes ?? "jogo"));
+                }
+            }
+            catch (Exception ex) { Log.Error("vigia de perfil por jogo", ex); }
+        }
+
+        private void TrocarPorJogo(string nome, string motivo)
+        {
+            _cfg.ActiveName = nome;
+            _cfg.Save();
+            Publicar();
+            RebuildProfileMenu();
+            ResetAlerts();
+
+            // Registrado SEMPRE. O aplicativo trocou o que esta na peca sem
+            // ninguem pedir; quem for procurar por que o mostrador mudou tem de
+            // achar a resposta escrita.
+            Log.Write("perfil por jogo: " + nome + " (" + motivo + ")");
         }
 
         /// <summary>
