@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Management;
@@ -91,7 +91,7 @@ namespace MhiagosControl
             if (o == null) return g;
 
             g.Por(T.SpecModel, Texto(o, "Name"));
-            g.Por(T.SpecVendor, Texto(o, "Manufacturer"));
+            g.Por(T.SpecVendor, Fabricante(Texto(o, "Manufacturer")));
 
             // "AMD64 Family 25 Model 33 Stepping 2" - a mesma linha que o CPU-Z
             // reparte em tres campos. Sai inteira e repartida: inteira e o que se
@@ -143,7 +143,7 @@ namespace MhiagosControl
             ManagementObject b = Primeiro("Win32_BaseBoard");
             if (b != null)
             {
-                g.Por(T.SpecVendor, Texto(b, "Manufacturer"));
+                g.Por(T.SpecVendor, Fabricante(Texto(b, "Manufacturer")));
                 g.Por(T.SpecModel, Texto(b, "Product"));
 
                 // "Default string" e o texto de exemplo que o montador nao
@@ -156,7 +156,7 @@ namespace MhiagosControl
             ManagementObject bios = Primeiro("Win32_BIOS");
             if (bios != null)
             {
-                g.Por(T.SpecBiosVendor, Texto(bios, "Manufacturer"));
+                g.Por(T.SpecBiosVendor, Fabricante(Texto(bios, "Manufacturer")));
                 g.Por(T.SpecBiosVersion, Texto(bios, "SMBIOSBIOSVersion"));
                 g.Por(T.SpecBiosDate, DataWmi(Texto(bios, "ReleaseDate")));
             }
@@ -241,7 +241,7 @@ namespace MhiagosControl
 
             g.Por(T.SpecModel, Texto(o, "Name"));
 
-            using (Microsoft.Win32.RegistryKey k = ChaveDaGpu())
+            using (Microsoft.Win32.RegistryKey k = SystemInfo.ChaveDaGpu())
             {
                 g.Por(T.SpecChip, TextoBinario(k, "HardwareInformation.ChipType")
                                   ?? Texto(o, "VideoProcessor"));
@@ -254,11 +254,11 @@ namespace MhiagosControl
                 // tipo, porque passa despercebido. O qwMemorySize, ao lado deles
                 // na mesma chave, e de 64 bits e devolve 8589934592.
                 //
-                // O sensor fica de reserva: em placa cujo driver nao grava a
-                // chave, ele ainda responde.
-                ulong vram = Longo64(k, "HardwareInformation.qwMemorySize");
-                g.Por(T.SpecVram, vram > 0 ? EmGigabytes(vram)
-                                           : SystemInfo.From(sensores).GpuMemoria);
+                // A conta mora no SystemInfo, que ja precisava dela para a tira
+                // da Visao geral. Duas leituras da mesma chave, cada classe com a
+                // sua copia do caminho, e o comeco de duas verdades sobre a mesma
+                // peca - e uma delas fica desatualizada primeiro.
+                g.Por(T.SpecVram, SystemInfo.From(sensores).GpuMemoria);
 
                 // "113-4E3531U-O4V" - o numero da VBIOS, que e o que se compara
                 // com a pagina do fabricante para saber se ha atualizacao.
@@ -598,52 +598,6 @@ namespace MhiagosControl
             return 0;
         }
 
-        /// <summary>
-        /// A chave do adaptador de video no registro.
-        ///
-        /// Fica sob a classe de dispositivos de tela, numerada 0000, 0001... Uma
-        /// maquina com video integrado e placa dedicada tem as duas, e vale a
-        /// primeira que declara memoria: a integrada costuma nao declarar.
-        /// </summary>
-        private static Microsoft.Win32.RegistryKey ChaveDaGpu()
-        {
-            const string Classe =
-                @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
-            try
-            {
-                using (Microsoft.Win32.RegistryKey raiz =
-                    Microsoft.Win32.Registry.LocalMachine.OpenSubKey(Classe))
-                {
-                    if (raiz == null) return null;
-
-                    Microsoft.Win32.RegistryKey reserva = null;
-                    foreach (string nome in raiz.GetSubKeyNames())
-                    {
-                        if (nome.Length != 4) continue;
-
-                        Microsoft.Win32.RegistryKey k = raiz.OpenSubKey(nome);
-                        if (k == null) continue;
-
-                        if (Longo64(k, "HardwareInformation.qwMemorySize") > 0) return k;
-                        if (reserva == null) reserva = k; else k.Close();
-                    }
-                    return reserva;
-                }
-            }
-            catch (Exception ex) { Log.Error("chave da placa de video", ex); return null; }
-        }
-
-        private static ulong Longo64(Microsoft.Win32.RegistryKey k, string nome)
-        {
-            if (k == null) return 0;
-            try
-            {
-                object v = k.GetValue(nome);
-                if (v == null) return 0;
-                return Convert.ToUInt64(v, CultureInfo.InvariantCulture);
-            }
-            catch { return 0; }
-        }
 
         /// <summary>
         /// Valor binario que na verdade e texto em UTF-16.
@@ -679,6 +633,47 @@ namespace MhiagosControl
         {
             object v = Campo(o, nome);
             return v == null ? null : Convert.ToString(v).Trim();
+        }
+
+        /// <summary>
+        /// Nome de fabricante sem a razao social.
+        ///
+        /// "American Megatrends International, LLC." tem 38 caracteres, dos quais
+        /// 19 sao a forma juridica da empresa - que nao identifica nada e nao
+        /// cabe na coluna. "Gigabyte Technology Co., Ltd." e o mesmo caso. O que
+        /// se procura ali e a marca.
+        /// </summary>
+        internal static string Fabricante(string nome)
+        {
+            if (string.IsNullOrEmpty(nome)) return null;
+            string s = nome.Trim();
+
+            // "Co" precisa estar aqui sozinho: em "Gigabyte Technology Co., Ltd."
+            // o laco tira ", Ltd." primeiro e deixa "Gigabyte Technology Co"
+            // orfao. Cada passada corta uma cauda, entao a lista tem de conter
+            // tambem os RESTOS que as outras deixam.
+            string[] cauda =
+            {
+                ", LLC.", ", LLC", ", Inc.", ", Inc", ", Ltd.", ", Ltd",
+                " Corporation", " Corp.", " Corp", " Co.", " Co",
+                " International", " Technology", " Technologies", " GmbH", " S.A.",
+            };
+
+            // Em laco: "Gigabyte Technology Co., Ltd." carrega duas caudas, e uma
+            // passada so deixaria a outra.
+            bool cortou = true;
+            while (cortou)
+            {
+                cortou = false;
+                foreach (string c in cauda)
+                    if (s.EndsWith(c, StringComparison.OrdinalIgnoreCase))
+                    {
+                        s = s.Substring(0, s.Length - c.Length).TrimEnd(' ', ',', '.');
+                        cortou = true;
+                        break;
+                    }
+            }
+            return s.Length == 0 ? nome.Trim() : s;
         }
 
         private static int Inteiro(ManagementObject o, string nome)

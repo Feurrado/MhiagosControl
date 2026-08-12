@@ -705,6 +705,19 @@ namespace MhiagosControl
             }
             finally { T.Language = antesIdioma; }
 
+            // Razao social nao identifica nada e nao cabe na coluna. Estes dois
+            // sao os nomes reais que o WMI devolve nesta maquina.
+            Igual("American Megatrends", SpecSheet.Fabricante("American Megatrends International, LLC."),
+                  "a forma juridica sai");
+            Igual("Gigabyte", SpecSheet.Fabricante("Gigabyte Technology Co., Ltd."),
+                  "duas caudas na mesma linha saem as duas");
+            Igual("AuthenticAMD", SpecSheet.Fabricante("AuthenticAMD"), "sem cauda, passa inteiro");
+            Igual("Kingston", SpecSheet.Fabricante("Kingston"), "nome simples nao e mexido");
+            Igual(null, SpecSheet.Fabricante(null), "nulo continua nulo");
+
+            // Um nome que e SO cauda nao pode virar vazio: melhor o original.
+            Igual("Technology", SpecSheet.Fabricante("Technology"), "so cauda devolve o original");
+
             Igual("DDR4", SpecSheet.TipoDeMemoria(26), "codigo SMBIOS do DDR4");
             Igual("DDR5", SpecSheet.TipoDeMemoria(34), "e do DDR5");
             Igual(null, SpecSheet.TipoDeMemoria(0), "codigo desconhecido nao inventa tipo");

@@ -53,12 +53,33 @@ diferente do esperado no seu aparelho.
 
 ## Telas
 
+A janela abre na **Visão geral** e tem sete páginas na barra lateral:
+
+| Página | Responde |
+|---|---|
+| **Visão geral** | como a máquina está agora e o que o cooler está mostrando |
+| **Painéis** | qual sensor vai para cada mostrador, com escala, unidade e prévia |
+| **Alertas** | limiar de cima e de baixo por mostrador, com rearme ao voltar à faixa |
+| **Métricas** | a grade de cartões com histórico, arrastáveis, com conjuntos prontos |
+| **Especificações** | o retrato completo da máquina, no espírito do CPU-Z |
+| **Perfis** | conjuntos salvos, rodízio, exportação e perfil por jogo |
+| **Configurações** | idioma, início automático, ociosidade e a fonte de FPS |
+
+*Salvar* e *Fechar* moram no pé da barra lateral, que já é a coluna de comandos;
+recolhida, os dois viram ícone. *Salvar* fica esmaecido quando não há o que
+gravar, em vez de sumir — sumindo, ele levava junto a informação de que existe.
+A janela **redimensiona e lembra o tamanho** entre sessões, conferido contra o
+monitor atual.
+
 | | |
 |:--:|:--:|
 | ![Painéis](docs/paineis.png) | ![Alertas](docs/alertas.png) |
 | **Painéis** — escolha o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça | **Alertas** — limiar de cima e de baixo por mostrador, com rearme ao voltar à faixa |
 | ![Perfis](docs/perfis.png) | ![Configurações](docs/configuracoes.png) |
 | **Perfis** — cada conjunto salvo mostra o que põe no mostrador, com prévia, rodízio e exportação | **Configurações** — idioma, início automático, resumo de sensores por núcleo e apagar por ociosidade |
+
+> As capturas acima são de uma versão anterior: a barra lateral mudou e as
+> páginas *Visão geral*, *Métricas* e *Especificações* ainda não aparecem nelas.
 
 Preferências valem para o programa todo; perfis valem para o mostrador. Por
 isso moram em páginas diferentes — as preferências ficavam dentro do *Sobre*,

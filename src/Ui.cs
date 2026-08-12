@@ -156,22 +156,218 @@ namespace MhiagosControl
             base.OnPaint(e);
         }
 
+        /// <summary>Largura da barra propria. Entra na conta de quem arranja.</summary>
+        public const int LarguraDaBarra = 10;
+
+        private ScrollFina _barra;
+        private int _aplicado = 0;
+
+        public bool Rolavel { get { return _barra != null; } }
+
         /// <summary>
-        /// Liga a rolagem, so na vertical.
+        /// Liga a rolagem vertical, com barra PROPRIA.
         ///
-        /// A barra horizontal aparecia sem ter o que rolar de lado - bastava um
-        /// rotulo largo demais para a pagina ganhar uma faixa clara atravessada
-        /// no rodape. A ordem abaixo e a que funciona: desligar, zerar a rolagem
-        /// horizontal e so entao religar; com AutoScroll ligado, o painel
-        /// restaura os valores sozinho.
+        /// Sem AutoScroll de proposito. O AutoScroll traz as barras nativas, que
+        /// nao aceitam tema: sao area nao-cliente, pintadas pelo Windows antes de
+        /// qualquer coisa nossa, e saiam claras atravessando uma janela escura.
+        /// Rolar na mao custa este punhado de linhas e devolve o controle da
+        /// aparencia.
         /// </summary>
         public void RolarNaVertical()
         {
+            if (_barra != null) return;
+
             AutoScroll = false;
-            HorizontalScroll.Enabled = false;
-            HorizontalScroll.Visible = false;
-            HorizontalScroll.Maximum = 0;
-            AutoScroll = true;
+            _barra = new ScrollFina();
+            _barra.Dock = DockStyle.Right;
+            _barra.Visible = false;
+            _barra.ValorMudou += delegate { AplicarRolagem(); };
+            Controls.Add(_barra);
+        }
+
+        /// <summary>
+        /// Recalcula o alcance da barra e reaplica o deslocamento.
+        ///
+        /// Chamado depois de cada arranjo. Os arranjos posicionam como se nao
+        /// houvesse rolagem - e assim tem de ser, senao cada um deles precisaria
+        /// saber quanto a pagina esta rolada - entao e aqui que o deslocamento
+        /// volta.
+        /// </summary>
+        public void Sincronizar()
+        {
+            if (_barra == null) return;
+
+            // Os filhos acabaram de ser posicionados sem rolagem nenhuma.
+            _aplicado = 0;
+
+            int conteudo = 0;
+            foreach (Control c in Controls)
+            {
+                if (c == _barra || !c.Visible) continue;
+                if (c.Bottom > conteudo) conteudo = c.Bottom;
+            }
+
+            _barra.Definir(conteudo + 8, Height);
+            _barra.Visible = _barra.Precisa;
+            AplicarRolagem();
+        }
+
+        private void AplicarRolagem()
+        {
+            if (_barra == null) return;
+
+            int delta = _aplicado - _barra.Valor;
+            if (delta == 0) return;
+
+            SuspendLayout();
+            try
+            {
+                foreach (Control c in Controls)
+                    if (c != _barra) c.Top += delta;
+            }
+            finally { ResumeLayout(); }
+
+            _aplicado = _barra.Valor;
+        }
+
+        /// <summary>Rola por um empurrao da roda do mouse.</summary>
+        public void RolarPor(int pixels)
+        {
+            if (_barra == null || !_barra.Precisa) return;
+            _barra.Ajustar(_barra.Valor + pixels);
+        }
+    }
+
+    /// <summary>
+    /// Barra de rolagem vertical desenhada por nos.
+    ///
+    /// A nativa nao aceita o tema escuro. "DarkMode_Explorer" funciona em
+    /// ListBox, ListView e TreeView - controles que o Explorer usa - mas nao nas
+    /// barras de um painel com AutoScroll: aquelas sao area NAO-CLIENTE da
+    /// janela, pintadas pelo Windows antes de qualquer coisa nossa. O resultado
+    /// era um trilho claro atravessando a lateral direita de uma janela escura.
+    ///
+    /// Fina e sem setas. As setas de ponta somam 34 px de alvo que ninguem usa
+    /// desde que a roda do mouse existe, e o trilho estreito devolve essa
+    /// largura para o conteudo.
+    /// </summary>
+    public class ScrollFina : Control
+    {
+        public int Maximo = 0;      // altura total do conteudo
+        public int Janela = 0;      // altura visivel
+        public int Valor = 0;       // topo da janela dentro do conteudo
+
+        public event EventHandler ValorMudou;
+
+        private bool _arrastando = false;
+        private int _pegouEm = 0;
+        private bool _sobre = false;
+
+        public ScrollFina()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            Width = 10;
+        }
+
+        /// <summary>Ha o que rolar?</summary>
+        public bool Precisa { get { return Maximo > Janela && Janela > 0; } }
+
+        public void Definir(int maximo, int janela)
+        {
+            Maximo = maximo; Janela = janela;
+            Ajustar(Valor);
+            Invalidate();
+        }
+
+        /// <summary>Move mantendo o valor dentro do que existe para rolar.</summary>
+        public void Ajustar(int novo)
+        {
+            int teto = Math.Max(0, Maximo - Janela);
+            if (novo < 0) novo = 0;
+            if (novo > teto) novo = teto;
+            if (novo == Valor) return;
+
+            Valor = novo;
+            Invalidate();
+            if (ValorMudou != null) ValorMudou(this, EventArgs.Empty);
+        }
+
+        /// <summary>Retangulo do polegar. Vazio quando nao ha o que rolar.</summary>
+        private Rectangle Polegar()
+        {
+            if (!Precisa) return Rectangle.Empty;
+
+            // Minimo de 28 px: proporcional puro, um conteudo de dez telas daria
+            // um polegar de seis pixels, que nao da para pegar com o ponteiro.
+            int h = Math.Max(28, (int)((long)Height * Janela / Maximo));
+            int curso = Height - h;
+            int teto = Maximo - Janela;
+            int y = teto <= 0 ? 0 : (int)((long)curso * Valor / teto);
+            return new Rectangle(2, y, Width - 4, h);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            using (SolidBrush b = new SolidBrush(Parent != null ? Parent.BackColor : Ui.Window))
+                g.FillRectangle(b, ClientRectangle);
+
+            Rectangle p = Polegar();
+            if (p.IsEmpty) return;
+
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            Color cor = (_arrastando || _sobre) ? Ui.Muted : Ui.Thumb;
+            using (GraphicsPath gp = Ui.RoundRect(p, (p.Width - 1) / 2))
+            using (SolidBrush b = new SolidBrush(cor))
+                g.FillPath(b, gp);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            Rectangle p = Polegar();
+            if (p.IsEmpty) { base.OnMouseDown(e); return; }
+
+            if (p.Contains(e.Location))
+            {
+                _arrastando = true;
+                _pegouEm = e.Y - p.Y;
+            }
+            else
+            {
+                // Clique no trilho salta uma tela, como manda o costume - e nao
+                // pula direto para o ponto clicado, que perderia o contexto.
+                Ajustar(Valor + (e.Y < p.Y ? -Janela : Janela));
+            }
+            Invalidate();
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if (_arrastando && Precisa)
+            {
+                int h = Polegar().Height;
+                int curso = Height - h;
+                int teto = Maximo - Janela;
+                if (curso > 0) Ajustar((int)((long)(e.Y - _pegouEm) * teto / curso));
+            }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            _arrastando = false; Invalidate(); base.OnMouseUp(e);
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            _sobre = true; Invalidate(); base.OnMouseEnter(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _sobre = false; Invalidate(); base.OnMouseLeave(e);
         }
     }
 
@@ -693,11 +889,10 @@ namespace MhiagosControl
         /// </summary>
         public string Subtitle = "";
 
-        /// <summary>Resumo da maquina, no rodape da barra. Nulo esconde o bloco.</summary>
-        public SystemInfo Specs;
-
-        /// <summary>Legenda do bloco de sistema - "SISTEMA".</summary>
-        public string SpecsCaption = "";
+        // O resumo da maquina saiu do rodape da barra. Processador, video e
+        // memoria agora tem uma aba inteira - com fabricante, cache, VBIOS e o
+        // resto - e repetir tres linhas na lateral era ocupar a coluna de
+        // navegacao para dizer de novo, pior, o que esta a um clique.
 
         public NavBar()
         {
@@ -759,11 +954,9 @@ namespace MhiagosControl
             if (!string.IsNullOrEmpty(Subtitle))
                 precisa = Math.Max(precisa, 18 + TextRenderer.MeasureText(Subtitle, Ui.FontBase).Width + 18);
 
-            if (Specs != null)
-                foreach (string v in new string[] { Specs.Cpu, Specs.Gpu, Specs.Ram })
-                    if (!string.IsNullOrEmpty(v))
-                        precisa = Math.Max(precisa, 52 + TextRenderer.MeasureText(v, Ui.FontSmall).Width + 18);
-
+            // O nome das pecas nao entra mais na conta: com o resumo fora da
+            // barra, "AMD Ryzen 5 5600X" alargava a coluna de navegacao para
+            // acomodar um texto que nao esta mais nela.
             _larguraAberta = Math.Min(precisa, LarguraMaxima);
             if (!_collapsed && _alvo == 0) Width = _larguraAberta;
         }
@@ -950,7 +1143,6 @@ namespace MhiagosControl
                 y += RowH + 2;
             }
 
-            DesenharSistema(g, y);
         }
 
         /// <summary>
@@ -1011,89 +1203,5 @@ namespace MhiagosControl
             }
         }
 
-        private const int SpecRowH = 21;
-
-        /// <summary>
-        /// Altura reservada pelo rodape de sistema, para quem posiciona controles
-        /// acima dele.
-        ///
-        /// Repete a conta do DesenharSistema de proposito: quem desenha e quem
-        /// posiciona precisam concordar, e a alternativa - guardar o valor num
-        /// campo durante a pintura - so funcionaria depois da primeira pintura,
-        /// que e justamente quando o arranjo ja aconteceu.
-        /// </summary>
-        public int AlturaDoSistema
-        {
-            get
-            {
-                if (Estreita || Specs == null || !Specs.Any) return 0;
-
-                int n = 0;
-                if (!string.IsNullOrEmpty(Specs.Cpu)) n++;
-                if (!string.IsNullOrEmpty(Specs.Gpu)) n++;
-                if (!string.IsNullOrEmpty(Specs.Ram)) n++;
-                if (n == 0) return 0;
-
-                return 18 + 16 + n * SpecRowH + 12;   // margem + rotulo + linhas + risco
-            }
-        }
-
-        /// <summary>
-        /// Resumo da maquina no rodape da barra lateral.
-        ///
-        /// Fica ancorado embaixo, e nao logo apos os itens: a lista de navegacao
-        /// pode crescer, e um bloco solto no meio da coluna vazia parece um item
-        /// que perdeu o lugar. Encostado na base, le-se como rodape.
-        ///
-        /// Sem glifos de proposito. "CPU", "GPU" e "RAM" ja sao os rotulos que a
-        /// pessoa procura, e um icone de chip ao lado da palavra CPU ocupa 24 px
-        /// para repetir o que a palavra diz.
-        /// </summary>
-        private void DesenharSistema(Graphics g, int fimDosItens)
-        {
-            if (Estreita || Specs == null || !Specs.Any) return;
-
-            string[][] linhas = new string[][]
-            {
-                new string[] { "CPU", Specs.Cpu },
-                new string[] { "GPU", Specs.Gpu },
-                new string[] { "RAM", Specs.Ram },
-            };
-
-            int n = 0;
-            foreach (string[] l in linhas) if (!string.IsNullOrEmpty(l[1])) n++;
-            if (n == 0) return;
-
-            int alturaBloco = 16 + n * SpecRowH;
-            int topo = Height - 18 - alturaBloco;
-
-            // Se a navegacao crescer a ponto de encostar, o bloco cede o lugar:
-            // navegar e a funcao da barra, e o resumo e informacao de apoio.
-            if (topo < fimDosItens + 16) return;
-
-            using (Pen p = new Pen(Ui.Border))
-                g.DrawLine(p, 18, topo - 12, Width - 18, topo - 12);
-
-            if (!string.IsNullOrEmpty(SpecsCaption))
-                TextRenderer.DrawText(g, SpecsCaption, Ui.FontSmall,
-                    new Rectangle(18, topo, Width - 36, 14), Ui.Faint,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-
-            int y = topo + 16;
-            foreach (string[] l in linhas)
-            {
-                if (string.IsNullOrEmpty(l[1])) continue;
-
-                TextRenderer.DrawText(g, l[0], Ui.FontSmall,
-                    new Rectangle(18, y, 32, SpecRowH), Ui.Faint,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
-
-                TextRenderer.DrawText(g, l[1], Ui.FontSmall,
-                    new Rectangle(52, y, Width - 70, SpecRowH), Ui.Muted,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-
-                y += SpecRowH;
-            }
-        }
     }
 }

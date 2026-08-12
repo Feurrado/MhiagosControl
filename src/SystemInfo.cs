@@ -136,6 +136,16 @@ namespace MhiagosControl
         /// </summary>
         private static string MemoriaDeVideo(List<SensorEntry> sensores)
         {
+            // O REGISTRO primeiro, e nao o sensor.
+            //
+            // O sensor "GPU Memory Total" existe na LibreHardwareMonitor mas nao
+            // em toda combinacao de fontes: com o HWiNFO no comando ele some, e a
+            // linha da placa de video ficava sem a memoria. O registro do driver
+            // esta sempre la, custa uma leitura de chave e nao depende de qual
+            // fonte de sensores respondeu.
+            string doRegistro = VramDoRegistro();
+            if (!string.IsNullOrEmpty(doRegistro)) return doRegistro;
+
             if (sensores == null) return null;
 
             string[] nomes =
@@ -168,6 +178,85 @@ namespace MhiagosControl
         private static bool DaGpu(SensorEntry e)
         {
             return e != null && e.Category == "GPU";
+        }
+
+        /// <summary>
+        /// A chave do adaptador de video no registro.
+        ///
+        /// Fica sob a classe de dispositivos de tela, numerada 0000, 0001... Uma
+        /// maquina com video integrado e placa dedicada tem as duas, e vale a
+        /// primeira que declara memoria: a integrada costuma nao declarar.
+        ///
+        /// Publica porque a folha de especificacoes le da mesma chave o tipo do
+        /// chip e a VBIOS - abrir a chave duas vezes, cada classe com a sua
+        /// copia do caminho, e o comeco de duas verdades sobre a mesma peca.
+        /// </summary>
+        internal static Microsoft.Win32.RegistryKey ChaveDaGpu()
+        {
+            const string Classe =
+                @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+            try
+            {
+                using (Microsoft.Win32.RegistryKey raiz =
+                    Microsoft.Win32.Registry.LocalMachine.OpenSubKey(Classe))
+                {
+                    if (raiz == null) return null;
+
+                    Microsoft.Win32.RegistryKey reserva = null;
+                    foreach (string nome in raiz.GetSubKeyNames())
+                    {
+                        if (nome.Length != 4) continue;
+
+                        Microsoft.Win32.RegistryKey k = raiz.OpenSubKey(nome);
+                        if (k == null) continue;
+
+                        if (LongoDoRegistro(k, "HardwareInformation.qwMemorySize") > 0) return k;
+                        if (reserva == null) reserva = k; else k.Close();
+                    }
+                    return reserva;
+                }
+            }
+            catch (Exception ex) { Log.Error("chave da placa de video", ex); return null; }
+        }
+
+        internal static ulong LongoDoRegistro(Microsoft.Win32.RegistryKey k, string nome)
+        {
+            if (k == null) return 0;
+            try
+            {
+                object v = k.GetValue(nome);
+                if (v == null) return 0;
+                return Convert.ToUInt64(v, System.Globalization.CultureInfo.InvariantCulture);
+            }
+            catch { return 0; }
+        }
+
+        /// <summary>
+        /// Memoria da placa pelo registro do driver.
+        ///
+        /// qwMemorySize, e nao MemorySize nem AdapterRAM: os dois ultimos sao de
+        /// 32 bits e devolvem 4293918720 - os 4 GiB onde o campo estourou - numa
+        /// placa de 8 GB. Medido nesta maquina, com os tres valores lado a lado
+        /// na mesma chave.
+        /// </summary>
+        private static string VramDoRegistro()
+        {
+            using (Microsoft.Win32.RegistryKey k = ChaveDaGpu())
+            {
+                ulong b = LongoDoRegistro(k, "HardwareInformation.qwMemorySize");
+                return b > 0 ? EmGigabytes(b) : null;
+            }
+        }
+
+        /// <summary>Bytes em gigabytes redondos, sem a decimal quando ela e zero.</summary>
+        private static string EmGigabytes(ulong bytes)
+        {
+            if (bytes == 0) return null;
+            double gb = bytes / 1073741824.0;
+            if (gb <= 0) return null;
+            if (gb >= 10) return Math.Round(gb).ToString("0") + " GB";
+            if (Math.Abs(gb - Math.Round(gb)) < 0.05) return Math.Round(gb).ToString("0") + " GB";
+            return gb.ToString("0.0") + " GB";
         }
 
         /// <summary>

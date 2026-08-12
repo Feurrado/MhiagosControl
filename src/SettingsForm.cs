@@ -180,8 +180,6 @@ namespace MhiagosControl
             _nav.Logo = IconImage();
             _nav.SubtitleCaption = T.ActiveProfile;
             _nav.Subtitle = _current.Name;
-            _nav.SpecsCaption = T.SystemCaption;
-            _nav.Specs = SystemInfo.From(_sensors);
             _nav.Collapsed = _cfg.SidebarCollapsed;
             _nav.CollapsedChanged += delegate
             {
@@ -357,7 +355,7 @@ namespace MhiagosControl
             bool cabeNota = !estreita;
             int alturaNota = cabeNota ? 32 : 0;
 
-            int baixo = _nav.Height - _nav.AlturaDoSistema - 14;
+            int baixo = _nav.Height - 18;
             int y = baixo - alturaNota - Alt - Esp - Alt;
 
             _btSave.SetBounds(margem, y, larg, Alt);
@@ -417,6 +415,43 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("gravar tamanho da janela", ex); }
         }
 
+        /// <summary>
+        /// A roda do mouse rola a pagina, esteja o ponteiro sobre o que estiver.
+        ///
+        /// Filtro de mensagens porque o WM_MOUSEWHEEL vai para o controle sob o
+        /// ponteiro, e sobre um cartao - que nao rola nada - ele morria ali. Era
+        /// o comportamento que o AutoScroll dava de graca e que se perdeu junto
+        /// com ele. Aqui a mensagem e interceptada antes de ser entregue, e a
+        /// pagina visivel rola independentemente de quem estava embaixo.
+        /// </summary>
+        private class RodaDoMouse : IMessageFilter
+        {
+            private const int WM_MOUSEWHEEL = 0x020A;
+            private readonly SettingsForm _dono;
+
+            public RodaDoMouse(SettingsForm dono) { _dono = dono; }
+
+            public bool PreFilterMessage(ref Message m)
+            {
+                if (m.Msg != WM_MOUSEWHEEL) return false;
+                if (_dono == null || _dono.IsDisposed || !_dono.ContainsFocus) return false;
+
+                NavItem sel = _dono._nav != null ? _dono._nav.Selected : null;
+                Pagina p = sel != null ? sel.Page as Pagina : null;
+                if (p == null || !p.Rolavel || !p.Visible) return false;
+
+                // So quando o ponteiro esta sobre a pagina: fora dela, a roda
+                // pertence a quem estiver embaixo - uma lista, um seletor.
+                if (!p.RectangleToScreen(p.ClientRectangle).Contains(Cursor.Position)) return false;
+
+                int delta = (short)((long)m.WParam >> 16);
+                p.RolarPor(delta > 0 ? -60 : 60);
+                return true;
+            }
+        }
+
+        private RodaDoMouse _roda;
+
         /// <summary>Rearranja a pagina que esta a mostra, seja ela qual for.</summary>
         private void ArranjarPaginaVisivel()
         {
@@ -436,10 +471,21 @@ namespace MhiagosControl
         private void ArranjarPagina(Control pagina)
         {
             if (pagina == null) return;
-            if (pagina == _pgMetricas) { ArranjarMetricas(); return; }
-            if (pagina == _pgVisao) { if (pagina.Visible) ArranjarVisaoGeral(); return; }
-            if (pagina == _pgSpecs) { if (pagina.Visible) ArranjarSpecsPagina(); return; }
-            Elastico(pagina);
+            // Cada arranjo termina chamando a Sincronizar da sua pagina, e nao
+            // este metodo depois deles.
+            //
+            // Parece rodeio e nao e: a Sincronizar NAO e idempotente - ela parte
+            // do principio de que os filhos acabaram de ser posicionados sem
+            // rolagem nenhuma, e chamada duas vezes seguidas aplicaria o
+            // deslocamento em dobro. Deixar a responsabilidade com quem arranja
+            // garante uma chamada por arranjo, inclusive nos arranjos que
+            // acontecem sem passar por aqui - foi assim que a barra da folha de
+            // especificacoes nunca chegou a existir: o MostrarSpecs arranjava
+            // direto.
+            if (pagina == _pgMetricas) ArranjarMetricas();
+            else if (pagina == _pgVisao) { if (pagina.Visible) ArranjarVisaoGeral(); }
+            else if (pagina == _pgSpecs) { if (pagina.Visible) ArranjarSpecsPagina(); }
+            else Elastico(pagina);
         }
 
 
@@ -534,26 +580,17 @@ namespace MhiagosControl
             Rectangle[] projeto = new Rectangle[alvos.Count];
             for (int i = 0; i < alvos.Count; i++) projeto[i] = Projeto(alvos[i]);
 
-            // A largura da barra de rolagem sai da conta quando a pagina VAI
-            // rolar - e nao sempre que ela puder.
+            // A largura da barra propria sai da conta sempre que a pagina possa
+            // rolar, apareca a barra ou nao.
             //
-            // Reservar incondicionalmente evitava um circulo: medir a area de
+            // Reservar incondicionalmente evita um circulo: medir a area de
             // cliente faria o conteudo encolher quando a barra surge e alargar
-            // quando ela some, e cada troca dispara um novo arranjo. Mas o preco
-            // era uma faixa clara de dezessete pixels em toda pagina rolavel,
-            // aparecesse a barra ou nao.
-            //
-            // Nao ha circulo se a decisao vier da ALTURA: as alturas dos cartoes
-            // sao fixas, entao o que a pagina precisa nao muda com a largura, e a
-            // resposta e a mesma antes e depois de esticar.
-            int alturaNecessaria = 0;
-            foreach (Rectangle p in projeto)
-                if (p.Bottom > alturaNecessaria) alturaNecessaria = p.Bottom;
-
+            // quando ela some, e cada troca dispara um novo arranjo. Com a barra
+            // nativa isso custava dezessete pixels de faixa morta; com a nossa,
+            // que tem dez e some quando nao ha o que rolar, o preco cabe.
             int disp = pagina.Width - 4;
-            ScrollableControl rolavel = pagina as ScrollableControl;
-            if (rolavel != null && rolavel.AutoScroll && alturaNecessaria > pagina.Height)
-                disp -= System.Windows.Forms.SystemInformation.VerticalScrollBarWidth;
+            Pagina pg = pagina as Pagina;
+            if (pg != null && pg.Rolavel) disp -= Pagina.LarguraDaBarra;
 
             Rectangle[] destino = Esticar(projeto, disp, LarguraMaxDaPagina);
             if (destino == null) return;
@@ -564,6 +601,8 @@ namespace MhiagosControl
                 for (int i = 0; i < alvos.Count; i++) alvos[i].Bounds = destino[i];
             }
             finally { pagina.ResumeLayout(); }
+
+            if (pg != null && pg.Rolavel) pg.Sincronizar();
         }
 
         /// <summary>
@@ -1001,7 +1040,19 @@ namespace MhiagosControl
             if (soma > disp && soma > 0)
                 for (int i = 0; i < n; i++) larg[i] = larg[i] * disp / soma;
 
-            int x = 16;
+            // Centralizada, e nao encostada a esquerda.
+            //
+            // Com as colunas coladas ao conteudo, a sobra ia toda para o fim - e
+            // quatro dados curtos alinhados a esquerda, com um vao de trezentos
+            // pixels do lado direito, se leem como uma tira que ficou pela
+            // metade. Centralizada, o que sobra vira margem dos dois lados, que e
+            // a mesma decisao que a pagina inteira ja toma acima de 1100 px.
+            int total = (n - 1) * Vao;
+            for (int i = 0; i < n; i++) total += larg[i];
+
+            int x = (_cardSpecs.Width - total) / 2;
+            if (x < 16) x = 16;
+
             for (int i = 0; i < n; i++)
             {
                 _vgSpecCap[i].SetBounds(x, 11, larg[i], 15);
@@ -1081,7 +1132,7 @@ namespace MhiagosControl
         // ---------------- pagina: Especificacoes ----------------
 
         private Pagina _pgSpecs;
-        private Label _lbSpecsEstado;
+        private Label _lbSpecsEstado, _lbSpecsNota;
         private FlatBtn _btCopiarSpecs;
         private bool _coletando = false;
 
@@ -1098,22 +1149,31 @@ namespace MhiagosControl
             _pgSpecs = new Pagina();
             _pgSpecs.RolarNaVertical();
 
-            _lbSpecsEstado = MakeLabel(T.SpecsLoading, 2, 6, Ui.FontBase);
-            _lbSpecsEstado.Size = new Size(400, 22);
-            _lbSpecsEstado.ForeColor = Ui.Muted;
-            _pgSpecs.Controls.Add(_lbSpecsEstado);
-
+            // Cabecalho de UMA fileira: botao a esquerda, aviso ao lado.
+            //
+            // Antes eram tres linhas empilhadas - estado, botao, nota - e o
+            // estado ficava invisivel depois da coleta, deixando a altura dele
+            // como buraco entre o botao e o primeiro cartao. O estado agora
+            // divide a linha com o botao e some sem levar altura junto.
             _btCopiarSpecs = new FlatBtn();
             _btCopiarSpecs.Text = T.SpecsCopy;
-            _btCopiarSpecs.SetBounds(2, 34, 150, 32);
+            _btCopiarSpecs.SetBounds(2, 2, 150, 30);
             _btCopiarSpecs.Enabled = false;
             _btCopiarSpecs.Click += delegate { CopiarSpecs(); };
             _pgSpecs.Controls.Add(_btCopiarSpecs);
 
-            Label nota = MakeLabel(T.SpecsNote, 166, 38, Ui.FontSmall);
-            nota.Size = new Size(560, 32);
-            nota.ForeColor = Ui.Faint;
-            _pgSpecs.Controls.Add(nota);
+            _lbSpecsEstado = MakeLabel(T.SpecsLoading, 166, 4, Ui.FontBase);
+            _lbSpecsEstado.Size = new Size(300, 26);
+            _lbSpecsEstado.TextAlign = ContentAlignment.MiddleLeft;
+            _lbSpecsEstado.ForeColor = Ui.Muted;
+            _pgSpecs.Controls.Add(_lbSpecsEstado);
+
+            _lbSpecsNota = MakeLabel(T.SpecsNote, 166, 4, Ui.FontSmall);
+            _lbSpecsNota.Size = new Size(600, 28);
+            _lbSpecsNota.TextAlign = ContentAlignment.MiddleLeft;
+            _lbSpecsNota.ForeColor = Ui.Faint;
+            _lbSpecsNota.Visible = false;
+            _pgSpecs.Controls.Add(_lbSpecsNota);
 
             return _pgSpecs;
         }
@@ -1167,6 +1227,7 @@ namespace MhiagosControl
             try
             {
                 _lbSpecsEstado.Visible = false;
+                _lbSpecsNota.Visible = true;
                 _btCopiarSpecs.Enabled = true;
 
                 foreach (SpecGrupo g in folha)
@@ -1181,13 +1242,16 @@ namespace MhiagosControl
                     foreach (string[] l in g.Linhas)
                     {
                         Label cap = MakeLabel(l[0], 16, y + 2, Ui.FontSmall);
-                        cap.Size = new Size(150, 17);
                         cap.ForeColor = Ui.Muted;
                         c.Controls.Add(cap);
 
-                        Label val = MakeLabel(l[1], 172, y, Ui.FontSemi);
-                        val.Size = new Size(200, 19);
-                        val.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+                        Label val = MakeLabel(l[1], 0, y, Ui.FontSemi);
+                        // Reticencias em vez de corte seco: "American Megatrends
+                        // International, LLC." nao cabe numa coluna estreita, e
+                        // sem elas o texto acabava no meio de uma letra, sem nada
+                        // avisando que havia mais.
+                        val.AutoEllipsis = true;
+                        val.Tag = cap;
                         c.Controls.Add(val);
                         vals.Add(val);
 
@@ -1218,27 +1282,79 @@ namespace MhiagosControl
             if (_pgSpecs == null || _specCards.Count == 0) return;
 
             const int Esp = 12;
-            const int Topo = 78;
 
-            int disp = _pgSpecs.Width - 4 -
-                       System.Windows.Forms.SystemInformation.VerticalScrollBarWidth;
+            // O topo sai do cabecalho, e nao de um numero escrito a mao: mexer na
+            // altura do botao deixaria a constante mentindo, e o buraco - ou a
+            // sobreposicao - so apareceria na tela de quem usa.
+            int topo = _btCopiarSpecs.Bottom + 12;
+
+            int disp = _pgSpecs.Width - 4 - Pagina.LarguraDaBarra;
             if (disp > LarguraMaxDaPagina) disp = LarguraMaxDaPagina;
             if (disp < 460) disp = 460;
 
-            bool duas = disp >= 700;
-            int larg = duas ? (disp - Esp) / 2 : disp;
+            // Tres colunas quando ha largura. Com duas, uma janela larga deixava
+            // colunas de 550 px para linhas cujo valor mais longo tem 250 - e a
+            // folha ficava alta a toa, obrigando a rolar por causa de espaco que
+            // sobrava do lado.
+            int colunas = disp >= 1280 ? 3 : (disp >= 700 ? 2 : 1);
+            int larg = (disp - (colunas - 1) * Esp) / colunas;
 
-            int yEsq = Topo, yDir = Topo;
+            int[] alturas = new int[colunas];
+            for (int i = 0; i < colunas; i++) alturas[i] = topo;
+
             foreach (Card c in _specCards)
             {
-                bool naEsquerda = !duas || yEsq <= yDir;
-                int x = naEsquerda ? 2 : 2 + larg + Esp;
-                int y = naEsquerda ? yEsq : yDir;
+                // Sempre na coluna mais BAIXA: com alturas muito diferentes -
+                // "Sistema" sao cinco linhas e "Processador" sao catorze -
+                // preencher em ziguezague deixaria uma coluna com o dobro da
+                // outra e um rodape vazio do lado.
+                int alvo = 0;
+                for (int i = 1; i < colunas; i++) if (alturas[i] < alturas[alvo]) alvo = i;
 
-                c.SetBounds(x, y, larg, c.Height);
+                c.SetBounds(2 + alvo * (larg + Esp), alturas[alvo], larg, c.Height);
+                alturas[alvo] += c.Height + Esp;
 
-                if (naEsquerda) yEsq += c.Height + Esp;
-                else yDir += c.Height + Esp;
+                ArranjarLinhasDeSpec(c);
+            }
+
+            // O aviso ao lado do botao acompanha a largura: fixo em 600 px, ele
+            // saia cortado no meio de "nome da maquina" numa janela estreita.
+            if (_lbSpecsNota != null)
+                _lbSpecsNota.Width = Math.Max(160, disp - _lbSpecsNota.Left);
+
+            _pgSpecs.Sincronizar();
+        }
+
+        /// <summary>
+        /// As linhas de um cartao de especificacao, medidas pela largura dele.
+        ///
+        /// Explicito, e nao por ancora. A ancora calcula o deslocamento a partir
+        /// do tamanho que o cartao tinha quando o filho entrou - e aqui os filhos
+        /// entram antes de o cartao ser dimensionado, entao a conta partia de um
+        /// tamanho que nunca foi o de verdade e o valor saia cortado.
+        ///
+        /// A coluna do rotulo e proporcional, com teto: num cartao estreito ela
+        /// cede espaco para o valor, que e a parte que muda de tamanho. Fixa em
+        /// 150 px, ela comia mais da metade de uma coluna de tres.
+        /// </summary>
+        private static void ArranjarLinhasDeSpec(Card c)
+        {
+            List<Label> vals = c.Tag as List<Label>;
+            if (vals == null) return;
+
+            int rotulo = c.Width * 34 / 100;
+            if (rotulo < 88) rotulo = 88;
+            if (rotulo > 150) rotulo = 150;
+
+            int xVal = 16 + rotulo + 8;
+            int larg = c.Width - xVal - 14;
+            if (larg < 60) larg = 60;
+
+            foreach (Label val in vals)
+            {
+                Label cap = val.Tag as Label;
+                if (cap != null) cap.SetBounds(16, val.Top + 2, rotulo, 17);
+                val.SetBounds(xVal, val.Top, larg, 19);
             }
         }
 
@@ -2339,26 +2455,17 @@ namespace MhiagosControl
         /// Reconstruir controles a cada segundo pisca a tela inteira e joga fora
         /// o historico de cada cartao, que e justamente o que da sentido a ela.
         /// </summary>
-        private Panel _pgMetricas;
+        private Pagina _pgMetricas;
 
         private Control BuildPageMetricas()
         {
             _pgMetricas = new Pagina();
             // fundo opaco vem da propria Pagina
 
-            // Rolagem so na vertical.
-            //
-            // A barra horizontal aparecia porque a dica tinha 600 px fixos de
-            // largura numa pagina de 780, e uma grade que nunca precisou rolar
-            // de lado ganhava uma barra clara atravessada no rodape. A ordem
-            // abaixo e a que funciona: desligar, zerar a rolagem horizontal e
-            // so entao religar - com AutoScroll ligado, o painel restaura os
-            // valores sozinho.
-            _pgMetricas.AutoScroll = false;
-            _pgMetricas.HorizontalScroll.Enabled = false;
-            _pgMetricas.HorizontalScroll.Visible = false;
-            _pgMetricas.HorizontalScroll.Maximum = 0;
-            _pgMetricas.AutoScroll = true;
+            // Rolagem so na vertical - e com a barra propria, que nao precisa da
+            // ginastica de desligar e religar o AutoScroll para nao trazer a
+            // horizontal junto: ela simplesmente nao existe.
+            _pgMetricas.RolarNaVertical();
 
             // A grade se refaz com a janela: as larguras saem da area
             // disponivel, e nao de um numero fixo que so serve para o tamanho
@@ -2711,8 +2818,7 @@ namespace MhiagosControl
                 // ou nao. Medir a area de cliente faria a grade encolher quando
                 // a barra surge e alargar quando ela some, e cada troca dispara
                 // um novo arranjo - dois estados que se chamam em circulo.
-                int disp = _pgMetricas.Width -
-                           System.Windows.Forms.SystemInformation.VerticalScrollBarWidth - 4;
+                int disp = _pgMetricas.Width - Pagina.LarguraDaBarra - 4;
                 if (disp < 320) disp = 320;
 
                 int porLinha = disp / 200;
@@ -2777,6 +2883,8 @@ namespace MhiagosControl
                 _pgMetricas.ResumeLayout();
                 _arranjando = false;
             }
+
+            _pgMetricas.Sincronizar();
         }
 
         private int IndiceDaJanela()
@@ -2893,7 +3001,7 @@ namespace MhiagosControl
             // Continua rolando: mesmo sem as preferencias, identidade, fontes,
             // creditos e isencao passam dos 818 px, e cortar a isencao para
             // caber seria trocar o que importa pelo que cabe.
-            page.AutoScroll = true;
+            ((Pagina)page).RolarNaVertical();
 
             Card c = new Card();
             c.Title = T.NavAbout;
@@ -3387,12 +3495,25 @@ namespace MhiagosControl
             base.OnShown(e);
             Theme.ApplyScrollbars(this);
             ArranjarPaginaVisivel();
+
+            if (_roda == null)
+            {
+                _roda = new RodaDoMouse(this);
+                Application.AddMessageFilter(_roda);
+            }
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             if (_tick != null) { _tick.Stop(); _tick.Dispose(); }
             if (_noteTimer != null) { _noteTimer.Stop(); _noteTimer.Dispose(); }
+
+            // Filtro de mensagens e do Application, e nao da janela: esquecer de
+            // tirar deixaria um filtro morto examinando toda mensagem do processo
+            // pelo resto da execucao, e a janela e reaberta a cada duplo clique
+            // na bandeja.
+            if (_roda != null) { Application.RemoveMessageFilter(_roda); _roda = null; }
+
             base.OnFormClosed(e);
         }
     }
