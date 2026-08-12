@@ -598,9 +598,27 @@ namespace MhiagosControl
             return n > 0 ? (float?)(sum / n) : null;
         }
 
-        /// <summary>Mapeia cada agregado aos identificadores que ele resume.</summary>
+        /// <summary>
+        /// Mapeia cada agregado aos identificadores que ele resume.
+        ///
+        /// SEMPRE a partir da lista completa, nunca do instantaneo dirigido.
+        ///
+        /// O metodo comeca limpando o mapa, e a leitura dirigida so traz os
+        /// grupos em foco: reconstruir com ela na mao apaga todo agregado cujos
+        /// membros estao fora do foco. O efeito era um circulo fechado - o
+        /// agregado sumia do mapa, sem mapa o foco nao sabia de que grupo ele
+        /// depende, sem o grupo os membros nao eram lidos, e sem os membros ele
+        /// continuava fora do mapa na volta seguinte.
+        ///
+        /// Ficava invisivel porque um vizinho salvava as aparencias: o agregado
+        /// de clock voltava toda vez, ja que o grupo dele estava em foco por
+        /// outro motivo. Um funcionava, o outro nunca - e os dois pareciam a
+        /// mesma coisa.
+        /// </summary>
         private void BuildSynthetics()
         {
+            Completar();
+
             _synth.Clear();
             Dictionary<string, List<string>> groups = new Dictionary<string, List<string>>();
 
@@ -661,13 +679,29 @@ namespace MhiagosControl
             return null;
         }
 
+        /// <summary>
+        /// Um agregado que nao existe nesta maquina. Perfil vindo de outro
+        /// computador, ou peca que foi trocada.
+        /// </summary>
+        private readonly List<string> _synthAusentes = new List<string>();
+
         private SensorEntry ReadSynthetic(string id)
         {
             List<string> members;
             if (!_synth.TryGetValue(id, out members))
             {
-                BuildSynthetics();                       // a lista pode nao ter sido montada ainda
-                if (!_synth.TryGetValue(id, out members)) return null;
+                // Uma tentativa por identificador. A reconstrucao faz uma leitura
+                // completa, e um identificador que nao existe mesmo - de um
+                // perfil trazido de outra maquina - pagaria esse preco a cada
+                // ciclo, para sempre, sem nunca encontrar nada.
+                if (_synthAusentes.Contains(id)) return null;
+
+                BuildSynthetics();
+                if (!_synth.TryGetValue(id, out members))
+                {
+                    _synthAusentes.Add(id);
+                    return null;
+                }
             }
 
             double sum = 0; int n = 0;

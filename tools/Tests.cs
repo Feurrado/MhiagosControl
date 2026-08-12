@@ -762,6 +762,24 @@ namespace MhiagosControl
             MetricHistory.Seguir(null);
             Igual(0, MetricHistory.Seguidos.Count, "lista vazia nao acompanha nada");
 
+            // SeguirTambem acrescenta sem podar: a janela chama com o que de
+            // fato pos na tela, e o que ja estava sendo gravado nao pode sumir
+            // por causa disso.
+            MetricHistory.Seguir(new string[] { "a", "b" });
+            MetricHistory.SeguirTambem(new string[] { "c", "a" });
+            Igual(3, MetricHistory.Seguidos.Count, "acrescenta o novo e ignora o repetido");
+            Verdade(MetricHistory.Seguidos.Contains("a") && MetricHistory.Seguidos.Contains("b"),
+                    "e conserva os que ja estavam");
+
+            MetricHistory.SeguirTambem(null);
+            Igual(3, MetricHistory.Seguidos.Count, "nulo nao mexe na lista");
+
+            // E o Seguir seguinte poda: quem saiu da tela para de gastar arquivo.
+            MetricHistory.Seguir(new string[] { "a" });
+            Igual(1, MetricHistory.Seguidos.Count, "o Seguir continua substituindo");
+
+            MetricHistory.Seguir(null);
+
             // O relogio da janela, que e o que o balao do cartao mostra. Um erro
             // de um balde aqui vira um horario errado por cinco segundos - nada
             // que salte aos olhos numa curva, e por isso mesmo o tipo de coisa

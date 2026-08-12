@@ -810,6 +810,11 @@ namespace MhiagosControl
                 return;
             }
 
+            // Trocar de perfil troca o sensor do mostrador, e o novo pode nao
+            // estar sendo acompanhado - o cartao abriria sem curva.
+            if (c.SensorId != s.Id)
+                MetricHistory.SeguirTambem(new string[] { s.Id });
+
             c.Visible = true;
             c.SensorId = s.Id;
             c.Titulo = titulo + "  ·  " + MetricPicker.RotuloCurto(s);
@@ -893,6 +898,11 @@ namespace MhiagosControl
                 _vgTiles.Add(c);
                 _vgIds.Add(s.Id);
             }
+
+            // O que foi POSTO na tela e o que precisa de historico. A lista do
+            // arranque foi montada com os sensores frios e pode ter escolhido
+            // outro sensor para o mesmo lugar.
+            MetricHistory.SeguirTambem(_vgIds);
         }
 
         /// <summary>
@@ -991,9 +1001,19 @@ namespace MhiagosControl
             int lado = Math.Min(w - 32, h - 52 - hTexto - 12);
             if (lado < 80) lado = 80;
 
-            _vgPreview.SetBounds((w - lado) / 2, 46, lado, lado);
+            // O BLOCO INTEIRO centrado na altura util, e nao encostado no topo.
+            //
+            // Numa coluna estreita a previa e limitada pela LARGURA, nao pela
+            // altura: sobrava um palmo de fundo embaixo das duas linhas de
+            // texto, e a peca - que e o assunto do cartao - ficava empurrada
+            // para cima como se o resto tivesse sido cortado.
+            int bloco = lado + 14 + hTexto;
+            int topo = 46 + (h - 46 - bloco) / 2;
+            if (topo < 46) topo = 46;
 
-            int y = 46 + lado + 14;
+            _vgPreview.SetBounds((w - lado) / 2, topo, lado, lado);
+
+            int y = topo + lado + 14;
             foreach (Label val in linhas)
             {
                 if (val == null || !val.Visible) continue;

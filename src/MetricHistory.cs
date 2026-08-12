@@ -101,6 +101,36 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>
+        /// Acrescenta leituras a lista, sem tirar as que ja estao.
+        ///
+        /// Existe por causa de uma diferenca de horario. A lista do arranque e
+        /// montada assim que as fontes abrem, e nesse instante varios sensores
+        /// ainda nao publicaram valor nenhum - a escolha dos destaques exige
+        /// valor, entao ela pode cair num sensor diferente do que a janela vai
+        /// desenhar minutos depois, com tudo aquecido. O sintoma era um bloco
+        /// sem curva atras, e so um: os vizinhos, escolhidos igual nas duas
+        /// horas, tinham a serie completa.
+        ///
+        /// Quem monta a tela chama isto com o que de fato pos na tela. O Seguir,
+        /// que substitui a lista e poda o que sobrou, continua sendo chamado
+        /// quando a janela fecha - e ai os valores estao quentes e as duas
+        /// escolhas concordam.
+        /// </summary>
+        public static void SeguirTambem(IEnumerable<string> ids)
+        {
+            if (ids == null) return;
+            lock (_trava)
+            {
+                foreach (string id in ids)
+                {
+                    if (string.IsNullOrEmpty(id) || _seguidos.Contains(id)) continue;
+                    _seguidos.Add(id);
+                    if (!_series.ContainsKey(id)) _series[id] = new Serie();
+                }
+            }
+        }
+
         public static List<string> Seguidos
         {
             get { lock (_trava) return new List<string>(_seguidos); }
