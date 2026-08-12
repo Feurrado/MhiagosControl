@@ -5,6 +5,11 @@ tools/*.exe
 # rascunho de anotacoes fora do Worklog
 A.txt
 
+# Area de espera das capturas de tela. O que entra no README e copiado para
+# docs\ com nome proprio; guardar as duas copias no repositorio seria versionar
+# a mesma imagem duas vezes, com uma delas fadada a ficar para tras.
+screenshots/
+
 # Instalador gerado. Fica de fora porque carrega a biblioteca comercial do
 # HWiNFO embutida quando ela existe em lib\ - veja tools\build-installer.ps1.
 dist/
