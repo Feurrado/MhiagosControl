@@ -92,6 +92,11 @@ namespace MhiagosControl
 
         /// <summary>Leitura em destaque - o numero e o assunto do cartao.</summary>
         public static readonly Font FontValue = new Font("Segoe UI", 16f, FontStyle.Bold);
+        public static readonly Font FontGlyph8 = new Font("Segoe MDL2 Assets", 8f);
+        public static readonly Font FontGlyph9 = new Font("Segoe MDL2 Assets", 9f);
+        public static readonly Font FontGlyph10 = new Font("Segoe MDL2 Assets", 10f);
+        public static readonly Font FontGlyph11 = new Font("Segoe MDL2 Assets", 11f);
+        public static readonly Font FontBadge = new Font("Segoe UI", 7.5f, FontStyle.Bold);
 
         public const int Radius = 8;
         public const int Gap = 12;
@@ -452,6 +457,8 @@ namespace MhiagosControl
             Font = Ui.FontBase;
             Size = new Size(96, 32);
             Cursor = Cursors.Hand;
+            TabStop = true;
+            SetStyle(ControlStyles.Selectable, true);
         }
 
         protected override void OnEnabledChanged(EventArgs e)
@@ -465,6 +472,17 @@ namespace MhiagosControl
         protected override void OnMouseLeave(EventArgs e) { _hover = false; _down = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
         protected override void OnMouseUp(MouseEventArgs e) { _down = false; Invalidate(); base.OnMouseUp(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { _down = false; Invalidate(); base.OnLostFocus(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space)
+            {
+                OnClick(EventArgs.Empty);
+                e.Handled = true; e.SuppressKeyPress = true;
+            }
+            base.OnKeyDown(e);
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -513,14 +531,21 @@ namespace MhiagosControl
             bool cabe = TextRenderer.MeasureText(g, Text, Font).Width <= Width - 12;
             if (!cabe && !string.IsNullOrEmpty(Glyph))
             {
-                using (Font f = new Font("Segoe MDL2 Assets", 10f))
-                    TextRenderer.DrawText(g, Glyph, f, r, fore,
-                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                TextRenderer.DrawText(g, Glyph, Ui.FontGlyph10, r, fore,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                DrawFocus(g, r, fore);
                 return;
             }
 
             TextRenderer.DrawText(g, Text, Font, r, fore,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            DrawFocus(g, r, fore);
+        }
+
+        private void DrawFocus(Graphics g, Rectangle r, Color fore)
+        {
+            if (Focused && ShowFocusCues)
+                ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(r, -4, -4), fore, Color.Transparent);
         }
     }
 
@@ -558,11 +583,24 @@ namespace MhiagosControl
             Font = Ui.FontBase;
             Size = new Size(240, 26);
             Cursor = Cursors.Hand;
+            TabStop = true;
+            SetStyle(ControlStyles.Selectable, true);
         }
 
         protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnClick(EventArgs e) { Checked = !Checked; base.OnClick(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Space)
+            {
+                Checked = !Checked;
+                e.Handled = true; e.SuppressKeyPress = true;
+            }
+            base.OnKeyDown(e);
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -579,6 +617,11 @@ namespace MhiagosControl
             using (GraphicsPath p = Ui.RoundRect(track, h / 2))
             using (SolidBrush b = new SolidBrush(fill))
                 g.FillPath(b, p);
+
+            if (Focused && ShowFocusCues)
+                using (GraphicsPath p = Ui.RoundRect(Rectangle.Inflate(track, 1, 1), h / 2 + 1))
+                using (Pen pen = new Pen(Ui.Accent, 1.5f))
+                    g.DrawPath(pen, p);
 
             int knob = h - 6;
             int kx = _on ? track.Right - knob - 3 : track.X + 3;
@@ -618,6 +661,8 @@ namespace MhiagosControl
             Font = Ui.FontBase;
             Size = new Size(160, 30);
             Cursor = Cursors.Hand;
+            TabStop = true;
+            SetStyle(ControlStyles.Selectable, true);
         }
 
         public void SetItems(params string[] items) { _items.Clear(); _items.AddRange(items); Invalidate(); }
@@ -660,6 +705,23 @@ namespace MhiagosControl
             base.OnMouseDown(e);
         }
 
+        protected override bool IsInputKey(Keys keyData)
+        {
+            return keyData == Keys.Left || keyData == Keys.Right || base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right)
+            {
+                SelectedIndex += e.KeyCode == Keys.Left ? -1 : 1;
+                e.Handled = true; e.SuppressKeyPress = true;
+            }
+            base.OnKeyDown(e);
+        }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -670,7 +732,8 @@ namespace MhiagosControl
             int radius = Height / 2;
             using (GraphicsPath p = Ui.RoundRect(outer, radius))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
-            using (Pen pen = new Pen(Ui.Border))
+            using (Pen pen = new Pen(Focused && ShowFocusCues ? Ui.Accent : Ui.Border,
+                                     Focused && ShowFocusCues ? 1.5f : 1f))
             {
                 g.FillPath(b, p);
                 g.DrawPath(pen, p);
@@ -1121,18 +1184,17 @@ namespace MhiagosControl
                 Color fore = sel ? Ui.Text : Ui.Muted;
                 if (!string.IsNullOrEmpty(it.Glyph))
                 {
-                    using (Font f = new Font("Segoe MDL2 Assets", 11f))
                     using (SolidBrush b = new SolidBrush(sel ? Ui.Accent : fore))
                     {
                         // Recolhida, o glifo e a unica coisa que resta do item:
                         // centraliza, senao fica encostado na esquerda da faixa.
                         if (Estreita)
                         {
-                            SizeF t = g.MeasureString(it.Glyph, f);
-                            g.DrawString(it.Glyph, f, b,
+                            SizeF t = g.MeasureString(it.Glyph, Ui.FontGlyph11);
+                            g.DrawString(it.Glyph, Ui.FontGlyph11, b,
                                 it.Bounds.X + (it.Bounds.Width - t.Width) / 2f, it.Bounds.Y + 11);
                         }
-                        else g.DrawString(it.Glyph, f, b, it.Bounds.X + 14, it.Bounds.Y + 11);
+                        else g.DrawString(it.Glyph, Ui.FontGlyph11, b, it.Bounds.X + 14, it.Bounds.Y + 11);
                     }
                 }
                 if (!Estreita)
@@ -1193,11 +1255,10 @@ namespace MhiagosControl
             // E700 e o "hamburguer" da Segoe MDL2 - escapado, e nao colado como
             // caractere, porque area de uso privado nao sobrevive a toda
             // ferramenta que passa pelo arquivo.
-            using (Font f = new Font("Segoe MDL2 Assets", 11f))
             using (SolidBrush b = new SolidBrush(_sobreBotao ? Ui.Text : Ui.Muted))
             {
-                SizeF t = g.MeasureString("", f);
-                g.DrawString("", f, b,
+                SizeF t = g.MeasureString("", Ui.FontGlyph11);
+                g.DrawString("", Ui.FontGlyph11, b,
                     _botao.X + (_botao.Width - t.Width) / 2f,
                     _botao.Y + (_botao.Height - t.Height) / 2f);
             }

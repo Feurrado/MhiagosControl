@@ -72,7 +72,8 @@ dois painéis, validada por escrita.
 
 O firmware apaga o painel se parar de receber atualizações. É obrigatório
 reenviar continuamente. O software original usa cadência de **~1105 ms**
-(medida: desvio inferior a 1%). Este projeto usa 1100 ms.
+(medida: desvio inferior a 1%). Este projeto envia a cada 1000 ms, preservando
+folga para atrasos normais de coleta e escalonamento do Windows.
 
 ---
 

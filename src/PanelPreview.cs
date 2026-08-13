@@ -122,6 +122,19 @@ namespace MhiagosControl
         private Image _fonteDoCache;
         private Bitmap _cache;
         private int _cacheW, _cacheH;
+        private Font _unitFont;
+        private float _unitFontSize;
+
+        private Font UnitFont(float size)
+        {
+            if (_unitFont == null || Math.Abs(_unitFontSize - size) > 0.05f)
+            {
+                if (_unitFont != null) _unitFont.Dispose();
+                _unitFont = new Font("Segoe UI", size, FontStyle.Bold);
+                _unitFontSize = size;
+            }
+            return _unitFont;
+        }
 
         /// <summary>
         /// A foto do cooler ja no tamanho em que vai ser desenhada.
@@ -159,7 +172,11 @@ namespace MhiagosControl
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && _cache != null) { _cache.Dispose(); _cache = null; }
+            if (disposing)
+            {
+                if (_cache != null) { _cache.Dispose(); _cache = null; }
+                if (_unitFont != null) { _unitFont.Dispose(); _unitFont = null; }
+            }
             base.Dispose(disposing);
         }
 
@@ -256,10 +273,10 @@ namespace MhiagosControl
             // fixa da area o simbolo transbordava para o mostrador vizinho,
             // porque a fonte cresce com a altura e a reserva nao acompanhava.
             float ufs = Math.Max(5.5f, dh * 0.30f);
+            Font uf = UnitFont(ufs);
             float unitW;
-            using (Font uf = new Font("Segoe UI", ufs, FontStyle.Bold))
-                unitW = Math.Max(g.MeasureString(topLabel, uf).Width,
-                                 g.MeasureString(bottomLabel, uf).Width) + 3f;
+            unitW = Math.Max(g.MeasureString(topLabel, uf).Width,
+                             g.MeasureString(bottomLabel, uf).Width) + 3f;
 
             float cell = (area.Width - unitW) / 3f;
             float dw = cell * 0.54f;
@@ -276,7 +293,6 @@ namespace MhiagosControl
 
             // Dois indicadores empilhados, como no aparelho: °C sobre °F, % sobre W.
             // O hardware acende um dos dois; o outro fica apagado, nao ausente.
-            using (Font uf = new Font("Segoe UI", ufs, FontStyle.Bold))
             {
                 float x = area.Right - unitW + 1f;
                 SizeF sb = g.MeasureString(bottomLabel, uf);
@@ -299,9 +315,8 @@ namespace MhiagosControl
                 using (GraphicsPath gp = Rounded(ring, 6))
                     g.DrawPath(p, gp);
 
-                using (Font f = new Font("Segoe UI", 7.5f, FontStyle.Bold))
                 {
-                    SizeF sz = g.MeasureString(badge, f);
+                    SizeF sz = g.MeasureString(badge, Ui.FontBadge);
                     // Empilhados, o rotulo do de cima nao pode cair sobre o de
                     // baixo: ele sobe, o do mostrador inferior desce.
                     float ty = badgeAbove ? ring.Top - sz.Height - 7f : ring.Bottom + 5f;
@@ -310,7 +325,7 @@ namespace MhiagosControl
                     using (SolidBrush b = new SolidBrush(Color.FromArgb(224, 15, 16, 20)))
                         g.FillPath(b, gp);
                     using (SolidBrush b = new SolidBrush(mark))
-                        g.DrawString(badge, f, b, tag.X + 5f, tag.Y + 1f);
+                        g.DrawString(badge, Ui.FontBadge, b, tag.X + 5f, tag.Y + 1f);
                 }
             }
         }

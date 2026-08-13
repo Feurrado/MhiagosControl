@@ -32,6 +32,9 @@ namespace MhiagosControl
         {
             QuadroDoPainel();
             PreparoDoValor();
+            IntegracaoDoCicloDoPainel();
+            KeepaliveIndependente();
+            FontesInjetaveis();
             Formatacao();
             IdaEVoltaDaConfiguracao();
             TodosOsCamposDoPerfil();
@@ -116,6 +119,142 @@ namespace MhiagosControl
         }
 
         // ---------------- escala ----------------
+
+        /// <summary>
+        /// Exercita o limite injetavel entre a regra de monitoramento e o HID.
+        /// Nenhum dispositivo real e aberto: o painel falso registra o quadro que
+        /// receberia, inclusive o apagamento por ociosidade.
+        /// </summary>
+        private static void IntegracaoDoCicloDoPainel()
+        {
+            Secao("integracao do ciclo do painel");
+
+            PainelFalso painel = new PainelFalso();
+            PanelCycle ciclo = new PanelCycle(painel);
+            FonteFalsa fonte = new FonteFalsa();
+            Profile p = new Profile();
+            p.Fahrenheit = true; p.Percent = true;
+            p.Panel1Id = "temp"; p.Panel2Id = "uso";
+
+            SensorEntry temp = Sensor(SensorType.Temperature, 50f);
+            SensorEntry uso = Sensor(SensorType.Load, 73.4f);
+            fonte.Adicionar("temp", temp); fonte.Adicionar("uso", uso);
+            MonitorReadings leituras = new SensorCycle(fonte).Refresh(p, p, true);
+            Verdade(fonte.Refreshes == 1, "fonte injetada participa do ciclo");
+
+            PanelDispatch normal = ciclo.Send(p, leituras.Display1, leituras.Display2, false);
+
+            Igual(122, normal.Panel1.Value, "converte temperatura antes de enviar");
+            Igual(73, normal.Panel2.Value, "arredonda segunda leitura antes de enviar");
+            Igual(122, painel.Panel1, "painel falso recebe leitura superior");
+            Igual(73, painel.Panel2, "painel falso recebe leitura inferior");
+            Verdade(painel.Fahrenheit && painel.Percent, "painel falso recebe as unidades do perfil");
+
+            PanelDispatch ocioso = ciclo.Send(p, temp, uso, true);
+            Verdade(ocioso.Sent, "apagamento ainda envia o keepalive");
+            Igual(null, painel.Panel1, "ociosidade apaga painel superior");
+            Igual(null, painel.Panel2, "ociosidade apaga painel inferior");
+        }
+
+        private sealed class PainelFalso : IPanelDevice
+        {
+            public int? Panel1, Panel2;
+            public bool Fahrenheit, Percent;
+
+            public bool Send(int? panel1, int? panel2, bool fahrenheit, bool percent)
+            {
+                Panel1 = panel1; Panel2 = panel2;
+                Fahrenheit = fahrenheit; Percent = percent;
+                return true;
+            }
+
+            public void Close() { }
+        }
+
+        private sealed class FonteFalsa : ISensorService
+        {
+            private readonly Dictionary<string, SensorEntry> _leituras = new Dictionary<string, SensorEntry>();
+            public int Refreshes;
+            public bool ShowAll { get; set; }
+
+            public void Adicionar(string id, SensorEntry leitura) { _leituras[id] = leitura; }
+            public void Open() { }
+            public void Refresh() { Refreshes++; }
+            public void Focar(IEnumerable<string> ids) { }
+            public List<SensorEntry> List() { return new List<SensorEntry>(_leituras.Values); }
+            public Dictionary<string, float> Snapshot() { return new Dictionary<string, float>(); }
+            public SensorEntry ReadEntry(string id)
+            {
+                SensorEntry leitura;
+                return _leituras.TryGetValue(id, out leitura) ? leitura : null;
+            }
+            public void Dispose() { }
+        }
+
+        private static void KeepaliveIndependente()
+        {
+            Secao("keepalive independente");
+            PainelContador painel = new PainelContador();
+            using (PanelKeepalive keepalive = new PanelKeepalive(painel, null))
+            {
+                keepalive.Publish(new PanelFrame(42, 73, false, true));
+                Verdade(keepalive.DispatchOnce(), "primeiro envio usa o quadro publicado");
+                Verdade(keepalive.DispatchOnce(), "reenvia sem nova coleta de sensores");
+                Igual(2, painel.Envios, "duas escritas para uma unica publicacao");
+                Igual(42, painel.Panel1, "ultimo quadro conserva o painel superior");
+            }
+        }
+
+        private sealed class PainelContador : IPanelDevice
+        {
+            public int Envios;
+            public int? Panel1;
+            public bool Send(int? panel1, int? panel2, bool fahrenheit, bool percent)
+            {
+                Envios++; Panel1 = panel1; return true;
+            }
+            public void Close() { }
+        }
+
+        private static void FontesInjetaveis()
+        {
+            Secao("fontes de sensores injetaveis");
+            FonteBruta primaria = new FonteBruta(true, "primaria", "hw:cpu");
+            FonteBruta reserva = new FonteBruta(true, "reserva", "lhm:cpu");
+            FonteBruta auxiliar = new FonteBruta(true, "auxiliar", "rtss:fps");
+            using (Sensors sensors = new Sensors(primaria, reserva, auxiliar))
+            {
+                sensors.ShowAll = true;
+                sensors.Open();
+                List<SensorEntry> lista = sensors.List();
+                Verdade(primaria.Aberturas == 1, "fonte primaria e aberta");
+                Igual(0, reserva.Aberturas, "reserva nao abre quando a primaria responde");
+                Verdade(Achar(lista, "hw:cpu").Value.HasValue, "leitura primaria entra no agregado");
+                Verdade(Achar(lista, "rtss:fps").Value.HasValue, "fonte auxiliar entra independentemente");
+            }
+        }
+
+        private sealed class FonteBruta : ISensorSource
+        {
+            private readonly bool _open;
+            private readonly string _name, _id;
+            private bool _available;
+            public int Aberturas;
+            public FonteBruta(bool open, string name, string id) { _open = open; _name = name; _id = id; }
+            public string Name { get { return _name; } }
+            public bool Available { get { return _available; } }
+            public bool LastReadComplete { get { return true; } }
+            public bool Open() { Aberturas++; _available = _open; return _open; }
+            public void Refresh() { }
+            public List<SensorEntry> Read(IEnumerable<string> focusedIds)
+            {
+                SensorEntry e = Sensor(SensorType.Load, 50f);
+                e.Id = _id; e.Hardware = _name; e.Name = _name; e.Label = _name;
+                e.Source = _name;
+                return new List<SensorEntry> { e };
+            }
+            public void Dispose() { _available = false; }
+        }
 
         private static void PreparoDoValor()
         {
@@ -1022,7 +1161,12 @@ namespace MhiagosControl
                 c.GameProfiles = true;
                 c.MapearJogo("cyberpunk2077.exe", "CPU = GPU");
                 c.MapearJogo("LeagueClientUxRender.exe", "Padrão");
-                c.SaveTo(arquivo);
+                Config copia = c.Clone();
+                copia.Profiles[0].Name = "alterado";
+                copia.MetricIds[0] = "alterado";
+                Verdade(c.Profiles[0].Name != "alterado", "clone nao compartilha perfis");
+                Igual("cpu:temp", c.MetricIds[0], "clone nao compartilha listas");
+                Verdade(c.SaveTo(arquivo), "grava a configuracao inicial");
 
                 Verdade(File.Exists(arquivo), "gravou no arquivo do teste, e nao no real");
 
@@ -1092,6 +1236,21 @@ namespace MhiagosControl
                 Igual(2, lido.Rotation.Count, "dois perfis marcados");
                 lido.Profiles.RemoveAt(1);
                 Igual(1, lido.Rotation.Count, "excluir o perfil tira ele da roda");
+
+                // A segunda gravacao passa pelo caminho de substituicao atomica
+                // (a primeira so move o arquivo temporario). O resultado precisa
+                // ser integro e o temporario nao pode ficar para a proxima sessao.
+                c.ActiveName = "PadrÃ£o";
+                Verdade(c.SaveTo(arquivo), "sobrescreve a configuracao existente");
+                Config regravado = Config.LoadFrom(arquivo, false);
+                Igual("PadrÃ£o", regravado.ActiveName, "sobrescrita atomica preserva a configuracao");
+                Verdade(!File.Exists(arquivo + ".tmp"), "sobrescrita atomica nao deixa temporario");
+
+                string diretorioInvalido = Path.Combine(caixa, "destino-diretorio");
+                Directory.CreateDirectory(diretorioInvalido);
+                string erro;
+                Verdade(!c.SaveTo(diretorioInvalido, out erro), "falha de disco volta ao chamador");
+                Verdade(!string.IsNullOrEmpty(erro), "falha de disco explica o motivo");
             }
             finally { try { Directory.Delete(caixa, true); } catch { } }
         }
@@ -1137,7 +1296,7 @@ namespace MhiagosControl
                 Config c = new Config();
                 c.Profiles.Add(p);
                 c.ActiveName = p.Name;
-                c.SaveTo(arquivo);
+                Verdade(c.SaveTo(arquivo), "grava o perfil para conferencia dos campos");
 
                 Config lido = Config.LoadFrom(arquivo, false);
                 Igual(1, lido.Profiles.Count, "gravou e leu um perfil");

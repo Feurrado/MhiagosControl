@@ -57,6 +57,7 @@ namespace MhiagosControl
 
         private float[] _buf;
         private float? _valor;
+        private long _historyRevision = -1;
 
         public MetricCard()
         {
@@ -73,7 +74,13 @@ namespace MhiagosControl
         /// <summary>Leitura do ciclo corrente. A serie e alimentada em outro lugar.</summary>
         public void Push(float? v)
         {
+            long revision = MetricHistory.Revision;
+            bool mesmoValor = (!_valor.HasValue && !v.HasValue)
+                           || (_valor.HasValue && v.HasValue && _valor.Value.Equals(v.Value));
+            if (mesmoValor && revision == _historyRevision) return;
+
             _valor = v;
+            _historyRevision = revision;
             Invalidate();
         }
 
@@ -244,8 +251,7 @@ namespace MhiagosControl
             string[] glifos = { "\uE76B", "\uE76C", "\uE711", "\uE740" };
             Rectangle[] areas = { _bEsq, _bDir, _bRem, _bTam };
 
-            using (Font f = new Font("Segoe MDL2 Assets", 8f))
-                for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 4; i++)
                 {
                     bool ativo = (_sobre == i);
                     if (ativo)
@@ -254,9 +260,9 @@ namespace MhiagosControl
                             g.FillPath(b, p);
 
                     Color c = ativo ? (i == 2 ? Ui.Danger : Ui.Text) : Ui.Faint;
-                    SizeF ts = g.MeasureString(glifos[i], f);
+                    SizeF ts = g.MeasureString(glifos[i], Ui.FontGlyph8);
                     using (SolidBrush b = new SolidBrush(c))
-                        g.DrawString(glifos[i], f, b,
+                        g.DrawString(glifos[i], Ui.FontGlyph8, b,
                             areas[i].X + (t - ts.Width) / 2f, areas[i].Y + (t - ts.Height) / 2f);
                 }
         }

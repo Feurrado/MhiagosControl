@@ -88,14 +88,14 @@ namespace MhiagosControl
     /// proprio e o aplicativo funciona com qualquer subconjunto disponivel.
     /// Ambas exigem privilegio administrativo.
     /// </summary>
-    public class Sensors : IDisposable
+    public class Sensors : ISensorService
     {
-        private Computer _computer;
-        private HwInfo _hw;
-        private readonly UpdateVisitor _visitor = new UpdateVisitor();
+        private readonly ISensorSource _primary;
+        private readonly ISensorSource _fallback;
+        private readonly ISensorSource _auxiliary;
 
         /// <summary>Quando falso, sensores por nucleo sao resumidos em medias.</summary>
-        public static bool ShowAll = false;
+        public bool ShowAll { get; set; }
 
         /// <summary>Leituras do ciclo corrente, de todas as fontes.</summary>
         private List<SensorEntry> _raw = new List<SensorEntry>();
@@ -108,13 +108,8 @@ namespace MhiagosControl
         /// </summary>
         private ICollection<string> _foco;
 
-        /// <summary>Identificador -> grupo, aprendido na ultima varredura completa.</summary>
-        private readonly Dictionary<string, string> _grupoDoId = new Dictionary<string, string>();
-
         /// <summary>Se o ultimo instantaneo saiu de uma leitura dirigida.</summary>
         private bool _dirigida = false;
-
-        private readonly Rtss _rtss = new Rtss();
 
         private const string HwPrefix = "hw:";
 
@@ -129,16 +124,21 @@ namespace MhiagosControl
             @"#\s*\d+|\bCore\s+\d+\b|\bT\d\b|\(perf[^)]*\)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        public bool HwInfoActive { get { return _hw != null && _hw.IsOpen; } }
+        public Sensors() : this(new HwInfoSensorSource(), new LibreSensorSource(), new RtssSensorSource()) { }
+
+        internal Sensors(ISensorSource primary, ISensorSource fallback, ISensorSource auxiliary)
+        {
+            if (primary == null) throw new ArgumentNullException("primary");
+            if (fallback == null) throw new ArgumentNullException("fallback");
+            if (auxiliary == null) throw new ArgumentNullException("auxiliary");
+            _primary = primary; _fallback = fallback; _auxiliary = auxiliary;
+        }
+
+        public bool HwInfoActive { get { return _primary.Available; } }
 
         public void Open()
         {
-            try
-            {
-                HwInfo hw = new HwInfo();
-                if (hw.Open()) _hw = hw; else hw.Dispose();
-            }
-            catch (Exception ex) { Log.Error("HWiNFO: abertura", ex); _hw = null; }
+            bool primary = _primary.Open();
 
             // A LibreHardwareMonitor so entra quando o HWiNFO nao esta disponivel.
             // Abri-la cobra um preco fixo: ela tenta instalar seu driver de kernel
@@ -146,9 +146,11 @@ namespace MhiagosControl
             // do Windows, o antivirus o remove e emite um alerta - toda vez. Com o
             // HWiNFO ativo nao ha o que ganhar pagando isso, porque ele entrega os
             // mesmos sensores (e mais alguns) por um driver que o sistema aceita.
-            if (!HwInfoActive) OpenLibre();
+            bool fallback = false;
+            if (!primary) fallback = _fallback.Open();
+            _auxiliary.Open();
 
-            if (_computer == null && !HwInfoActive)
+            if (!primary && !fallback)
                 throw new Exception("nenhuma fonte de sensores disponivel");
 
             // Duas passagens: varios sensores da LibreHardwareMonitor so publicam
@@ -159,73 +161,17 @@ namespace MhiagosControl
             BuildSynthetics();
 
             Log.Write("fontes ativas: " +
-                      (_computer != null ? "LibreHardwareMonitor" : "-") + " | " +
-                      (HwInfoActive ? "HWiNFO" : "-"));
-        }
-
-        /// <summary>Abre a LibreHardwareMonitor, recuando para um conjunto minimo se falhar.</summary>
-        private void OpenLibre()
-        {
-            try
-            {
-                _computer = Build(true, true, true);
-                _computer.Open();
-            }
-            catch (Exception)
-            {
-                SafeCloseComputer();
-                try
-                {
-                    _computer = Build(false, false, false);
-                    _computer.Open();
-                }
-                catch (Exception ex)
-                {
-                    SafeCloseComputer();
-                    Log.Error("LibreHardwareMonitor: abertura", ex);
-                }
-            }
-        }
-
-        private static Computer Build(bool motherboard, bool memory, bool storage)
-        {
-            Computer c = new Computer();
-            c.IsCpuEnabled = true;
-            c.IsGpuEnabled = true;
-            c.IsMotherboardEnabled = motherboard;
-            c.IsMemoryEnabled = memory;
-            c.IsStorageEnabled = storage;
-            c.IsControllerEnabled = false;   // exigiria HidSharp
-            return c;
-        }
-
-        private void SafeCloseComputer()
-        {
-            if (_computer != null) { try { _computer.Close(); } catch { } _computer = null; }
+                      (_fallback.Available ? _fallback.Name : "-") + " | " +
+                      (_primary.Available ? _primary.Name : "-"));
         }
 
         /// <summary>Atualiza as duas fontes e recompoe o instantaneo do ciclo.</summary>
         public void Refresh()
         {
-            if (_computer != null)
-            {
-                try { _computer.Accept(_visitor); }
-                catch (Exception ex) { Log.Error("LibreHardwareMonitor: atualizacao", ex); }
-            }
+            if (_primary.Available) _primary.Refresh();
+            if (_fallback.Available) _fallback.Refresh();
+            if (_auxiliary.Available) _auxiliary.Refresh();
             _raw = BuildRaw();
-        }
-
-        // ---------------- enumeracao ----------------
-
-        private void ForEachSensor(Action<IHardware, ISensor> fn)
-        {
-            if (_computer == null) return;
-            foreach (IHardware hw in _computer.Hardware)
-            {
-                foreach (ISensor s in hw.Sensors) fn(hw, s);
-                foreach (IHardware sub in hw.SubHardware)
-                    foreach (ISensor s in sub.Sensors) fn(sub, s);
-            }
         }
 
         /// <summary>
@@ -239,55 +185,13 @@ namespace MhiagosControl
         {
             List<SensorEntry> raw = new List<SensorEntry>();
 
-            ForEachSensor(delegate(IHardware hw, ISensor s)
-            {
-                SensorEntry e = new SensorEntry();
-                e.Id = s.Identifier.ToString();
-                e.Hardware = hw.Name;
-                e.Category = CategoryOf(hw.HardwareType);
-                e.Name = s.Name;
-                e.Type = s.SensorType;
-                e.Value = s.Value;
-                e.Label = Describe(hw.Name, s.Name, s.SensorType);
-                raw.Add(e);
-            });
-
-            if (HwInfoActive)
-            {
-                // Dirigida quando ha foco e ele ainda vale; senao completa, que
-                // tambem e o que reaprende onde cada grupo esta.
-                ICollection<string> foco = _foco;
-                List<HwReading> leituras = foco != null ? _hw.ReadGroups(foco) : null;
-                _dirigida = leituras != null;
-                if (leituras == null)
-                {
-                    leituras = _hw.ReadAll();
-                    _grupoDoId.Clear();
-                    foreach (HwReading r in leituras) _grupoDoId[r.Id] = r.Group;
-                }
-
-                foreach (HwReading r in leituras)
-                {
-                    SensorEntry e = new SensorEntry();
-                    e.Id = r.Id;
-                    e.Hardware = r.Group;
-                    e.Category = CategoryOf(r.Category, r.Group);
-                    e.Name = r.Label;
-                    e.Type = r.Type;
-                    e.Value = (float)r.Value;
-                    e.Unit = CleanUnit(r.Unit);
-                    ParaGigabytes(e);
-                    e.Source = "HWiNFO";
-                    e.Label = Describe(r.Group, r.Label, r.Type);
-                    raw.Add(e);
-                }
-            }
-
-            // Terceira fonte, independente das outras duas: nao le hardware, le
-            // o que o RTSS mediu no processo que esta apresentando. Entra sempre,
-            // mesmo sem o RTSS instalado - la as leituras vem sem valor, e o
-            // rodape delas diz o porque.
-            raw.AddRange(_rtss.Ler());
+            IEnumerable<string> focus = FocusedRawIds();
+            if (_primary.Available) raw.AddRange(_primary.Read(focus));
+            if (_fallback.Available) raw.AddRange(_fallback.Read(focus));
+            if (_auxiliary.Available) raw.AddRange(_auxiliary.Read(focus));
+            _dirigida = (_primary.Available && !_primary.LastReadComplete) ||
+                        (_fallback.Available && !_fallback.LastReadComplete) ||
+                        (_auxiliary.Available && !_auxiliary.LastReadComplete);
             return raw;
         }
 
@@ -298,7 +202,7 @@ namespace MhiagosControl
         /// "?". O resto do aplicativo escreve temperatura so com a letra, e a
         /// unidade vazia devolve a decisao ao tipo do sensor.
         /// </summary>
-        private static string CleanUnit(string u)
+        internal static string CleanUnit(string u)
         {
             if (string.IsNullOrEmpty(u)) return null;
             u = u.Trim();
@@ -316,7 +220,7 @@ namespace MhiagosControl
         /// 999 que o mostrador aceita, entao ia para o painel truncado. Em GB
         /// cabe e se le de imediato.
         /// </summary>
-        private static void ParaGigabytes(SensorEntry e)
+        internal static void ToGigabytes(SensorEntry e)
         {
             if (e.Unit != "MB" || !e.Value.HasValue) return;
             e.Value = e.Value.Value / 1024f;
@@ -345,7 +249,7 @@ namespace MhiagosControl
             "CPU", "GPU", CategoriaJogos, "Placa-mãe", "Memória", "Disco", "Rede", "Outros"
         };
 
-        private static string CategoryOf(HardwareType t)
+        internal static string CategoryOf(HardwareType t)
         {
             switch (t)
             {
@@ -370,7 +274,7 @@ namespace MhiagosControl
         /// reversa - por isso ha o desempate pelo nome do grupo: se a biblioteca
         /// devolver um codigo fora dos conhecidos, o nome ainda classifica.
         /// </summary>
-        private static string CategoryOf(int code, string group)
+        internal static string CategoryOf(int code, string group)
         {
             switch (code)
             {
@@ -403,7 +307,7 @@ namespace MhiagosControl
             return false;
         }
 
-        private static string Describe(string hardware, string name, SensorType type)
+        internal static string Describe(string hardware, string name, SensorType type)
         {
             return string.Format("{0} - {1} ({2}{3})", hardware, name, type, UnitOf(type));
         }
@@ -428,39 +332,35 @@ namespace MhiagosControl
             _foco = null;
             if (ids == null) return;
 
-            List<string> grupos = new List<string>();
+            List<string> focused = new List<string>();
             foreach (string id in ids)
             {
                 if (string.IsNullOrEmpty(id)) continue;
-                if (!GruposDe(id, grupos)) return;
+                if (!IdsDe(id, focused)) return;
             }
-            if (grupos.Count > 0) _foco = grupos;
+            if (focused.Count > 0) _foco = focused;
         }
 
         /// <summary>
         /// Grupos de que um identificador depende. Um agregado depende dos
         /// grupos de todos os membros que ele resume.
         /// </summary>
-        private bool GruposDe(string id, List<string> destino)
+        private bool IdsDe(string id, List<string> destino)
         {
             if (id.StartsWith(SynthPrefix, StringComparison.Ordinal))
             {
                 List<string> membros;
                 if (!_synth.TryGetValue(id, out membros)) return false;
                 foreach (string m in membros)
-                    if (!GruposDe(m, destino)) return false;
+                    if (!IdsDe(m, destino)) return false;
                 return true;
             }
 
-            // Sensor da LibreHardwareMonitor: nao passa pelo HWiNFO e a
-            // varredura dela ja e completa e barata.
-            if (!id.StartsWith(HwPrefix, StringComparison.Ordinal)) return true;
-
-            string grupo;
-            if (!_grupoDoId.TryGetValue(id, out grupo)) return false;
-            if (!destino.Contains(grupo)) destino.Add(grupo);
+            if (!destino.Contains(id)) destino.Add(id);
             return true;
         }
+
+        private IEnumerable<string> FocusedRawIds() { return _foco; }
 
         /// <summary>
         /// Garante que o instantaneo corrente tem todos os sensores.
@@ -752,8 +652,9 @@ namespace MhiagosControl
 
         public void Dispose()
         {
-            SafeCloseComputer();
-            if (_hw != null) { try { _hw.Dispose(); } catch { } _hw = null; }
+            try { _auxiliary.Dispose(); } catch { }
+            try { _fallback.Dispose(); } catch { }
+            try { _primary.Dispose(); } catch { }
         }
     }
 }

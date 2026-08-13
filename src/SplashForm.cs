@@ -213,10 +213,9 @@ namespace MhiagosControl
                     g.FillPath(b, p);
             // U+E8BB (ChromeClose) escrito por codigo: o caractere literal no
             // fonte nao sobrevive a ida e volta pela pagina de codigo do build
-            using (Font f = new Font("Segoe MDL2 Assets", 8f))
-                TextRenderer.DrawText(g, "", f, fechar,
-                    _hoverFechar ? Ui.Text : Ui.Muted,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(g, "", Ui.FontGlyph8, fechar,
+                _hoverFechar ? Ui.Text : Ui.Muted,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
             TextRenderer.DrawText(g, T.ClosingIsSafe, Ui.FontSmall,
                 new Rectangle(88, 76, Width - 130, 18), Ui.Faint,

@@ -56,9 +56,8 @@ namespace MhiagosControl
                 g.DrawPath(pen, p);
             }
 
-            using (Font f = new Font("Segoe MDL2 Assets", 9f))
             using (SolidBrush b = new SolidBrush(Ui.Muted))
-                g.DrawString("", f, b, 9, (Height - 16) / 2);
+                g.DrawString("", Ui.FontGlyph9, b, 9, (Height - 16) / 2);
 
             if (_box.Text.Length == 0)
                 TextRenderer.DrawText(g, Placeholder, Ui.FontBase,

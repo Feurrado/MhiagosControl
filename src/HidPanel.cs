@@ -21,8 +21,12 @@ namespace MhiagosControl
     ///
     /// O firmware tem watchdog: sem reenvio continuo o painel apaga.
     /// </summary>
-    public class HidPanel
+    public class HidPanel : IPanelDevice
     {
+        // Sem o painel, enumerar todas as colecoes HID a cada ciclo nao melhora
+        // a reconexao e pode custar bastante em maquinas com muitos dispositivos.
+        private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
+
         public const ushort VID = 0x1A2C;
 
         /// <summary>
@@ -80,6 +84,7 @@ namespace MhiagosControl
 
         private string _path;
         private IntPtr _handle = (IntPtr)(-1);
+        private DateTime _nextAutomaticOpen = DateTime.MinValue;
 
         public string DevicePath { get { return _path; } }
         public bool IsConnected { get { return _handle.ToInt64() != -1; } }
@@ -193,7 +198,17 @@ namespace MhiagosControl
             _handle = CreateFile(_path, 0xC0000000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
             if (_handle.ToInt64() == -1)
                 _handle = CreateFile(_path, 0x40000000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
+            if (IsConnected) _nextAutomaticOpen = DateTime.MinValue;
             return IsConnected;
+        }
+
+        /// <summary>Abre pelo ciclo normal, respeitando a espera apos uma falha.</summary>
+        private bool OpenAutomatically()
+        {
+            if (DateTime.UtcNow < _nextAutomaticOpen) return false;
+            if (Open()) return true;
+            _nextAutomaticOpen = DateTime.UtcNow.Add(RetryDelay);
+            return false;
         }
 
         public void Close()
@@ -217,7 +232,7 @@ namespace MhiagosControl
         /// </summary>
         public bool Send(int? panel1, int? panel2, bool fahrenheit, bool percent)
         {
-            if (!IsConnected && !Open()) return false;
+            if (!IsConnected && !OpenAutomatically()) return false;
 
             byte flags = 0;
             if (fahrenheit) flags |= FLAG_FAHRENHEIT;
@@ -234,6 +249,7 @@ namespace MhiagosControl
             {
                 // dispositivo pode ter sido removido; forca reabertura na proxima chamada
                 Close();
+                _nextAutomaticOpen = DateTime.UtcNow.Add(RetryDelay);
             }
             return ok;
         }

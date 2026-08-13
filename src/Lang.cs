@@ -145,6 +145,10 @@ namespace MhiagosControl
             }
         }
         public static string Saved { get { return P("alterações salvas", "changes saved"); } }
+        public static string SaveFailed(string erro)
+        {
+            return P("Não foi possível salvar: " + erro, "Could not save: " + erro);
+        }
 
         // ---------------- barra lateral ----------------
 
@@ -155,6 +159,20 @@ namespace MhiagosControl
         public static string NavMetrics { get { return P("Métricas", "Metrics"); } }
         public static string AddMetric { get { return P("Adicionar métrica", "Add metric"); } }
         public static string DefaultMetrics { get { return P("Conjuntos", "Presets"); } }
+
+        /// <summary>Titulos curtos que cabem nos cinco cartoes do painel inicial.</summary>
+        public static string DashboardMetric(int index, string fallback)
+        {
+            switch (index)
+            {
+                case 0: return P("Temperatura da CPU", "CPU temperature");
+                case 1: return P("Uso da CPU", "CPU usage");
+                case 2: return P("Temperatura da GPU", "GPU temperature");
+                case 3: return P("Uso da GPU", "GPU usage");
+                case 4: return P("Uso da memória", "Memory usage");
+                default: return fallback;
+            }
+        }
 
         /// <summary>
         /// Nome de cada conjunto pronto. Chave, e nao indice: a ordem da lista

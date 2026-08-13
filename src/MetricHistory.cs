@@ -62,7 +62,16 @@ namespace MhiagosControl
         private static long _balde = 0;
 
         private static bool _sujo = false;
+        private static bool _gravando = false;
+        private static long _geracao = 0;
         private static DateTime _ultimaGravacao = DateTime.MinValue;
+        private static DateTime _proximaTentativa = DateTime.MinValue;
+
+        /// <summary>Versao das series finalizadas, usada para evitar repinturas vazias.</summary>
+        public static long Revision
+        {
+            get { lock (_trava) return _geracao; }
+        }
 
         private static string Arquivo
         {
@@ -86,6 +95,7 @@ namespace MhiagosControl
         {
             lock (_trava)
             {
+                string antes = string.Join("\n", _seguidos.ToArray());
                 _seguidos.Clear();
                 if (ids != null)
                     foreach (string id in ids)
@@ -98,6 +108,7 @@ namespace MhiagosControl
 
                 foreach (string id in _seguidos)
                     if (!_series.ContainsKey(id)) _series[id] = new Serie();
+                if (antes != string.Join("\n", _seguidos.ToArray())) Alterado();
             }
         }
 
@@ -127,6 +138,7 @@ namespace MhiagosControl
                     if (string.IsNullOrEmpty(id) || _seguidos.Contains(id)) continue;
                     _seguidos.Add(id);
                     if (!_series.ContainsKey(id)) _series[id] = new Serie();
+                    Alterado();
                 }
             }
         }
@@ -211,6 +223,12 @@ namespace MhiagosControl
             }
 
             _balde = agora;
+            Alterado();
+        }
+
+        private static void Alterado()
+        {
+            _geracao++;
             _sujo = true;
         }
 
@@ -227,7 +245,9 @@ namespace MhiagosControl
             lock (_trava)
             {
                 if (!_sujo) return;
-                if ((DateTime.UtcNow - _ultimaGravacao).TotalMinutes < 5) return;
+                DateTime agora = DateTime.UtcNow;
+                if (agora < _proximaTentativa) return;
+                if ((agora - _ultimaGravacao).TotalMinutes < 5) return;
             }
             Salvar();
         }
@@ -353,42 +373,71 @@ namespace MhiagosControl
 
         public static void Salvar()
         {
+            long geracao;
+            long balde;
+            string[] ids;
+            float[][] valores;
             lock (_trava)
             {
                 if (!_sujo && _ultimaGravacao != DateTime.MinValue) return;
-                _ultimaGravacao = DateTime.UtcNow;
-                _sujo = false;
+                if (_gravando) return;
+                _gravando = true;
 
-                string caminho = Arquivo;
-                string temp = caminho + ".tmp";
-                try
+                geracao = _geracao;
+                balde = _balde;
+                ids = new string[_series.Count];
+                valores = new float[_series.Count][];
+                int i = 0;
+                foreach (KeyValuePair<string, Serie> kv in _series)
                 {
-                    using (FileStream fs = File.Create(temp))
-                    using (BinaryWriter w = new BinaryWriter(fs))
+                    ids[i] = kv.Key;
+                    valores[i] = (float[])kv.Value.V.Clone();
+                    i++;
+                }
+            }
+
+            string caminho = Arquivo;
+            string temp = caminho + ".tmp";
+            try
+            {
+                using (FileStream fs = File.Create(temp))
+                using (BinaryWriter w = new BinaryWriter(fs))
+                {
+                    w.Write(Magica);
+                    w.Write(PassoSeg);
+                    w.Write(Baldes);
+                    w.Write(balde);
+                    w.Write(ids.Length);
+                    for (int i = 0; i < ids.Length; i++)
                     {
-                        w.Write(Magica);
-                        w.Write(PassoSeg);
-                        w.Write(Baldes);
-                        w.Write(_balde);
-                        w.Write(_series.Count);
-                        foreach (KeyValuePair<string, Serie> kv in _series)
-                        {
-                            w.Write(kv.Key);
-                            for (int k = 0; k < Baldes; k++) w.Write(kv.Value.V[k]);
-                        }
+                        w.Write(ids[i]);
+                        for (int k = 0; k < Baldes; k++) w.Write(valores[i][k]);
                     }
+                }
 
-                    // Grava em arquivo temporario e troca: um desligamento no meio
-                    // da escrita perde o historico, nao o arquivo.
-                    if (File.Exists(caminho)) File.Delete(caminho);
-                    File.Move(temp, caminho);
-                }
-                catch (Exception ex)
+                // Nunca apaga o arquivo anterior antes de o novo estar pronto.
+                if (File.Exists(caminho)) File.Replace(temp, caminho, null);
+                else File.Move(temp, caminho);
+
+                lock (_trava)
                 {
-                    Log.Error("gravacao do historico de metricas", ex);
-                    try { if (File.Exists(temp)) File.Delete(temp); }
-                    catch (Exception ex2) { Log.Error("descarte do historico temporario", ex2); }
+                    _ultimaGravacao = DateTime.UtcNow;
+                    _proximaTentativa = DateTime.MinValue;
+                    if (_geracao == geracao) _sujo = false;
+                    _gravando = false;
                 }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("gravacao do historico de metricas", ex);
+                lock (_trava)
+                {
+                    _proximaTentativa = DateTime.UtcNow.AddMinutes(1);
+                    _sujo = true;
+                    _gravando = false;
+                }
+                try { if (File.Exists(temp)) File.Delete(temp); }
+                catch (Exception ex2) { Log.Error("descarte do historico temporario", ex2); }
             }
         }
     }

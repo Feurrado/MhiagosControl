@@ -154,6 +154,46 @@ namespace MhiagosControl
         public List<string> GameKeys = new List<string>();
         public List<string> GameProfileNames = new List<string>();
 
+        /// <summary>
+        /// Copia profunda usada por editores e operacoes transacionais. Listas e
+        /// perfis nunca sao compartilhados entre a copia publicada e o rascunho.
+        /// </summary>
+        public Config Clone()
+        {
+            Config c = new Config();
+            c.CopyFrom(this);
+            return c;
+        }
+
+        /// <summary>Substitui todo o estado mantendo a identidade desta instancia.</summary>
+        public void CopyFrom(Config other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            Profiles.Clear();
+            foreach (Profile p in other.Profiles) Profiles.Add(p.Clone());
+            ActiveName = other.ActiveName;
+            ShowAllSensors = other.ShowAllSensors;
+            Language = other.Language;
+            IdleBlankMinutes = other.IdleBlankMinutes;
+            RotateSeconds = other.RotateSeconds;
+            SidebarCollapsed = other.SidebarCollapsed;
+            MetricsChosen = other.MetricsChosen;
+            MetricRange = other.MetricRange;
+            WindowW = other.WindowW;
+            WindowH = other.WindowH;
+            GameProfiles = other.GameProfiles;
+
+            MetricIds.Clear();
+            MetricIds.AddRange(other.MetricIds);
+            MetricSizes.Clear();
+            MetricSizes.AddRange(other.MetricSizes);
+            GameKeys.Clear();
+            GameKeys.AddRange(other.GameKeys);
+            GameProfileNames.Clear();
+            GameProfileNames.AddRange(other.GameProfileNames);
+        }
+
         /// <summary>Perfil casado com o executavel, ou nulo.</summary>
         public string PerfilDoJogo(string exe)
         {
@@ -365,11 +405,26 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("migracao do config", ex); }
         }
 
-        public void Save() { SaveTo(FilePath); }
+        /// <summary>Grava a configuracao principal e informa se ela chegou ao disco.</summary>
+        public bool Save()
+        {
+            string erro;
+            return Save(out erro);
+        }
+
+        public bool Save(out string erro) { return SaveTo(FilePath, out erro); }
 
         /// <summary>Grava num caminho explicito. Veja LoadFrom.</summary>
-        public void SaveTo(string path)
+        public bool SaveTo(string path)
         {
+            string erro;
+            return SaveTo(path, out erro);
+        }
+
+        /// <summary>Grava num caminho explicito e devolve a causa quando falhar.</summary>
+        public bool SaveTo(string path, out string erro)
+        {
+            erro = null;
             try
             {
                 StringBuilder sb = new StringBuilder();
@@ -394,12 +449,37 @@ namespace MhiagosControl
                         sb.AppendLine("metric=" + MetricSize(i).ToString(CultureInfo.InvariantCulture) +
                                       "|" + MetricIds[i]);
                 foreach (Profile p in Profiles) AppendProfile(sb, p);
-                File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+                WriteAtomically(path, sb.ToString());
                 Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " + ActiveName + ")");
+                return true;
             }
             catch (Exception ex)
             {
                 Log.Error("gravacao da configuracao", ex);
+                erro = ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Grava primeiro ao lado do destino e so entao o substitui. Configuracao
+        /// parcial parece uma configuracao valida para o leitor e poderia fazer os
+        /// perfis parecerem apagados depois de uma queda de energia.
+        /// </summary>
+        private static void WriteAtomically(string path, string text)
+        {
+            string temp = path + ".tmp";
+            try
+            {
+                File.WriteAllText(temp, text, Encoding.UTF8);
+                if (File.Exists(path)) File.Replace(temp, path, null);
+                else File.Move(temp, path);
+            }
+            catch
+            {
+                try { if (File.Exists(temp)) File.Delete(temp); }
+                catch { }
+                throw;
             }
         }
 

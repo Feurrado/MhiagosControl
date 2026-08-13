@@ -17,9 +17,14 @@ namespace MhiagosControl
     /// (MSR, SMART, NVMe) leva dezenas a centenas de milissegundos, e fazer
     /// isso na thread de UI travaria a bomba de mensagens a cada ciclo.
     /// </summary>
-    public class TrayContext : ApplicationContext
+    public class TrayContext : ApplicationContext, ISettingsData
     {
-        private const int PeriodMs = 1100;   // cadencia do firmware original: ~1105 ms
+        // O firmware apaga perto de 1105 ms sem quadro novo. Um segundo deixa
+        // folga para a leitura de sensores e para os atrasos normais do Windows.
+        private const int PeriodMs = 1000;
+        private const int ShutdownTimeoutMs = 3000;
+
+        private enum RuntimeState { Starting, Running, Stopping, Stopped }
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool DestroyIcon(IntPtr handle);
@@ -33,11 +38,16 @@ namespace MhiagosControl
         private NotifyIcon _icon;
         private Icon _iconNormal, _iconAlert;
         private Control _marshal;
+        private Thread _sensorInit;
         private Thread _worker;
         private ManualResetEvent _stop = new ManualResetEvent(false);
+        private int _runtimeState = (int)RuntimeState.Starting;
 
-        private HidPanel _panel = new HidPanel();
-        private Sensors _sensors = new Sensors();
+        private IPanelDevice _panel;
+        private PanelCycle _panelCycle;
+        private PanelKeepalive _panelKeepalive;
+        private ISensorService _sensors;
+        private SensorCycle _sensorCycle;
         private readonly object _sensorLock = new object();
 
         private Config _cfg;
@@ -95,12 +105,27 @@ namespace MhiagosControl
         /// </summary>
         private bool _hi1 = false, _hi2 = false, _lo1 = false, _lo2 = false;
         private bool _iconIsAlert = false;
+        private readonly object _alertLock = new object();
 
-        public TrayContext()
+        public TrayContext() : this(new Sensors(), new HidPanel()) { }
+
+        /// <summary>
+        /// Ponto de composicao da aplicacao. Mantido interno para a producao
+        /// continuar abrindo apenas as fontes reais, e disponivel aos testes para
+        /// injetar sensores e painel sem hardware fisico.
+        /// </summary>
+        internal TrayContext(ISensorService sensors, IPanelDevice panel)
         {
+            if (sensors == null) throw new ArgumentNullException("sensors");
+            if (panel == null) throw new ArgumentNullException("panel");
+            _sensors = sensors;
+            _panel = panel;
+            _sensorCycle = new SensorCycle(sensors);
+            _panelCycle = new PanelCycle(panel);
+            _panelKeepalive = new PanelKeepalive(panel, OnPanelConnectionChanged);
             Log.Write("=== Mhiagos Control iniciando ===");
             _cfg = Config.Load();
-            Sensors.ShowAll = _cfg.ShowAllSensors;
+            _sensors.ShowAll = _cfg.ShowAllSensors;
 
             // antes de qualquer texto de tela: o menu da bandeja e montado logo
             // abaixo e a tela de carregamento pode aparecer a qualquer momento
@@ -124,7 +149,6 @@ namespace MhiagosControl
 
             // A abertura das fontes NAO acontece aqui. Ela e agendada para
             // depois que Application.Run assumir: veja AbrirSensores.
-            _iniciando = true;
             _marshal.BeginInvoke(new MethodInvoker(AbrirSensores));
         }
 
@@ -155,7 +179,7 @@ namespace MhiagosControl
             };
             _demora.Start();
 
-            Thread init = new Thread(delegate()
+            _sensorInit = new Thread(delegate()
             {
                 Exception falha = null;
                 try
@@ -168,12 +192,13 @@ namespace MhiagosControl
                 }
                 catch (Exception ex) { falha = ex; }
 
+                if (IsStopping) return;
                 try { _marshal.BeginInvoke(new SensoresProntosHandler(SensoresProntos), falha); }
                 catch (Exception ex) { Log.Error("retorno da inicializacao", ex); }
             });
-            init.IsBackground = true;
-            init.Name = "SensorInit";
-            init.Start();
+            _sensorInit.IsBackground = true;
+            _sensorInit.Name = "SensorInit";
+            _sensorInit.Start();
         }
 
         /// <summary>
@@ -213,7 +238,11 @@ namespace MhiagosControl
         /// <summary>Continuacao do arranque, ja de volta na thread de interface.</summary>
         private void SensoresProntos(Exception falha)
         {
-            _iniciando = false;
+            // A thread de abertura pode terminar depois de o usuario mandar sair.
+            // Nesse caso ela nao pode iniciar o worker nem reconstruir a bandeja
+            // que o encerramento ja desmontou.
+            if (IsStopping) return;
+
             if (_demora != null) { _demora.Stop(); _demora.Dispose(); _demora = null; }
             FecharSplash();
 
@@ -249,10 +278,13 @@ namespace MhiagosControl
             IniciarVigiaDeJogo();
 
             Publicar();   // antes de a thread comecar, senao o primeiro ciclo nao tem perfil
+            _panelKeepalive.Start();
             _worker = new Thread(new ThreadStart(WorkerLoop));
             _worker.IsBackground = true;
             _worker.Name = "PanelUpdate";
             _worker.Start();
+            Interlocked.CompareExchange(ref _runtimeState,
+                (int)RuntimeState.Running, (int)RuntimeState.Starting);
         }
 
         /// <summary>
@@ -264,10 +296,11 @@ namespace MhiagosControl
         {
             MouseEventArgs m = e as MouseEventArgs;
             if (m != null && m.Button != MouseButtons.Left) return;   // direito e o menu
-            if (_iniciando) MostrarSplash();
+            if (IsStarting) MostrarSplash();
         }
 
-        private volatile bool _iniciando = false;
+        private bool IsStarting { get { return Volatile.Read(ref _runtimeState) == (int)RuntimeState.Starting; } }
+        private bool IsStopping { get { return Volatile.Read(ref _runtimeState) >= (int)RuntimeState.Stopping; } }
         private string _statusInicial = null;   // T.OpeningSources, ja com idioma resolvido
 
         private void StatusInicial(string texto)
@@ -336,13 +369,21 @@ namespace MhiagosControl
             Profile p = mi.Tag as Profile;
             if (p == null) return;
 
+            string erro;
+            bool salvo = ProfileActivation.TryActivate(_cfg, p.Name, out erro);
+            if (!salvo)
+            {
+                RebuildProfileMenu();
+                MessageBox.Show(T.SaveFailed(erro), T.AppName,
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             // Escolha manual cancela o retorno automatico: se a pessoa trocou de
             // perfil com o jogo aberto, ela quer ESTE perfil, e devolver o antigo
             // quando o jogo fechar seria desfazer o que ela acabou de mandar.
             _perfilAntesDoJogo = null;
 
-            _cfg.ActiveName = p.Name;
-            _cfg.Save();
             Publicar();
             RebuildProfileMenu();
             ResetAlerts();
@@ -392,9 +433,10 @@ namespace MhiagosControl
                     // Guarda de onde veio, mas so na PRIMEIRA troca: pular de um
                     // jogo para outro sem passar pela area de trabalho nao pode
                     // fazer o retorno apontar para o perfil do jogo anterior.
-                    if (string.IsNullOrEmpty(_perfilAntesDoJogo)) _perfilAntesDoJogo = _cfg.ActiveName;
-
-                    TrocarPorJogo(alvo, "jogo " + agora);
+                    string anterior = _cfg.ActiveName;
+                    if (TrocarPorJogo(alvo, "jogo " + agora) &&
+                        string.IsNullOrEmpty(_perfilAntesDoJogo))
+                        _perfilAntesDoJogo = anterior;
                     return;
                 }
 
@@ -402,18 +444,25 @@ namespace MhiagosControl
                 if (!string.IsNullOrEmpty(_perfilAntesDoJogo))
                 {
                     string volta = _perfilAntesDoJogo;
-                    _perfilAntesDoJogo = null;
                     if (_cfg.NameExists(volta) && volta != _cfg.ActiveName)
-                        TrocarPorJogo(volta, "fim de " + (antes ?? "jogo"));
+                    {
+                        if (TrocarPorJogo(volta, "fim de " + (antes ?? "jogo")))
+                            _perfilAntesDoJogo = null;
+                    }
+                    else _perfilAntesDoJogo = null;
                 }
             }
             catch (Exception ex) { Log.Error("vigia de perfil por jogo", ex); }
         }
 
-        private void TrocarPorJogo(string nome, string motivo)
+        private bool TrocarPorJogo(string nome, string motivo)
         {
-            _cfg.ActiveName = nome;
-            _cfg.Save();
+            string erro;
+            if (!ProfileActivation.TryActivate(_cfg, nome, out erro))
+            {
+                Log.Write("perfil por jogo nao persistiu: " + erro);
+                return false;
+            }
             Publicar();
             RebuildProfileMenu();
             ResetAlerts();
@@ -422,6 +471,7 @@ namespace MhiagosControl
             // ninguem pedir; quem for procurar por que o mostrador mudou tem de
             // achar a resposta escrita.
             Log.Write("perfil por jogo: " + nome + " (" + motivo + ")");
+            return true;
         }
 
         /// <summary>
@@ -614,27 +664,32 @@ namespace MhiagosControl
 
         private void WorkerLoop()
         {
-            bool warnedDevice = false;
+            Stopwatch clock = Stopwatch.StartNew();
+            long next = 0;
             while (!_stop.WaitOne(0))
             {
-                DateTime started = DateTime.UtcNow;
+                next += PeriodMs;
                 if (!_paused)
                 {
-                    try { UpdateOnce(ref warnedDevice); }
+                    try { UpdateOnce(); }
                     catch (Exception ex)
                     {
                         Log.Error("ciclo de atualizacao", ex);
                         SetTooltip("Mhiagos Control - erro: " + ex.Message);
                     }
                 }
-                double spent = (DateTime.UtcNow - started).TotalMilliseconds;
-                int wait = (int)Math.Max(50, PeriodMs - spent);
-                if (_stop.WaitOne(wait)) break;
+                long wait = next - clock.ElapsedMilliseconds;
+                if (wait < 0)
+                {
+                    next += ((-wait / PeriodMs) + 1) * PeriodMs;
+                    wait = next - clock.ElapsedMilliseconds;
+                }
+                if (_stop.WaitOne((int)Math.Max(1, wait))) break;
             }
             Log.Write("thread de atualizacao encerrada");
         }
 
-        private void UpdateOnce(ref bool warnedDevice)
+        private void UpdateOnce()
         {
             Profile vigiar = _live;
             if (vigiar == null) return;   // ainda nao publicado
@@ -647,7 +702,7 @@ namespace MhiagosControl
             Profile cfg = Rodar(vigiar);
             bool mesmo = ReferenceEquals(cfg, vigiar) || cfg.Name == vigiar.Name;
 
-            SensorEntry e1, e2, g1, g2;
+            MonitorReadings readings;
             lock (_sensorLock)
             {
                 // Ciclo de amostra: a leitura se abre para os grupos dos cartoes
@@ -656,11 +711,7 @@ namespace MhiagosControl
                 bool amostrar = MetricHistory.HoraDeAmostrar();
                 if (amostrar) _sensors.Focar(Foco(true));
 
-                _sensors.Refresh();
-                e1 = _sensors.ReadEntry(cfg.Panel1Id);
-                e2 = _sensors.ReadEntry(cfg.Panel2Id);
-                g1 = mesmo ? e1 : _sensors.ReadEntry(vigiar.Panel1Id);
-                g2 = mesmo ? e2 : _sensors.ReadEntry(vigiar.Panel2Id);
+                readings = _sensorCycle.Refresh(cfg, vigiar, mesmo);
                 if (_snapshotWanted)
                     Interlocked.Exchange(ref _snapshot, _sensors.Snapshot());
 
@@ -673,22 +724,19 @@ namespace MhiagosControl
 
             MetricHistory.SalvarSeVencido();   // fora do lock: escreve em disco
 
-            PanelValue v1 = Scaling.Prepare(e1, Scaling.Effective(cfg.Divisor1, e1), cfg.Fahrenheit);
-            PanelValue v2 = Scaling.Prepare(e2, Scaling.Effective(cfg.Divisor2, e2), false);
+            bool ocioso = Ocioso();
+            PanelDispatch envio = _panelCycle.Prepare(cfg, readings.Display1, readings.Display2, ocioso);
+            _panelKeepalive.Publish(envio.Frame);
+            PanelValue v1 = envio.Panel1;
+            PanelValue v2 = envio.Panel2;
 
-            PanelValue a1 = mesmo ? v1 : Scaling.Prepare(g1, Scaling.Effective(vigiar.Divisor1, g1), vigiar.Fahrenheit);
-            PanelValue a2 = mesmo ? v2 : Scaling.Prepare(g2, Scaling.Effective(vigiar.Divisor2, g2), false);
+            PanelValue a1 = mesmo ? v1 : Scaling.Prepare(readings.Alert1, Scaling.Effective(vigiar.Divisor1, readings.Alert1), vigiar.Fahrenheit);
+            PanelValue a2 = mesmo ? v2 : Scaling.Prepare(readings.Alert2, Scaling.Effective(vigiar.Divisor2, readings.Alert2), false);
 
             // Apagar e sobre o mostrador, nao sobre a vigilancia: o quadro sai
             // em branco, mas os alertas continuam sendo avaliados com os
             // valores reais logo abaixo. Uma CPU nao esfria porque o dono saiu.
-            bool ocioso = Ocioso();
-            bool ok = ocioso
-                ? _panel.Send(null, null, cfg.Fahrenheit, cfg.Percent)
-                : _panel.Send(v1.Value, v2.Value, cfg.Fahrenheit, cfg.Percent);
-
-            if (!ok && !warnedDevice) { Log.Write("painel ausente ou envio falhou"); warnedDevice = true; }
-            else if (ok && warnedDevice) { Log.Write("painel reconectado"); warnedDevice = false; }
+            bool ok = _panelKeepalive.LastSent;
 
             EvaluateAlerts(vigiar, a1.Value, a2.Value);
 
@@ -703,6 +751,11 @@ namespace MhiagosControl
             if (v1.Clamped || v2.Clamped) text += T.TagOver;
             if (!ok) text += T.TagNoDevice;
             SetTooltip(text);
+        }
+
+        private void OnPanelConnectionChanged(bool connected)
+        {
+            Log.Write(connected ? "painel conectado" : "painel ausente ou envio falhou");
         }
 
         /// <summary>
@@ -810,20 +863,23 @@ namespace MhiagosControl
         /// </summary>
         private void EvaluateAlerts(Profile cfg, int? p1, int? p2)
         {
-            bool hi1 = Acima(p1, cfg.Alert1), lo1 = Abaixo(p1, cfg.Alert1Low);
-            bool hi2 = Acima(p2, cfg.Alert2), lo2 = Abaixo(p2, cfg.Alert2Low);
-
-            if (hi1 && !_hi1) Notify(T.AlertReached(1, p1.Value, cfg.Alert1));
-            if (hi2 && !_hi2) Notify(T.AlertReached(2, p2.Value, cfg.Alert2));
-            if (lo1 && !_lo1) Notify(T.AlertDropped(1, p1.Value, cfg.Alert1Low));
-            if (lo2 && !_lo2) Notify(T.AlertDropped(2, p2.Value, cfg.Alert2Low));
-
-            _hi1 = hi1; _hi2 = hi2; _lo1 = lo1; _lo2 = lo2;
-            bool any = hi1 || hi2 || lo1 || lo2;
-            if (any != _alerting)
+            lock (_alertLock)
             {
-                _alerting = any;
-                SetIconAlert(any);
+                bool hi1 = Acima(p1, cfg.Alert1), lo1 = Abaixo(p1, cfg.Alert1Low);
+                bool hi2 = Acima(p2, cfg.Alert2), lo2 = Abaixo(p2, cfg.Alert2Low);
+
+                if (hi1 && !_hi1) Notify(T.AlertReached(1, p1.Value, cfg.Alert1));
+                if (hi2 && !_hi2) Notify(T.AlertReached(2, p2.Value, cfg.Alert2));
+                if (lo1 && !_lo1) Notify(T.AlertDropped(1, p1.Value, cfg.Alert1Low));
+                if (lo2 && !_lo2) Notify(T.AlertDropped(2, p2.Value, cfg.Alert2Low));
+
+                _hi1 = hi1; _hi2 = hi2; _lo1 = lo1; _lo2 = lo2;
+                bool any = hi1 || hi2 || lo1 || lo2;
+                if (any != _alerting)
+                {
+                    _alerting = any;
+                    SetIconAlert(any);
+                }
             }
         }
 
@@ -835,8 +891,11 @@ namespace MhiagosControl
 
         private void ResetAlerts()
         {
-            _hi1 = _hi2 = _lo1 = _lo2 = false;
-            if (_alerting) { _alerting = false; SetIconAlert(false); }
+            lock (_alertLock)
+            {
+                _hi1 = _hi2 = _lo1 = _lo2 = false;
+                if (_alerting) { _alerting = false; SetIconAlert(false); }
+            }
         }
 
         private void Notify(string message)
@@ -883,6 +942,15 @@ namespace MhiagosControl
 
         private void OnConfig(object sender, EventArgs e)
         {
+            // A lista so existe depois de a thread de inicializacao publicar as
+            // fontes. Abrir antes montava uma janela incompleta e concorria com
+            // o primeiro Refresh; o clique passa a explicar o que esta ocorrendo.
+            if (IsStarting)
+            {
+                MostrarSplash();
+                return;
+            }
+
             try
             {
                 // Antes de qualquer leitura: com a janela aberta o ciclo volta a
@@ -907,7 +975,7 @@ namespace MhiagosControl
                 DialogResult r;
                 do
                 {
-                    using (SettingsForm f = new SettingsForm(_cfg, _cache, GetSnapshot, ReListSensors))
+                    using (SettingsForm f = new SettingsForm(_cfg, _cache, this))
                     {
                         // Aplicar dentro da janela ja vale no mostrador: sem
                         // isto o perfil so mudaria ao fechar, o que faria o
@@ -943,6 +1011,8 @@ namespace MhiagosControl
             return Interlocked.CompareExchange(ref _snapshot, null, null);
         }
 
+        Dictionary<string, float> ISettingsData.CurrentSnapshot() { return GetSnapshot(); }
+
         /// <summary>Remonta a lista de sensores sob o lock, para a janela de configuracao.</summary>
         private List<SensorEntry> ReListSensors()
         {
@@ -953,9 +1023,17 @@ namespace MhiagosControl
             }
         }
 
+        List<SensorEntry> ISettingsData.RefreshSensorList() { return ReListSensors(); }
+
+        void ISettingsData.SetShowAllSensors(bool showAll)
+        {
+            lock (_sensorLock) _sensors.ShowAll = showAll;
+        }
+
         private void OnPause(object sender, EventArgs e)
         {
             _paused = !_paused;
+            _panelKeepalive.Enabled = !_paused;
             _miPause.Text = _paused ? T.TrayResume : T.TrayPause;
             Log.Write(_paused ? "pausado" : "retomado");
             if (_paused) { ResetAlerts(); _icon.Text = T.TrayPaused; }
@@ -979,34 +1057,78 @@ namespace MhiagosControl
             Application.Exit();
         }
 
-        private bool _shutdown = false;
         private void Shutdown()
         {
-            if (_shutdown) return;
-            _shutdown = true;
+            int previous = Interlocked.Exchange(ref _runtimeState, (int)RuntimeState.Stopping);
+            if (previous >= (int)RuntimeState.Stopping) return;
 
             try { Microsoft.Win32.SystemEvents.SessionEnding -= new Microsoft.Win32.SessionEndingEventHandler(OnSessionEnding); } catch { }
 
+            if (_relogioDoJogo != null)
+            {
+                _relogioDoJogo.Stop();
+                _relogioDoJogo.Tick -= new EventHandler(OnVigiaDeJogo);
+                _relogioDoJogo.Dispose();
+                _relogioDoJogo = null;
+            }
+            if (_demora != null) { _demora.Stop(); _demora.Dispose(); _demora = null; }
+
             _stop.Set();
-            if (_worker != null && _worker.IsAlive && !_worker.Join(3000))
-                Log.Write("thread de atualizacao nao encerrou a tempo");
+            _panelKeepalive.Stop();
+            Stopwatch budget = Stopwatch.StartNew();
+            bool workerParou = EsperarThread(_worker, "atualizacao", budget);
+            bool painelParou = EsperarKeepalive(budget);
+            bool aberturaParou = EsperarThread(_sensorInit, "abertura de sensores", budget);
 
             // Depois de a thread parar: gravar com ela viva copiaria uma serie
-            // no meio de um balde sendo fechado.
+            // no meio de um balde sendo fechado. Pelo mesmo motivo, se uma
+            // thread resistir ao timeout, nao fechamos painel ou sensores sob os
+            // pes dela: o processo esta saindo e o Windows libera os handles.
+            bool podeDescartarRecursos = workerParou && painelParou && aberturaParou;
             try { MetricHistory.Salvar(); } catch (Exception ex) { Log.Error("gravacao do historico", ex); }
+            if (!podeDescartarRecursos)
+                Log.Write("encerramento: recursos de hardware ficarao para o termino do processo");
 
             if (_icon != null) { _icon.Visible = false; _icon.Dispose(); }
             if (_iconNormal != null) _iconNormal.Dispose();
             if (_iconAlert != null) _iconAlert.Dispose();
 
-            try { _panel.Close(); } catch (Exception ex) { Log.Error("fechamento do painel", ex); }
-            lock (_sensorLock)
+            if (podeDescartarRecursos)
             {
-                try { _sensors.Dispose(); } catch (Exception ex) { Log.Error("fechamento dos sensores", ex); }
+                try { _panel.Close(); } catch (Exception ex) { Log.Error("fechamento do painel", ex); }
+                lock (_sensorLock)
+                {
+                    try { _sensors.Dispose(); } catch (Exception ex) { Log.Error("fechamento dos sensores", ex); }
+                }
             }
+            _panelKeepalive.Dispose();
             if (_marshal != null) _marshal.Dispose();
+            if (podeDescartarRecursos) _stop.Dispose();
 
+            Volatile.Write(ref _runtimeState, (int)RuntimeState.Stopped);
             Log.Write("=== encerrado ===");
+        }
+
+        /// <summary>
+        /// Espera uma thread cooperativa sem permitir que um driver lento vire
+        /// descarte concorrente de handles. Threads do aplicativo sao de fundo;
+        /// no raro timeout, o termino do processo faz a limpeza final.
+        /// </summary>
+        private static bool EsperarThread(Thread thread, string nome, Stopwatch budget)
+        {
+            if (thread == null || !thread.IsAlive) return true;
+            int remaining = ShutdownTimeoutMs - (int)budget.ElapsedMilliseconds;
+            if (remaining > 0 && thread.Join(remaining)) return true;
+            Log.Write("thread de " + nome + " nao encerrou a tempo");
+            return false;
+        }
+
+        private bool EsperarKeepalive(Stopwatch budget)
+        {
+            int remaining = ShutdownTimeoutMs - (int)budget.ElapsedMilliseconds;
+            if (_panelKeepalive.Wait(Math.Max(0, remaining))) return true;
+            Log.Write("thread de keepalive nao encerrou a tempo");
+            return false;
         }
     }
 
