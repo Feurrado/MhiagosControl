@@ -88,7 +88,7 @@ namespace MhiagosControl
     /// proprio e o aplicativo funciona com qualquer subconjunto disponivel.
     /// Ambas exigem privilegio administrativo.
     /// </summary>
-    public class Sensors : ISensorService
+    public class Sensors : ISensorService, IFastSensorService
     {
         private readonly ISensorSource _primary;
         private readonly ISensorSource _fallback;
@@ -172,6 +172,42 @@ namespace MhiagosControl
             if (_fallback.Available) _fallback.Refresh();
             if (_auxiliary.Available) _auxiliary.Refresh();
             _raw = BuildRaw();
+        }
+
+        /// <summary>
+        /// Atualiza apenas o RTSS e substitui suas seis entradas no instantâneo.
+        /// HWiNFO, discos e demais fontes conservam o último ciclo completo;
+        /// assim FPS/frametime podem acompanhar o jogo sem multiplicar o custo
+        /// da varredura de hardware pela frequência do LCD.
+        /// </summary>
+        public void RefreshFast()
+        {
+            if (!_auxiliary.Available) return;
+            _auxiliary.Refresh();
+            List<SensorEntry> fast = _auxiliary.Read(null);
+            List<SensorEntry> next = new List<SensorEntry>(
+                (_raw != null ? _raw.Count : 0) + fast.Count);
+            if (_raw != null)
+                foreach (SensorEntry entry in _raw)
+                    if (entry == null || entry.Id == null ||
+                        !entry.Id.StartsWith(Rtss.Prefixo, StringComparison.OrdinalIgnoreCase))
+                        next.Add(entry);
+            next.AddRange(fast);
+            _raw = next;
+        }
+
+        /// <summary>Instantâneo pequeno que nunca força uma leitura completa.</summary>
+        public Dictionary<string, float> FastSnapshot()
+        {
+            Dictionary<string, float> values = new Dictionary<string, float>();
+            if (_raw == null) return values;
+            foreach (SensorEntry entry in _raw)
+                if (entry != null && entry.Id != null &&
+                    entry.Id.StartsWith(Rtss.Prefixo, StringComparison.OrdinalIgnoreCase) &&
+                    entry.Value.HasValue && !float.IsNaN(entry.Value.Value) &&
+                    !float.IsInfinity(entry.Value.Value))
+                    values[entry.Id] = entry.Value.Value;
+            return values;
         }
 
         /// <summary>

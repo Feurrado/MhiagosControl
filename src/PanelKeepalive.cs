@@ -10,9 +10,11 @@ namespace MhiagosControl
     /// </summary>
     internal sealed class PanelKeepalive : IDisposable
     {
-        private const int IntervalMs = 800;
+        private const int KeepaliveMs = 800;
+        internal const int MinDispatchMs = 250;
         private readonly IPanelDevice _panel;
         private readonly ManualResetEvent _stop = new ManualResetEvent(false);
+        private readonly AutoResetEvent _changed = new AutoResetEvent(false);
         private readonly Action<bool> _connectionChanged;
         private Thread _thread;
         private PanelFrame _latest;
@@ -28,12 +30,23 @@ namespace MhiagosControl
         }
 
         public bool LastSent { get { return _lastSent; } }
-        public bool Enabled { get { return _enabled; } set { _enabled = value; } }
+        public bool Enabled
+        {
+            get { return _enabled; }
+            set { _enabled = value; if (value) _changed.Set(); }
+        }
 
         public void Publish(PanelFrame frame)
         {
             if (frame == null) return;
-            Interlocked.Exchange(ref _latest, frame);
+            PanelFrame previous = Interlocked.Exchange(ref _latest, frame);
+            if (!Same(previous, frame)) _changed.Set();
+        }
+
+        private static bool Same(PanelFrame a, PanelFrame b)
+        {
+            return a != null && b != null && a.Panel1 == b.Panel1 && a.Panel2 == b.Panel2 &&
+                   a.Fahrenheit == b.Fahrenheit && a.Percent == b.Percent;
         }
 
         public void Start()
@@ -48,19 +61,29 @@ namespace MhiagosControl
         private void Run()
         {
             Stopwatch clock = Stopwatch.StartNew();
-            long next = 0;
-            while (!_stop.WaitOne(0))
+            long lastDispatch = -MinDispatchMs;
+            long keepaliveAt = 0;
+            WaitHandle[] signals = { _stop, _changed };
+            while (true)
             {
-                next += IntervalMs;
-                if (_enabled) DispatchOnce();
+                long now = clock.ElapsedMilliseconds;
+                int timeout = _enabled ? (int)Math.Max(1, keepaliveAt - now)
+                                       : Timeout.Infinite;
+                int reason = WaitHandle.WaitAny(signals, timeout);
+                if (reason == 0) break;
+                if (!_enabled) continue;
 
-                long delay = next - clock.ElapsedMilliseconds;
-                if (delay < 0)
-                {
-                    next += ((-delay / IntervalMs) + 1) * IntervalMs;
-                    delay = next - clock.ElapsedMilliseconds;
-                }
-                if (_stop.WaitOne((int)Math.Max(1, delay))) break;
+                now = clock.ElapsedMilliseconds;
+                long remaining = MinDispatchMs - (now - lastDispatch);
+                if (remaining > 0 && _stop.WaitOne((int)remaining)) break;
+
+                long dispatchStarted = clock.ElapsedMilliseconds;
+                DispatchOnce();
+                // Limite entre inícios, não depois do retorno: o SET_FEATURE
+                // leva ~9,5 ms neste painel. O intervalo é contado entre os
+                // inícios para manter os 250 ms pedidos sem acumular esse custo.
+                lastDispatch = dispatchStarted;
+                keepaliveAt = clock.ElapsedMilliseconds + KeepaliveMs;
             }
             Log.Write("thread de keepalive encerrada");
         }
@@ -97,7 +120,11 @@ namespace MhiagosControl
         public void Dispose()
         {
             Stop();
-            if (_thread == null || !_thread.IsAlive) _stop.Dispose();
+            if (_thread == null || !_thread.IsAlive)
+            {
+                _changed.Dispose();
+                _stop.Dispose();
+            }
         }
     }
 }

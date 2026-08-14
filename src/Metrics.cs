@@ -1102,11 +1102,11 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Limiares por unidade, para o cartao mudar de cor sozinho.
+        /// Faixas visuais por unidade, para o cartão mudar de cor sozinho.
         ///
         /// Sao os valores de senso comum de quem olha esses numeros: 80 °C
-        /// incomoda, 90 preocupa. Nao substituem os alertas configuraveis da
-        /// aba Alertas - aqui e leitura de relance, la e disparo.
+        /// incomoda, 90 preocupa. São apenas uma leitura de relance do cartão;
+        /// não disparam notificações.
         /// </summary>
         public static void Faixas(string unidade, out float? atencao, out float? perigo)
         {

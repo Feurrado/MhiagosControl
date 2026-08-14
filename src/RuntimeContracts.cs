@@ -20,6 +20,17 @@ namespace MhiagosControl
         SensorEntry ReadEntry(string identifier);
     }
 
+    /// <summary>
+    /// Caminho curto para fontes leves que mudam muito mais depressa que o
+    /// hardware. Mantido separado de ISensorService para fontes falsas e
+    /// integrações existentes não precisarem simular uma capacidade opcional.
+    /// </summary>
+    internal interface IFastSensorService
+    {
+        void RefreshFast();
+        Dictionary<string, float> FastSnapshot();
+    }
+
     /// <summary>Canal de saida do monitoramento para o painel fisico.</summary>
     public interface IPanelDevice
     {

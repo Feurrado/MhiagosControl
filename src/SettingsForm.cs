@@ -10,7 +10,7 @@ namespace MhiagosControl
     /// Janela principal de configuracao.
     ///
     /// Organizada em secoes na barra lateral em vez de uma tela unica: com
-    /// sensores, unidades, escala, alertas e perfis, tudo junto ficava denso
+    /// sensores, unidades, escala e perfis, tudo junto ficava denso
     /// demais para encontrar qualquer coisa.
     /// </summary>
     public class SettingsForm : Form
@@ -52,6 +52,7 @@ namespace MhiagosControl
         private Profile _current;
         private bool _loading = false;
         private Timer _tick;
+        private DateTime _lastSlowUiTickUtc = DateTime.MinValue;
         private Label _footerNote;
         private Timer _noteTimer;
         private FlatBtn _btSave, _btClose;
@@ -65,17 +66,13 @@ namespace MhiagosControl
         private Card _panelPreviewCard;
         private SensorSlot _slot1, _slot2;
 
-        // pagina Alertas
-        private Control _pgAlertas;
-        private NumberBox _alert1, _alert2, _alert1Low, _alert2Low;
-        private Label _alertInfo1, _alertInfo2, _alertCross;
-
         // pagina Perfis
         private Control _pgPerfis;
         private ProfileList _profileList;
         private PanelPreview _profilePreview;
-        private Label _profileInfo;
-        private FlatBtn _btnApply, _profileSensor1, _profileSensor2;
+        private FlatBtn _btnApply, _btnDefault, _profileSensor1, _profileSensor2;
+        private Card _cardGame, _cardRotation;
+        private Label _profilesNote;
 
         // pagina Sobre
         private Control _pgConfig;
@@ -89,8 +86,8 @@ namespace MhiagosControl
         /// Ha edicao ainda nao gravada. Governa o aviso ao fechar E o rodape.
         ///
         /// Propriedade, e nao campo, porque o valor e atribuido em uma duzia de
-        /// lugares - renomear perfil, importar, mexer num limiar, trocar de
-        /// sensor. Com campo, cada um deles teria de lembrar de avisar o rodape,
+        /// lugares - renomear perfil, importar, trocar sensor ou unidade. Com
+        /// campo, cada um deles teria de lembrar de avisar o rodape,
         /// e o que fosse esquecido deixaria o botao Salvar mentindo sobre haver
         /// ou nao o que gravar. Aqui nao ha o que esquecer.
         /// </summary>
@@ -174,7 +171,9 @@ namespace MhiagosControl
             Theme.Apply(this);
 
             _tick = new Timer();
-            _tick.Interval = 1000;
+            // A interface acompanha a mesma cadência do LCD. Assim não redesenha
+            // quatro vezes um valor que ainda não teve oportunidade de mudar.
+            _tick.Interval = 250;
             _tick.Tick += new EventHandler(OnTick);
             _tick.Start();
         }
@@ -285,10 +284,6 @@ namespace MhiagosControl
             paineis.Text = T.NavPanels; paineis.Glyph = ""; paineis.Page = BuildPagePaineis();
             _pgPaineis = paineis.Page;
 
-            NavItem alertas = new NavItem();
-            alertas.Text = T.NavAlerts; alertas.Glyph = ""; alertas.Page = BuildPageAlertas();
-            _pgAlertas = alertas.Page;
-
             NavItem perfis = new NavItem();
             perfis.Text = T.NavProfiles; perfis.Glyph = ""; perfis.Page = BuildPagePerfis();
             _pgPerfis = perfis.Page;
@@ -312,7 +307,7 @@ namespace MhiagosControl
             NavItem sobre = new NavItem();
             sobre.Text = T.NavAbout; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
 
-            foreach (NavItem it in new NavItem[] { visao, paineis, alertas, metricas, specs, perfis, config, sobre })
+            foreach (NavItem it in new NavItem[] { visao, paineis, metricas, specs, perfis, config, sobre })
             {
                 _nav.Add(it);
                 it.Page.Dock = DockStyle.Fill;
@@ -526,7 +521,6 @@ namespace MhiagosControl
             else if (pagina == _pgVisao) { if (pagina.Visible) ArranjarVisaoGeral(); }
             else if (pagina == _pgSpecs) { if (pagina.Visible) ArranjarSpecsPagina(); }
             else if (pagina == _pgPaineis) ArranjarPaineis();
-            else if (pagina == _pgAlertas) Elastico(pagina, 820, null);
             else Elastico(pagina);
         }
 
@@ -1456,25 +1450,42 @@ namespace MhiagosControl
                 MostrarLinhasDeSpec(c, 3);
             }
 
-            int colunas = disp >= 900 ? 3 : (disp >= 620 ? 2 : 1);
-            int larg = (disp - (colunas - 1) * Esp) / colunas;
-
-            int[] alturas = new int[colunas];
-            for (int i = 0; i < colunas; i++) alturas[i] = topo;
-
-            foreach (Card c in _specCards)
+            if (disp >= 620 && _specCards.Count >= 7)
             {
-                // Sempre na coluna mais BAIXA: com alturas muito diferentes -
-                // "Sistema" sao cinco linhas e "Processador" sao catorze -
-                // preencher em ziguezague deixaria uma coluna com o dobro da
-                // outra e um rodape vazio do lado.
-                int alvo = 0;
-                for (int i = 1; i < colunas; i++) if (alturas[i] < alturas[alvo]) alvo = i;
+                // Ordem visual estável: duas fileiras de componentes, discos
+                // usando a largura toda e, por fim, rede/sistema. O antigo
+                // empacotamento pela coluna mais curta deixava Armazenamento
+                // sozinho diante de dois cartões empilhados e um grande vazio.
+                int half = (disp - Esp) / 2;
+                int y = topo;
+                ArranjarParDeSpecs(0, 1, y, half, Esp); y += 128 + Esp;
+                ArranjarParDeSpecs(2, 3, y, half, Esp); y += 128 + Esp;
 
-                c.SetBounds(2 + alvo * (larg + Esp), alturas[alvo], larg, c.Height);
-                alturas[alvo] += c.Height + Esp;
+                Card storage = _specCards[4];
+                storage.SetBounds(2, y, disp, 104);
+                ArranjarLinhasDeSpecEmColunas(storage);
+                y += storage.Height + Esp;
 
-                ArranjarLinhasDeSpec(c);
+                ArranjarParDeSpecs(5, 6, y, half, Esp); y += 128 + Esp;
+
+                // Grupos futuros não somem: entram abaixo em largura inteira.
+                for (int i = 7; i < _specCards.Count; i++)
+                {
+                    Card extra = _specCards[i];
+                    extra.SetBounds(2, y, disp, 128);
+                    ArranjarLinhasDeSpec(extra);
+                    y += extra.Height + Esp;
+                }
+            }
+            else
+            {
+                int y = topo;
+                foreach (Card c in _specCards)
+                {
+                    c.SetBounds(2, y, disp, 128);
+                    ArranjarLinhasDeSpec(c);
+                    y += c.Height + Esp;
+                }
             }
 
             // O aviso ao lado do botao acompanha a largura: fixo em 600 px, ele
@@ -1483,6 +1494,37 @@ namespace MhiagosControl
                 _lbSpecsNota.Width = Math.Max(160, disp - _lbSpecsNota.Left);
 
             _pgSpecs.Sincronizar();
+        }
+
+        private void ArranjarParDeSpecs(int left, int right, int y, int width, int gap)
+        {
+            Card a = _specCards[left], b = _specCards[right];
+            a.SetBounds(2, y, width, 128);
+            b.SetBounds(2 + width + gap, y, width, 128);
+            ArranjarLinhasDeSpec(a);
+            ArranjarLinhasDeSpec(b);
+        }
+
+        /// <summary>Três unidades de armazenamento lado a lado no resumo.</summary>
+        private static void ArranjarLinhasDeSpecEmColunas(Card card)
+        {
+            List<Label> vals = card.Tag as List<Label>;
+            if (vals == null || vals.Count == 0) return;
+            int count = Math.Min(3, vals.Count);
+            int gap = 18;
+            int width = (card.Width - 32 - (count - 1) * gap) / count;
+            for (int i = 0; i < vals.Count; i++)
+            {
+                bool visible = i < count;
+                Label val = vals[i];
+                Label cap = val.Tag as Label;
+                val.Visible = visible;
+                if (cap != null) cap.Visible = visible;
+                if (!visible) continue;
+                int x = 16 + i * (width + gap);
+                if (cap != null) cap.SetBounds(x, 46, width, 17);
+                val.SetBounds(x, 66, width, 20);
+            }
         }
 
         private static void MostrarLinhasDeSpec(Card card, int quantidade)
@@ -1515,19 +1557,21 @@ namespace MhiagosControl
             List<Label> vals = c.Tag as List<Label>;
             if (vals == null) return;
 
-            int rotulo = c.Width * 34 / 100;
+            int rotulo = c.Width * 30 / 100;
             if (rotulo < 88) rotulo = 88;
-            if (rotulo > 150) rotulo = 150;
+            if (rotulo > 128) rotulo = 128;
 
             int xVal = 16 + rotulo + 8;
             int larg = c.Width - xVal - 14;
             if (larg < 60) larg = 60;
 
-            foreach (Label val in vals)
+            for (int i = 0; i < vals.Count; i++)
             {
+                Label val = vals[i];
                 Label cap = val.Tag as Label;
-                if (cap != null) cap.SetBounds(16, val.Top + 2, rotulo, 17);
-                val.SetBounds(xVal, val.Top, larg, 19);
+                int y = 46 + i * 24;
+                if (cap != null) cap.SetBounds(16, y + 2, rotulo, 17);
+                val.SetBounds(xVal, y, larg, 19);
             }
         }
 
@@ -1722,100 +1766,11 @@ namespace MhiagosControl
             return copy;
         }
 
-        // ---------------- pagina: Alertas ----------------
-
-        private Control BuildPageAlertas()
-        {
-            Panel page = new Pagina();
-            ((Pagina)page).RolarNaVertical();
-            // fundo opaco vem da propria Pagina
-
-            Card c = new Card();
-            c.Title = T.Thresholds;
-            c.SetBounds(0, 0, 756, 288);
-            page.Controls.Add(c);
-
-            // Uma coluna por mostrador, cada uma num painel proprio.
-            //
-            // Soltas dentro do cartao, as duas ficavam presas em x=16 e x=386: o
-            // cartao esticado deixava a segunda coluna parada no meio e um vao
-            // do tamanho da esticada a direita dela - o mesmo defeito que esta
-            // pagina veio consertar, so que agora dentro do cartao. Agrupadas,
-            // uma se ancora a esquerda e a outra a direita, e as duas se afastam
-            // com o cartao, como os dois cartoes da pagina de Paineis.
-            Panel col1 = MakeLimiar(c, T.Panel1, 16, 58, out _alert1, out _alert1Low, out _alertInfo1);
-            col1.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-
-            Panel col2 = MakeLimiar(c, T.Panel2, 386, 58, out _alert2, out _alert2Low, out _alertInfo2);
-            col2.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-
-            // Aviso de faixa impossivel. Fica sempre no mesmo lugar, e nao num
-            // balao ao salvar: e uma observacao sobre o que esta na tela, e
-            // interromper para dize-la seria desproporcional - a configuracao
-            // e valida, so nao faz o que parece fazer.
-            _alertCross = MakeLabel("", 16, 182, Ui.FontSmall);
-            _alertCross.Size = new Size(720, 20);
-            _alertCross.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            _alertCross.ForeColor = Ui.Warn;
-            _alertCross.Visible = false;
-            c.Controls.Add(_alertCross);
-
-            Label note = MakeLabel(T.AlertsNote, 16, 210, Ui.FontSmall);
-            note.Size = new Size(720, 56);
-            note.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            note.ForeColor = Ui.Muted;
-            c.Controls.Add(note);
-
-            return page;
-        }
-
         /// <summary>Gruda o controle na borda direita do que o hospeda.</summary>
         private static FlatBtn ADireita(FlatBtn b)
         {
             b.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             return b;
-        }
-
-        /// <summary>
-        /// Titulo, leitura atual e os dois limiares de um mostrador, numa coluna.
-        ///
-        /// Devolve o painel que embrulha a coluna: e por ele que quem chama a
-        /// ancora, e sem o embrulho nao havia o que ancorar - eram cinco
-        /// controles avulsos, cada um com o seu x fixo.
-        /// </summary>
-        private Panel MakeLimiar(Control host, string titulo, int x, int y,
-                                 out NumberBox alto, out NumberBox baixo, out Label info)
-        {
-            Panel col = new Panel();
-            col.SetBounds(x, y, 330, 108);
-            col.BackColor = Color.Transparent;
-            host.Controls.Add(col);
-
-            col.Controls.Add(MakeLabel(titulo, 0, 0, Ui.FontMed));
-
-            info = MakeLabel("", 0, 24, Ui.FontSmall);
-            info.Size = new Size(330, 18);
-            info.ForeColor = Ui.Muted;
-            col.Controls.Add(info);
-
-            alto = MakeCampoLimiar(col, T.AboveOf, 0, 50);
-            baixo = MakeCampoLimiar(col, T.BelowOf, 152, 50);
-            return col;
-        }
-
-        private NumberBox MakeCampoLimiar(Control host, string legenda, int x, int y)
-        {
-            Label cap = MakeLabel(legenda, x, y, Ui.FontSmall);
-            cap.Size = new Size(140, 18);
-            cap.ForeColor = Ui.Muted;
-            host.Controls.Add(cap);
-
-            NumberBox n = new NumberBox();
-            n.Minimum = 0; n.Maximum = 999;
-            n.SetBounds(x, y + 22, 120, 34);
-            n.ValueChanged += delegate { OnChanged(); };
-            host.Controls.Add(n);
-            return n;
         }
 
         // ---------------- pagina: Perfis ----------------
@@ -1845,6 +1800,7 @@ namespace MhiagosControl
             _profileList.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _profileList.Resolve = NomeDoSensor;
             _profileList.ActiveName = _cfg.ActiveName;
+            _profileList.DefaultName = _cfg.DefaultProfile.Name;
             _profileList.SelectionChanged += new EventHandler(OnProfileSelected);
             _profileList.ItemActivated += delegate { AplicarPerfil(); };
             c.Controls.Add(_profileList);
@@ -1883,16 +1839,17 @@ namespace MhiagosControl
             _profileSensor2.Click += delegate { TrocarSensorDoPerfil(2); };
             cv.Controls.Add(_profileSensor2);
 
-            _profileInfo = MakeLabel("", 16, 390, Ui.FontSmall);
-            _profileInfo.Size = new Size(378, 40);
-            _profileInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            _profileInfo.ForeColor = Ui.Muted;
-            cv.Controls.Add(_profileInfo);
+            _btnDefault = new FlatBtn();
+            _btnDefault.Text = T.SetAsDefault;
+            _btnDefault.SetBounds(12, 416, 150, 40);
+            _btnDefault.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            _btnDefault.Click += delegate { DefinirPerfilPadrao(); };
+            cv.Controls.Add(_btnDefault);
 
             _btnApply = new FlatBtn();
             _btnApply.Text = T.ApplyProfile;
             _btnApply.Primary = true;
-            _btnApply.SetBounds(12, 448, 386, 40);
+            _btnApply.SetBounds(168, 416, 230, 40);
             _btnApply.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _btnApply.Click += delegate { AplicarPerfil(); };
             cv.Controls.Add(_btnApply);
@@ -1900,36 +1857,37 @@ namespace MhiagosControl
             // A automacao por jogo vem antes do rodizio: ela e uma relacao entre
             // o perfil selecionado acima e um aplicativo real, e deixa-la no fim
             // escondia a acao principal atras de uma frase com apenas a contagem.
-            Card cj = new Card();
-            cj.Title = T.GameProfilesCard;
-            cj.SetBounds(0, 512, 756, 400);
-            page.Controls.Add(cj);
+            _cardGame = new Card();
+            _cardGame.Title = T.GameProfilesCard;
+            _cardGame.SetBounds(0, 512, 756, 400);
+            page.Controls.Add(_cardGame);
 
             _tgJogo = new Toggle();
             _tgJogo.Label = T.GameProfilesOn;
             _tgJogo.SetBounds(16, 48, 560, 26);
             _tgJogo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _tgJogo.CheckedChanged += new EventHandler(OnToggleJogo);
-            cj.Controls.Add(_tgJogo);
+            _cardGame.Controls.Add(_tgJogo);
 
             Label atual = MakeLabel(T.CurrentGame, 16, 84, Ui.FontSmall);
             atual.ForeColor = Ui.Muted;
-            cj.Controls.Add(atual);
+            _cardGame.Controls.Add(atual);
 
             _gameIcon = new GameIconView();
-            _gameIcon.SetBounds(16, 108, 52, 52);
-            cj.Controls.Add(_gameIcon);
+            // O centro coincide com o ícone das linhas de vínculos abaixo.
+            _gameIcon.SetBounds(24, 108, 52, 52);
+            _cardGame.Controls.Add(_gameIcon);
 
             _lbJogoNome = MakeLabel(T.NoGameToBind, 82, 106, Ui.FontMed);
             _lbJogoNome.Size = new Size(400, 26);
             _lbJogoNome.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            cj.Controls.Add(_lbJogoNome);
+            _cardGame.Controls.Add(_lbJogoNome);
 
             _lbJogoAtual = MakeLabel("", 82, 132, Ui.FontSmall);
             _lbJogoAtual.Size = new Size(400, 22);
             _lbJogoAtual.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _lbJogoAtual.ForeColor = Ui.Accent;
-            cj.Controls.Add(_lbJogoAtual);
+            _cardGame.Controls.Add(_lbJogoAtual);
 
             _btVincular = new FlatBtn();
             _btVincular.Text = T.BindGame;
@@ -1937,61 +1895,61 @@ namespace MhiagosControl
             _btVincular.SetBounds(510, 106, 230, 34);
             _btVincular.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _btVincular.Click += delegate { VincularJogo(); };
-            cj.Controls.Add(_btVincular);
+            _cardGame.Controls.Add(_btVincular);
 
             _btDesvincular = new FlatBtn();
             _btDesvincular.Text = T.UnbindGame;
             _btDesvincular.SetBounds(510, 146, 230, 30);
             _btDesvincular.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _btDesvincular.Click += delegate { DesvincularJogo(); };
-            cj.Controls.Add(_btDesvincular);
+            _cardGame.Controls.Add(_btDesvincular);
 
             _lbJogoNota = MakeLabel(T.GameProfilesNote, 16, 177, Ui.FontSmall);
             _lbJogoNota.Size = new Size(724, 38);
             _lbJogoNota.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _lbJogoNota.ForeColor = Ui.Faint;
-            cj.Controls.Add(_lbJogoNota);
+            _cardGame.Controls.Add(_lbJogoNota);
 
             Label vinculos = MakeLabel(T.GameBindings, 16, 219, Ui.FontMed);
-            cj.Controls.Add(vinculos);
+            _cardGame.Controls.Add(vinculos);
 
             _gameBindings = new GameBindingList();
             _gameBindings.EmptyText = T.NoGameBindings;
             _gameBindings.SetBounds(16, 246, 724, 138);
             _gameBindings.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _gameBindings.RemoveRequested += delegate(string key) { RemoverVinculo(key); };
-            cj.Controls.Add(_gameBindings);
+            _cardGame.Controls.Add(_gameBindings);
 
             // O rodizio continua junto dos perfis, mas depois da automacao mais
             // frequente e visualmente mais rica.
-            Card cg = new Card();
-            cg.Title = T.Rotation;
-            cg.SetBounds(0, 924, 756, 150);
-            page.Controls.Add(cg);
+            _cardRotation = new Card();
+            _cardRotation.Title = T.Rotation;
+            _cardRotation.SetBounds(0, 924, 756, 150);
+            page.Controls.Add(_cardRotation);
 
             _tgRotate = new Toggle();
             _tgRotate.Label = T.IncludeInRotation;
             _tgRotate.SetBounds(16, 48, 460, 26);
             _tgRotate.CheckedChanged += new EventHandler(OnToggleRotate);
-            cg.Controls.Add(_tgRotate);
+            _cardRotation.Controls.Add(_tgRotate);
 
             _rotSecs = new NumberBox();
             _rotSecs.Minimum = 2; _rotSecs.Maximum = 999;
             _rotSecs.Value = _cfg.RotateSeconds > 0 ? _cfg.RotateSeconds : 20;
             _rotSecs.SetBounds(16, 84, 110, 32);
             _rotSecs.ValueChanged += new EventHandler(OnRotateSeconds);
-            cg.Controls.Add(_rotSecs);
+            _cardRotation.Controls.Add(_rotSecs);
 
             _rotNote = MakeLabel("", 134, 84, Ui.FontSmall);
             _rotNote.Size = new Size(600, 32);
             _rotNote.TextAlign = ContentAlignment.MiddleLeft;
             _rotNote.ForeColor = Ui.Muted;
-            cg.Controls.Add(_rotNote);
+            _cardRotation.Controls.Add(_rotNote);
 
-            Label note = MakeLabel(T.ProfilesNote, 2, 1086, Ui.FontSmall);
-            note.Size = new Size(750, 40);
-            note.ForeColor = Ui.Muted;
-            page.Controls.Add(note);
+            _profilesNote = MakeLabel(T.ProfilesNote, 2, 1086, Ui.FontSmall);
+            _profilesNote.Size = new Size(750, 40);
+            _profilesNote.ForeColor = Ui.Muted;
+            page.Controls.Add(_profilesNote);
 
             AtualizarRodizio();
             AtualizarJogo();
@@ -2167,6 +2125,18 @@ namespace MhiagosControl
             if (next == _gameBindingsSignature) return;
             _gameBindingsSignature = next;
             _gameBindings.SetItems(items);
+            ArranjarSecaoDeJogos(items.Count);
+        }
+
+        private void ArranjarSecaoDeJogos(int quantidade)
+        {
+            if (_cardGame == null || _gameBindings == null || _cardRotation == null) return;
+            _gameBindings.Height = GameBindingList.PreferredHeight(quantidade);
+            _cardGame.Height = _gameBindings.Bottom + 16;
+            _cardRotation.Top = _cardGame.Bottom + 12;
+            if (_profilesNote != null) _profilesNote.Top = _cardRotation.Bottom + 12;
+            Pagina pagina = _pgPerfis as Pagina;
+            if (pagina != null) pagina.Sincronizar();
         }
 
         /// <summary>Casa o jogo detectado com o perfil SELECIONADO na lista.</summary>
@@ -2270,6 +2240,31 @@ namespace MhiagosControl
             Aviso(T.ApplyProfile + ": " + p.Name);
         }
 
+        /// <summary>Escolhe e persiste o destino usado quando um jogo termina.</summary>
+        private void DefinirPerfilPadrao()
+        {
+            Profile p = _profileList != null ? _profileList.Selected : _current;
+            if (p == null) return;
+
+            SaveToProfile();
+            string anterior = _cfg.DefaultProfileName;
+            _cfg.DefaultProfileName = p.Name;
+            string erro;
+            if (!_session.TrySaveAll(out erro))
+            {
+                _cfg.DefaultProfileName = anterior;
+                _saved = false; _dirty = true;
+                Aviso(T.SaveFailed(erro));
+                return;
+            }
+
+            _saved = true; _dirty = false;
+            _profileList.DefaultName = p.Name;
+            _profileList.Invalidate();
+            AtualizarPreviaDoPerfil();
+            Aviso(T.DefaultProfileSet(p.Name));
+        }
+
         private FlatBtn MakeSideButton(string text, int x, int y, int w, EventHandler h)
         {
             FlatBtn b = new FlatBtn();
@@ -2284,6 +2279,7 @@ namespace MhiagosControl
             if (_profileList == null) return;
             _loading = true;
             _profileList.ActiveName = _cfg.ActiveName;
+            _profileList.DefaultName = _cfg.DefaultProfile.Name;
             _profileList.SetItems(_cfg.Profiles, _current);
             _loading = false;
             AtualizarPreviaDoPerfil();
@@ -2304,8 +2300,6 @@ namespace MhiagosControl
             _profilePreview.Value2 = v2.Value;
             _profilePreview.Fahrenheit = p.Fahrenheit;
             _profilePreview.Percent = p.Percent;
-            _profilePreview.Alert1 = Fora(v1, p.Alert1, p.Alert1Low);
-            _profilePreview.Alert2 = Fora(v2, p.Alert2, p.Alert2Low);
             _profilePreview.Invalidate();
 
             string n1 = NomeDoSensor(p.Panel1Id), n2 = NomeDoSensor(p.Panel2Id);
@@ -2313,15 +2307,18 @@ namespace MhiagosControl
                                    "  (" + (p.Fahrenheit ? "°F" : "°C") + ")";
             _profileSensor2.Text = T.PanelShort(2) + "  ·  " + (n2 ?? T.NoSensorChosen) +
                                    "  (" + (p.Percent ? "%" : "W") + ")";
-            _profileInfo.Text = T.Thresholds + ":  " + Faixa(p.Alert1, p.Alert1Low) +
-                "   ·   " + Faixa(p.Alert2, p.Alert2Low);
-
             AtualizarRodizio();
 
             bool ativo = string.Equals(p.Name, _cfg.ActiveName, StringComparison.Ordinal);
             _btnApply.Text = ativo ? T.ApplyProfile + "  (" + T.AlreadyActive + ")" : T.ApplyProfile;
             _btnApply.Enabled = !ativo;
             _btnApply.Invalidate();
+
+            bool padrao = string.Equals(p.Name, _cfg.DefaultProfile.Name,
+                                        StringComparison.Ordinal);
+            _btnDefault.Text = padrao ? T.AlreadyDefault : T.SetAsDefault;
+            _btnDefault.Enabled = !padrao;
+            _btnDefault.Invalidate();
         }
 
         /// <summary>
@@ -2397,7 +2394,7 @@ namespace MhiagosControl
         ///
         /// SaveToProfile antes de tudo porque o perfil em edicao mora nos
         /// controles ate alguem mandar grava-lo: sem isso, exportar logo depois
-        /// de mexer num limiar exportaria o valor antigo, e o arquivo sairia
+        /// de trocar um sensor exportaria o valor antigo, e o arquivo sairia
         /// diferente do que esta na tela sem nenhum aviso.
         /// </summary>
         private void OnExportProfile(object sender, EventArgs e)
@@ -2476,10 +2473,12 @@ namespace MhiagosControl
             // guarda o nome, e nao a referencia, entao o antigo deixaria de
             // casar com qualquer perfil e o primeiro da lista viraria o ativo.
             bool eraAtivo = string.Equals(alvo.Name, _cfg.ActiveName, StringComparison.Ordinal);
+            bool eraPadrao = string.Equals(alvo.Name, _cfg.DefaultProfile.Name, StringComparison.Ordinal);
             string nomeAnterior = alvo.Name;
             alvo.Name = name;
             _cfg.RenomearPerfilNosJogos(nomeAnterior, name);
             if (eraAtivo) _cfg.ActiveName = name;
+            if (eraPadrao) _cfg.DefaultProfileName = name;
 
             if (alvo == _current) { _nav.Subtitle = name; _nav.Invalidate(); }
             _dirty = true;
@@ -2498,6 +2497,10 @@ namespace MhiagosControl
             if (_current == alvo) _current = _cfg.Profiles[0];
             if (string.Equals(_cfg.ActiveName, alvo.Name, StringComparison.Ordinal))
                 _cfg.ActiveName = _cfg.Profiles[0].Name;
+            if (string.Equals(_cfg.DefaultProfileName, alvo.Name, StringComparison.Ordinal))
+                _cfg.DefaultProfileName = _cfg.NameExists(_cfg.ActiveName)
+                    ? _cfg.ActiveName : _cfg.Profiles[0].Name;
+            _cfg.EnsureDefaultProfile();
 
             _nav.Subtitle = _current.Name;
             _nav.Invalidate();
@@ -2779,7 +2782,7 @@ namespace MhiagosControl
         private readonly List<string> _cardIds = new List<string>();
         private readonly List<int> _cardTamanhos = new List<int>();
 
-        private FlatBtn _btAddMetrica, _btPadraoMetrica;
+        private FlatBtn _btAddMetrica, _btPadraoMetrica, _btPerfisMetrica;
         private Segmented _segJanela;
         private Label _lbDicaMetricas, _lbSemMetricas;
         private bool _arranjando = false;
@@ -2856,6 +2859,121 @@ namespace MhiagosControl
         }
 
         /// <summary>
+        /// Perfis de métricas ficam num menu hierárquico: a primeira ação cria
+        /// um novo e cada perfil existente concentra aplicar/atualizar/renomear/
+        /// excluir sem ocupar permanentemente a barra da grade.
+        /// </summary>
+        private void MenuDePerfisDeMetricas()
+        {
+            ContextMenu menu = new ContextMenu();
+            menu.MenuItems.Add(new MenuItem(T.SaveMetricProfile,
+                delegate { SalvarPerfilDeMetricas(); }));
+
+            if (_cfg.MetricProfiles.Count > 0) menu.MenuItems.Add("-");
+            foreach (MetricProfile item in _cfg.MetricProfiles)
+            {
+                MetricProfile profile = item;
+                MenuItem group = new MenuItem(profile.Name);
+                group.MenuItems.Add(new MenuItem(T.Apply,
+                    delegate { AplicarPerfilDeMetricas(profile); }));
+                group.MenuItems.Add(new MenuItem(T.UpdateMetricProfile,
+                    delegate { AtualizarPerfilDeMetricas(profile); }));
+                group.MenuItems.Add(new MenuItem(T.RenameMetricProfile,
+                    delegate { RenomearPerfilDeMetricas(profile); }));
+                group.MenuItems.Add("-");
+                group.MenuItems.Add(new MenuItem(T.DeleteMetricProfile,
+                    delegate { ExcluirPerfilDeMetricas(profile); }));
+                menu.MenuItems.Add(group);
+            }
+            menu.Show(_btPerfisMetrica, new Point(0, _btPerfisMetrica.Height));
+        }
+
+        private MetricProfile CapturarPerfilDeMetricas(string nome)
+        {
+            MetricProfile profile = new MetricProfile();
+            profile.Name = nome;
+            profile.Range = MetricHistory.JanelaValida(_cfg.MetricRange);
+            profile.Ids.AddRange(_cfg.MetricIds);
+            profile.Sizes.AddRange(_cfg.MetricSizes);
+            return profile;
+        }
+
+        private static void CopiarPerfilDeMetricas(MetricProfile source, MetricProfile target)
+        {
+            target.Range = source.Range;
+            target.Ids.Clear(); target.Ids.AddRange(source.Ids);
+            target.Sizes.Clear(); target.Sizes.AddRange(source.Sizes);
+        }
+
+        private void SalvarPerfilDeMetricas()
+        {
+            string nome = Prompt(T.MetricProfileName,
+                T.DefaultMetricProfileName(_cfg.MetricProfiles.Count + 1));
+            if (string.IsNullOrWhiteSpace(nome)) return;
+            if (_cfg.MetricProfileNameExists(nome)) { Warn(T.NameTaken); return; }
+
+            MetricProfile profile = CapturarPerfilDeMetricas(nome);
+            _cfg.MetricProfiles.Add(profile);
+            if (!GravarMetricas()) { _cfg.MetricProfiles.Remove(profile); return; }
+            Aviso(T.MetricProfileSaved(profile.Name));
+        }
+
+        private void AplicarPerfilDeMetricas(MetricProfile profile)
+        {
+            if (profile == null) return;
+            List<string> oldIds = new List<string>(_cfg.MetricIds);
+            List<int> oldSizes = new List<int>(_cfg.MetricSizes);
+            int oldRange = _cfg.MetricRange;
+
+            _cfg.MetricIds.Clear(); _cfg.MetricIds.AddRange(profile.Ids);
+            _cfg.MetricSizes.Clear(); _cfg.MetricSizes.AddRange(profile.Sizes);
+            _cfg.MetricRange = MetricHistory.JanelaValida(profile.Range);
+            _cfg.MetricsChosen = true;
+            if (!GravarMetricas())
+            {
+                _cfg.MetricIds.Clear(); _cfg.MetricIds.AddRange(oldIds);
+                _cfg.MetricSizes.Clear(); _cfg.MetricSizes.AddRange(oldSizes);
+                _cfg.MetricRange = oldRange;
+                return;
+            }
+            MontarMetricas();
+            if (Applied != null) Applied(this, EventArgs.Empty);
+            Aviso(T.MetricProfileApplied(profile.Name));
+        }
+
+        private void AtualizarPerfilDeMetricas(MetricProfile profile)
+        {
+            if (profile == null) return;
+            MetricProfile backup = profile.Clone();
+            CopiarPerfilDeMetricas(CapturarPerfilDeMetricas(profile.Name), profile);
+            if (!GravarMetricas()) CopiarPerfilDeMetricas(backup, profile);
+            else Aviso(T.MetricProfileSaved(profile.Name));
+        }
+
+        private void RenomearPerfilDeMetricas(MetricProfile profile)
+        {
+            if (profile == null) return;
+            string nome = Prompt(T.MetricProfileName, profile.Name);
+            if (string.IsNullOrWhiteSpace(nome) || nome == profile.Name) return;
+            MetricProfile existing = _cfg.MetricProfileByName(nome);
+            if (existing != null && !ReferenceEquals(existing, profile)) { Warn(T.NameTaken); return; }
+            string old = profile.Name;
+            profile.Name = nome;
+            if (!GravarMetricas()) profile.Name = old;
+        }
+
+        private void ExcluirPerfilDeMetricas(MetricProfile profile)
+        {
+            if (profile == null) return;
+            if (MessageBox.Show(T.DeleteMetricProfileQ(profile.Name), T.AppName,
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            int index = _cfg.MetricProfiles.IndexOf(profile);
+            if (index < 0) return;
+            _cfg.MetricProfiles.RemoveAt(index);
+            if (!GravarMetricas()) _cfg.MetricProfiles.Insert(index, profile);
+        }
+
+        /// <summary>
         /// Troca a grade pelo conjunto escolhido. Nulo significa o automatico.
         ///
         /// Conjunto que nao acha nada NAO limpa a grade: numa maquina sem RTSS o
@@ -2898,6 +3016,9 @@ namespace MhiagosControl
                     target.MetricSizes.Clear(); target.MetricSizes.AddRange(draft.MetricSizes);
                     target.MetricsChosen = draft.MetricsChosen;
                     target.MetricRange = draft.MetricRange;
+                    target.MetricProfiles.Clear();
+                    foreach (MetricProfile profile in draft.MetricProfiles)
+                        target.MetricProfiles.Add(profile.Clone());
                 }, out erro);
                 if (!salvo) { _dirty = true; Aviso(T.SaveFailed(erro)); }
                 return salvo;
@@ -3070,6 +3191,11 @@ namespace MhiagosControl
             _btPadraoMetrica.Click += delegate { MenuDeConjuntos(); };
             _pgMetricas.Controls.Add(_btPadraoMetrica);
 
+            _btPerfisMetrica = new FlatBtn();
+            _btPerfisMetrica.Text = T.MetricProfiles;
+            _btPerfisMetrica.Click += delegate { MenuDePerfisDeMetricas(); };
+            _pgMetricas.Controls.Add(_btPerfisMetrica);
+
             // Janela de tempo dos graficos. Vale para a grade inteira: comparar
             // dois cartoes em escalas de tempo diferentes nao diz nada, e e
             // exatamente o que uma escolha por cartao permitiria fazer sem
@@ -3180,11 +3306,12 @@ namespace MhiagosControl
                 int y = 0;
                 if (_btAddMetrica != null) _btAddMetrica.SetBounds(2, y, 150, 32);
                 if (_btPadraoMetrica != null) _btPadraoMetrica.SetBounds(158, y, 150, 32);
-                if (_segJanela != null) _segJanela.SetBounds(314, y, 186, 32);
+                if (_btPerfisMetrica != null) _btPerfisMetrica.SetBounds(314, y, 150, 32);
+                if (_segJanela != null) _segJanela.SetBounds(470, y, 186, 32);
 
                 if (_lbDicaMetricas != null)
                 {
-                    const int x = 512;
+                    const int x = 668;
                     int w = disp - x;
                     // Some quando nao cabe, em vez de ser cortada: uma dica pela
                     // metade nao ensina nada e ainda ocupa a fileira. Recolhida,
@@ -3605,10 +3732,6 @@ namespace MhiagosControl
             _pick2.SelectedId = _current.Panel2Id;
             _unit1.SelectedIndex = _current.Fahrenheit ? 1 : 0;
             _unit2.SelectedIndex = _current.Percent ? 0 : 1;
-            _alert1.Value = Clamp(_current.Alert1);
-            _alert2.Value = Clamp(_current.Alert2);
-            _alert1Low.Value = Clamp(_current.Alert1Low);
-            _alert2Low.Value = Clamp(_current.Alert2Low);
             _loading = false;
             Refresh0();
         }
@@ -3619,13 +3742,6 @@ namespace MhiagosControl
         /// <summary>Porcentagem e a PRIMEIRA pastilha; a segunda acende W.</summary>
         private bool Percent { get { return _unit2.SelectedIndex == 0; } }
 
-        private static int Clamp(int v)
-        {
-            if (v < 0) return 0;
-            if (v > 999) return 999;
-            return v;
-        }
-
         private void SaveToProfile()
         {
             if (_current == null) return;
@@ -3633,10 +3749,6 @@ namespace MhiagosControl
             if (_pick2.SelectedId.Length > 0) _current.Panel2Id = _pick2.SelectedId;
             _current.Fahrenheit = Fahrenheit;
             _current.Percent = Percent;
-            _current.Alert1 = _alert1.Value;
-            _current.Alert2 = _alert2.Value;
-            _current.Alert1Low = _alert1Low.Value;
-            _current.Alert2Low = _alert2Low.Value;
         }
 
         private void OnChanged()
@@ -3666,8 +3778,6 @@ namespace MhiagosControl
             _preview.Value2 = v2.Value;
             _preview.Fahrenheit = Fahrenheit;
             _preview.Percent = Percent;
-            _preview.Alert1 = Fora(v1, _alert1.Value, _alert1Low.Value);
-            _preview.Alert2 = Fora(v2, _alert2.Value, _alert2Low.Value);
             _preview.Invalidate();
 
             // A previa da tela de bordo e a MESMA leitura, e nao um calculo
@@ -3679,20 +3789,7 @@ namespace MhiagosControl
                 _vgPreview.Value2 = v2.Value;
                 _vgPreview.Fahrenheit = Fahrenheit;
                 _vgPreview.Percent = Percent;
-                _vgPreview.Alert1 = _preview.Alert1;
-                _vgPreview.Alert2 = _preview.Alert2;
                 _vgPreview.Invalidate();
-            }
-
-            if (_alertInfo1 != null)
-            {
-                _alertInfo1.Text = T.Current + Show(v1, Fahrenheit ? " °F" : " °C")
-                                 + Desligado(_alert1.Value, _alert1Low.Value);
-                _alertInfo2.Text = T.Current + Show(v2, Percent ? " %" : " W")
-                                 + Desligado(_alert2.Value, _alert2Low.Value);
-                _alertCross.Visible = Cruzado(_alert1.Value, _alert1Low.Value)
-                                   || Cruzado(_alert2.Value, _alert2Low.Value);
-                if (_alertCross.Visible) _alertCross.Text = T.ThresholdsCross;
             }
 
             if (_slot1 != null)
@@ -3700,43 +3797,6 @@ namespace MhiagosControl
                 _slot1.Entry = s1; _slot1.Invalidate();
                 _slot2.Entry = s2; _slot2.Invalidate();
             }
-        }
-
-        private static string Show(PanelValue v)
-        {
-            return v.Value.HasValue ? v.Value.Value.ToString() : T.NoReading;
-        }
-
-        private static string Show(PanelValue v, string unidade)
-        {
-            return v.Value.HasValue ? v.Value.Value.ToString() + unidade : T.NoReading;
-        }
-
-        /// <summary>Mesma regra do TrayApp: zero desliga, sem leitura nao dispara.</summary>
-        private static bool Fora(PanelValue v, int alto, int baixo)
-        {
-            if (!v.Value.HasValue) return false;
-            return (alto > 0 && v.Value.Value >= alto) || (baixo > 0 && v.Value.Value <= baixo);
-        }
-
-        private static string Desligado(int alto, int baixo)
-        {
-            return (alto == 0 && baixo == 0) ? "   ·   " + T.Off : "";
-        }
-
-        private static bool Cruzado(int alto, int baixo)
-        {
-            return alto > 0 && baixo > 0 && baixo >= alto;
-        }
-
-        /// <summary>Resumo dos dois limiares de um mostrador: "&lt;30 &gt;85".</summary>
-        private static string Faixa(int alto, int baixo)
-        {
-            if (alto == 0 && baixo == 0) return T.Off;
-            string s = "";
-            if (baixo > 0) s = "<" + baixo;
-            if (alto > 0) s += (s.Length > 0 ? " " : "") + ">" + alto;
-            return s;
         }
 
         private void HighlightDivisor(FlatBtn[] row, int value)
@@ -3753,6 +3813,13 @@ namespace MhiagosControl
         {
             try
             {
+                Control ativa = _nav != null && _nav.Selected != null ? _nav.Selected.Page : null;
+                bool sensorPage = ativa == _pgVisao || ativa == _pgMetricas ||
+                                  ativa == _pgPaineis;
+                DateTime now = DateTime.UtcNow;
+                if (!sensorPage && now - _lastSlowUiTickUtc < TimeSpan.FromMilliseconds(900))
+                    return;
+                if (!sensorPage) _lastSlowUiTickUtc = now;
                 AtualizarPaginaAtiva(false);
             }
             catch (Exception ex) { Log.Error("atualizacao da previa", ex); }
@@ -3769,7 +3836,7 @@ namespace MhiagosControl
         {
             Control ativa = _nav != null && _nav.Selected != null ? _nav.Selected.Page : null;
             bool usaSensores = ativa == _pgVisao || ativa == _pgMetricas
-                            || ativa == _pgPaineis || ativa == _pgAlertas;
+                            || ativa == _pgPaineis;
             Dictionary<string, float> snap = usaSensores && _data != null
                 ? _data.CurrentSnapshot() : null;
 
@@ -3779,7 +3846,7 @@ namespace MhiagosControl
             if (snap != null && ativa == _pgMetricas)
                 AtualizarMetricas(snap);
 
-            if (snap != null && (ativa == _pgPaineis || ativa == _pgAlertas))
+            if (snap != null && ativa == _pgPaineis)
             {
                 _pick1.UpdateValues(snap);
                 _pick2.UpdateValues(snap);

@@ -40,6 +40,7 @@ namespace MhiagosControl
             IdaEVoltaDaConfiguracao();
             RecuperacaoSemantica();
             IdentidadeVisualDoJogo();
+            ControlesVisuais();
             TodosOsCamposDoPerfil();
             RodizioDePerfis();
             NomesDoSistema();
@@ -157,8 +158,10 @@ namespace MhiagosControl
             SensorEntry temp = Sensor(SensorType.Temperature, 50f);
             SensorEntry uso = Sensor(SensorType.Load, 73.4f);
             fonte.Adicionar("temp", temp); fonte.Adicionar("uso", uso);
-            MonitorReadings leituras = new SensorCycle(fonte).Refresh(p, p, true);
+            MonitorReadings leituras = new SensorCycle(fonte).Refresh(p);
             Verdade(fonte.Refreshes == 1, "fonte injetada participa do ciclo");
+            new SensorCycle(fonte).Read(p);
+            Igual(1, fonte.Refreshes, "releitura rapida nao varre o hardware");
 
             PanelDispatch normal = ciclo.Send(p, leituras.Display1, leituras.Display2, false);
 
@@ -212,6 +215,8 @@ namespace MhiagosControl
         private static void KeepaliveIndependente()
         {
             Secao("keepalive independente");
+            Igual(250, PanelKeepalive.MinDispatchMs,
+                  "LCD recebe um quadro novo a 4 Hz");
             PainelContador painel = new PainelContador();
             using (PanelKeepalive keepalive = new PanelKeepalive(painel, null))
             {
@@ -221,6 +226,18 @@ namespace MhiagosControl
                 Igual(2, painel.Envios, "duas escritas para uma unica publicacao");
                 Igual(42, painel.Panel1, "ultimo quadro conserva o painel superior");
             }
+
+            Profile rapido = new Profile();
+            rapido.Panel1Id = "rtss:fps"; rapido.Panel2Id = "cpu:temp";
+            Verdade(TrayContext.PerfilUsaRtss(rapido),
+                    "perfil com FPS habilita o caminho rapido");
+            rapido.Panel1Id = "cpu:load";
+            Verdade(!TrayContext.PerfilUsaRtss(rapido),
+                    "perfil apenas de hardware conserva o ciclo economico");
+            Igual(250L, TrayContext.ProximoInstante(0, 0, 250),
+                  "primeiro quadro rapido e agendado em 250 ms");
+            Igual(500L, TrayContext.ProximoInstante(250, 499, 250),
+                  "agenda compensada nao acumula atraso");
         }
 
         private sealed class PainelContador : IPanelDevice
@@ -249,6 +266,21 @@ namespace MhiagosControl
                 Igual(0, reserva.Aberturas, "reserva nao abre quando a primaria responde");
                 Verdade(Achar(lista, "hw:cpu").Value.HasValue, "leitura primaria entra no agregado");
                 Verdade(Achar(lista, "rtss:fps").Value.HasValue, "fonte auxiliar entra independentemente");
+
+                int refreshesPrimarios = primaria.Refreshes;
+                int refreshesAuxiliares = auxiliar.Refreshes;
+                auxiliar.Valor = 144f;
+                sensors.RefreshFast();
+                Igual(refreshesPrimarios, primaria.Refreshes,
+                      "caminho rapido nao atualiza a fonte de hardware");
+                Igual(refreshesAuxiliares + 1, auxiliar.Refreshes,
+                      "caminho rapido atualiza apenas a fonte auxiliar");
+                Igual(144f, sensors.ReadEntry("rtss:fps").Value.Value,
+                      "novo FPS entra no instantaneo corrente");
+                Igual(50f, sensors.ReadEntry("hw:cpu").Value.Value,
+                      "leitura de hardware anterior e preservada");
+                Igual(144f, sensors.FastSnapshot()["rtss:fps"],
+                      "instantaneo rapido contem somente o valor vivo");
             }
         }
 
@@ -257,16 +289,17 @@ namespace MhiagosControl
             private readonly bool _open;
             private readonly string _name, _id;
             private bool _available;
-            public int Aberturas;
+            public int Aberturas, Refreshes;
+            public float Valor = 50f;
             public FonteBruta(bool open, string name, string id) { _open = open; _name = name; _id = id; }
             public string Name { get { return _name; } }
             public bool Available { get { return _available; } }
             public bool LastReadComplete { get { return true; } }
             public bool Open() { Aberturas++; _available = _open; return _open; }
-            public void Refresh() { }
+            public void Refresh() { Refreshes++; }
             public List<SensorEntry> Read(IEnumerable<string> focusedIds)
             {
-                SensorEntry e = Sensor(SensorType.Load, 50f);
+                SensorEntry e = Sensor(SensorType.Load, Valor);
                 e.Id = _id; e.Hardware = _name; e.Name = _name; e.Label = _name;
                 e.Source = _name;
                 return new List<SensorEntry> { e };
@@ -971,6 +1004,9 @@ namespace MhiagosControl
         {
             Secao("quadros por segundo");
 
+            Verdade(Math.Abs(Rtss.InstantFps(6.25f) - 160f) < 0.01f,
+                    "FPS instantaneo acompanha o tempo do ultimo quadro");
+
             // A ordem dos bytes da assinatura esta AFERIDA contra a memoria de
             // uma maquina com o RTSS 2.21 no ar, onde o cabecalho se le "SSTR".
             // O literal multicaractere 'RTSS' do C cai assim em little-endian.
@@ -1163,9 +1199,10 @@ namespace MhiagosControl
             try
             {
                 Config c = new Config();
-                c.Profiles.Add(Perfil("Padrão", "cpu:temp", "cpu:load", 85, 0, true, false, 0, 10));
-                c.Profiles.Add(Perfil("CPU = GPU", "gpu:temp", "gpu:pow", 0, 120, false, true, 100, 1000));
+                c.Profiles.Add(Perfil("Padrão", "cpu:temp", "cpu:load", true, false, 0, 10));
+                c.Profiles.Add(Perfil("CPU = GPU", "gpu:temp", "gpu:pow", false, true, 100, 1000));
                 c.ActiveName = "CPU = GPU";
+                c.DefaultProfileName = "Padrão";
                 c.ShowAllSensors = true;
                 c.Language = T.EnUs;
                 c.IdleBlankMinutes = 15;
@@ -1175,6 +1212,12 @@ namespace MhiagosControl
                 c.MetricRange = 3600;
                 c.MetricIds.Add("cpu:temp"); c.MetricSizes.Add(2);
                 c.MetricIds.Add("gpu:load"); c.MetricSizes.Add(1);
+                MetricProfile metricas = new MetricProfile();
+                metricas.Name = "Jogos | 144 Hz";
+                metricas.Range = 21600;
+                metricas.Ids.Add("rtss:fps"); metricas.Sizes.Add(2);
+                metricas.Ids.Add("rtss:frametime"); metricas.Sizes.Add(1);
+                c.MetricProfiles.Add(metricas);
                 c.WindowW = 1280; c.WindowH = 940;
                 c.GameProfiles = true;
                 c.MapearJogo("cyberpunk2077.exe", "CPU = GPU");
@@ -1184,9 +1227,13 @@ namespace MhiagosControl
                 Config copia = c.Clone();
                 copia.Profiles[0].Name = "alterado";
                 copia.MetricIds[0] = "alterado";
+                copia.MetricProfiles[0].Ids[0] = "alterado";
                 copia.GameDisplayNames[0] = "alterado";
                 Verdade(c.Profiles[0].Name != "alterado", "clone nao compartilha perfis");
+                Igual("Padrão", copia.DefaultProfileName, "clone conserva o perfil padrao");
                 Igual("cpu:temp", c.MetricIds[0], "clone nao compartilha listas");
+                Igual("rtss:fps", c.MetricProfiles[0].Ids[0],
+                      "clone nao compartilha perfis de metricas");
                 Igual("Cyberpunk 2077", c.GameDisplayNames[0], "clone nao compartilha nomes de jogos");
                 Verdade(c.SaveTo(arquivo), "grava a configuracao inicial");
 
@@ -1195,6 +1242,8 @@ namespace MhiagosControl
                 Config lido = Config.LoadFrom(arquivo, false);
                 Igual(2, lido.Profiles.Count, "quantidade de perfis");
                 Igual("CPU = GPU", lido.ActiveName, "perfil ativo");
+                Igual("Padrão", lido.DefaultProfileName, "perfil padrao persistido");
+                Igual("Padrão", lido.DefaultProfile.Name, "perfil padrao resolve pelo nome");
                 Verdade(lido.ShowAllSensors, "preferencia de mostrar todos");
                 Igual(T.EnUs, lido.Language, "idioma");
 
@@ -1202,8 +1251,6 @@ namespace MhiagosControl
                 Igual("Padrão", a.Name, "acento no nome sobrevive");
                 Igual("CPU = GPU", b.Name, "igual no nome sobrevive");
                 Igual("cpu:temp", a.Panel1Id, "sensor do painel 1");
-                Igual(85, a.Alert1, "limiar 1");
-                Igual(120, b.Alert2, "limiar 2");
                 Verdade(a.Percent, "porcentagem");
                 Verdade(b.Fahrenheit, "Fahrenheit");
                 Igual(10, a.Divisor2, "divisor 2");
@@ -1219,6 +1266,15 @@ namespace MhiagosControl
                 Igual("cpu:temp", lido.MetricIds[0], "identificador do primeiro cartao");
                 Igual(2, lido.MetricSize(0), "tamanho do primeiro cartao");
                 Igual(1, lido.MetricSize(1), "tamanho do segundo cartao");
+                Igual(1, lido.MetricProfiles.Count, "perfil de metricas persistido");
+                Igual("Jogos | 144 Hz", lido.MetricProfiles[0].Name,
+                      "nome do perfil de metricas preserva separadores");
+                Igual(21600, lido.MetricProfiles[0].Range,
+                      "perfil de metricas preserva a janela");
+                Igual("rtss:fps", lido.MetricProfiles[0].Ids[0],
+                      "perfil de metricas preserva a grade");
+                Igual(2, lido.MetricProfiles[0].Size(0),
+                      "perfil de metricas preserva o tamanho");
 
                 Igual(1280, lido.WindowW, "largura da janela");
                 Igual(940, lido.WindowH, "altura da janela");
@@ -1263,6 +1319,30 @@ namespace MhiagosControl
                 Igual(2, lido.Rotation.Count, "dois perfis marcados");
                 lido.Profiles.RemoveAt(1);
                 Igual(1, lido.Rotation.Count, "excluir o perfil tira ele da roda");
+
+                // Configuracoes de versoes anteriores nao tem a chave
+                // defaultprofile. A migracao prefere o perfil que ja se chama
+                // Padrao, sem criar, excluir ou renomear nenhum perfil do usuario.
+                string legado = Path.Combine(caixa, "config-legado.ini");
+                List<string> linhasLegadas = new List<string>();
+                foreach (string linha in File.ReadAllLines(arquivo))
+                    if (!linha.StartsWith("defaultprofile=", StringComparison.OrdinalIgnoreCase))
+                        linhasLegadas.Add(linha);
+                File.WriteAllLines(legado, linhasLegadas.ToArray());
+                Config migrado = Config.LoadFrom(legado, false);
+                Igual(2, migrado.Profiles.Count, "migracao conserva todos os perfis");
+                Igual("Padrão", migrado.DefaultProfile.Name,
+                      "migracao reconhece o perfil Padrao existente");
+                Igual("CPU = GPU", migrado.ActiveName,
+                      "migracao nao troca o perfil ativo");
+
+                Config semNomePadrao = new Config();
+                semNomePadrao.Profiles.Add(Perfil("Silencioso", "cpu:temp", "cpu:load", true, false, 0, 0));
+                semNomePadrao.Profiles.Add(Perfil("Jogos", "gpu:temp", "gpu:pow", false, false, 0, 0));
+                semNomePadrao.ActiveName = "Jogos";
+                semNomePadrao.EnsureDefaultProfile();
+                Igual("Jogos", semNomePadrao.DefaultProfile.Name,
+                      "sem nome reservado, o ativo vira o padrao inicial");
 
                 // A segunda gravacao passa pelo caminho de substituicao atomica
                 // (a primeira so move o arquivo temporario). O resultado precisa
@@ -1321,6 +1401,10 @@ namespace MhiagosControl
             c.MetricIds.Add("semantic:cpu-clock");
             c.MetricIds.Add("semantic:gpu-fan-pwm");
             c.MetricIds.Add("semantic:vram-used");
+            MetricProfile salvo = new MetricProfile();
+            salvo.Name = "portatil";
+            salvo.Ids.Add("semantic:gpu-clock");
+            c.MetricProfiles.Add(salvo);
 
             Verdade(SensorSemantics.ResolveConfiguration(c, sensores), "resolve configuracao recuperada");
             Igual("cpu-t", p.Panel1Id, "alias legado da temperatura da CPU");
@@ -1329,6 +1413,8 @@ namespace MhiagosControl
             Igual("cpu-c", c.MetricIds[0], "clock medio da CPU");
             Igual("gpu-f", c.MetricIds[1], "PWM da ventoinha da GPU");
             Igual("vram", c.MetricIds[2], "memoria de video usada");
+            Igual("gpu-c", c.MetricProfiles[0].Ids[0],
+                  "perfil salvo de metricas tambem recupera IDs semanticos");
             Verdade(!SensorSemantics.ResolveConfiguration(c, sensores), "segunda passagem nao altera IDs concretos");
             Igual("semantic:ausente", SensorSemantics.ResolveId(sensores, "semantic:ausente"),
                   "sensor ausente permanece pendente em vez de virar escolha errada");
@@ -1374,6 +1460,7 @@ namespace MhiagosControl
             }
             using (Bitmap source = new Bitmap(40, 40))
             using (Bitmap rounded = new Bitmap(40, 40))
+            using (Bitmap original = new Bitmap(40, 40))
             {
                 using (Graphics fill = Graphics.FromImage(source)) fill.Clear(Color.Red);
                 using (Graphics draw = Graphics.FromImage(rounded))
@@ -1382,6 +1469,10 @@ namespace MhiagosControl
                       "a propria arte do icone perde o canto quadrado");
                 Verdade(rounded.GetPixel(20, 20).A > 0,
                         "o conteudo central do icone permanece inteiro");
+                using (Graphics draw = Graphics.FromImage(original))
+                    GameIconView.DrawOriginal(draw, source, new Rectangle(0, 0, 40, 40));
+                Verdade(original.GetPixel(0, 0).A > 0,
+                        "o desenho oficial quadrado do jogo nao e recortado");
             }
             using (GameIconView view = new GameIconView())
                 Igual(0, view.BackColor.A,
@@ -1395,13 +1486,47 @@ namespace MhiagosControl
             Verdade(!string.IsNullOrEmpty(atual.ExecutablePath), "processo fornece caminho para o icone");
         }
 
+        private static void ControlesVisuais()
+        {
+            Secao("controles visuais");
+
+            using (FlatBtn button = new FlatBtn())
+            {
+                button.CreateControl();
+                int invalidations = 0;
+                button.Invalidated += delegate { invalidations++; };
+                button.Text = "Painel 1 · outro sensor";
+                Verdade(invalidations > 0,
+                        "texto novo do botao repinta sem esperar o ponteiro");
+            }
+
+            Igual(82, GameBindingList.PreferredHeight(0),
+                  "lista vazia conserva apenas a mensagem");
+            Igual(70, GameBindingList.PreferredHeight(1),
+                  "um vinculo ocupa exatamente uma linha");
+            Igual(194, GameBindingList.PreferredHeight(4),
+                  "quatro vinculos limitam a lista a tres linhas com rolagem");
+
+            using (ProfileList list = new ProfileList())
+            using (Bitmap image = new Bitmap(120, 70))
+            {
+                list.SetBounds(0, 0, 120, 70);
+                Profile first = new Profile(); first.Name = "Primeiro";
+                Profile second = new Profile(); second.Name = "Segundo";
+                list.SetItems(new Profile[] { first, second }, first);
+                list.DrawToBitmap(image, new Rectangle(0, 0, image.Width, image.Height));
+                Igual(Ui.SurfaceAlt.ToArgb(), image.GetPixel(108, 20).ToArgb(),
+                      "highlight termina antes da coluna da barra de rolagem");
+            }
+        }
+
         /// <summary>
         /// Confere Clone e a ida e volta pelo INI campo a campo, por reflexao.
         ///
         /// Escrito assim porque o jeito de errar aqui e sempre o mesmo:
         /// acrescentar um campo ao Profile e esquecer de uma das duas pontas.
         /// Um teste que listasse os campos a mao esqueceria junto - foi
-        /// exatamente o que quase aconteceu com os limiares inferiores.
+        /// exatamente o tipo de regressao que ocorre ao acrescentar um campo.
         /// </summary>
         private static void TodosOsCamposDoPerfil()
         {
@@ -1466,21 +1591,21 @@ namespace MhiagosControl
                 // nome livre: importar duas vezes nao pode gerar dois perfis iguais
                 Config d = new Config();
                 d.Profiles.Clear();
-                d.Profiles.Add(Perfil("Jogos", "a", "b", 0, 0, true, false, 0, 0));
+                d.Profiles.Add(Perfil("Jogos", "a", "b", true, false, 0, 0));
                 Igual("Jogos (2)", d.UniqueName("Jogos"), "primeiro nome livre");
-                d.Profiles.Add(Perfil("Jogos (2)", "a", "b", 0, 0, true, false, 0, 0));
+                d.Profiles.Add(Perfil("Jogos (2)", "a", "b", true, false, 0, 0));
                 Igual("Jogos (3)", d.UniqueName("Jogos"), "segundo nome livre");
                 Igual("Vazio", d.UniqueName("Vazio"), "nome inedito passa inteiro");
             }
             finally { try { Directory.Delete(caixa, true); } catch { } }
         }
 
-        private static Profile Perfil(string nome, string p1, string p2, int a1, int a2,
+        private static Profile Perfil(string nome, string p1, string p2,
                                       bool pct, bool f, int d1, int d2)
         {
             Profile p = new Profile();
             p.Name = nome; p.Panel1Id = p1; p.Panel2Id = p2;
-            p.Alert1 = a1; p.Alert2 = a2; p.Percent = pct; p.Fahrenheit = f;
+            p.Percent = pct; p.Fahrenheit = f;
             p.Divisor1 = d1; p.Divisor2 = d2;
             return p;
         }

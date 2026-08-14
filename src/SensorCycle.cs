@@ -1,12 +1,10 @@
 namespace MhiagosControl
 {
-    /// <summary>Leituras do perfil exibido e do perfil que governa alertas.</summary>
+    /// <summary>Leituras dos dois mostradores do perfil exibido.</summary>
     internal struct MonitorReadings
     {
         public SensorEntry Display1;
         public SensorEntry Display2;
-        public SensorEntry Alert1;
-        public SensorEntry Alert2;
     }
 
     /// <summary>
@@ -20,14 +18,18 @@ namespace MhiagosControl
 
         public SensorCycle(ISensorService sensors) { _sensors = sensors; }
 
-        public MonitorReadings Refresh(Profile display, Profile alert, bool sameProfile)
+        public MonitorReadings Refresh(Profile display)
         {
             _sensors.Refresh();
+            return Read(display);
+        }
+
+        /// <summary>Relê o instantâneo já atualizado sem varrer o hardware.</summary>
+        public MonitorReadings Read(Profile display)
+        {
             MonitorReadings r = new MonitorReadings();
             r.Display1 = _sensors.ReadEntry(display.Panel1Id);
             r.Display2 = _sensors.ReadEntry(display.Panel2Id);
-            r.Alert1 = sameProfile ? r.Display1 : _sensors.ReadEntry(alert.Panel1Id);
-            r.Alert2 = sameProfile ? r.Display2 : _sensors.ReadEntry(alert.Panel2Id);
             return r;
         }
     }

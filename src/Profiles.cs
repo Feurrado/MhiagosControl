@@ -18,19 +18,6 @@ namespace MhiagosControl
         public bool Fahrenheit = false;
         public bool Percent = true;
 
-        /// <summary>Limiar superior de alerta; 0 desliga. Comparado ao valor JA convertido.</summary>
-        public int Alert1 = 0;
-        public int Alert2 = 0;
-
-        /// <summary>
-        /// Limiar inferior; 0 desliga. Existe porque nem todo sensor avisa por
-        /// excesso: ventoinha parada, vazao de rede que zerou e carga que
-        /// despencou sao falhas que so aparecem por baixo. Comparado ao valor
-        /// ja convertido, como o superior.
-        /// </summary>
-        public int Alert1Low = 0;
-        public int Alert2Low = 0;
-
         /// <summary>
         /// Divisor aplicado antes de enviar (1, 10, 100, 1000). Zero significa
         /// "automatico": usa a sugestao para o tipo do sensor.
@@ -54,14 +41,36 @@ namespace MhiagosControl
             Profile p = new Profile();
             p.Name = Name; p.Panel1Id = Panel1Id; p.Panel2Id = Panel2Id;
             p.Fahrenheit = Fahrenheit; p.Percent = Percent;
-            p.Alert1 = Alert1; p.Alert2 = Alert2;
-            p.Alert1Low = Alert1Low; p.Alert2Low = Alert2Low;
             p.Divisor1 = Divisor1; p.Divisor2 = Divisor2;
             p.Rotate = Rotate;
             return p;
         }
 
         public override string ToString() { return Name; }
+    }
+
+    /// <summary>Uma grade nomeada da aba Métricas.</summary>
+    public sealed class MetricProfile
+    {
+        public string Name = "";
+        public int Range = MetricHistory.JanelaPadrao;
+        public List<string> Ids = new List<string>();
+        public List<int> Sizes = new List<int>();
+
+        public MetricProfile Clone()
+        {
+            MetricProfile copy = new MetricProfile();
+            copy.Name = Name;
+            copy.Range = Range;
+            copy.Ids.AddRange(Ids);
+            copy.Sizes.AddRange(Sizes);
+            return copy;
+        }
+
+        public int Size(int index)
+        {
+            return index >= 0 && index < Sizes.Count ? Sizes[index] : 0;
+        }
     }
 
     /// <summary>
@@ -77,6 +86,12 @@ namespace MhiagosControl
 
         public List<Profile> Profiles = new List<Profile>();
         public string ActiveName = "Padrao";
+
+        /// <summary>
+        /// Perfil de repouso. É para ele que o mostrador volta quando termina
+        /// um jogo vinculado; não depende do perfil que estava ativo antes.
+        /// </summary>
+        public string DefaultProfileName = "";
 
         /// <summary>
         /// Falso resume os sensores por nucleo em medias. Preferencia global,
@@ -131,6 +146,9 @@ namespace MhiagosControl
         /// <summary>Janela de tempo dos graficos, em segundos.</summary>
         public int MetricRange = MetricHistory.JanelaPadrao;
 
+        /// <summary>Grades de métricas salvas pelo usuário.</summary>
+        public List<MetricProfile> MetricProfiles = new List<MetricProfile>();
+
         /// <summary>
         /// Tamanho da janela de configuracao, em pixels de area util.
         ///
@@ -181,6 +199,7 @@ namespace MhiagosControl
             Profiles.Clear();
             foreach (Profile p in other.Profiles) Profiles.Add(p.Clone());
             ActiveName = other.ActiveName;
+            DefaultProfileName = other.DefaultProfileName;
             ShowAllSensors = other.ShowAllSensors;
             Language = other.Language;
             IdleBlankMinutes = other.IdleBlankMinutes;
@@ -196,6 +215,8 @@ namespace MhiagosControl
             MetricIds.AddRange(other.MetricIds);
             MetricSizes.Clear();
             MetricSizes.AddRange(other.MetricSizes);
+            MetricProfiles.Clear();
+            foreach (MetricProfile p in other.MetricProfiles) MetricProfiles.Add(p.Clone());
             GameKeys.Clear();
             GameKeys.AddRange(other.GameKeys);
             GameProfileNames.Clear();
@@ -296,6 +317,19 @@ namespace MhiagosControl
             return (i >= 0 && i < MetricSizes.Count) ? MetricSizes[i] : 0;
         }
 
+        public MetricProfile MetricProfileByName(string name)
+        {
+            foreach (MetricProfile profile in MetricProfiles)
+                if (string.Equals(profile.Name, name, StringComparison.OrdinalIgnoreCase))
+                    return profile;
+            return null;
+        }
+
+        public bool MetricProfileNameExists(string name)
+        {
+            return MetricProfileByName(name) != null;
+        }
+
         /// <summary>Perfis marcados para o rodizio. Menos de dois nao e rodizio.</summary>
         public List<Profile> Rotation
         {
@@ -324,6 +358,51 @@ namespace MhiagosControl
             }
         }
 
+        public Profile DefaultProfile
+        {
+            get
+            {
+                EnsureDefaultProfile();
+                foreach (Profile p in Profiles)
+                    if (string.Equals(p.Name, DefaultProfileName,
+                        StringComparison.OrdinalIgnoreCase)) return p;
+                return Profiles[0];
+            }
+        }
+
+        /// <summary>
+        /// Migração de configurações anteriores: prefere um perfil literalmente
+        /// chamado Padrão/Padrao/Default; na ausência dele, conserva o ativo.
+        /// </summary>
+        public void EnsureDefaultProfile()
+        {
+            if (Profiles.Count == 0) Profiles.Add(new Profile());
+            foreach (Profile p in Profiles)
+                if (string.Equals(p.Name, DefaultProfileName,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    DefaultProfileName = p.Name;
+                    return;
+                }
+
+            foreach (Profile p in Profiles)
+                if (string.Equals(p.Name, "Padrão", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p.Name, "Padrao", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p.Name, "Default", StringComparison.OrdinalIgnoreCase))
+                {
+                    DefaultProfileName = p.Name;
+                    return;
+                }
+
+            foreach (Profile p in Profiles)
+                if (string.Equals(p.Name, ActiveName, StringComparison.OrdinalIgnoreCase))
+                {
+                    DefaultProfileName = p.Name;
+                    return;
+                }
+            DefaultProfileName = Profiles[0].Name;
+        }
+
         public bool NameExists(string name)
         {
             foreach (Profile p in Profiles)
@@ -349,7 +428,12 @@ namespace MhiagosControl
             try
             {
                 if (migrar) MigrateLegacyFile(path);
-                if (!File.Exists(path)) { c.Profiles.Add(new Profile()); return c; }
+                if (!File.Exists(path))
+                {
+                    c.Profiles.Add(new Profile());
+                    c.EnsureDefaultProfile();
+                    return c;
+                }
 
                 Profile current = null;
                 foreach (string raw in File.ReadAllLines(path))
@@ -377,6 +461,7 @@ namespace MhiagosControl
                     if (current == null)
                     {
                         if (k == "active") c.ActiveName = v;
+                        else if (k == "defaultprofile") c.DefaultProfileName = v;
                         else if (k == "showall") c.ShowAllSensors = (v == "1");
                         else if (k == "language") c.Language = v;
                         else if (k == "idleblank") c.IdleBlankMinutes = ParseInt(v);
@@ -420,6 +505,12 @@ namespace MhiagosControl
                                 c.MetricSizes.Add(tam < 0 ? 0 : (tam > 2 ? 2 : tam));
                             }
                         }
+                        else if (k == "metricprofile")
+                        {
+                            MetricProfile profile = ParseMetricProfile(v);
+                            if (profile != null && !c.MetricProfileNameExists(profile.Name))
+                                c.MetricProfiles.Add(profile);
+                        }
                         // chaves legadas (formato antigo, sem seccao)
                         else if (k == "panel1" || k == "panel2" || k == "fahrenheit" || k == "percent")
                         {
@@ -437,6 +528,7 @@ namespace MhiagosControl
                 Log.Error("leitura da configuracao", ex);
                 if (c.Profiles.Count == 0) c.Profiles.Add(new Profile());
             }
+            c.EnsureDefaultProfile();
             return c;
         }
 
@@ -449,10 +541,9 @@ namespace MhiagosControl
                 case "panel2": p.Panel2Id = v; break;
                 case "fahrenheit": p.Fahrenheit = (v == "1"); break;
                 case "percent": p.Percent = (v == "1"); break;
-                case "alert1": p.Alert1 = ParseInt(v); break;
-                case "alert2": p.Alert2 = ParseInt(v); break;
-                case "alert1low": p.Alert1Low = ParseInt(v); break;
-                case "alert2low": p.Alert2Low = ParseInt(v); break;
+                // alert1/alert2 e variantes "low" de versões antigas são
+                // deliberadamente ignorados: alertas foram removidos da UI e
+                // do ciclo de execução.
                 case "divisor1": p.Divisor1 = ParseInt(v); break;
                 case "divisor2": p.Divisor2 = ParseInt(v); break;
                 case "rotate": p.Rotate = (v == "1"); break;
@@ -476,6 +567,42 @@ namespace MhiagosControl
             if (string.IsNullOrEmpty(value)) return "";
             try { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
             catch { return ""; }
+        }
+
+        private static MetricProfile ParseMetricProfile(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return null;
+            string[] parts = value.Split('|');
+            if (parts.Length < 2) return null;
+            string name = Decode(parts[0]);
+            if (string.IsNullOrWhiteSpace(name)) return null;
+
+            MetricProfile profile = new MetricProfile();
+            profile.Name = name.Trim();
+            profile.Range = MetricHistory.JanelaValida(ParseInt(parts[1]));
+            for (int i = 2; i < parts.Length; i++)
+            {
+                int colon = parts[i].IndexOf(':');
+                if (colon <= 0 || colon >= parts[i].Length - 1) continue;
+                int size = ParseInt(parts[i].Substring(0, colon));
+                string id = Decode(parts[i].Substring(colon + 1));
+                if (string.IsNullOrEmpty(id) || profile.Ids.Contains(id)) continue;
+                profile.Ids.Add(id);
+                profile.Sizes.Add(size < 0 ? 0 : (size > 2 ? 2 : size));
+            }
+            return profile;
+        }
+
+        private static string SerializeMetricProfile(MetricProfile profile)
+        {
+            StringBuilder line = new StringBuilder();
+            line.Append(Encode(profile.Name)).Append('|')
+                .Append(MetricHistory.JanelaValida(profile.Range).ToString(CultureInfo.InvariantCulture));
+            for (int i = 0; i < profile.Ids.Count; i++)
+                if (!string.IsNullOrEmpty(profile.Ids[i]))
+                    line.Append('|').Append(profile.Size(i).ToString(CultureInfo.InvariantCulture))
+                        .Append(':').Append(Encode(profile.Ids[i]));
+            return line.ToString();
         }
 
         /// <summary>Move um config.ini deixado ao lado do executavel por versoes antigas.</summary>
@@ -528,6 +655,8 @@ namespace MhiagosControl
                 sb.AppendLine("; Mhiagos Control - configuracao");
                 sb.AppendLine("[general]");
                 sb.AppendLine("active=" + ActiveName);
+                EnsureDefaultProfile();
+                sb.AppendLine("defaultprofile=" + DefaultProfileName);
                 sb.AppendLine("showall=" + (ShowAllSensors ? "1" : "0"));
                 if (!string.IsNullOrEmpty(Language)) sb.AppendLine("language=" + Language);
                 sb.AppendLine("idleblank=" + IdleBlankMinutes.ToString(CultureInfo.InvariantCulture));
@@ -552,9 +681,13 @@ namespace MhiagosControl
                     if (!string.IsNullOrEmpty(MetricIds[i]))
                         sb.AppendLine("metric=" + MetricSize(i).ToString(CultureInfo.InvariantCulture) +
                                       "|" + MetricIds[i]);
+                foreach (MetricProfile profile in MetricProfiles)
+                    if (profile != null && !string.IsNullOrWhiteSpace(profile.Name))
+                        sb.AppendLine("metricprofile=" + SerializeMetricProfile(profile));
                 foreach (Profile p in Profiles) AppendProfile(sb, p);
                 WriteAtomically(path, sb.ToString());
-                Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " + ActiveName + ")");
+                Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " +
+                          ActiveName + ", padrao: " + DefaultProfileName + ")");
                 return true;
             }
             catch (Exception ex)
@@ -605,10 +738,6 @@ namespace MhiagosControl
             sb.AppendLine("panel2=" + p.Panel2Id);
             sb.AppendLine("fahrenheit=" + (p.Fahrenheit ? "1" : "0"));
             sb.AppendLine("percent=" + (p.Percent ? "1" : "0"));
-            sb.AppendLine("alert1=" + p.Alert1.ToString(CultureInfo.InvariantCulture));
-            sb.AppendLine("alert2=" + p.Alert2.ToString(CultureInfo.InvariantCulture));
-            sb.AppendLine("alert1low=" + p.Alert1Low.ToString(CultureInfo.InvariantCulture));
-            sb.AppendLine("alert2low=" + p.Alert2Low.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("divisor1=" + p.Divisor1.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("divisor2=" + p.Divisor2.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("rotate=" + (p.Rotate ? "1" : "0"));

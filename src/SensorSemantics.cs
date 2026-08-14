@@ -37,6 +37,12 @@ namespace MhiagosControl
                 string id = ResolveId(sensors, config.MetricIds[i]);
                 if (id != config.MetricIds[i]) { config.MetricIds[i] = id; changed = true; }
             }
+            foreach (MetricProfile profile in config.MetricProfiles)
+                for (int i = 0; i < profile.Ids.Count; i++)
+                {
+                    string id = ResolveId(sensors, profile.Ids[i]);
+                    if (id != profile.Ids[i]) { profile.Ids[i] = id; changed = true; }
+                }
             return changed;
         }
 

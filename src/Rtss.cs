@@ -78,7 +78,8 @@ namespace MhiagosControl
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
 
-        private DateTime _ultima = DateTime.MinValue;
+        private DateTime _ultimaLeitura = DateTime.MinValue;
+        private DateTime _ultimaEstatistica = DateTime.MinValue;
         private DateTime _proximaTentativa = DateTime.MinValue;
         private bool _disponivel = false;
         private bool _avisado = false;
@@ -383,7 +384,9 @@ namespace MhiagosControl
         // ---------------- leitura ----------------
 
         /// <summary>
-        /// Amostra no maximo uma vez por segundo.
+        /// Lê o valor vivo até a cadência útil do RTSS. As estatísticas de 60 s
+        /// continuam recebendo uma amostra por segundo; só FPS/frametime atuais
+        /// seguem cada quadro publicado.
         ///
         /// A cadencia nao pode vir de quantas vezes alguem chama: o BuildRaw
         /// roda por ciclo e tambem fora dele, quando a lista precisa ficar
@@ -393,8 +396,8 @@ namespace MhiagosControl
         private void Amostrar()
         {
             DateTime agora = DateTime.UtcNow;
-            if ((agora - _ultima).TotalMilliseconds < 900) return;
-            _ultima = agora;
+            if ((agora - _ultimaLeitura).TotalMilliseconds < 8) return;
+            _ultimaLeitura = agora;
 
             uint pid; string app; float? fps, ft;
             _disponivel = LerMemoria(out pid, out app, out fps, out ft);
@@ -402,16 +405,27 @@ namespace MhiagosControl
             if (!_disponivel || pid == 0)
             {
                 _pid = 0; _app = null; _fps = null; _ft = null; _n = 0;
+                _ultimaEstatistica = DateTime.MinValue;
                 return;
             }
 
             // Trocou de jogo: a janela recomeca. Misturar o minimo de dois
             // programas diferentes daria um numero que nunca aconteceu.
-            if (pid != _pid) { _pid = pid; _app = app; _n = 0; }
+            if (pid != _pid)
+            {
+                _pid = pid; _app = app; _n = 0;
+                _ultimaEstatistica = DateTime.MinValue;
+            }
 
             _fps = fps; _ft = ft;
-            if (fps.HasValue && ft.HasValue) Empurrar(fps.Value, ft.Value);
-            else _n = 0;
+            if (fps.HasValue && ft.HasValue &&
+                (_ultimaEstatistica == DateTime.MinValue ||
+                 (agora - _ultimaEstatistica).TotalMilliseconds >= 900))
+            {
+                _ultimaEstatistica = agora;
+                Empurrar(fps.Value, ft.Value);
+            }
+            else if (!fps.HasValue || !ft.HasValue) _n = 0;
         }
 
         private void Empurrar(float fps, float ft)
@@ -486,8 +500,12 @@ namespace MhiagosControl
                 uint quadros = v.ReadUInt32(e + EntQuadros);
                 uint us = v.ReadUInt32(e + EntTempoDeQuadro);
 
-                if (a1 > a0) fps = quadros * 1000f / (a1 - a0);
-                if (us > 0) ft = us / 1000f;
+                if (us > 0)
+                {
+                    ft = us / 1000f;
+                    fps = InstantFps(ft.Value);
+                }
+                else if (a1 > a0) fps = quadros * 1000f / (a1 - a0);
                 return true;
             }
             catch (FileNotFoundException)
@@ -507,6 +525,12 @@ namespace MhiagosControl
                 if (v != null) v.Dispose();
                 if (mmf != null) mmf.Dispose();
             }
+        }
+
+        /// <summary>FPS instantâneo derivado do tempo do último quadro.</summary>
+        internal static float InstantFps(float frameTimeMs)
+        {
+            return frameTimeMs > 0 ? 1000f / frameTimeMs : 0f;
         }
 
         private static string NomeDoApp(MemoryMappedViewAccessor v, long baseEntrada)

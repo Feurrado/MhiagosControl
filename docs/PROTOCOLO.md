@@ -72,8 +72,10 @@ dois painéis, validada por escrita.
 
 O firmware apaga o painel se parar de receber atualizações. É obrigatório
 reenviar continuamente. O software original usa cadência de **~1105 ms**
-(medida: desvio inferior a 1%). Este projeto envia a cada 1000 ms, preservando
-folga para atrasos normais de coleta e escalonamento do Windows.
+(medida: desvio inferior a 1%). Este projeto mantém um keepalive de **800 ms**.
+Quando FPS ou frametime estão no mostrador, um valor novo acorda o escritor HID
+imediatamente, limitado a um quadro a cada **250 ms**; números repetidos não
+geram tráfego extra.
 
 ---
 
@@ -164,8 +166,8 @@ Não é aberta quando o HWiNFO responde: não haveria o que ganhar.
 - A leitura de sensores roda em **thread própria**: percorrer o hardware leva
   dezenas a centenas de ms e travaria a interface se fosse feita na thread de
   UI. Só a atualização do tooltip volta para a UI.
-- A cadência é **compensada**: o laço desconta o tempo gasto no ciclo, mantendo
-  1100 ms reais independentemente da carga da máquina.
+- A cadência é **compensada**: hardware continua em 1000 ms; RTSS usa um caminho
+  isolado de 250 ms quando está no mostrador. Perder um ciclo não acumula deriva.
 - **Instância única** garantida por mutex — duas instâncias disputariam o painel.
 - A biblioteca do HWiNFO não expõe consulta individual, então a enumeração
   visita grupo por grupo. **Preparar um grupo (ordinal `678`) custa ~2,9 ms; as
@@ -223,7 +225,7 @@ Não é aberta quando o HWiNFO responde: não haveria o que ganhar.
   no momento errado lançava exceção no meio do ciclo, e o mostrador podia exibir
   um perfil pela metade.
 - A posição no rodízio é **derivada do relógio**, não somada a cada volta. O ciclo
-  dura 1100 ms mais o que a varredura levar, e um contador incrementado "quando
+  pode atrasar pelo que a varredura levar, e um contador incrementado "quando
   der" acumularia esse resto até o rodízio de 20 s virar de 23.
 - A ociosidade vem de `GetLastInputInfo` com **aritmética sem sinal**:
   `GetTickCount` dá a volta a cada 49,7 dias, e a subtração em `uint` continua

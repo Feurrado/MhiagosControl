@@ -7,7 +7,8 @@ namespace MhiagosControl
     /// Comunicacao com o painel do cooler (VID 1A2C / PID 4984).
     ///
     /// Protocolo levantado por engenharia reversa:
-    ///   SET_REPORT (Feature), ReportID 0x07, wIndex=1, 64 bytes, cadencia ~1,1 s
+    ///   SET_REPORT (Feature), ReportID 0x07, wIndex=1, 64 bytes
+    ///   software original: ~1,1 s; app: 250 ms (16 ms foi validado sem falhas)
     ///   Setup: 21 09 07 03 01 00 40 00
     ///
     ///   [0]     0x07

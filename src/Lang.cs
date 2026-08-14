@@ -160,11 +160,33 @@ namespace MhiagosControl
 
         public static string NavOverview { get { return P("Visão geral", "Overview"); } }
         public static string NavPanels { get { return P("Painéis", "Panels"); } }
-        public static string NavAlerts { get { return P("Alertas", "Alerts"); } }
         public static string NavProfiles { get { return P("Perfis", "Profiles"); } }
         public static string NavMetrics { get { return P("Métricas", "Metrics"); } }
         public static string AddMetric { get { return P("Adicionar métrica", "Add metric"); } }
         public static string DefaultMetrics { get { return P("Conjuntos", "Presets"); } }
+        public static string MetricProfiles { get { return P("Perfis de métricas", "Metric profiles"); } }
+        public static string SaveMetricProfile { get { return P("Salvar perfil atual...", "Save current profile..."); } }
+        public static string MetricProfileName { get { return P("Nome do perfil de métricas", "Metric profile name"); } }
+        public static string UpdateMetricProfile { get { return P("Atualizar com a grade atual", "Update with current grid"); } }
+        public static string RenameMetricProfile { get { return P("Renomear perfil...", "Rename profile..."); } }
+        public static string DeleteMetricProfile { get { return P("Excluir perfil", "Delete profile"); } }
+        public static string DefaultMetricProfileName(int index)
+        {
+            return P("Métricas " + index, "Metrics " + index);
+        }
+        public static string DeleteMetricProfileQ(string name)
+        {
+            return P("Excluir o perfil de métricas “" + name + "”?",
+                     "Delete the metric profile “" + name + "”?");
+        }
+        public static string MetricProfileSaved(string name)
+        {
+            return P("Perfil de métricas salvo: " + name, "Metric profile saved: " + name);
+        }
+        public static string MetricProfileApplied(string name)
+        {
+            return P("Perfil de métricas aplicado: " + name, "Metric profile applied: " + name);
+        }
 
         /// <summary>Titulos curtos que cabem nos cinco cartoes do painel inicial.</summary>
         public static string DashboardMetric(int index, string fallback)
@@ -283,8 +305,8 @@ namespace MhiagosControl
         {
             get
             {
-                return P("Depende do RivaTuner Statistics Server, que é quem identifica o jogo em primeiro plano. Ao fechar o jogo, o perfil anterior volta.",
-                         "Requires the RivaTuner Statistics Server, which identifies the foreground game. The previous profile returns when the game closes.");
+                return P("Depende do RivaTuner Statistics Server, que identifica o jogo em primeiro plano. Ao fechar o jogo, o perfil padrão volta.",
+                         "Requires the RivaTuner Statistics Server, which identifies the foreground game. The default profile returns when the game closes.");
             }
         }
 
@@ -473,39 +495,7 @@ namespace MhiagosControl
             }
         }
 
-        // ---------------- pagina: alertas ----------------
-
         public static string NavSettings { get { return P("Configurações", "Settings"); } }
-
-        public static string Thresholds { get { return P("Limiares", "Thresholds"); } }
-        public static string WarnWhenReaching { get { return P("Avisar quando atingir", "Warn when it reaches"); } }
-        public static string Current { get { return P("atual: ", "current: "); } }
-        public static string AboveOf { get { return P("Acima de", "Above"); } }
-        public static string BelowOf { get { return P("Abaixo de", "Below"); } }
-
-        /// <summary>Aviso de faixa impossivel: com inferior >= superior, os dois disparam sempre.</summary>
-        public static string ThresholdsCross
-        {
-            get
-            {
-                return P("O limiar inferior está acima do superior — os dois vão disparar juntos.",
-                         "The lower threshold sits above the upper one — both will fire together.");
-            }
-        }
-
-        public static string AlertsNote
-        {
-            get
-            {
-                return P(
-                    "Zero desliga o aviso. O alerta dispara ao entrar na faixa e só rearma quando o valor volta —\n" +
-                    "sem isso, um sensor oscilando no limite notificaria a cada ciclo. O limiar inferior serve ao que\n" +
-                    "falha por baixo: ventoinha parada, vazão que zerou. Mostrador apagado não dispara alerta.",
-                    "Zero turns the warning off. The alert fires when the value enters the range and only rearms once it\n" +
-                    "leaves — without that, a sensor hovering at the limit would notify every cycle. The lower threshold\n" +
-                    "catches what fails downward: a stopped fan, throughput at zero. A blank display never fires.");
-            }
-        }
 
         // ---------------- pagina: perfis ----------------
 
@@ -555,6 +545,13 @@ namespace MhiagosControl
             }
         }
         public static string ActiveBadge { get { return P("ATIVO", "ACTIVE"); } }
+        public static string DefaultBadge { get { return P("PADRÃO", "DEFAULT"); } }
+        public static string SetAsDefault { get { return P("Definir como padrão", "Set as default"); } }
+        public static string AlreadyDefault { get { return P("Perfil padrão", "Default profile"); } }
+        public static string DefaultProfileSet(string nome)
+        {
+            return P("Perfil padrão: " + nome, "Default profile: " + nome);
+        }
 
         public static string Rotation { get { return P("Rodízio", "Rotation"); } }
 
@@ -586,10 +583,10 @@ namespace MhiagosControl
             get
             {
                 return P(
-                    "Aplicar torna o perfil selecionado o que vai para o mostrador, e grava na hora.\n" +
+                    "Aplicar envia o perfil ao mostrador. O padrão volta quando um jogo termina.\n" +
                     "Todos aparecem no menu da bandeja para troca rápida, sem abrir esta janela.",
-                    "Apply makes the selected profile the one sent to the display, and saves right away.\n" +
-                    "All of them show up in the tray menu for a quick switch, without opening this window.");
+                    "Apply sends the profile to the display. The default returns when a game ends.\n" +
+                    "All profiles appear in the tray menu for quick switching without opening this window.");
             }
         }
 
@@ -735,9 +732,9 @@ namespace MhiagosControl
             get
             {
                 return P("Conta teclado e mouse da sessão inteira. Assistir vídeo ou esperar uma renderização longa " +
-                         "conta como ocioso — o mostrador volta ao primeiro toque, e os alertas continuam valendo.",
+                         "conta como ocioso — o mostrador volta ao primeiro toque.",
                          "Counts keyboard and mouse across the whole session. Watching a video or waiting on a long " +
-                         "render counts as idle — the display returns on the first input, and alerts keep working.");
+                         "render counts as idle — the display returns on the first input.");
             }
         }
 
@@ -813,7 +810,6 @@ namespace MhiagosControl
         {
             get { return P("Mhiagos Control - pausado (o painel vai apagar)", "Mhiagos Control - paused (the panel will go blank)"); }
         }
-        public static string TagAlert { get { return P("  [ALERTA]", "  [ALERT]"); } }
         public static string TagIdle { get { return P("  [ocioso]", "  [idle]"); } }
         public static string TagOver { get { return P("  [excede 999]", "  [over 999]"); } }
         public static string TagNoDevice { get { return P("  [painel ausente]", "  [panel missing]"); } }
@@ -838,18 +834,6 @@ namespace MhiagosControl
                 return P("inclua esta linha ao relatar um problema",
                          "include this line when reporting an issue");
             }
-        }
-
-        public static string AlertReached(int panel, int value, int threshold)
-        {
-            return P("Painel " + panel + " atingiu " + value + " (limiar " + threshold + ")",
-                     "Panel " + panel + " reached " + value + " (threshold " + threshold + ")");
-        }
-
-        public static string AlertDropped(int panel, int value, int threshold)
-        {
-            return P("Painel " + panel + " caiu para " + value + " (limiar inferior " + threshold + ")",
-                     "Panel " + panel + " dropped to " + value + " (lower threshold " + threshold + ")");
         }
 
         public static string SensorInitFailed(string message, string logPath)
@@ -881,6 +865,5 @@ namespace MhiagosControl
 
         public static string BadgeNoReading { get { return P("sem leitura", "no reading"); } }
         public static string BadgeOver999 { get { return P("excede 999", "over 999"); } }
-        public static string BadgeAboveThreshold { get { return P("acima do limiar", "above threshold"); } }
     }
 }

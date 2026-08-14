@@ -469,6 +469,15 @@ namespace MhiagosControl
             base.OnEnabledChanged(e);
         }
 
+        protected override void OnTextChanged(EventArgs e)
+        {
+            // O botão é desenhado à mão; alterar Text não repinta esse tipo de
+            // controle automaticamente em todas as versões do WinForms. Sem
+            // isto, o novo sensor só aparecia quando o hover forçava um paint.
+            Invalidate();
+            base.OnTextChanged(e);
+        }
+
         protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hover = false; _down = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
@@ -774,8 +783,8 @@ namespace MhiagosControl
     /// Campo numerico desenhado pelo kit.
     ///
     /// O NumericUpDown nativo entra branco numa janela escura e nao aceita
-    /// borda arredondada - era a caixa que destoava de tudo na pagina de
-    /// alertas. Aqui a moldura e nossa e so a area de digitacao e um TextBox.
+    /// borda arredondada. Aqui a moldura e nossa e so a area de digitacao e um
+    /// TextBox.
     /// </summary>
     public class NumberBox : Control
     {

@@ -16,7 +16,7 @@ namespace MhiagosControl
     ///
     /// Os digitos sao sete segmentos monocromaticos, como no aparelho, e cada
     /// mostrador tem DOIS indicadores de unidade empilhados - um aceso, o outro
-    /// apagado. Estado (sem leitura, estouro, alerta) e sinalizado FORA do
+    /// apagado. Estado (sem leitura ou estouro) e sinalizado FORA do
     /// mostrador: o hardware so acende e apaga segmentos, entao colorir os
     /// digitos ensinaria algo falso sobre o que ele consegue fazer.
     /// </summary>
@@ -42,8 +42,6 @@ namespace MhiagosControl
         public int? Value2 { get; set; }
         public bool Fahrenheit { get; set; }
         public bool Percent { get; set; }
-        public bool Alert1 { get; set; }
-        public bool Alert2 { get; set; }
 
         /// <summary>Desenha a foto do cooler atras dos mostradores.</summary>
         public bool ShowCooler = true;
@@ -231,9 +229,9 @@ namespace MhiagosControl
             float y = plate.Y + (plate.Height - total) / 2f;
 
             DrawDisplay(g, new RectangleF(x, y, dispW, dispH),
-                        Value1, "°C", "°F", !Fahrenheit, Alert1, true);
+                        Value1, "°C", "°F", !Fahrenheit, true);
             DrawDisplay(g, new RectangleF(x, y + dispH + vgap, dispW, dispH),
-                        Value2, "%", "W", Percent, Alert2, false);
+                        Value2, "%", "W", Percent, false);
         }
 
         /// <summary>
@@ -257,7 +255,7 @@ namespace MhiagosControl
 
         private void DrawDisplay(Graphics g, RectangleF area, int? value,
                                  string topLabel, string bottomLabel, bool topLit,
-                                 bool alert, bool badgeAbove)
+                                 bool badgeAbove)
         {
             bool blank = !value.HasValue;
             bool over = value.HasValue && (value.Value > 999 || value.Value < 0);
@@ -306,7 +304,6 @@ namespace MhiagosControl
             Color mark = Color.Empty;
             if (blank) { badge = T.BadgeNoReading; mark = Color.FromArgb(165, 170, 180); }
             else if (over) { badge = T.BadgeOver999; mark = Ui.Warn; }
-            else if (alert) { badge = T.BadgeAboveThreshold; mark = Ui.Danger; }
 
             if (badge != null)
             {

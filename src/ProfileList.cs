@@ -28,6 +28,9 @@ namespace MhiagosControl
         /// <summary>Nome do perfil que esta valendo no mostrador.</summary>
         public string ActiveName = "";
 
+        /// <summary>Nome do perfil que volta depois dos jogos.</summary>
+        public string DefaultName = "";
+
         public event EventHandler SelectionChanged;
 
         /// <summary>Duplo clique numa linha - a pagina usa para aplicar o perfil.</summary>
@@ -162,6 +165,10 @@ namespace MhiagosControl
         {
             Graphics g = e.Graphics;
             Ui.Smooth(g);
+            bool temRolagem = _items.Count > PorTela;
+            // A barra tem uma coluna própria. Antes ela era pintada sobre o
+            // último pixel do highlight, parecendo cortar o perfil selecionado.
+            int limiteDireito = Width - (temRolagem ? 14 : 4);
 
             using (GraphicsPath p = Ui.RoundRect(new Rectangle(0, 0, Width - 1, Height - 1), 8))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
@@ -175,7 +182,7 @@ namespace MhiagosControl
             for (int i = _top; i < _items.Count && i < _top + PorTela; i++, y += RowH)
             {
                 Profile p = _items[i];
-                Rectangle r = new Rectangle(4, y, Width - 8, RowH - 2);
+                Rectangle r = new Rectangle(4, y, Math.Max(1, limiteDireito - 4), RowH - 2);
 
                 bool sel = i == _sel;
                 if (sel || i == _hover)
@@ -205,6 +212,23 @@ namespace MhiagosControl
                     right = badge.Left - 8;
                 }
 
+                bool padrao = string.Equals(p.Name, DefaultName, StringComparison.Ordinal);
+                if (padrao)
+                {
+                    Size bs = TextRenderer.MeasureText(g, T.DefaultBadge, Ui.FontSmall);
+                    Rectangle badge = new Rectangle(right - bs.Width - 14, r.Y + 9, bs.Width + 14, 18);
+                    using (GraphicsPath gp = Ui.RoundRect(badge, 9))
+                    using (SolidBrush b = new SolidBrush(Ui.Surface))
+                    using (Pen pen = new Pen(Ui.Accent))
+                    {
+                        g.FillPath(b, gp);
+                        g.DrawPath(pen, gp);
+                    }
+                    TextRenderer.DrawText(g, T.DefaultBadge, Ui.FontSmall, badge, Ui.Accent,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                    right = badge.Left - 8;
+                }
+
                 // Marca do rodizio. Simbolo e nao pastilha: ela dividiria a
                 // linha com o distintivo de ativo, e as duas juntas nao
                 // deixariam largura para o nome, que e o que se le primeiro.
@@ -228,7 +252,7 @@ namespace MhiagosControl
 
             // Sem barra: o indicador so aparece quando ha o que rolar, e ocupa
             // a lateral em vez de roubar largura do resumo.
-            if (_items.Count > PorTela)
+            if (temRolagem)
             {
                 int trilho = Height - 12;
                 int alt = Math.Max(24, trilho * PorTela / _items.Count);

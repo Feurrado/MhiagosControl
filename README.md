@@ -6,8 +6,8 @@ e Temp 8**, substituindo o software original *CPU TEMP Monitor*
 
 Permite exibir **qualquer sensor** do sistema nos dois painéis de 3 dígitos,
 em vez das duas métricas fixas que o software de fábrica oferece — com perfis
-salvos, rodízio entre eles, alertas por limiar de cima e de baixo e apagamento
-automático quando ninguém está usando o computador.
+salvos, rodízio entre eles, perfil automático por jogo e apagamento quando
+ninguém está usando o computador.
 
 > A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
 > Windows na primeira execução e trocável em *Configurações*.
@@ -59,8 +59,7 @@ A janela abre na **Visão geral** e tem sete páginas na barra lateral:
 |---|---|
 | **Visão geral** | como a máquina está agora e o que o cooler está mostrando |
 | **Painéis** | qual sensor vai para cada mostrador, com escala, unidade e prévia |
-| **Alertas** | limiar de cima e de baixo por mostrador, com rearme ao voltar à faixa |
-| **Métricas** | a grade de cartões com histórico, arrastáveis, com conjuntos prontos |
+| **Métricas** | cartões com histórico, conjuntos prontos e perfis de grade salvos |
 | **Especificações** | o retrato completo da máquina, no espírito do CPU-Z |
 | **Perfis** | conjuntos salvos, rodízio, exportação e perfil por jogo |
 | **Configurações** | idioma, início automático, ociosidade e a fonte de FPS |
@@ -100,7 +99,7 @@ termos ao mesmo tempo. Duplo clique ou <kbd>Enter</kbd> confirmam.
 
 ### Perfis
 
-Um perfil é um par de sensores salvo junto com unidades, escala e limiares.
+Um perfil é um par de sensores salvo junto com unidades e escala.
 A lista mostra o que cada um manda para o mostrador, e selecionar um já exibe a
 prévia sobre a peça antes de *Aplicar perfil* torná-lo o que está valendo —
 aplicar grava na hora, então um perfil "ativo" sempre sobrevive a fechar a
@@ -121,22 +120,21 @@ indicador de unidade é do quadro: `°C`/`°F` em cima e `%`/`W` embaixo valem p
 os dois painéis de uma vez. Girar só o sensor poria watts sob o indicador de
 porcentagem, e o mostrador mentiria sem jeito de perceber.
 
-Os **alertas continuam seguindo o perfil ativo**, e não o que está girando:
-limiares que mudassem a cada volta travariam e destravariam sozinhos, e um aviso
-que aparece conforme a hora do relógio não é aviso. Girar é sobre o mostrador,
-não sobre a vigilância.
+O rodízio altera apenas o que aparece no mostrador; a configuração ativa
+continua intacta e volta a comandar a peça quando a rotação é desligada.
 
 ### Perfil por jogo
 
-Ligado, o aplicativo **troca de perfil sozinho** quando um jogo abre e devolve o
-anterior quando ele fecha. Vem desligado: isto mexe no que aparece na peça sem
+Na aba Perfis, **Definir como padrão** escolhe o perfil de repouso do mostrador.
+Ligado, o perfil por jogo **troca sozinho** quando um jogo abre e sempre devolve
+esse padrão quando ele fecha. Vem desligado: isto mexe no que aparece na peça sem
 ninguém pedir, e um recurso que age sozinho tem de ser escolhido, não descoberto.
 
 O casamento é pelo **executável**, não pelo título da janela — título muda com
 patch, idioma e placar, e quebraria justamente quando ninguém está olhando. Toda
 troca automática vai para o log com o motivo, porque quem for procurar por que o
-mostrador mudou tem de achar a resposta escrita. Escolher um perfil na mão
-cancela o retorno automático: quem trocou quer aquele perfil.
+mostrador mudou tem de achar a resposta escrita. Uma troca manual durante o jogo
+não altera o destino de retorno: ao terminar, o padrão escolhido volta.
 
 Depende do RivaTuner Statistics Server, que é quem identifica o jogo em primeiro
 plano — sem ele o cartão diz isso e desabilita o interruptor, em vez de deixar
@@ -200,6 +198,10 @@ o que a pessoa montou por uma tela vazia seria destruir trabalho sem entregar
 nada. Qualquer sensor pode virar cartão, em três tamanhos que se reorganizam
 sozinhos na largura
 disponível.
+
+O botão *Perfis de métricas* salva a grade atual com nome, ordem, tamanho dos
+cartões e janela de histórico. Cada perfil salvo pode ser aplicado, atualizado
+com a grade atual, renomeado ou excluído pelo mesmo menu.
 
 O histórico **não vive na janela**: é gravado em disco e alimentado pelo mesmo
 ciclo que atualiza o mostrador, então continua correndo com a configuração
@@ -265,7 +267,8 @@ instalação seria pior — sem URL estável nem soma de verificação publicada
 executar o que viesse. Pelo `winget` a origem é o repositório da Microsoft e o
 pacote é o oficial (`Guru3D.RTSS`).
 
-> As três estatísticas derivadas saem das **nossas** amostras, uma por segundo,
+> FPS e frametime atuais acompanham o tempo do último quadro publicado pelo
+> RTSS. As três estatísticas derivadas saem das **nossas** amostras, uma por segundo,
 > e a janela está escrita no próprio rótulo. **Não são "1% low"**: aquilo exige o
 > tempo de cada quadro, e nesta altura os quadros individuais já não existem.
 
@@ -361,22 +364,12 @@ raramente vem sozinho, e fechar a cada gravação só significava reabrir.
 
 O software original não precisa estar instalado.
 
-### Alertas
-
-Cada mostrador tem dois limiares, e **zero desliga** cada um. O de cima é o
-esperado; o de baixo pega o que falha por baixo — ventoinha parada, vazão de
-rede que zerou, carga que despencou. O aviso dispara ao entrar na faixa e só
-rearma quando o valor volta, senão um sensor oscilando no limite notificaria a
-cada 1,1 s. **Mostrador em branco não dispara nada:** ausência de leitura não é
-valor baixo.
-
 ### Apagar quando ocioso
 
 Em *Configurações*, o mostrador pode apagar depois de N minutos sem teclado nem
 mouse, e volta ao primeiro toque. Conta a sessão inteira do Windows, não este
 programa — o que também quer dizer que assistir a um vídeo ou esperar uma
-renderização longa conta como ocioso, porque ninguém digita. Os alertas seguem
-valendo com o mostrador apagado: uma CPU não esfria porque o dono saiu.
+renderização longa conta como ocioso, porque ninguém digita.
 
 ### Dados do aplicativo
 
@@ -385,7 +378,7 @@ Ficam em `%LOCALAPPDATA%\MhiagosControl\` — acessível pelo menu da bandeja em
 
 | Arquivo | Conteúdo |
 |---------|----------|
-| `config.ini` | perfis, sensor de cada painel, unidades, limiares, rodízio, idioma da interface |
+| `config.ini` | perfis do painel e de métricas, sensores, unidades, rodízio e idioma |
 | `log.txt` | diagnóstico, com rotação em 512 KB (`log.txt.1`) |
 
 Configurações de versões antigas (inclusive da época em que o projeto se

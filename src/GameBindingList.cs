@@ -56,7 +56,7 @@ namespace MhiagosControl
             if (_gameIcon != null)
             {
                 Rectangle icon = Fit(_gameIcon, Rectangle.Inflate(r, -6, -6));
-                DrawRounded(g, _gameIcon, icon, Math.Max(10, icon.Width / 3));
+                DrawOriginal(g, _gameIcon, icon);
             }
             else
                 TextRenderer.DrawText(g, "\uE7FC", Ui.FontGlyph18, r, Ui.Accent,
@@ -95,6 +95,28 @@ namespace MhiagosControl
             }
             finally { graphics.Restore(state); }
         }
+
+        /// <summary>
+        /// Desenha a arte exatamente como o jogo a publicou. O cartao externo
+        /// continua arredondado, mas o ícone do VALORANT, por exemplo, possui
+        /// uma moldura quadrada oficial que não deve ser recortada.
+        /// </summary>
+        internal static void DrawOriginal(Graphics graphics, Image image, Rectangle bounds)
+        {
+            InterpolationMode previous = graphics.InterpolationMode;
+            PixelOffsetMode pixel = graphics.PixelOffsetMode;
+            try
+            {
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                graphics.DrawImage(image, bounds);
+            }
+            finally
+            {
+                graphics.InterpolationMode = previous;
+                graphics.PixelOffsetMode = pixel;
+            }
+        }
     }
 
     /// <summary>Regras visiveis no formato jogo real -> perfil.</summary>
@@ -102,7 +124,12 @@ namespace MhiagosControl
     {
         private readonly List<GameBindingView> _items = new List<GameBindingView>();
         private int _hover = -1, _top;
-        private const int RowH = 62;
+        internal const int RowH = 62;
+
+        internal static int PreferredHeight(int count)
+        {
+            return count <= 0 ? 82 : Math.Min(3, count) * RowH + 8;
+        }
 
         public string EmptyText = "";
         public event Action<string> RemoveRequested;
@@ -205,7 +232,7 @@ namespace MhiagosControl
             if (item.Icon != null)
             {
                 Rectangle image = GameIconView.Fit(item.Icon, Rectangle.Inflate(icon, -5, -5));
-                GameIconView.DrawRounded(g, item.Icon, image, Math.Max(8, image.Width / 3));
+                GameIconView.DrawOriginal(g, item.Icon, image);
             }
             else TextRenderer.DrawText(g, "\uE7FC", Ui.FontGlyph18, icon, Ui.Accent,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
