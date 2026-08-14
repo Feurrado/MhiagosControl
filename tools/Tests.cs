@@ -34,9 +34,12 @@ namespace MhiagosControl
             PreparoDoValor();
             IntegracaoDoCicloDoPainel();
             KeepaliveIndependente();
+            GuardaDaJanela();
             FontesInjetaveis();
             Formatacao();
             IdaEVoltaDaConfiguracao();
+            RecuperacaoSemantica();
+            IdentidadeVisualDoJogo();
             TodosOsCamposDoPerfil();
             RodizioDePerfis();
             NomesDoSistema();
@@ -109,6 +112,21 @@ namespace MhiagosControl
             b[4] = flags;
             Escrever(b, 5, p2);
             return b;
+        }
+
+        private static void GuardaDaJanela()
+        {
+            Secao("instancia unica da janela");
+
+            WindowOpenGate gate = new WindowOpenGate();
+            Verdade(!gate.Busy, "comeca livre");
+            Verdade(gate.TryEnter(), "primeiro pedido abre a janela");
+            Verdade(gate.Busy, "fica ocupada enquanto a janela existe");
+            Verdade(!gate.TryEnter(), "segundo pedido nao cria outra janela");
+            gate.Exit();
+            Verdade(!gate.Busy, "libera ao fechar");
+            Verdade(gate.TryEnter(), "pode abrir novamente depois de fechar");
+            gate.Exit();
         }
 
         private static void Escrever(byte[] b, int off, int? valor)
@@ -1161,11 +1179,15 @@ namespace MhiagosControl
                 c.GameProfiles = true;
                 c.MapearJogo("cyberpunk2077.exe", "CPU = GPU");
                 c.MapearJogo("LeagueClientUxRender.exe", "Padrão");
+                c.IdentificarJogo("cyberpunk2077.exe", "Cyberpunk 2077", @"C:\Jogos\Cyberpunk 2077\bin\x64\Cyberpunk2077.exe");
+                c.IdentificarJogo("LeagueClientUxRender.exe", "League of Legends", @"C:\Riot Games\League of Legends\LeagueClientUxRender.exe");
                 Config copia = c.Clone();
                 copia.Profiles[0].Name = "alterado";
                 copia.MetricIds[0] = "alterado";
+                copia.GameDisplayNames[0] = "alterado";
                 Verdade(c.Profiles[0].Name != "alterado", "clone nao compartilha perfis");
                 Igual("cpu:temp", c.MetricIds[0], "clone nao compartilha listas");
+                Igual("Cyberpunk 2077", c.GameDisplayNames[0], "clone nao compartilha nomes de jogos");
                 Verdade(c.SaveTo(arquivo), "grava a configuracao inicial");
 
                 Verdade(File.Exists(arquivo), "gravou no arquivo do teste, e nao no real");
@@ -1208,6 +1230,9 @@ namespace MhiagosControl
                 Igual(2, lido.GameKeys.Count, "dois jogos vinculados");
                 Igual("CPU = GPU", lido.PerfilDoJogo("cyberpunk2077.exe"), "casamento do primeiro");
                 Igual("Padrão", lido.PerfilDoJogo("LeagueClientUxRender.exe"), "casamento do segundo");
+                Igual("Cyberpunk 2077", lido.NomeDoJogo("cyberpunk2077.exe"), "nome real do jogo sobrevive");
+                Igual(@"C:\Jogos\Cyberpunk 2077\bin\x64\Cyberpunk2077.exe",
+                      lido.CaminhoDoJogo("cyberpunk2077.exe"), "caminho do icone sobrevive");
 
                 // O executavel vem do RTSS e a caixa nao e garantida.
                 Igual("CPU = GPU", lido.PerfilDoJogo("Cyberpunk2077.EXE"),
@@ -1224,6 +1249,8 @@ namespace MhiagosControl
                 lido.DesmapearJogo("cyberpunk2077.exe");
                 Igual(1, lido.GameKeys.Count, "desvincular remove");
                 Igual(1, lido.GameProfileNames.Count, "e as duas listas continuam do mesmo tamanho");
+                Igual(1, lido.GameDisplayNames.Count, "nome visual acompanha a remocao");
+                Igual(1, lido.GamePaths.Count, "caminho visual acompanha a remocao");
                 Igual(null, lido.PerfilDoJogo("cyberpunk2077.exe"), "e o casamento some");
 
                 // A roda e derivada da marca de cada perfil, e nao uma segunda
@@ -1245,14 +1272,127 @@ namespace MhiagosControl
                 Config regravado = Config.LoadFrom(arquivo, false);
                 Igual("PadrÃ£o", regravado.ActiveName, "sobrescrita atomica preserva a configuracao");
                 Verdade(!File.Exists(arquivo + ".tmp"), "sobrescrita atomica nao deixa temporario");
+                Verdade(File.Exists(arquivo + ".bak"), "sobrescrita conserva backup anterior");
+                Config anterior = Config.LoadFrom(arquivo + ".bak", false);
+                Igual("CPU = GPU", anterior.ActiveName, "backup contem o estado anterior");
+
+                // Save acompanha o caminho de onde a instancia foi carregada.
+                // Uma Config montada para previa nao tem destino implicito: isso
+                // impede auditorias visuais e testes de atingirem o arquivo real.
+                string erro;
+                regravado.WindowW = 1337;
+                Verdade(regravado.Save(out erro), "config carregada volta ao mesmo arquivo explicito");
+                Igual(1337, Config.LoadFrom(arquivo, false).WindowW,
+                      "Save persiste no arquivo de origem");
+                Config transitoria = new Config();
+                Verdade(!transitoria.Save(out erro), "config transitoria recusa gravacao implicita");
+                Verdade(!string.IsNullOrEmpty(erro), "recusa explica a falta de destino");
 
                 string diretorioInvalido = Path.Combine(caixa, "destino-diretorio");
                 Directory.CreateDirectory(diretorioInvalido);
-                string erro;
                 Verdade(!c.SaveTo(diretorioInvalido, out erro), "falha de disco volta ao chamador");
                 Verdade(!string.IsNullOrEmpty(erro), "falha de disco explica o motivo");
             }
             finally { try { Directory.Delete(caixa, true); } catch { } }
+        }
+
+        private static void RecuperacaoSemantica()
+        {
+            Secao("recuperacao semantica de sensores");
+
+            List<SensorEntry> sensores = new List<SensorEntry>();
+            sensores.Add(Semantico("cpu-t", "CPU", SensorType.Temperature, "CPU (Tctl/Tdie)"));
+            sensores.Add(Semantico("cpu-p", "CPU", SensorType.Power, "CPU PPT"));
+            sensores.Add(Semantico("cpu-u", "CPU", SensorType.Load, "Total CPU Usage"));
+            sensores.Add(Semantico("cpu-c", "CPU", SensorType.Clock, "Core Clock · média de 6"));
+            sensores.Add(Semantico("gpu-t", "GPU", SensorType.Temperature, "GPU Thermal Diode"));
+            sensores.Add(Semantico("gpu-u", "GPU", SensorType.Load, "GPU Utilization"));
+            sensores.Add(Semantico("gpu-c", "GPU", SensorType.Clock, "GPU Core Clock"));
+            sensores.Add(Semantico("gpu-f", "GPU", SensorType.Control, "GPU Fan"));
+            sensores.Add(Semantico("ram", "Memória", SensorType.Data, "Physical Memory Used"));
+            sensores.Add(Semantico("vrm", "Placa-mãe", SensorType.Temperature, "VRM MOS"));
+            sensores.Add(Semantico("vram", "GPU", SensorType.SmallData, "GPU Memory Used"));
+            sensores.Add(Semantico("d3d", "GPU", SensorType.Load, "D3D 3D"));
+
+            Config c = new Config();
+            Profile p = new Profile();
+            p.Panel1Id = "cpu-temp"; p.Panel2Id = "semantic:cpu-power";
+            c.Profiles.Add(p);
+            c.MetricIds.Add("semantic:cpu-clock");
+            c.MetricIds.Add("semantic:gpu-fan-pwm");
+            c.MetricIds.Add("semantic:vram-used");
+
+            Verdade(SensorSemantics.ResolveConfiguration(c, sensores), "resolve configuracao recuperada");
+            Igual("cpu-t", p.Panel1Id, "alias legado da temperatura da CPU");
+            Igual("cpu-p", p.Panel2Id, "potencia da CPU");
+            Verdade(!p.Percent, "potencia recuperada acende W no painel inferior");
+            Igual("cpu-c", c.MetricIds[0], "clock medio da CPU");
+            Igual("gpu-f", c.MetricIds[1], "PWM da ventoinha da GPU");
+            Igual("vram", c.MetricIds[2], "memoria de video usada");
+            Verdade(!SensorSemantics.ResolveConfiguration(c, sensores), "segunda passagem nao altera IDs concretos");
+            Igual("semantic:ausente", SensorSemantics.ResolveId(sensores, "semantic:ausente"),
+                  "sensor ausente permanece pendente em vez de virar escolha errada");
+
+            List<SensorEntry> hwinfo = new List<SensorEntry>();
+            hwinfo.Add(Semantico("fan-hw", "GPU", SensorType.Load, "GPU Fan PWM"));
+            Igual("fan-hw", SensorSemantics.ResolveId(hwinfo, "semantic:gpu-fan-pwm"),
+                  "PWM em porcentagem publicado como carga tambem e reconhecido");
+            Igual("semantic:vrm-temp", SensorSemantics.ResolveId(hwinfo, "semantic:vrm-temp"),
+                  "VRM ausente nao e substituido por uma temperatura qualquer");
+        }
+
+        private static SensorEntry Semantico(string id, string categoria, SensorType tipo, string nome)
+        {
+            SensorEntry s = new SensorEntry();
+            s.Id = id; s.Category = categoria; s.Type = tipo; s.Name = nome;
+            s.Label = nome; s.Value = 1;
+            return s;
+        }
+
+        private static void IdentidadeVisualDoJogo()
+        {
+            Secao("identidade visual dos jogos");
+
+            Igual("Cyberpunk 2077", GameIdentity.Humanize("Cyberpunk2077.exe"),
+                  "o executavel vira nome humano");
+            Igual("League Client Ux Render", GameIdentity.Humanize("LeagueClientUxRender.exe"),
+                  "camel case ganha espacos");
+            Verdade(GameIdentity.Humanize("meu_jogo-final.exe").IndexOf(".exe") < 0,
+                    "o nome principal nunca exibe a extensao");
+            Verdade(GameIdentity.InstalledNameMatches("VALORANT", "VALORANT.exe", null),
+                    "nome instalado casa com o executavel protegido");
+            Verdade(GameIdentity.InstalledNameMatches("League of Legends", "LeagueClient.exe",
+                    "League of Legends"), "nome confirmado casa com o cadastro instalado");
+            Verdade(!GameIdentity.InstalledNameMatches("Riot Client", "VALORANT.exe", null),
+                    "launcher nao e confundido com o jogo");
+
+            using (Bitmap wide = new Bitmap(128, 64))
+            {
+                Rectangle fitted = GameIconView.Fit(wide, new Rectangle(0, 0, 40, 40));
+                Igual(40, fitted.Width, "icone horizontal usa toda a largura disponivel");
+                Igual(20, fitted.Height, "icone horizontal preserva a proporcao sem corte");
+            }
+            using (Bitmap source = new Bitmap(40, 40))
+            using (Bitmap rounded = new Bitmap(40, 40))
+            {
+                using (Graphics fill = Graphics.FromImage(source)) fill.Clear(Color.Red);
+                using (Graphics draw = Graphics.FromImage(rounded))
+                    GameIconView.DrawRounded(draw, source, new Rectangle(0, 0, 40, 40), 13);
+                Igual(0, rounded.GetPixel(0, 0).A,
+                      "a propria arte do icone perde o canto quadrado");
+                Verdade(rounded.GetPixel(20, 20).A > 0,
+                        "o conteudo central do icone permanece inteiro");
+            }
+            using (GameIconView view = new GameIconView())
+                Igual(0, view.BackColor.A,
+                      "o fundo do controle nao deixa uma borda externa quadrada");
+
+            int pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+            GameIdentityInfo atual = GameIdentity.Resolve("Tests.exe", pid, null, null);
+            Verdade(!string.IsNullOrEmpty(atual.DisplayName), "processo recebe nome visivel");
+            Verdade(!atual.DisplayName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase),
+                    "nome resolvido nao e o executavel");
+            Verdade(!string.IsNullOrEmpty(atual.ExecutablePath), "processo fornece caminho para o icone");
         }
 
         /// <summary>

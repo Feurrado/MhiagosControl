@@ -29,6 +29,14 @@ namespace MhiagosControl
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool DestroyIcon(IntPtr handle);
 
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr handle);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindowAsync(IntPtr handle, int command);
+
+        private const int SwRestore = 9;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
 
@@ -40,6 +48,8 @@ namespace MhiagosControl
         private Control _marshal;
         private Thread _sensorInit;
         private Thread _worker;
+        private Thread _activationWatcher;
+        private readonly EventWaitHandle _activationSignal;
         private ManualResetEvent _stop = new ManualResetEvent(false);
         private int _runtimeState = (int)RuntimeState.Starting;
 
@@ -97,6 +107,9 @@ namespace MhiagosControl
         private MenuItem _miPause, _miAutostart, _miProfiles;
         private bool _sensorsOk = false;
         private bool _alerting = false;
+        private bool _openWhenReady = false;
+        private SettingsForm _settingsForm;
+        private readonly WindowOpenGate _settingsGate = new WindowOpenGate();
 
         /// <summary>
         /// Travas de alerta, uma por limiar. Sao quatro e nao duas porque o
@@ -107,7 +120,7 @@ namespace MhiagosControl
         private bool _iconIsAlert = false;
         private readonly object _alertLock = new object();
 
-        public TrayContext() : this(new Sensors(), new HidPanel()) { }
+        public TrayContext() : this(new Sensors(), new HidPanel(), null) { }
 
         /// <summary>
         /// Ponto de composicao da aplicacao. Mantido interno para a producao
@@ -115,11 +128,16 @@ namespace MhiagosControl
         /// injetar sensores e painel sem hardware fisico.
         /// </summary>
         internal TrayContext(ISensorService sensors, IPanelDevice panel)
+            : this(sensors, panel, null) { }
+
+        internal TrayContext(ISensorService sensors, IPanelDevice panel,
+                             EventWaitHandle activationSignal)
         {
             if (sensors == null) throw new ArgumentNullException("sensors");
             if (panel == null) throw new ArgumentNullException("panel");
             _sensors = sensors;
             _panel = panel;
+            _activationSignal = activationSignal;
             _sensorCycle = new SensorCycle(sensors);
             _panelCycle = new PanelCycle(panel);
             _panelKeepalive = new PanelKeepalive(panel, OnPanelConnectionChanged);
@@ -147,9 +165,37 @@ namespace MhiagosControl
             _icon.DoubleClick += new EventHandler(OnConfig);
             BuildMenu();
 
+            IniciarVigiaDeAtivacao();
+
             // A abertura das fontes NAO acontece aqui. Ela e agendada para
             // depois que Application.Run assumir: veja AbrirSensores.
             _marshal.BeginInvoke(new MethodInvoker(AbrirSensores));
+        }
+
+        /// <summary>
+        /// A segunda execucao nao abre interface propria. Ela acende este evento
+        /// nomeado e termina; a instancia que possui a bandeja recebe o sinal e
+        /// executa exatamente a mesma acao do duplo clique no icone.
+        /// </summary>
+        private void IniciarVigiaDeAtivacao()
+        {
+            if (_activationSignal == null) return;
+
+            _activationWatcher = new Thread(new ThreadStart(delegate
+            {
+                WaitHandle[] sinais = { _activationSignal, _stop };
+                while (!IsStopping)
+                {
+                    int qual;
+                    try { qual = WaitHandle.WaitAny(sinais); }
+                    catch (ObjectDisposedException) { return; }
+                    if (qual != 0 || IsStopping) return;
+                    Marshal(delegate { PedirConfiguracao(); });
+                }
+            }));
+            _activationWatcher.IsBackground = true;
+            _activationWatcher.Name = "InstanceActivation";
+            _activationWatcher.Start();
         }
 
         /// <summary>
@@ -258,6 +304,15 @@ namespace MhiagosControl
                     T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
+            // Recuperacoes e migracoes podem usar nomes portaveis. Resolve-los
+            // somente depois de as fontes abrirem evita gravar um ID da fonte
+            // reserva numa maquina que normalmente usa HWiNFO.
+            if (_sensorsOk && SensorSemantics.ResolveConfiguration(_cfg, _cache))
+            {
+                string erro;
+                if (!_cfg.Save(out erro)) Log.Write("sensores recuperados nao persistiram: " + erro);
+            }
+
             // Antes de qualquer caminho que possa abrir a janela de
             // configuracao: e la que a grade de metricas se monta e passa a
             // acompanhar leituras.
@@ -268,7 +323,7 @@ namespace MhiagosControl
             if (_sensorsOk && (string.IsNullOrEmpty(act.Panel1Id) || string.IsNullOrEmpty(act.Panel2Id)))
             {
                 PickDefaults(act);
-                OnConfig(null, null);
+                _openWhenReady = true;
             }
 
             WarnAboutOriginalTask();
@@ -285,6 +340,12 @@ namespace MhiagosControl
             _worker.Start();
             Interlocked.CompareExchange(ref _runtimeState,
                 (int)RuntimeState.Running, (int)RuntimeState.Starting);
+
+            if (_openWhenReady)
+            {
+                _openWhenReady = false;
+                _marshal.BeginInvoke(new MethodInvoker(PedirConfiguracao));
+            }
         }
 
         /// <summary>
@@ -942,12 +1003,37 @@ namespace MhiagosControl
 
         private void OnConfig(object sender, EventArgs e)
         {
+            PedirConfiguracao();
+        }
+
+        private void PedirConfiguracao()
+        {
+            if (IsStopping) return;
+
             // A lista so existe depois de a thread de inicializacao publicar as
             // fontes. Abrir antes montava uma janela incompleta e concorria com
-            // o primeiro Refresh; o clique passa a explicar o que esta ocorrendo.
+            // o primeiro Refresh. O pedido fica pendente e abre a janela assim
+            // que as fontes terminarem, em vez de se perder na tela de carga.
             if (IsStarting)
             {
+                _openWhenReady = true;
                 MostrarSplash();
+                return;
+            }
+
+            if (_settingsForm != null && !_settingsForm.IsDisposed)
+            {
+                TrazerParaFrente(_settingsForm);
+                return;
+            }
+
+            // ShowDialog cria um laco de mensagens aninhado. Sem esta guarda,
+            // o duplo clique seguinte reentra neste metodo antes de o primeiro
+            // voltar e cria outra janela modal por cima da anterior.
+            if (!_settingsGate.TryEnter())
+            {
+                if (_settingsForm != null && !_settingsForm.IsDisposed)
+                    TrazerParaFrente(_settingsForm);
                 return;
             }
 
@@ -977,11 +1063,13 @@ namespace MhiagosControl
                 {
                     using (SettingsForm f = new SettingsForm(_cfg, _cache, this))
                     {
+                        _settingsForm = f;
                         // Aplicar dentro da janela ja vale no mostrador: sem
                         // isto o perfil so mudaria ao fechar, o que faria o
                         // botao parecer sem efeito.
                         f.Applied += delegate { Publicar(); ResetAlerts(); };
                         r = f.ShowDialog();
+                        _settingsForm = null;
                     }
                     if (r == DialogResult.Retry) _cache = ReListSensors();
                 }
@@ -1004,6 +1092,26 @@ namespace MhiagosControl
                 Log.Error("janela de configuracao", ex);
                 MessageBox.Show(ex.Message, T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+            finally
+            {
+                _settingsForm = null;
+                _settingsGate.Exit();
+            }
+        }
+
+        private static void TrazerParaFrente(Form form)
+        {
+            if (form == null || form.IsDisposed) return;
+            try
+            {
+                if (form.WindowState == FormWindowState.Minimized)
+                    form.WindowState = FormWindowState.Normal;
+                ShowWindowAsync(form.Handle, SwRestore);
+                form.BringToFront();
+                form.Activate();
+                SetForegroundWindow(form.Handle);
+            }
+            catch (Exception ex) { Log.Error("trazer configuracao para frente", ex); }
         }
 
         private Dictionary<string, float> GetSnapshot()
@@ -1079,12 +1187,13 @@ namespace MhiagosControl
             bool workerParou = EsperarThread(_worker, "atualizacao", budget);
             bool painelParou = EsperarKeepalive(budget);
             bool aberturaParou = EsperarThread(_sensorInit, "abertura de sensores", budget);
+            bool ativacaoParou = EsperarThread(_activationWatcher, "ativacao", budget);
 
             // Depois de a thread parar: gravar com ela viva copiaria uma serie
             // no meio de um balde sendo fechado. Pelo mesmo motivo, se uma
             // thread resistir ao timeout, nao fechamos painel ou sensores sob os
             // pes dela: o processo esta saindo e o Windows libera os handles.
-            bool podeDescartarRecursos = workerParou && painelParou && aberturaParou;
+            bool podeDescartarRecursos = workerParou && painelParou && aberturaParou && ativacaoParou;
             try { MetricHistory.Salvar(); } catch (Exception ex) { Log.Error("gravacao do historico", ex); }
             if (!podeDescartarRecursos)
                 Log.Write("encerramento: recursos de hardware ficarao para o termino do processo");
@@ -1134,6 +1243,9 @@ namespace MhiagosControl
 
     public static class Program
     {
+        private const string MutexName = "Local\\MhiagosControl_SingleInstance";
+        private const string ActivationName = "Local\\MhiagosControl_Activate";
+
         private static bool TemArgumento(string alvo)
         {
             try
@@ -1171,12 +1283,16 @@ namespace MhiagosControl
             }
 
             bool createdNew;
-            using (Mutex mutex = new Mutex(true, "Local\\MhiagosControl_SingleInstance", out createdNew))
+            using (EventWaitHandle activation = new EventWaitHandle(
+                false, EventResetMode.AutoReset, ActivationName))
+            using (Mutex mutex = new Mutex(true, MutexName, out createdNew))
             {
                 if (!createdNew)
                 {
-                    MessageBox.Show(T.AlreadyRunning,
-                        T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    // A instancia existente traz sua unica janela para frente.
+                    // Esta segunda execucao nao cria janela nem icone proprios.
+                    try { activation.Set(); }
+                    catch (Exception ex) { Log.Error("sinalizar instancia existente", ex); }
                     return;
                 }
 
@@ -1187,7 +1303,7 @@ namespace MhiagosControl
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 
-                try { Application.Run(new TrayContext()); }
+                try { Application.Run(new TrayContext(new Sensors(), new HidPanel(), activation)); }
                 catch (Exception ex)
                 {
                     Log.Error("falha fatal", ex);

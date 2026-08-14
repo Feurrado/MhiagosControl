@@ -70,6 +70,11 @@ namespace MhiagosControl
     /// </summary>
     public class Config
     {
+        // O destino pertence a instancia carregada. Uma Config criada apenas
+        // para previa, teste ou importacao nao pode cair silenciosamente no
+        // arquivo real do usuario ao chamar Save().
+        private string _savePath;
+
         public List<Profile> Profiles = new List<Profile>();
         public string ActiveName = "Padrao";
 
@@ -153,6 +158,8 @@ namespace MhiagosControl
         /// </summary>
         public List<string> GameKeys = new List<string>();
         public List<string> GameProfileNames = new List<string>();
+        public List<string> GameDisplayNames = new List<string>();
+        public List<string> GamePaths = new List<string>();
 
         /// <summary>
         /// Copia profunda usada por editores e operacoes transacionais. Listas e
@@ -161,6 +168,7 @@ namespace MhiagosControl
         public Config Clone()
         {
             Config c = new Config();
+            c._savePath = _savePath;
             c.CopyFrom(this);
             return c;
         }
@@ -192,6 +200,10 @@ namespace MhiagosControl
             GameKeys.AddRange(other.GameKeys);
             GameProfileNames.Clear();
             GameProfileNames.AddRange(other.GameProfileNames);
+            GameDisplayNames.Clear();
+            GameDisplayNames.AddRange(other.GameDisplayNames);
+            GamePaths.Clear();
+            GamePaths.AddRange(other.GamePaths);
         }
 
         /// <summary>Perfil casado com o executavel, ou nulo.</summary>
@@ -211,6 +223,44 @@ namespace MhiagosControl
             DesmapearJogo(exe);
             GameKeys.Add(exe.Trim());
             GameProfileNames.Add(perfil.Trim());
+            GameDisplayNames.Add("");
+            GamePaths.Add("");
+        }
+
+        public string NomeDoJogo(string exe)
+        {
+            int i = IndiceDoJogo(exe);
+            return i >= 0 && i < GameDisplayNames.Count ? GameDisplayNames[i] : null;
+        }
+
+        public string CaminhoDoJogo(string exe)
+        {
+            int i = IndiceDoJogo(exe);
+            return i >= 0 && i < GamePaths.Count ? GamePaths[i] : null;
+        }
+
+        /// <summary>Guarda a identidade visual sem trocar o perfil associado.</summary>
+        public bool IdentificarJogo(string exe, string nome, string caminho)
+        {
+            int i = IndiceDoJogo(exe);
+            if (i < 0) return false;
+            while (GameDisplayNames.Count <= i) GameDisplayNames.Add("");
+            while (GamePaths.Count <= i) GamePaths.Add("");
+
+            nome = nome == null ? "" : nome.Trim();
+            caminho = caminho == null ? "" : caminho.Trim();
+            if (GameDisplayNames[i] == nome && GamePaths[i] == caminho) return false;
+            GameDisplayNames[i] = nome;
+            GamePaths[i] = caminho;
+            return true;
+        }
+
+        private int IndiceDoJogo(string exe)
+        {
+            if (string.IsNullOrEmpty(exe)) return -1;
+            for (int i = 0; i < GameKeys.Count; i++)
+                if (string.Equals(GameKeys[i], exe, StringComparison.OrdinalIgnoreCase)) return i;
+            return -1;
         }
 
         public void DesmapearJogo(string exe)
@@ -221,7 +271,23 @@ namespace MhiagosControl
                 {
                     GameKeys.RemoveAt(i);
                     if (i < GameProfileNames.Count) GameProfileNames.RemoveAt(i);
+                    if (i < GameDisplayNames.Count) GameDisplayNames.RemoveAt(i);
+                    if (i < GamePaths.Count) GamePaths.RemoveAt(i);
                 }
+        }
+
+        public void RenomearPerfilNosJogos(string anterior, string novo)
+        {
+            for (int i = 0; i < GameProfileNames.Count; i++)
+                if (string.Equals(GameProfileNames[i], anterior, StringComparison.Ordinal))
+                    GameProfileNames[i] = novo;
+        }
+
+        public void RemoverPerfilDosJogos(string perfil)
+        {
+            for (int i = GameProfileNames.Count - 1; i >= 0; i--)
+                if (string.Equals(GameProfileNames[i], perfil, StringComparison.Ordinal) && i < GameKeys.Count)
+                    DesmapearJogo(GameKeys[i]);
         }
 
         /// <summary>Tamanho do cartao i, tolerando lista curta de versao antiga.</summary>
@@ -279,6 +345,7 @@ namespace MhiagosControl
         public static Config LoadFrom(string path, bool migrar)
         {
             Config c = new Config();
+            c._savePath = Path.GetFullPath(path);
             try
             {
                 if (migrar) MigrateLegacyFile(path);
@@ -326,6 +393,14 @@ namespace MhiagosControl
                             int barra = v.IndexOf('|');
                             if (barra <= 0 || barra >= v.Length - 1) continue;
                             c.MapearJogo(v.Substring(0, barra), v.Substring(barra + 1));
+                        }
+                        else if (k == "gameidentity")
+                        {
+                            // executavel|nome-base64|caminho-base64. Separado do
+                            // gamemap para continuar lendo configuracoes antigas.
+                            string[] partes = v.Split('|');
+                            if (partes.Length >= 3)
+                                c.IdentificarJogo(partes[0], Decode(partes[1]), Decode(partes[2]));
                         }
                         else if (k == "metric")
                         {
@@ -390,6 +465,19 @@ namespace MhiagosControl
             return int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n) ? n : 0;
         }
 
+        private static string Encode(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
+        }
+
+        private static string Decode(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            try { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
+            catch { return ""; }
+        }
+
         /// <summary>Move um config.ini deixado ao lado do executavel por versoes antigas.</summary>
         private static void MigrateLegacyFile(string target)
         {
@@ -412,7 +500,16 @@ namespace MhiagosControl
             return Save(out erro);
         }
 
-        public bool Save(out string erro) { return SaveTo(FilePath, out erro); }
+        public bool Save(out string erro)
+        {
+            if (string.IsNullOrEmpty(_savePath))
+            {
+                erro = "configuracao sem destino de persistencia";
+                Log.Write("gravacao recusada: " + erro);
+                return false;
+            }
+            return SaveTo(_savePath, out erro);
+        }
 
         /// <summary>Grava num caminho explicito. Veja LoadFrom.</summary>
         public bool SaveTo(string path)
@@ -443,7 +540,14 @@ namespace MhiagosControl
                 sb.AppendLine("gameprofiles=" + (GameProfiles ? "1" : "0"));
                 for (int i = 0; i < GameKeys.Count && i < GameProfileNames.Count; i++)
                     if (!string.IsNullOrEmpty(GameKeys[i]) && !string.IsNullOrEmpty(GameProfileNames[i]))
+                    {
                         sb.AppendLine("gamemap=" + GameKeys[i] + "|" + GameProfileNames[i]);
+                        string nome = i < GameDisplayNames.Count ? GameDisplayNames[i] : "";
+                        string caminho = i < GamePaths.Count ? GamePaths[i] : "";
+                        if (!string.IsNullOrEmpty(nome) || !string.IsNullOrEmpty(caminho))
+                            sb.AppendLine("gameidentity=" + GameKeys[i] + "|" +
+                                          Encode(nome) + "|" + Encode(caminho));
+                    }
                 for (int i = 0; i < MetricIds.Count; i++)
                     if (!string.IsNullOrEmpty(MetricIds[i]))
                         sb.AppendLine("metric=" + MetricSize(i).ToString(CultureInfo.InvariantCulture) +
@@ -469,10 +573,19 @@ namespace MhiagosControl
         private static void WriteAtomically(string path, string text)
         {
             string temp = path + ".tmp";
+            string backup = path + ".bak";
             try
             {
                 File.WriteAllText(temp, text, Encoding.UTF8);
-                if (File.Exists(path)) File.Replace(temp, path, null);
+                if (File.Exists(path))
+                {
+                    // File.Replace nao guarda a versao anterior quando o terceiro
+                    // argumento e nulo. Uma copia explicita deixa ao menos um
+                    // estado recuperavel se uma gravacao valida, mas indevida,
+                    // substituir dados do usuario.
+                    File.Copy(path, backup, true);
+                    File.Replace(temp, path, null);
+                }
                 else File.Move(temp, path);
             }
             catch

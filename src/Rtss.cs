@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using LibreHardwareMonitor.Hardware;
 
 namespace MhiagosControl
@@ -113,8 +114,10 @@ namespace MhiagosControl
         /// arquivo, e precisa que a ausencia seja nulo e nao uma frase.
         /// </summary>
         private static volatile string _jogo;
+        private static int _jogoPid;
 
         public static string JogoAtual { get { return _jogo; } }
+        public static int JogoAtualPid { get { return Volatile.Read(ref _jogoPid); } }
 
         private readonly float[] _serieFps = new float[JanelaSeg];
         private readonly float[] _serieFt = new float[JanelaSeg];
@@ -560,6 +563,7 @@ namespace MhiagosControl
                         : (string.IsNullOrEmpty(_app) ? T.RtssIdle : _app);
             _peca = peca;
             _jogo = (_disponivel && !string.IsNullOrEmpty(_app)) ? _app : null;
+            Volatile.Write(ref _jogoPid, _jogo != null ? (int)_pid : 0);
 
             float? fpsMin = null, fpsMed = null, ftMed = null, ftPior = null;
 

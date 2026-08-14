@@ -75,7 +75,7 @@ namespace MhiagosControl
         private ProfileList _profileList;
         private PanelPreview _profilePreview;
         private Label _profileInfo;
-        private FlatBtn _btnApply;
+        private FlatBtn _btnApply, _profileSensor1, _profileSensor2;
 
         // pagina Sobre
         private Control _pgConfig;
@@ -134,7 +134,10 @@ namespace MhiagosControl
             _cfg = _session.Draft;
             _sensors = sensors;
             _data = data;
-            _current = cfg.Active;
+            // Toda a janela edita o rascunho da sessao. Misturar aqui o perfil
+            // da configuracao viva fazia a primeira troca de aba escrever parte
+            // do formulario no objeto errado antes de Salvar.
+            _current = _cfg.Active;
 
             Text = T.AppName;
             Icon = Assets.AppIcon;
@@ -469,6 +472,13 @@ namespace MhiagosControl
                 NavItem sel = _dono._nav != null ? _dono._nav.Selected : null;
                 Pagina p = sel != null ? sel.Page as Pagina : null;
                 if (p == null || !p.Rolavel || !p.Visible) return false;
+
+                // Listas internas possuem alcance proprio. Roubar a roda delas
+                // para mover a pagina deixaria perfis e vinculos alem da segunda
+                // linha inacessiveis justamente quando ha muitos itens.
+                Control alvo = Control.FromHandle(m.HWnd);
+                for (Control c = alvo; c != null && c != p; c = c.Parent)
+                    if (c is ProfileList || c is GameBindingList) return false;
 
                 // So quando o ponteiro esta sobre a pagina: fora dela, a roda
                 // pertence a quem estiver embaixo - uma lista, um seletor.
@@ -859,7 +869,13 @@ namespace MhiagosControl
 
             if (s == null)
             {
-                c.Visible = false;
+                c.Visible = true;
+                c.SensorId = "";
+                c.Titulo = titulo;
+                c.Sub = T.NoSensorChosen;
+                c.Unidade = "";
+                c.Atencao = null; c.Perigo = null;
+                c.Push(null);
                 return;
             }
 
@@ -1210,6 +1226,9 @@ namespace MhiagosControl
         private Label _lbSpecsEstado, _lbSpecsNota;
         private FlatBtn _btCopiarSpecs;
         private bool _coletando = false;
+        private readonly List<FlatBtn> _specCategoryButtons = new List<FlatBtn>();
+        private readonly Dictionary<Card, int> _specFullHeights = new Dictionary<Card, int>();
+        private int _specCategory = 0; // zero = resumo; os demais seguem _specCards
 
         /// <summary>
         /// A folha de especificacoes, no espirito do CPU-Z.
@@ -1334,7 +1353,10 @@ namespace MhiagosControl
                     }
                     c.Height = y + 10;
                     c.Tag = vals;
+                    _specFullHeights[c] = c.Height;
                 }
+
+                MontarCategoriasDeSpecs(folha);
             }
             finally { _pgSpecs.ResumeLayout(); }
 
@@ -1342,6 +1364,37 @@ namespace MhiagosControl
         }
 
         private readonly List<Card> _specCards = new List<Card>();
+
+        private void MontarCategoriasDeSpecs(List<SpecGrupo> folha)
+        {
+            if (_specCategoryButtons.Count > 0) return;
+            string[] nomes = new string[folha.Count + 1];
+            nomes[0] = T.SpecsOverview;
+            for (int i = 0; i < folha.Count; i++) nomes[i + 1] = folha[i].Titulo;
+
+            for (int i = 0; i < nomes.Length; i++)
+            {
+                FlatBtn b = new FlatBtn();
+                b.Text = nomes[i];
+                b.Tag = i;
+                b.Primary = i == _specCategory;
+                b.Height = 30;
+                b.Click += delegate(object sender, EventArgs e)
+                {
+                    FlatBtn clicked = sender as FlatBtn;
+                    if (clicked == null) return;
+                    _specCategory = (int)clicked.Tag;
+                    foreach (FlatBtn item in _specCategoryButtons)
+                    {
+                        item.Primary = ReferenceEquals(item, clicked);
+                        item.Invalidate();
+                    }
+                    ArranjarSpecsPagina();
+                };
+                _pgSpecs.Controls.Add(b);
+                _specCategoryButtons.Add(b);
+            }
+        }
 
         /// <summary>
         /// Duas colunas de cartoes, empacotadas na mais curta.
@@ -1358,20 +1411,52 @@ namespace MhiagosControl
 
             const int Esp = 12;
 
-            // O topo sai do cabecalho, e nao de um numero escrito a mao: mexer na
-            // altura do botao deixaria a constante mentindo, e o buraco - ou a
-            // sobreposicao - so apareceria na tela de quem usa.
-            int topo = _btCopiarSpecs.Bottom + 12;
-
             int disp = _pgSpecs.Width - 4 - Pagina.LarguraDaBarra;
             if (disp > LarguraMaxDaPagina) disp = LarguraMaxDaPagina;
             if (disp < 460) disp = 460;
 
-            // Tres colunas quando ha largura. Com duas, uma janela larga deixava
-            // colunas de 550 px para linhas cujo valor mais longo tem 250 - e a
-            // folha ficava alta a toa, obrigando a rolar por causa de espaco que
-            // sobrava do lado.
-            int colunas = disp >= 1280 ? 3 : (disp >= 700 ? 2 : 1);
+            // Categorias em pastilhas que quebram de linha. Uma faixa dividida
+            // em partes iguais esmagaria "Armazenamento" em janelas estreitas;
+            // aqui cada uma ocupa o texto que realmente possui.
+            int catX = 2, catY = _btCopiarSpecs.Bottom + 10;
+            foreach (FlatBtn b in _specCategoryButtons)
+            {
+                int w = TextRenderer.MeasureText(b.Text, Ui.FontBase).Width + 30;
+                w = Math.Max(82, Math.Min(164, w));
+                if (catX > 2 && catX + w > disp) { catX = 2; catY += 36; }
+                b.SetBounds(catX, catY, w, 30);
+                catX += w + 6;
+            }
+            int topo = (_specCategoryButtons.Count > 0 ? catY + 30 : _btCopiarSpecs.Bottom) + 12;
+
+            if (_specCategory > 0)
+            {
+                int escolhido = _specCategory - 1;
+                for (int i = 0; i < _specCards.Count; i++)
+                {
+                    Card c = _specCards[i];
+                    c.Visible = i == escolhido;
+                    if (!c.Visible) continue;
+                    MostrarLinhasDeSpec(c, int.MaxValue);
+                    int detailWidth = Math.Min(820, disp);
+                    int detailX = 2 + (disp - detailWidth) / 2;
+                    c.SetBounds(detailX, topo, detailWidth, _specFullHeights[c]);
+                    ArranjarLinhasDeSpec(c);
+                }
+                _pgSpecs.Sincronizar();
+                return;
+            }
+
+            // Resumo: todos os grupos viram cartoes compactos com as primeiras
+            // informacoes. A categoria abre a ficha inteira sem repetir dados.
+            foreach (Card c in _specCards)
+            {
+                c.Visible = true;
+                c.Height = Math.Min(128, _specFullHeights[c]);
+                MostrarLinhasDeSpec(c, 3);
+            }
+
+            int colunas = disp >= 900 ? 3 : (disp >= 620 ? 2 : 1);
             int larg = (disp - (colunas - 1) * Esp) / colunas;
 
             int[] alturas = new int[colunas];
@@ -1398,6 +1483,19 @@ namespace MhiagosControl
                 _lbSpecsNota.Width = Math.Max(160, disp - _lbSpecsNota.Left);
 
             _pgSpecs.Sincronizar();
+        }
+
+        private static void MostrarLinhasDeSpec(Card card, int quantidade)
+        {
+            List<Label> vals = card.Tag as List<Label>;
+            if (vals == null) return;
+            for (int i = 0; i < vals.Count; i++)
+            {
+                bool visible = i < quantidade;
+                vals[i].Visible = visible;
+                Label cap = vals[i].Tag as Label;
+                if (cap != null) cap.Visible = visible;
+            }
         }
 
         /// <summary>
@@ -1471,7 +1569,7 @@ namespace MhiagosControl
 
             Card c1 = new Card();
             c1.Title = T.Panel1;
-            c1.SetBounds(0, 0, 370, 268);
+            c1.SetBounds(0, 0, 370, 282);
             page.Controls.Add(c1);
 
             _slot1 = new SensorSlot();
@@ -1496,7 +1594,7 @@ namespace MhiagosControl
 
             Card c2 = new Card();
             c2.Title = T.Panel2;
-            c2.SetBounds(386, 0, 370, 268);
+            c2.SetBounds(386, 0, 370, 282);
             page.Controls.Add(c2);
 
             _slot2 = new SensorSlot();
@@ -1519,7 +1617,7 @@ namespace MhiagosControl
 
             _panelPreviewCard = new Card();
             _panelPreviewCard.Title = T.Preview;
-            _panelPreviewCard.SetBounds(0, 280, 756, 532);
+            _panelPreviewCard.SetBounds(0, 294, 756, 532);
             page.Controls.Add(_panelPreviewCard);
 
             _preview = new PanelPreview();
@@ -1739,11 +1837,11 @@ namespace MhiagosControl
 
             Card c = new Card();
             c.Title = T.SavedProfiles;
-            c.SetBounds(0, 0, 330, 566);
+            c.SetBounds(0, 0, 330, 500);
             page.Controls.Add(c);
 
             _profileList = new ProfileList();
-            _profileList.SetBounds(12, 44, 306, 350);
+            _profileList.SetBounds(12, 44, 306, 300);
             _profileList.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _profileList.Resolve = NomeDoSensor;
             _profileList.ActiveName = _cfg.ActiveName;
@@ -1754,27 +1852,39 @@ namespace MhiagosControl
             // Grade de dois por tres. A coluna da esquerda fica na esquerda e a
             // da direita na direita, senao o cartao esticado abre um vao a
             // direita dos seis botoes e a grade some para um canto.
-            c.Controls.Add(MakeSideButton(T.New, 12, 406, 145, new EventHandler(OnNewProfile)));
-            c.Controls.Add(ADireita(MakeSideButton(T.Rename, 173, 406, 145, new EventHandler(OnRenameProfile))));
-            c.Controls.Add(MakeSideButton(T.Duplicate, 12, 446, 145, new EventHandler(OnDuplicateProfile)));
-            FlatBtn del = ADireita(MakeSideButton(T.Delete, 173, 446, 145, new EventHandler(OnDeleteProfile)));
+            c.Controls.Add(MakeSideButton(T.New, 12, 356, 145, new EventHandler(OnNewProfile)));
+            c.Controls.Add(ADireita(MakeSideButton(T.Rename, 173, 356, 145, new EventHandler(OnRenameProfile))));
+            c.Controls.Add(MakeSideButton(T.Duplicate, 12, 396, 145, new EventHandler(OnDuplicateProfile)));
+            FlatBtn del = ADireita(MakeSideButton(T.Delete, 173, 396, 145, new EventHandler(OnDeleteProfile)));
             del.Danger = true;
             c.Controls.Add(del);
-            c.Controls.Add(MakeSideButton(T.Export, 12, 486, 145, new EventHandler(OnExportProfile)));
-            c.Controls.Add(ADireita(MakeSideButton(T.Import, 173, 486, 145, new EventHandler(OnImportProfile))));
+            c.Controls.Add(MakeSideButton(T.Export, 12, 436, 145, new EventHandler(OnExportProfile)));
+            c.Controls.Add(ADireita(MakeSideButton(T.Import, 173, 436, 145, new EventHandler(OnImportProfile))));
 
             Card cv = new Card();
             cv.Title = T.ProfilePreview;
-            cv.SetBounds(346, 0, 410, 566);
+            cv.SetBounds(346, 0, 410, 500);
             page.Controls.Add(cv);
 
             _profilePreview = new PanelPreview();
-            _profilePreview.SetBounds(12, 44, 386, 372);
+            _profilePreview.SetBounds(12, 44, 386, 250);
             _profilePreview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             cv.Controls.Add(_profilePreview);
 
-            _profileInfo = MakeLabel("", 16, 428, Ui.FontSmall);
-            _profileInfo.Size = new Size(378, 66);
+            _profileSensor1 = new FlatBtn();
+            _profileSensor1.SetBounds(12, 306, 386, 34);
+            _profileSensor1.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _profileSensor1.Click += delegate { TrocarSensorDoPerfil(1); };
+            cv.Controls.Add(_profileSensor1);
+
+            _profileSensor2 = new FlatBtn();
+            _profileSensor2.SetBounds(12, 346, 386, 34);
+            _profileSensor2.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _profileSensor2.Click += delegate { TrocarSensorDoPerfil(2); };
+            cv.Controls.Add(_profileSensor2);
+
+            _profileInfo = MakeLabel("", 16, 390, Ui.FontSmall);
+            _profileInfo.Size = new Size(378, 40);
             _profileInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _profileInfo.ForeColor = Ui.Muted;
             cv.Controls.Add(_profileInfo);
@@ -1782,18 +1892,81 @@ namespace MhiagosControl
             _btnApply = new FlatBtn();
             _btnApply.Text = T.ApplyProfile;
             _btnApply.Primary = true;
-            _btnApply.SetBounds(12, 508, 386, 40);
+            _btnApply.SetBounds(12, 448, 386, 40);
             _btnApply.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _btnApply.Click += delegate { AplicarPerfil(); };
             cv.Controls.Add(_btnApply);
 
-            // O rodizio mora aqui, e nao junto das outras preferencias, porque
-            // o que ele gira sao perfis: o toggle age sobre o que esta
-            // selecionado na lista ao lado, e ver as duas coisas juntas e o que
-            // torna a marcacao compreensivel.
+            // A automacao por jogo vem antes do rodizio: ela e uma relacao entre
+            // o perfil selecionado acima e um aplicativo real, e deixa-la no fim
+            // escondia a acao principal atras de uma frase com apenas a contagem.
+            Card cj = new Card();
+            cj.Title = T.GameProfilesCard;
+            cj.SetBounds(0, 512, 756, 400);
+            page.Controls.Add(cj);
+
+            _tgJogo = new Toggle();
+            _tgJogo.Label = T.GameProfilesOn;
+            _tgJogo.SetBounds(16, 48, 560, 26);
+            _tgJogo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _tgJogo.CheckedChanged += new EventHandler(OnToggleJogo);
+            cj.Controls.Add(_tgJogo);
+
+            Label atual = MakeLabel(T.CurrentGame, 16, 84, Ui.FontSmall);
+            atual.ForeColor = Ui.Muted;
+            cj.Controls.Add(atual);
+
+            _gameIcon = new GameIconView();
+            _gameIcon.SetBounds(16, 108, 52, 52);
+            cj.Controls.Add(_gameIcon);
+
+            _lbJogoNome = MakeLabel(T.NoGameToBind, 82, 106, Ui.FontMed);
+            _lbJogoNome.Size = new Size(400, 26);
+            _lbJogoNome.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            cj.Controls.Add(_lbJogoNome);
+
+            _lbJogoAtual = MakeLabel("", 82, 132, Ui.FontSmall);
+            _lbJogoAtual.Size = new Size(400, 22);
+            _lbJogoAtual.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _lbJogoAtual.ForeColor = Ui.Accent;
+            cj.Controls.Add(_lbJogoAtual);
+
+            _btVincular = new FlatBtn();
+            _btVincular.Text = T.BindGame;
+            _btVincular.Primary = true;
+            _btVincular.SetBounds(510, 106, 230, 34);
+            _btVincular.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _btVincular.Click += delegate { VincularJogo(); };
+            cj.Controls.Add(_btVincular);
+
+            _btDesvincular = new FlatBtn();
+            _btDesvincular.Text = T.UnbindGame;
+            _btDesvincular.SetBounds(510, 146, 230, 30);
+            _btDesvincular.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _btDesvincular.Click += delegate { DesvincularJogo(); };
+            cj.Controls.Add(_btDesvincular);
+
+            _lbJogoNota = MakeLabel(T.GameProfilesNote, 16, 177, Ui.FontSmall);
+            _lbJogoNota.Size = new Size(724, 38);
+            _lbJogoNota.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _lbJogoNota.ForeColor = Ui.Faint;
+            cj.Controls.Add(_lbJogoNota);
+
+            Label vinculos = MakeLabel(T.GameBindings, 16, 219, Ui.FontMed);
+            cj.Controls.Add(vinculos);
+
+            _gameBindings = new GameBindingList();
+            _gameBindings.EmptyText = T.NoGameBindings;
+            _gameBindings.SetBounds(16, 246, 724, 138);
+            _gameBindings.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _gameBindings.RemoveRequested += delegate(string key) { RemoverVinculo(key); };
+            cj.Controls.Add(_gameBindings);
+
+            // O rodizio continua junto dos perfis, mas depois da automacao mais
+            // frequente e visualmente mais rica.
             Card cg = new Card();
             cg.Title = T.Rotation;
-            cg.SetBounds(0, 578, 756, 150);
+            cg.SetBounds(0, 924, 756, 150);
             page.Controls.Add(cg);
 
             _tgRotate = new Toggle();
@@ -1815,46 +1988,7 @@ namespace MhiagosControl
             _rotNote.ForeColor = Ui.Muted;
             cg.Controls.Add(_rotNote);
 
-            // Perfil por jogo. Mora aqui, junto do rodizio, porque as duas coisas
-            // decidem QUAL perfil vai para a peca - uma pelo relogio, a outra
-            // pelo que esta aberto - e quem procura por uma vai procurar no mesmo
-            // lugar que a outra.
-            Card cj = new Card();
-            cj.Title = T.GameProfilesCard;
-            cj.SetBounds(0, 738, 756, 168);
-            page.Controls.Add(cj);
-
-            _tgJogo = new Toggle();
-            _tgJogo.Label = T.GameProfilesOn;
-            _tgJogo.SetBounds(16, 48, 560, 26);
-            _tgJogo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            _tgJogo.CheckedChanged += new EventHandler(OnToggleJogo);
-            cj.Controls.Add(_tgJogo);
-
-            _lbJogoAtual = MakeLabel("", 16, 82, Ui.FontMed);
-            _lbJogoAtual.Size = new Size(720, 20);
-            _lbJogoAtual.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            cj.Controls.Add(_lbJogoAtual);
-
-            _btVincular = new FlatBtn();
-            _btVincular.Text = T.BindGame;
-            _btVincular.SetBounds(16, 110, 180, 32);
-            _btVincular.Click += delegate { VincularJogo(); };
-            cj.Controls.Add(_btVincular);
-
-            _btDesvincular = new FlatBtn();
-            _btDesvincular.Text = T.UnbindGame;
-            _btDesvincular.SetBounds(202, 110, 130, 32);
-            _btDesvincular.Click += delegate { DesvincularJogo(); };
-            cj.Controls.Add(_btDesvincular);
-
-            _lbJogoNota = MakeLabel(T.GameProfilesNote, 348, 110, Ui.FontSmall);
-            _lbJogoNota.Size = new Size(390, 44);
-            _lbJogoNota.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            _lbJogoNota.ForeColor = Ui.Faint;
-            cj.Controls.Add(_lbJogoNota);
-
-            Label note = MakeLabel(T.ProfilesNote, 2, 918, Ui.FontSmall);
+            Label note = MakeLabel(T.ProfilesNote, 2, 1086, Ui.FontSmall);
             note.Size = new Size(750, 40);
             note.ForeColor = Ui.Muted;
             page.Controls.Add(note);
@@ -1862,6 +1996,33 @@ namespace MhiagosControl
             AtualizarRodizio();
             AtualizarJogo();
             return page;
+        }
+
+        /// <summary>Edita o sensor do perfil sem obrigar a ida ate Paineis.</summary>
+        private void TrocarSensorDoPerfil(int painel)
+        {
+            Profile p = _profileList != null && _profileList.Selected != null
+                      ? _profileList.Selected : _current;
+            if (p == null) return;
+
+            string atual = painel == 1 ? p.Panel1Id : p.Panel2Id;
+            string titulo = painel == 1 ? T.PickSensor1 : T.PickSensor2;
+            using (SensorDialog d = new SensorDialog(Clone(_sensors), atual, titulo))
+            {
+                if (d.ShowDialog(this) != DialogResult.OK) return;
+                if (painel == 1) p.Panel1Id = d.SelectedId;
+                else
+                {
+                    p.Panel2Id = d.SelectedId;
+                    SensorEntry s = Achar(d.SelectedId);
+                    p.Percent = s == null || s.Type != SensorType.Power;
+                }
+            }
+
+            _dirty = true;
+            LoadFromProfile();
+            _profileList.Invalidate();
+            AtualizarPreviaDoPerfil();
         }
 
         /// <summary>
@@ -1893,8 +2054,15 @@ namespace MhiagosControl
         // ---------------- perfil por jogo ----------------
 
         private Toggle _tgJogo;
-        private Label _lbJogoAtual, _lbJogoNota;
+        private Label _lbJogoAtual, _lbJogoNome, _lbJogoNota;
         private FlatBtn _btVincular, _btDesvincular;
+        private GameIconView _gameIcon;
+        private GameBindingList _gameBindings;
+        private readonly Dictionary<string, GameIdentityInfo> _gameIdentityCache =
+            new Dictionary<string, GameIdentityInfo>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, DateTime> _gameIdentityRetry =
+            new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        private string _gameBindingsSignature = null;
 
         private void OnToggleJogo(object sender, EventArgs e)
         {
@@ -1923,22 +2091,82 @@ namespace MhiagosControl
             bool temJogo = !string.IsNullOrEmpty(jogo);
             bool temRtss = Rtss.Presente();
 
-            string linha;
-            if (!temRtss) linha = T.RtssMissing;
-            else if (!temJogo) linha = T.NoGameToBind;
-            else
-            {
-                string casado = _cfg.PerfilDoJogo(jogo);
-                linha = string.IsNullOrEmpty(casado) ? jogo : T.GameBound(jogo, casado);
-            }
+            GameIdentityInfo identity = temJogo ? IdentidadeDoJogo(jogo, Rtss.JogoAtualPid) : null;
+            string casado = temJogo ? _cfg.PerfilDoJogo(jogo) : null;
+            Profile selecionado = _profileList != null && _profileList.Selected != null
+                ? _profileList.Selected : _current;
 
-            _lbJogoAtual.Text = linha + "   ·   " + T.GamesBoundCount(_cfg.GameKeys.Count);
-            _lbJogoAtual.ForeColor = temRtss ? Ui.Text : Ui.Warn;
+            _lbJogoNome.Text = !temRtss ? T.RtssMissing
+                              : (identity != null ? identity.DisplayName : T.NoGameToBind);
+            _lbJogoNome.ForeColor = temRtss ? Ui.Text : Ui.Warn;
+            _lbJogoAtual.Text = !temJogo ? T.GamesBoundCount(_cfg.GameKeys.Count)
+                               : (!string.IsNullOrEmpty(casado)
+                                  ? T.BoundProfile(casado)
+                                  : T.SelectedProfile(selecionado != null ? selecionado.Name : "—"));
+            _lbJogoAtual.ForeColor = !string.IsNullOrEmpty(casado) ? Ui.Accent : Ui.Muted;
+            _gameIcon.GameIcon = identity != null ? identity.Icon : null;
 
             _btVincular.Enabled = _cfg.GameProfiles && temJogo;
+            _btVincular.Text = selecionado != null ? T.BindGameTo(selecionado.Name) : T.BindGame;
             _btDesvincular.Enabled = _cfg.GameProfiles && temJogo &&
-                                     !string.IsNullOrEmpty(_cfg.PerfilDoJogo(jogo));
+                                     !string.IsNullOrEmpty(casado);
             _tgJogo.Enabled = temRtss;
+
+            AtualizarListaDeJogos(jogo);
+        }
+
+        private GameIdentityInfo IdentidadeDoJogo(string key, int pid)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            GameIdentityInfo info;
+            if (_gameIdentityCache.TryGetValue(key, out info))
+            {
+                DateTime retry;
+                bool waiting = _gameIdentityRetry.TryGetValue(key, out retry) &&
+                               DateTime.UtcNow < retry;
+                // Uma identidade completa e imutavel durante a sessao. Quando
+                // falta o icone, tenta novamente com baixa frequencia em vez de
+                // consultar processo, versao e Registro a cada tick da tela.
+                if (info.Icon != null || waiting || pid <= 0) return info;
+            }
+
+            info = GameIdentity.Resolve(key, pid, _cfg.NomeDoJogo(key), _cfg.CaminhoDoJogo(key));
+            _gameIdentityCache[key] = info;
+            _gameIdentityRetry[key] = DateTime.UtcNow.AddSeconds(info.Icon != null ? 300 : 20);
+            if (_cfg.PerfilDoJogo(key) != null &&
+                _cfg.IdentificarJogo(key, info.DisplayName, info.ExecutablePath))
+            {
+                _dirty = true;
+                AtualizarRodape();
+            }
+            return info;
+        }
+
+        private void AtualizarListaDeJogos(string atual)
+        {
+            if (_gameBindings == null) return;
+            List<GameBindingView> items = new List<GameBindingView>();
+            System.Text.StringBuilder signature = new System.Text.StringBuilder();
+            for (int i = 0; i < _cfg.GameKeys.Count && i < _cfg.GameProfileNames.Count; i++)
+            {
+                string key = _cfg.GameKeys[i];
+                GameIdentityInfo identity = IdentidadeDoJogo(key,
+                    string.Equals(key, atual, StringComparison.OrdinalIgnoreCase) ? Rtss.JogoAtualPid : 0);
+                GameBindingView item = new GameBindingView();
+                item.Key = key;
+                item.Name = identity != null ? identity.DisplayName : GameIdentity.Humanize(key);
+                item.Profile = _cfg.GameProfileNames[i];
+                item.Icon = identity != null ? identity.Icon : null;
+                item.Current = string.Equals(key, atual, StringComparison.OrdinalIgnoreCase);
+                items.Add(item);
+                signature.Append(key).Append('|').Append(item.Name).Append('|')
+                         .Append(item.Profile).Append('|').Append(item.Current).Append('|')
+                         .Append(item.Icon != null).Append('\n');
+            }
+            string next = signature.ToString();
+            if (next == _gameBindingsSignature) return;
+            _gameBindingsSignature = next;
+            _gameBindings.SetItems(items);
         }
 
         /// <summary>Casa o jogo detectado com o perfil SELECIONADO na lista.</summary>
@@ -1951,10 +2179,15 @@ namespace MhiagosControl
                       ? _profileList.Selected : _current;
             if (p == null) return;
 
+            GameIdentityInfo identity = IdentidadeDoJogo(jogo, Rtss.JogoAtualPid);
             _cfg.MapearJogo(jogo, p.Name);
+            if (identity != null)
+                _cfg.IdentificarJogo(jogo, identity.DisplayName, identity.ExecutablePath);
+            _gameIdentityCache[jogo] = identity;
+            _gameBindingsSignature = null;
             _dirty = true;
             AtualizarJogo();
-            Aviso(T.GameBound(jogo, p.Name));
+            Aviso(T.GameBound(identity != null ? identity.DisplayName : GameIdentity.Humanize(jogo), p.Name));
         }
 
         private void DesvincularJogo()
@@ -1962,6 +2195,16 @@ namespace MhiagosControl
             string jogo = Rtss.JogoAtual;
             if (string.IsNullOrEmpty(jogo)) return;
             _cfg.DesmapearJogo(jogo);
+            _gameBindingsSignature = null;
+            _dirty = true;
+            AtualizarJogo();
+        }
+
+        private void RemoverVinculo(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return;
+            _cfg.DesmapearJogo(key);
+            _gameBindingsSignature = null;
             _dirty = true;
             AtualizarJogo();
         }
@@ -2066,10 +2309,11 @@ namespace MhiagosControl
             _profilePreview.Invalidate();
 
             string n1 = NomeDoSensor(p.Panel1Id), n2 = NomeDoSensor(p.Panel2Id);
-            _profileInfo.Text =
-                T.PanelShort(1) + ":  " + (n1 ?? "—") + "   (" + (p.Fahrenheit ? "°F" : "°C") + ")\n" +
-                T.PanelShort(2) + ":  " + (n2 ?? "—") + "   (" + (p.Percent ? "%" : "W") + ")\n" +
-                T.Thresholds + ":  " + Faixa(p.Alert1, p.Alert1Low) +
+            _profileSensor1.Text = T.PanelShort(1) + "  ·  " + (n1 ?? T.NoSensorChosen) +
+                                   "  (" + (p.Fahrenheit ? "°F" : "°C") + ")";
+            _profileSensor2.Text = T.PanelShort(2) + "  ·  " + (n2 ?? T.NoSensorChosen) +
+                                   "  (" + (p.Percent ? "%" : "W") + ")";
+            _profileInfo.Text = T.Thresholds + ":  " + Faixa(p.Alert1, p.Alert1Low) +
                 "   ·   " + Faixa(p.Alert2, p.Alert2Low);
 
             AtualizarRodizio();
@@ -2115,6 +2359,7 @@ namespace MhiagosControl
             _nav.Invalidate();
             LoadFromProfile();
             AtualizarPreviaDoPerfil();
+            AtualizarJogo();
         }
 
         private void OnNewProfile(object sender, EventArgs e)
@@ -2231,7 +2476,9 @@ namespace MhiagosControl
             // guarda o nome, e nao a referencia, entao o antigo deixaria de
             // casar com qualquer perfil e o primeiro da lista viraria o ativo.
             bool eraAtivo = string.Equals(alvo.Name, _cfg.ActiveName, StringComparison.Ordinal);
+            string nomeAnterior = alvo.Name;
             alvo.Name = name;
+            _cfg.RenomearPerfilNosJogos(nomeAnterior, name);
             if (eraAtivo) _cfg.ActiveName = name;
 
             if (alvo == _current) { _nav.Subtitle = name; _nav.Invalidate(); }
@@ -2246,6 +2493,7 @@ namespace MhiagosControl
             if (MessageBox.Show(T.DeleteProfileQ(alvo.Name), T.AppName,
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
+            _cfg.RemoverPerfilDosJogos(alvo.Name);
             _cfg.Profiles.Remove(alvo);
             if (_current == alvo) _current = _cfg.Profiles[0];
             if (string.Equals(_cfg.ActiveName, alvo.Name, StringComparison.Ordinal))

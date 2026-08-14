@@ -96,6 +96,7 @@ namespace MhiagosControl
         public static readonly Font FontGlyph9 = new Font("Segoe MDL2 Assets", 9f);
         public static readonly Font FontGlyph10 = new Font("Segoe MDL2 Assets", 10f);
         public static readonly Font FontGlyph11 = new Font("Segoe MDL2 Assets", 11f);
+        public static readonly Font FontGlyph18 = new Font("Segoe MDL2 Assets", 18f);
         public static readonly Font FontBadge = new Font("Segoe UI", 7.5f, FontStyle.Bold);
 
         public const int Radius = 8;

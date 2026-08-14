@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace MhiagosControl
 {
@@ -35,6 +36,28 @@ namespace MhiagosControl
         Dictionary<string, float> CurrentSnapshot();
         List<SensorEntry> RefreshSensorList();
         void SetShowAllSensors(bool showAll);
+    }
+
+    /// <summary>
+    /// Impede reentrada da janela de configuracao. ShowDialog bombeia outra
+    /// fila de mensagens; por isso um segundo duplo clique pode chegar enquanto
+    /// o primeiro manipulador ainda nao voltou e abrir outro formulario.
+    /// </summary>
+    internal sealed class WindowOpenGate
+    {
+        private int _busy;
+
+        public bool TryEnter()
+        {
+            return Interlocked.CompareExchange(ref _busy, 1, 0) == 0;
+        }
+
+        public void Exit()
+        {
+            Volatile.Write(ref _busy, 0);
+        }
+
+        public bool Busy { get { return Volatile.Read(ref _busy) != 0; } }
     }
 
     /// <summary>Uma origem independente de leituras brutas.</summary>

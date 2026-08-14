@@ -135,6 +135,12 @@ namespace MhiagosControl
 
         public static string SpecsCopy { get { return P("Copiar tudo", "Copy all"); } }
         public static string SpecsCopied { get { return P("Especificações copiadas", "Specs copied"); } }
+        public static string SpecsOverview { get { return P("Resumo", "Overview"); } }
+        public static string SpecsChooseCategory
+        {
+            get { return P("Selecione uma categoria para ver a ficha completa.",
+                           "Select a category to see its complete details."); }
+        }
 
         public static string SpecsNote
         {
@@ -282,7 +288,28 @@ namespace MhiagosControl
             }
         }
 
+        public static string CurrentGame { get { return P("Jogo detectado agora", "Game detected now"); } }
+        public static string GameBindings { get { return P("Vínculos", "Bindings"); } }
+        public static string NoGameBindings
+        {
+            get { return P("Nenhum jogo foi vinculado. Abra um jogo e associe o perfil selecionado.",
+                           "No game has been bound. Open a game and associate the selected profile."); }
+        }
+        public static string DetectedGame { get { return P("Jogo detectado", "Detected game"); } }
+        public static string SelectedProfile(string name)
+        {
+            return P("Perfil selecionado: " + name, "Selected profile: " + name);
+        }
+        public static string BoundProfile(string name)
+        {
+            return P("Perfil vinculado: " + name, "Bound profile: " + name);
+        }
+
         public static string BindGame { get { return P("Vincular jogo atual", "Bind current game"); } }
+        public static string BindGameTo(string profile)
+        {
+            return P("Vincular a " + profile, "Bind to " + profile);
+        }
         public static string UnbindGame { get { return P("Desvincular", "Unbind"); } }
 
         public static string NoGameToBind
@@ -823,15 +850,6 @@ namespace MhiagosControl
         {
             return P("Painel " + panel + " caiu para " + value + " (limiar inferior " + threshold + ")",
                      "Panel " + panel + " dropped to " + value + " (lower threshold " + threshold + ")");
-        }
-
-        public static string AlreadyRunning
-        {
-            get
-            {
-                return P("O Mhiagos Control já está em execução (ícone na bandeja).",
-                         "Mhiagos Control is already running (icon in the tray).");
-            }
         }
 
         public static string SensorInitFailed(string message, string logPath)
