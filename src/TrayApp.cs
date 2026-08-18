@@ -432,6 +432,11 @@ namespace MhiagosControl
                 return;
             }
 
+            // Escolha manual cancela o retorno automatico: se a pessoa trocou de
+            // perfil com o jogo aberto, ela quer ESTE perfil, e voltar ao padrao
+            // quando o jogo fechar seria desfazer o que ela acabou de mandar.
+            _perfilDeJogoAplicado = false;
+
             Publicar();
             RebuildProfileMenu();
             Log.Write("perfil ativo: " + p.Name);
@@ -465,6 +470,15 @@ namespace MhiagosControl
         {
             try
             {
+                // Com a janela aberta, quem manda na configuracao e ela. A janela
+                // edita um RASCUNHO tirado na abertura e o grava por cima do vivo;
+                // uma troca automatica aqui seria escrita no disco e desfeita no
+                // primeiro Salvar, deixando ainda _perfilDeJogoAplicado ligado
+                // para uma segunda troca ao fim do jogo. O estado nao se perde:
+                // _jogoVisto continua o de antes e o proximo tick, com a janela ja
+                // fechada, ve a diferenca e faz a troca.
+                if (_janelaAberta) return;
+
                 string agora = _cfg.GameProfiles ? Rtss.JogoAtual : null;
                 if (string.Equals(agora, _jogoVisto, StringComparison.OrdinalIgnoreCase))
                 {

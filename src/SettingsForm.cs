@@ -2091,12 +2091,14 @@ namespace MhiagosControl
             info = GameIdentity.Resolve(key, pid, _cfg.NomeDoJogo(key), _cfg.CaminhoDoJogo(key));
             _gameIdentityCache[key] = info;
             _gameIdentityRetry[key] = DateTime.UtcNow.AddSeconds(info.Icon != null ? 300 : 20);
-            if (_cfg.PerfilDoJogo(key) != null &&
-                _cfg.IdentificarJogo(key, info.DisplayName, info.ExecutablePath))
-            {
-                _dirty = true;
-                AtualizarRodape();
-            }
+            // Guarda no rascunho SEM sujar a janela. Descobrir o nome e o icone de
+            // um jogo ja vinculado e trabalho do tick, nao edicao de ninguem:
+            // marcar pendencia aqui acendia o botao Salvar e fazia o aviso de
+            // "alteracoes nao salvas" aparecer ao fechar uma janela em que a
+            // pessoa nao tocou. A identidade acompanha a proxima gravacao de
+            // verdade e, ate la, sai do cache a cada abertura.
+            if (_cfg.PerfilDoJogo(key) != null)
+                _cfg.IdentificarJogo(key, info.DisplayName, info.ExecutablePath);
             return info;
         }
 

@@ -40,6 +40,13 @@ jobs:
           @('payload.MhiagosControl.exe', 'payload.LibreHardwareMonitorLib.dll', 'payload.lhm-license.txt') | ForEach-Object {
             if ($names -notcontains $_) { throw "recurso obrigatorio ausente: $_" }
           }
+          # Assertiva NEGATIVA, e nao so a lista do que precisa estar presente:
+          # um instalador compilado sem -SemMotor carrega um quarto recurso com a
+          # biblioteca comercial da REALiX e passaria pela checagem acima, porque
+          # os tres obrigatorios continuam la. Publicar esse pacote nao e opcao.
+          if ($names -contains 'payload.engine.dll') {
+            throw "pacote contem a biblioteca comercial do HWiNFO (payload.engine.dll) e NAO pode ser distribuido"
+          }
           (Get-FileHash $setup -Algorithm SHA256).Hash + '  MhiagosControlSetup.exe' |
             Set-Content .\dist\MhiagosControlSetup.exe.sha256 -Encoding ascii
 
