@@ -60,6 +60,7 @@ namespace MhiagosControl
                 e.Id = s.Identifier.ToString(); e.Hardware = hw.Name;
                 e.Category = Sensors.CategoryOf(hw.HardwareType);
                 e.Name = s.Name; e.Type = s.SensorType; e.Value = s.Value;
+                e.Unit = e.EffectiveUnit;
                 e.Label = Sensors.Describe(hw.Name, s.Name, s.SensorType);
                 result.Add(e);
             }

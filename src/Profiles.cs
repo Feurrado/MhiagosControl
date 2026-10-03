@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -435,8 +435,34 @@ namespace MhiagosControl
                     return c;
                 }
 
+                ReadLines(c, File.ReadAllLines(path));
+
+                if (c.Profiles.Count == 0) c.Profiles.Add(new Profile());
+            }
+            catch (Exception ex)
+            {
+                Log.Error("leitura da configuracao", ex);
+                if (c.Profiles.Count == 0) c.Profiles.Add(new Profile());
+            }
+            ConfigTiming.NormalizeLegacy(c);
+            c.EnsureDefaultProfile();
+            return c;
+        }
+
+        internal static Config FromText(string text)
+        {
+            Config c = new Config();
+            ReadLines(c, text.Replace("\r", "").Split('\n'), true);
+            if (c.Profiles.Count == 0) throw new FormatException("No profiles in backup");
+            ConfigTiming.Validate(c);
+            c.EnsureDefaultProfile();
+            return c;
+        }
+
+        private static void ReadLines(Config c, string[] lines, bool strictTiming = false)
+        {
                 Profile current = null;
-                foreach (string raw in File.ReadAllLines(path))
+                foreach (string raw in lines)
                 {
                     string line = raw.Trim();
                     if (line.Length == 0 || line.StartsWith(";")) continue;
@@ -464,8 +490,8 @@ namespace MhiagosControl
                         else if (k == "defaultprofile") c.DefaultProfileName = v;
                         else if (k == "showall") c.ShowAllSensors = (v == "1");
                         else if (k == "language") c.Language = v;
-                        else if (k == "idleblank") c.IdleBlankMinutes = ParseInt(v);
-                        else if (k == "rotateseconds") c.RotateSeconds = ParseInt(v);
+                        else if (k == "idleblank") c.IdleBlankMinutes = ParseTiming(v, strictTiming);
+                        else if (k == "rotateseconds") c.RotateSeconds = ParseTiming(v, strictTiming);
                         else if (k == "sidebarcollapsed") c.SidebarCollapsed = (v == "1");
                         else if (k == "metricschosen") c.MetricsChosen = (v == "1");
                         else if (k == "metricrange") c.MetricRange = MetricHistory.JanelaValida(ParseInt(v));
@@ -521,15 +547,6 @@ namespace MhiagosControl
                     else Apply(current, k, v);
                 }
 
-                if (c.Profiles.Count == 0) c.Profiles.Add(new Profile());
-            }
-            catch (Exception ex)
-            {
-                Log.Error("leitura da configuracao", ex);
-                if (c.Profiles.Count == 0) c.Profiles.Add(new Profile());
-            }
-            c.EnsureDefaultProfile();
-            return c;
         }
 
         private static void Apply(Profile p, string k, string v)
@@ -651,6 +668,22 @@ namespace MhiagosControl
             erro = null;
             try
             {
+                ConfigTiming.Validate(this);
+                WriteAtomically(path, ToText());
+                Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " +
+                          ActiveName + ", padrao: " + DefaultProfileName + ")");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("gravacao da configuracao", ex);
+                erro = ex.Message;
+                return false;
+            }
+        }
+
+        internal string ToText()
+        {
                 StringBuilder sb = new StringBuilder();
                 sb.AppendLine("; Mhiagos Control - configuracao");
                 sb.AppendLine("[general]");
@@ -685,18 +718,10 @@ namespace MhiagosControl
                     if (profile != null && !string.IsNullOrWhiteSpace(profile.Name))
                         sb.AppendLine("metricprofile=" + SerializeMetricProfile(profile));
                 foreach (Profile p in Profiles) AppendProfile(sb, p);
-                WriteAtomically(path, sb.ToString());
-                Log.Write("configuracao salva (" + Profiles.Count + " perfis, ativo: " +
-                          ActiveName + ", padrao: " + DefaultProfileName + ")");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Log.Error("gravacao da configuracao", ex);
-                erro = ex.Message;
-                return false;
-            }
+            return sb.ToString();
         }
+
+        internal string SavePath { get { return _savePath; } }
 
         /// <summary>
         /// Grava primeiro ao lado do destino e so entao o substitui. Configuracao
@@ -754,13 +779,31 @@ namespace MhiagosControl
         /// </summary>
         public static bool ExportProfile(Profile p, string path, out string erro)
         {
+            return ExportProfile(p, path, FilePath, out erro);
+        }
+
+        private static int ParseTiming(string value, bool strict)
+        {
+            int number;
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) return number;
+            if (strict) throw new FormatException(T.InvalidTiming);
+            Log.Write("intervalo invalido na configuracao local: valor desativado");
+            return 0;
+        }
+
+        internal static bool ExportProfile(Profile p, string path, string configurationPath, out string erro)
+        {
             erro = null;
             try
             {
+                if ((!string.IsNullOrEmpty(configurationPath) && string.Equals(Path.GetFullPath(path),
+                    Path.GetFullPath(configurationPath), StringComparison.OrdinalIgnoreCase)) ||
+                    string.Equals(Path.GetFullPath(path), Path.GetFullPath(FilePath), StringComparison.OrdinalIgnoreCase))
+                    throw new IOException(T.ExportOwnConfig);
                 StringBuilder sb = new StringBuilder();
                 sb.AppendLine("; Mhiagos Control - perfil exportado");
                 AppendProfile(sb, p);
-                File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+                WriteAtomically(path, sb.ToString());
                 Log.Write("perfil exportado: " + p.Name + " -> " + path);
                 return true;
             }

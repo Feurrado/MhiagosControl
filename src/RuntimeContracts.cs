@@ -49,6 +49,23 @@ namespace MhiagosControl
         void SetShowAllSensors(bool showAll);
     }
 
+    internal interface IPanelStatusData
+    {
+        PanelStatus CurrentPanelStatus();
+    }
+
+    internal sealed class PanelStatus
+    {
+        public readonly PanelFrame Frame;
+        public readonly bool Connected;
+        public readonly bool Paused;
+
+        public PanelStatus(PanelFrame frame, bool connected, bool paused)
+        {
+            Frame = frame; Connected = connected; Paused = paused;
+        }
+    }
+
     /// <summary>
     /// Impede reentrada da janela de configuracao. ShowDialog bombeia outra
     /// fila de mensagens; por isso um segundo duplo clique pode chegar enquanto

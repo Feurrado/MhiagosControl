@@ -6,11 +6,15 @@ namespace MhiagosControl
         public readonly int? Panel2;
         public readonly bool Fahrenheit;
         public readonly bool Percent;
+        public readonly Profile Profile;
+        public readonly long SampleTicks;
 
-        public PanelFrame(int? panel1, int? panel2, bool fahrenheit, bool percent)
+        public PanelFrame(int? panel1, int? panel2, bool fahrenheit, bool percent, Profile profile = null)
         {
             Panel1 = panel1; Panel2 = panel2;
             Fahrenheit = fahrenheit; Percent = percent;
+            Profile = profile == null ? null : profile.Clone();
+            SampleTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         }
     }
 
@@ -49,8 +53,8 @@ namespace MhiagosControl
             r.Panel1 = Scaling.Prepare(sensor1, Scaling.Effective(profile.Divisor1, sensor1), profile.Fahrenheit);
             r.Panel2 = Scaling.Prepare(sensor2, Scaling.Effective(profile.Divisor2, sensor2), false);
             r.Frame = idle
-                ? new PanelFrame(null, null, profile.Fahrenheit, profile.Percent)
-                : new PanelFrame(r.Panel1.Value, r.Panel2.Value, profile.Fahrenheit, profile.Percent);
+                ? new PanelFrame(null, null, profile.Fahrenheit, profile.Percent, profile)
+                : new PanelFrame(r.Panel1.Value, r.Panel2.Value, profile.Fahrenheit, profile.Percent, profile);
             return r;
         }
     }

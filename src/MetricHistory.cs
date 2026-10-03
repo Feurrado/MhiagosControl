@@ -80,7 +80,12 @@ namespace MhiagosControl
 
         private static long BaldeAgora()
         {
-            return (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+            return BaldeEm(DateTime.UtcNow);
+        }
+
+        private static long BaldeEm(DateTime utcNow)
+        {
+            return (long)(utcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc))
                    .TotalSeconds / PassoSeg;
         }
 
@@ -163,7 +168,7 @@ namespace MhiagosControl
             {
                 if (_seguidos.Count == 0) return false;
                 if (_balde == 0) return true;
-                return BaldeAgora() > _balde;
+                return BaldeAgora() != _balde;
             }
         }
 
@@ -176,11 +181,29 @@ namespace MhiagosControl
         /// </summary>
         public static void Amostrar(Func<string, float?> ler)
         {
+            AmostrarEm(ler, DateTime.UtcNow);
+        }
+
+        internal static void AmostrarEm(Func<string, float?> ler, DateTime utcNow)
+        {
             if (ler == null) return;
             lock (_trava)
             {
                 if (_seguidos.Count == 0) return;
-                if (_balde == 0) _balde = BaldeAgora();
+                long agora = BaldeEm(utcNow);
+                if (_balde == 0) _balde = agora;
+                if (agora < _balde)
+                {
+                    // Nao apresentar dados do futuro depois de um ajuste de hora.
+                    foreach (Serie s in _series.Values)
+                    {
+                        for (int i = 0; i < Baldes; i++) s.V[i] = float.NaN;
+                        s.Soma = 0; s.Cont = 0;
+                    }
+                    _balde = agora;
+                    Alterado();
+                }
+                Fechar(agora);
 
                 foreach (string id in _seguidos)
                 {
@@ -195,7 +218,6 @@ namespace MhiagosControl
                     s.Cont++;
                 }
 
-                Fechar(BaldeAgora());
             }
         }
 

@@ -182,7 +182,7 @@ namespace MhiagosControl
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
-            if (!Editavel) { base.OnMouseDown(e); return; }
+            if (!Editavel || e.Button != MouseButtons.Left) { base.OnMouseDown(e); return; }
             if (_bEsq.Contains(e.Location)) Disparar(MoverEsquerda);
             else if (_bDir.Contains(e.Location)) Disparar(MoverDireita);
             else if (_bTam.Contains(e.Location)) Disparar(TrocarTamanho);
@@ -1095,7 +1095,7 @@ namespace MhiagosControl
             foreach (SensorEntry s in todos)
             {
                 if (s == null || s.Category != categoria) continue;
-                if (Normalizar(s.Unit) != unidade) continue;
+                if (Normalizar(s.EffectiveUnit) != unidade) continue;
                 return s;
             }
             return null;

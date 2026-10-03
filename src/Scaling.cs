@@ -42,6 +42,14 @@ namespace MhiagosControl
         public static int Effective(int configured, SensorEntry sensor)
         {
             if (configured > 0) return configured;
+            if (sensor != null && sensor.Type == SensorType.Throughput)
+            {
+                // Algumas fontes ja publicam KB/s ou MB/s. A escala automatica
+                // so converte bytes/s; um divisor escolhido continua literal.
+                string unit = sensor.EffectiveUnit;
+                if (!string.IsNullOrEmpty(unit) &&
+                    !string.Equals(unit, "B/s", StringComparison.OrdinalIgnoreCase)) return 1;
+            }
             return sensor != null ? Suggest(sensor.Type) : 1;
         }
 
@@ -75,11 +83,10 @@ namespace MhiagosControl
 
             if (divisor > 1) d /= divisor;
 
-            int v = (int)Math.Round(d);
-            if (v < 0) v = 0;                       // o mostrador nao tem sinal
-            if (v > 999) { v = 999; r.Clamped = true; }
-
-            r.Value = v;
+            d = Math.Round(d);
+            if (d < 0) d = 0;
+            if (d > 999) { d = 999; r.Clamped = true; }
+            r.Value = (int)d;
             return r;
         }
     }

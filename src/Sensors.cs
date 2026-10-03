@@ -40,6 +40,16 @@ namespace MhiagosControl
         /// </summary>
         public string Unit;
 
+        public string EffectiveUnit
+        {
+            get { return string.IsNullOrEmpty(Unit) ? UnitName(Type) : Unit; }
+        }
+
+        private static string UnitName(SensorType type)
+        {
+            return Sensors.UnitOf(type).TrimStart(',', ' ');
+        }
+
         /// <summary>Valor formatado com a unidade da fonte ou, na falta dela, a do tipo.</summary>
         public string Formatted
         {
@@ -674,6 +684,7 @@ namespace MhiagosControl
             {
                 case SensorType.Temperature: return ", C";
                 case SensorType.Load: return ", %";
+                case SensorType.Control: return ", %";
                 case SensorType.Level: return ", %";
                 case SensorType.Power: return ", W";
                 case SensorType.Clock: return ", MHz";
@@ -681,6 +692,7 @@ namespace MhiagosControl
                 case SensorType.Current: return ", A";
                 case SensorType.Fan: return ", RPM";
                 case SensorType.Data: return ", GB";
+                case SensorType.SmallData: return ", MB";
                 case SensorType.Throughput: return ", B/s";
                 default: return "";
             }

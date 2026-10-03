@@ -598,9 +598,10 @@ namespace MhiagosControl
             foreach (SensorEntry s in _all)
             {
                 float v;
-                if (!snapshot.TryGetValue(s.Id, out v)) continue;
-                if (s.Value.HasValue && s.Value.Value == v) continue;
-                s.Value = v;
+                float? next = snapshot.TryGetValue(s.Id, out v) &&
+                    !float.IsNaN(v) && !float.IsInfinity(v) ? (float?)v : null;
+                if (s.Value == next) continue;
+                s.Value = next;
                 changed = true;
             }
             if (changed) _list.Invalidate();

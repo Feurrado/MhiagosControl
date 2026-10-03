@@ -175,7 +175,7 @@ namespace MhiagosControl
         protected override void OnMouseUp(MouseEventArgs e)
         {
             int i = Hit(e.Location);
-            if (i >= 0 && e.X >= Width - 46 && RemoveRequested != null)
+            if (e.Button == MouseButtons.Left && i >= 0 && e.X >= Width - 46 && RemoveRequested != null)
                 RemoveRequested(_items[i].Key);
             base.OnMouseUp(e);
         }

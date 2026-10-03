@@ -18,11 +18,43 @@ namespace MhiagosControl
         }
 
         public Config Draft { get; private set; }
+        internal Config SavedConfiguration { get { return _live.Clone(); } }
+
+        internal bool TryRestore(Config restored, out string safetyPath, out string error)
+        {
+            safetyPath = null; error = null;
+            try
+            {
+                if (string.IsNullOrEmpty(_live.SavePath)) throw new InvalidOperationException(T.BackupOwnFile);
+                safetyPath = _live.SavePath + ".before-restore-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")
+                    + "-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".mhiagos-backup";
+                ConfigurationBackup.Write(_live, safetyPath);
+                Config candidate = _live.Clone();
+                candidate.CopyFrom(restored); // preserva o destino local, nunca grava no backup aberto
+                if (!candidate.Save(out error)) return false;
+                _live.CopyFrom(candidate);
+                Draft.CopyFrom(candidate);
+                return true;
+            }
+            catch (Exception ex) { error = ex.Message; return false; }
+        }
+        public Profile ActiveProfile { get { return _live.Active.Clone(); } }
 
         public bool TrySaveAll(out string error)
         {
-            if (!Draft.Save(out error)) return false;
-            _live.CopyFrom(Draft);
+            return TrySaveAll(false, out error);
+        }
+
+        public bool TrySaveAll(bool activateDraft, out string error)
+        {
+            Config candidate = Draft.Clone();
+            // Uma ativacao externa nao e uma edicao do rascunho. So um comando
+            // explicito Aplicar/Salvar perfil pode substitui-la.
+            if (!activateDraft && candidate.NameExists(_live.ActiveName))
+                candidate.ActiveName = _live.ActiveName;
+            if (!candidate.Save(out error)) return false;
+            _live.CopyFrom(candidate);
+            Draft.ActiveName = candidate.ActiveName;
             return true;
         }
 

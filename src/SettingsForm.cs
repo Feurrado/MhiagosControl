@@ -13,7 +13,7 @@ namespace MhiagosControl
     /// sensores, unidades, escala e perfis, tudo junto ficava denso
     /// demais para encontrar qualquer coisa.
     /// </summary>
-    public class SettingsForm : Form
+    public partial class SettingsForm : Form
     {
         private const int WS_EX_COMPOSITED = 0x02000000;
 
@@ -50,6 +50,7 @@ namespace MhiagosControl
         private NavBar _nav;
         private Panel _host;
         private Profile _current;
+        private Profile _selectionAtLastSave;
         private bool _loading = false;
         private Timer _tick;
         private DateTime _lastSlowUiTickUtc = DateTime.MinValue;
@@ -71,7 +72,7 @@ namespace MhiagosControl
         private ProfileList _profileList;
         private PanelPreview _profilePreview;
         private FlatBtn _btnApply, _btnDefault, _profileSensor1, _profileSensor2;
-        private Card _cardGame, _cardRotation;
+        private Card _cardGame, _cardRotation, _profilesListCard, _profilesPreviewCard;
         private Label _profilesNote;
 
         // pagina Sobre
@@ -135,6 +136,7 @@ namespace MhiagosControl
             // da configuracao viva fazia a primeira troca de aba escrever parte
             // do formulario no objeto errado antes de Salvar.
             _current = _cfg.Active;
+            _selectionAtLastSave = _current;
 
             Text = T.AppName;
             Icon = Assets.AppIcon;
@@ -156,7 +158,8 @@ namespace MhiagosControl
             MinimumSize = new Size(880, 660);
 
             Size guardado = TamanhoGuardado();
-            ClientSize = guardado != Size.Empty ? guardado : new Size(1010, 900);
+            ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(1010, 900),
+                Screen.FromPoint(Cursor.Position).WorkingArea.Size);
             BackColor = Ui.Window;
             Font = Ui.FontBase;
 
@@ -187,7 +190,7 @@ namespace MhiagosControl
             _nav.Width = 210;
             _nav.Logo = IconImage();
             _nav.SubtitleCaption = T.ActiveProfile;
-            _nav.Subtitle = _current.Name;
+            _nav.Subtitle = _session.ActiveProfile.Name;
             _nav.Collapsed = _cfg.SidebarCollapsed;
             _nav.CollapsedChanged += delegate
             {
@@ -521,7 +524,9 @@ namespace MhiagosControl
             else if (pagina == _pgVisao) { if (pagina.Visible) ArranjarVisaoGeral(); }
             else if (pagina == _pgSpecs) { if (pagina.Visible) ArranjarSpecsPagina(); }
             else if (pagina == _pgPaineis) ArranjarPaineis();
-            else Elastico(pagina);
+            else if (pagina == _pgConfig) ArrangeSettings();
+            else if (pagina == _pgPerfis) ArrangeProfiles();
+            else ArrangeAboutBounds(pagina);
         }
 
 
@@ -881,11 +886,11 @@ namespace MhiagosControl
             c.Visible = true;
             c.SensorId = s.Id;
             c.Titulo = titulo + "  ·  " + MetricPicker.RotuloCurto(s);
-            c.Unidade = s.Unit;
+            c.Unidade = s.EffectiveUnit;
             c.Sub = SystemInfo.Limpar(s.Hardware);
 
             float? at, pe;
-            MetricPicker.Faixas(s.Unit, out at, out pe);
+            MetricPicker.Faixas(s.EffectiveUnit, out at, out pe);
             c.Atencao = at; c.Perigo = pe;
         }
 
@@ -951,11 +956,11 @@ namespace MhiagosControl
                 c.Editavel = false;
                 c.Titulo = T.DashboardMetric(indice, MetricPicker.RotuloCurto(s));
                 c.Sub = SystemInfo.Limpar(s.Hardware);
-                c.Unidade = s.Unit;
+                c.Unidade = s.EffectiveUnit;
                 c.SensorId = s.Id;
                 c.Janela = MetricHistory.JanelaValida(_cfg.MetricRange);
                 float? at, pe;
-                MetricPicker.Faixas(s.Unit, out at, out pe);
+                MetricPicker.Faixas(s.EffectiveUnit, out at, out pe);
                 c.Atencao = at; c.Perigo = pe;
 
                 _pgVisao.Controls.Add(c);
@@ -1151,10 +1156,31 @@ namespace MhiagosControl
         {
             if (_cardCooler == null) return;
 
-            string id1 = _current != null ? _current.Panel1Id : null;
-            string id2 = _current != null ? _current.Panel2Id : null;
+            IPanelStatusData source = _data as IPanelStatusData;
+            PanelStatus status = source != null ? source.CurrentPanelStatus() : null;
+            PanelFrame frame = status != null ? status.Frame : null;
+            Profile displayed = frame != null && frame.Profile != null
+                ? frame.Profile : _session.ActiveProfile;
+            string id1 = displayed.Panel1Id;
+            string id2 = displayed.Panel2Id;
 
-            PorLinha(_vgPerfil, _current != null ? _current.Name : null);
+            // Previa sem runtime (testes e ferramentas) usa o perfil salvo.
+            if (source == null)
+            {
+                SensorEntry s1 = Achar(id1), s2 = Achar(id2);
+                frame = new PanelFrame(
+                    Scaling.Prepare(s1, Scaling.Effective(displayed.Divisor1, s1), displayed.Fahrenheit).Value,
+                    Scaling.Prepare(s2, Scaling.Effective(displayed.Divisor2, s2), false).Value,
+                    displayed.Fahrenheit, displayed.Percent, displayed);
+            }
+            bool showing = frame != null && (status == null || (status.Connected && !status.Paused));
+            _vgPreview.Value1 = showing ? frame.Panel1 : null;
+            _vgPreview.Value2 = showing ? frame.Panel2 : null;
+            _vgPreview.Fahrenheit = frame != null ? frame.Fahrenheit : displayed.Fahrenheit;
+            _vgPreview.Percent = frame != null ? frame.Percent : displayed.Percent;
+            _vgPreview.Invalidate();
+
+            PorLinha(_vgPerfil, displayed.Name);
             PorLinha(_vgPainel, IdDoPainel());
 
             ApontarMostrador(_vgP1, id1, T.OnPanel(T.Top));
@@ -1792,6 +1818,7 @@ namespace MhiagosControl
 
             Card c = new Card();
             c.Title = T.SavedProfiles;
+            _profilesListCard = c;
             c.SetBounds(0, 0, 330, 500);
             page.Controls.Add(c);
 
@@ -1819,6 +1846,7 @@ namespace MhiagosControl
 
             Card cv = new Card();
             cv.Title = T.ProfilePreview;
+            _profilesPreviewCard = cv;
             cv.SetBounds(346, 0, 410, 500);
             page.Controls.Add(cv);
 
@@ -1910,12 +1938,23 @@ namespace MhiagosControl
             _lbJogoNota.ForeColor = Ui.Faint;
             _cardGame.Controls.Add(_lbJogoNota);
 
-            Label vinculos = MakeLabel(T.GameBindings, 16, 219, Ui.FontMed);
+            FlatBtn browseGame = MakeSideButton(T.GameBrowse, 16, 220, 240, delegate { BrowseGame(); });
+            _gameFileButton = browseGame;
+            _cardGame.Controls.Add(browseGame);
+            Label browseNote = MakeLabel(T.GameFileNote, 16, 260, Ui.FontSmall);
+            _gameFileNote = browseNote;
+            browseNote.Size = new Size(724, 50);
+            browseNote.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            browseNote.ForeColor = Ui.Muted;
+            _cardGame.Controls.Add(browseNote);
+
+            Label vinculos = MakeLabel(T.GameBindings, 16, 319, Ui.FontMed);
+            _gameBindingsHeading = vinculos;
             _cardGame.Controls.Add(vinculos);
 
             _gameBindings = new GameBindingList();
             _gameBindings.EmptyText = T.NoGameBindings;
-            _gameBindings.SetBounds(16, 246, 724, 138);
+            _gameBindings.SetBounds(16, 346, 724, 138);
             _gameBindings.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _gameBindings.RemoveRequested += delegate(string key) { RemoverVinculo(key); };
             _cardGame.Controls.Add(_gameBindings);
@@ -2135,6 +2174,7 @@ namespace MhiagosControl
             if (_cardGame == null || _gameBindings == null || _cardRotation == null) return;
             _gameBindings.Height = GameBindingList.PreferredHeight(quantidade);
             _cardGame.Height = _gameBindings.Bottom + 16;
+            if (_pgPerfis != null && _pgPerfis.Visible) { ArrangeProfiles(); return; }
             _cardRotation.Top = _cardGame.Bottom + 12;
             if (_profilesNote != null) _profilesNote.Top = _cardRotation.Bottom + 12;
             Pagina pagina = _pgPerfis as Pagina;
@@ -2222,7 +2262,7 @@ namespace MhiagosControl
             string anterior = _cfg.ActiveName;
             _cfg.ActiveName = p.Name;
             string erro;
-            bool salvo = _session.TrySaveAll(out erro);
+            bool salvo = _session.TrySaveAll(true, out erro);
             if (!salvo)
             {
                 // Aplicar significa tambem sobreviver ao fechamento. Sem disco,
@@ -2230,12 +2270,13 @@ namespace MhiagosControl
                 // no proximo arranque e contradiz o proprio botao.
                 _cfg.ActiveName = anterior;
                 _saved = false; _dirty = true;
-                Aviso(T.SaveFailed(erro));
+                Warn(T.SaveFailed(erro));
                 return;
             }
             _saved = true; _dirty = false;
 
             _profileList.ActiveName = p.Name;
+            _selectionAtLastSave = _current;
             _profileList.Invalidate();
             AtualizarPreviaDoPerfil();
             if (Applied != null) Applied(this, EventArgs.Empty);
@@ -2256,15 +2297,17 @@ namespace MhiagosControl
             {
                 _cfg.DefaultProfileName = anterior;
                 _saved = false; _dirty = true;
-                Aviso(T.SaveFailed(erro));
+                Warn(T.SaveFailed(erro));
                 return;
             }
 
             _saved = true; _dirty = false;
             _profileList.DefaultName = p.Name;
+            _selectionAtLastSave = _current;
             _profileList.Invalidate();
             AtualizarPreviaDoPerfil();
             Aviso(T.DefaultProfileSet(p.Name));
+            if (Applied != null) Applied(this, EventArgs.Empty);
         }
 
         private FlatBtn MakeSideButton(string text, int x, int y, int w, EventHandler h)
@@ -2280,7 +2323,7 @@ namespace MhiagosControl
         {
             if (_profileList == null) return;
             _loading = true;
-            _profileList.ActiveName = _cfg.ActiveName;
+            _profileList.ActiveName = _session.ActiveProfile.Name;
             _profileList.DefaultName = _cfg.DefaultProfile.Name;
             _profileList.SetItems(_cfg.Profiles, _current);
             _loading = false;
@@ -2311,7 +2354,10 @@ namespace MhiagosControl
                                    "  (" + (p.Percent ? "%" : "W") + ")";
             AtualizarRodizio();
 
-            bool ativo = string.Equals(p.Name, _cfg.ActiveName, StringComparison.Ordinal);
+            string activeName = _session.ActiveProfile.Name;
+            _profileList.ActiveName = activeName;
+            _profileList.Invalidate();
+            bool ativo = string.Equals(p.Name, activeName, StringComparison.Ordinal);
             _btnApply.Text = ativo ? T.ApplyProfile + "  (" + T.AlreadyActive + ")" : T.ApplyProfile;
             _btnApply.Enabled = !ativo;
             _btnApply.Invalidate();
@@ -2336,7 +2382,8 @@ namespace MhiagosControl
             foreach (SensorEntry s in _sensors)
             {
                 float v;
-                if (snap.TryGetValue(s.Id, out v)) s.Value = v;
+                s.Value = snap.TryGetValue(s.Id, out v) && !float.IsNaN(v) && !float.IsInfinity(v)
+                    ? (float?)v : null;
             }
         }
 
@@ -2354,7 +2401,7 @@ namespace MhiagosControl
             if (p == null || p == _current) return;
             SaveToProfile();
             _current = p;
-            _nav.Subtitle = _current.Name;
+            _nav.Subtitle = _session.ActiveProfile.Name;
             _nav.Invalidate();
             LoadFromProfile();
             AtualizarPreviaDoPerfil();
@@ -2372,7 +2419,7 @@ namespace MhiagosControl
             _cfg.Profiles.Add(np);
             _current = np;
             _dirty = true;
-            _nav.Subtitle = name; _nav.Invalidate();
+            _nav.Subtitle = _session.ActiveProfile.Name; _nav.Invalidate();
             RefreshProfileList(); LoadFromProfile();
         }
 
@@ -2387,7 +2434,7 @@ namespace MhiagosControl
             _cfg.Profiles.Add(np);
             _current = np;
             _dirty = true;
-            _nav.Subtitle = name; _nav.Invalidate();
+            _nav.Subtitle = _session.ActiveProfile.Name; _nav.Invalidate();
             RefreshProfileList(); LoadFromProfile();
         }
 
@@ -2415,7 +2462,7 @@ namespace MhiagosControl
                 if (d.ShowDialog(this) != DialogResult.OK) return;
 
                 string erro;
-                if (Config.ExportProfile(p, d.FileName, out erro)) Aviso(T.Exported(p.Name));
+                if (Config.ExportProfile(p, d.FileName, _cfg.SavePath, out erro)) Aviso(T.Exported(p.Name));
                 else Warn(T.ExportFailed(erro));
             }
         }
@@ -2438,7 +2485,7 @@ namespace MhiagosControl
                 _cfg.Profiles.Add(p);
                 _current = p;
                 _dirty = true;
-                _nav.Subtitle = p.Name; _nav.Invalidate();
+                _nav.Subtitle = _session.ActiveProfile.Name; _nav.Invalidate();
                 RefreshProfileList(); LoadFromProfile();
 
                 // Identificador de sensor nao viaja entre maquinas: ele carrega
@@ -2482,7 +2529,7 @@ namespace MhiagosControl
             if (eraAtivo) _cfg.ActiveName = name;
             if (eraPadrao) _cfg.DefaultProfileName = name;
 
-            if (alvo == _current) { _nav.Subtitle = name; _nav.Invalidate(); }
+            if (alvo == _current) { _nav.Subtitle = _session.ActiveProfile.Name; _nav.Invalidate(); }
             _dirty = true;
             RefreshProfileList();
         }
@@ -2504,7 +2551,7 @@ namespace MhiagosControl
                     ? _cfg.ActiveName : _cfg.Profiles[0].Name;
             _cfg.EnsureDefaultProfile();
 
-            _nav.Subtitle = _current.Name;
+            _nav.Subtitle = _session.ActiveProfile.Name;
             _nav.Invalidate();
             _dirty = true;
             RefreshProfileList(); LoadFromProfile();
@@ -2554,9 +2601,13 @@ namespace MhiagosControl
             // Mesmo texto do dialogo de fechar, de proposito: a barra avisa e o
             // dialogo cobra a mesma coisa, e duas redacoes para o mesmo estado
             // fariam parecer dois estados.
-            _footerNote.Text = _dirty ? T.UnsavedTitle : "";
+            IReadingStatusData status = _data as IReadingStatusData;
+            Control page = _nav == null || _nav.Selected == null ? null : _nav.Selected.Page;
+            bool sensorPage = page == _pgVisao || page == _pgMetricas || page == _pgPaineis || page == _pgPerfis;
+            string readingNote = status != null && sensorPage ? ReadingStateText(status.CurrentReadingState(null)) : "";
+            _footerNote.Text = _dirty ? T.UnsavedTitle : readingNote;
             _footerNote.ForeColor = Ui.Warn;
-            _footerNote.Visible = _dirty && _nav != null && _nav.Width >= 120;
+            _footerNote.Visible = (_dirty || readingNote.Length > 0) && _nav != null && _nav.Width >= 120;
         }
 
         // ---------------- pagina: Configuracoes ----------------
@@ -2700,6 +2751,13 @@ namespace MhiagosControl
 
             AtualizarRtss();
             AtualizarOcioso();
+            // A nota de idioma ganha sua propria linha, inclusive em janela estreita.
+            langNote.SetBounds(16, 110, 724, 38);
+            foreach (Control control in c.Controls)
+                if (control != langNote && control.Top >= 128) control.Top += 44;
+            c.Height += 44;
+            onde.Name = "dataFolder";
+            AddDataTools(page);
             return page;
         }
 
@@ -3022,7 +3080,7 @@ namespace MhiagosControl
                     foreach (MetricProfile profile in draft.MetricProfiles)
                         target.MetricProfiles.Add(profile.Clone());
                 }, out erro);
-                if (!salvo) { _dirty = true; Aviso(T.SaveFailed(erro)); }
+                if (!salvo) { _dirty = true; Warn(T.SaveFailed(erro)); }
                 return salvo;
             }
             catch (Exception ex) { Log.Error("gravar cartoes de metricas", ex); return false; }
@@ -3175,7 +3233,7 @@ namespace MhiagosControl
         {
             _pgMetricas.SuspendLayout();
             List<Control> velhos = new List<Control>();
-            foreach (Control c in _pgMetricas.Controls) velhos.Add(c);
+            foreach (Control c in _pgMetricas.Controls) if (!(c is ScrollFina)) velhos.Add(c);
             foreach (Control c in velhos) { _pgMetricas.Controls.Remove(c); c.Dispose(); }
             _cards.Clear();
             _cardIds.Clear();
@@ -3227,19 +3285,19 @@ namespace MhiagosControl
             {
                 string id = _cfg.MetricIds[i];
                 SensorEntry s = Achar(id);
-                if (s == null) continue;   // sensor sumiu entre sessoes
-
                 MetricCard c = new MetricCard();
-                c.SensorId = s.Id;
-                c.Titulo = MetricPicker.Rotulo(s);
-                c.Sub = MetricPicker.Rodape(s);
-                c.Unidade = s.Unit;
+                // Um sensor ausente continua configurado e pode voltar a responder.
+                // Inclui-lo na grade evita perde-lo ao persistir a ordem do arraste.
+                c.SensorId = id;
+                c.Titulo = s == null ? T.SensorUnavailable : MetricPicker.Rotulo(s);
+                c.Sub = s == null ? id : MetricPicker.Rodape(s);
+                c.Unidade = s == null ? "" : s.EffectiveUnit;
                 c.Janela = janela;
                 float? at, pe;
-                MetricPicker.Faixas(s.Unit, out at, out pe);
+                MetricPicker.Faixas(c.Unidade, out at, out pe);
                 c.Atencao = at; c.Perigo = pe;
 
-                string alvo = s.Id;
+                string alvo = id;
                 c.Remover += delegate { MexerNaMetrica(alvo, 0); };
                 c.MoverEsquerda += delegate { MexerNaMetrica(alvo, -1); };
                 c.MoverDireita += delegate { MexerNaMetrica(alvo, +1); };
@@ -3252,13 +3310,15 @@ namespace MhiagosControl
 
                 _pgMetricas.Controls.Add(c);
                 _cards.Add(c);
-                _cardIds.Add(s.Id);
+                _cardIds.Add(id);
                 _cardTamanhos.Add(_cfg.MetricSize(i));
             }
 
             // Quem alimenta a serie e a thread de leitura, que roda com a janela
             // fechada: e ela que precisa saber o que acompanhar.
-            MetricHistory.Seguir(_cfg.MetricIds);
+            // A janela nao e dona das series de outros consumidores. A poda
+            // fica com o runtime, ao fechar a sessao de edicao.
+            MetricHistory.SeguirTambem(_cfg.MetricIds);
 
             _pgMetricas.ResumeLayout();
             ArranjarMetricas();
@@ -3302,27 +3362,24 @@ namespace MhiagosControl
                 if (porLinha > 12) porLinha = 12;
                 porLinha -= porLinha % 4;
 
-                int larg = (disp - (porLinha - 1) * Esp) / porLinha;
-                if (larg < 140) larg = 140;
-
-                int y = 0;
-                if (_btAddMetrica != null) _btAddMetrica.SetBounds(2, y, 150, 32);
-                if (_btPadraoMetrica != null) _btPadraoMetrica.SetBounds(158, y, 150, 32);
-                if (_btPerfisMetrica != null) _btPerfisMetrica.SetBounds(314, y, 150, 32);
-                if (_segJanela != null) _segJanela.SetBounds(470, y, 186, 32);
-
+                // Mantem a distribuicao anterior quando cabe; reduz colunas
+                // apenas quando os 140 px minimos ultrapassariam a pagina.
+                porLinha = Math.Min(porLinha, Math.Max(1, (disp - 4 + Esp) / (140 + Esp)));
+                int larg = (disp - 4 - (porLinha - 1) * Esp) / porLinha;
+                int x = 2, y = 0;
+                foreach (Control button in new Control[] { _btAddMetrica, _btPadraoMetrica, _btPerfisMetrica, _segJanela })
+                {
+                    if (button == null) continue;
+                    int width = button == _segJanela ? 186 : 150;
+                    if (x + width > disp) { x = 2; y += 40; }
+                    button.SetBounds(x, y, width, 32);
+                    x += width + 6;
+                }
                 if (_lbDicaMetricas != null)
                 {
-                    const int x = 668;
-                    int w = disp - x;
-                    // Some quando nao cabe, em vez de ser cortada: uma dica pela
-                    // metade nao ensina nada e ainda ocupa a fileira. Recolhida,
-                    // volta para dentro da area - um controle fora dela, mesmo
-                    // invisivel, e um convite a barra horizontal de volta.
-                    bool cabe = w >= 150;
-                    _lbDicaMetricas.Visible = cabe;
-                    if (cabe) _lbDicaMetricas.SetBounds(x, y + 4, w, 30);
-                    else _lbDicaMetricas.SetBounds(2, y + 4, 1, 1);
+                    int w = disp - x - 6;
+                    _lbDicaMetricas.Visible = w >= 150;
+                    _lbDicaMetricas.SetBounds(w >= 150 ? x + 6 : 2, y + 4, w >= 150 ? w : 1, w >= 150 ? 30 : 1);
                 }
                 y += 44;
 
@@ -3332,7 +3389,7 @@ namespace MhiagosControl
                 for (int i = 0; i < _cards.Count; i++)
                 {
                     int tam = i < _cardTamanhos.Count ? _cardTamanhos[i] : 0;
-                    int cols = MetricPicker.Colunas(tam);
+                    int cols = Math.Min(porLinha, MetricPicker.Colunas(tam));
                     int alt = MetricPicker.Altura(tam);
 
                     if (col + cols > porLinha && col > 0)
@@ -3456,24 +3513,43 @@ namespace MhiagosControl
         private void AtualizarMetricas(Dictionary<string, float> snap)
         {
             if (snap == null) return;
+            IReadingStatusData status = _data as IReadingStatusData;
             for (int i = 0; i < _cards.Count; i++)
             {
-                // O rodape das leituras de quadro segue o jogo. Montado uma vez,
-                // ele guardava o texto verdadeiro no instante em que a grade
-                // nasceu - e um cartao chegava a marcar 757 FPS com "nenhum jogo
-                // em execucao" escrito logo abaixo.
-                if (_cardIds[i].StartsWith(Rtss.Prefixo, StringComparison.Ordinal))
+                string id = _cardIds[i];
+                SensorEntry sensor = Achar(id);
+                MetricCard card = _cards[i];
+                string title = sensor == null ? T.SensorUnavailable : MetricPicker.Rotulo(sensor);
+                string footer = sensor == null ? id : MetricPicker.Rodape(sensor);
+                string unit = sensor == null ? "" : sensor.EffectiveUnit;
+                if (id.StartsWith(Rtss.Prefixo, StringComparison.Ordinal)) footer = MetricPicker.RodapeJogos();
+                if (status != null && sensor != null)
                 {
-                    string rodape = MetricPicker.RodapeJogos();
-                    if (_cards[i].Sub != rodape)
-                    {
-                        _cards[i].Sub = rodape;
-                        _cards[i].Invalidate();
-                    }
+                    ReadingState state = status.CurrentReadingState(id);
+                    if (state != ReadingState.Live && !(state == ReadingState.Waiting &&
+                        id.StartsWith(Rtss.Prefixo, StringComparison.Ordinal) && string.IsNullOrEmpty(Rtss.JogoAtual)))
+                        footer = ReadingStateText(state);
                 }
+                if (card.Titulo != title || card.Sub != footer || card.Unidade != unit)
+                {
+                    card.Titulo = title; card.Sub = footer; card.Unidade = unit;
+                    float? attention, danger; MetricPicker.Faixas(unit, out attention, out danger);
+                    card.Atencao = attention; card.Perigo = danger; card.Invalidate();
+                }
+                float value;
+                card.Push(snap.TryGetValue(id, out value) ? (float?)value : null);
+            }
+        }
 
-                float v;
-                _cards[i].Push(snap.TryGetValue(_cardIds[i], out v) ? (float?)v : null);
+        private static string ReadingStateText(ReadingState state)
+        {
+            switch (state)
+            {
+                case ReadingState.Paused: return T.ReadingsPaused;
+                case ReadingState.Failed: return T.ReadingsFailed;
+                case ReadingState.Expired: return T.ReadingsExpired;
+                case ReadingState.Waiting: return T.ReadingsWaiting;
+                default: return "";
             }
         }
 
@@ -3589,11 +3665,12 @@ namespace MhiagosControl
                 _lang.SelectedIndex = T.Pt ? 0 : 1;
                 _loading = false;
                 _saved = false; _dirty = true;
-                Aviso(T.SaveFailed(erro));
+                Warn(T.SaveFailed(erro));
                 return;
             }
             _saved = true; _dirty = false;
             T.Language = alvo;
+            if (Applied != null) Applied(this, EventArgs.Empty);
 
             DialogResult = DialogResult.Retry;   // quem abriu reabre
             Close();
@@ -3667,7 +3744,7 @@ namespace MhiagosControl
             {
                 _cfg.ShowAllSensors = anterior;
                 _loading = true; t.Checked = anterior; _loading = false;
-                Aviso(T.SaveFailed(erro));
+                Warn(T.SaveFailed(erro));
                 return;
             }
             _data.SetShowAllSensors(t.Checked);
@@ -3782,18 +3859,6 @@ namespace MhiagosControl
             _preview.Percent = Percent;
             _preview.Invalidate();
 
-            // A previa da tela de bordo e a MESMA leitura, e nao um calculo
-            // paralelo: duas contas para o mesmo mostrador acabariam divergindo
-            // no dia em que alguem mexesse numa e esquecesse a outra.
-            if (_vgPreview != null)
-            {
-                _vgPreview.Value1 = v1.Value;
-                _vgPreview.Value2 = v2.Value;
-                _vgPreview.Fahrenheit = Fahrenheit;
-                _vgPreview.Percent = Percent;
-                _vgPreview.Invalidate();
-            }
-
             if (_slot1 != null)
             {
                 _slot1.Entry = s1; _slot1.Invalidate();
@@ -3836,11 +3901,20 @@ namespace MhiagosControl
         /// </summary>
         private void AtualizarPaginaAtiva(bool force)
         {
+            string activeName = _session.ActiveProfile.Name;
+            if (_nav != null && _nav.Subtitle != activeName)
+            {
+                _nav.Subtitle = activeName;
+                _nav.Invalidate();
+            }
             Control ativa = _nav != null && _nav.Selected != null ? _nav.Selected.Page : null;
             bool usaSensores = ativa == _pgVisao || ativa == _pgMetricas
-                            || ativa == _pgPaineis;
+                            || ativa == _pgPaineis || ativa == _pgPerfis;
             Dictionary<string, float> snap = usaSensores && _data != null
                 ? _data.CurrentSnapshot() : null;
+
+            AtualizarRodape();
+            if (snap != null) AtualizarValores(snap);
 
             if (snap != null && ativa == _pgVisao)
                 AtualizarVisaoGeral(snap);
@@ -3852,13 +3926,12 @@ namespace MhiagosControl
             {
                 _pick1.UpdateValues(snap);
                 _pick2.UpdateValues(snap);
-                AtualizarValores(snap);
                 Refresh0();
             }
 
             if (ativa == _pgPerfis)
             {
-                if (force) AtualizarPreviaDoPerfil();
+                AtualizarPreviaDoPerfil();
                 AtualizarJogo();
             }
 
@@ -3919,16 +3992,18 @@ namespace MhiagosControl
         private void OnSave(object sender, EventArgs e)
         {
             SaveToProfile();
-            _cfg.ActiveName = _current.Name;
+            bool activateSelection = !ReferenceEquals(_current, _selectionAtLastSave);
+            if (activateSelection) _cfg.ActiveName = _current.Name;
             string erro;
-            if (!_session.TrySaveAll(out erro))
+            if (!_session.TrySaveAll(activateSelection, out erro))
             {
                 _dirty = true;
-                Aviso(T.SaveFailed(erro));
+                Warn(T.SaveFailed(erro));
                 return;
             }
             _saved = true;
             _dirty = false;
+            _selectionAtLastSave = _current;
 
             if (_profileList != null)
             {

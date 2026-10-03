@@ -24,12 +24,16 @@ namespace MhiagosControl
     ///
     ///   powershell -ExecutionPolicy Bypass -File .\tools\build-tests.ps1
     /// </summary>
-    public static class Tests
+    public static partial class Tests
     {
         private static int _ok, _falhas;
 
-        public static int Main()
+        [STAThread]
+        public static int Main(string[] args)
         {
+            System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
+            if (args.Length > 0 && args[0] == "--regression-child")
+                return RegressionChild(args);
             QuadroDoPainel();
             PreparoDoValor();
             IntegracaoDoCicloDoPainel();
@@ -52,6 +56,7 @@ namespace MhiagosControl
             HistoricoDasMetricas();
             QuadrosPorSegundo();
             CompletudeDoIdioma();
+            RegressoesAuditoria();
 
             Console.WriteLine();
             Console.WriteLine(_falhas == 0

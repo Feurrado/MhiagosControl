@@ -52,7 +52,10 @@ namespace MhiagosControl
                 try
                 {
                     using (Stream s = Open("app.ico"))
-                        if (s != null) _app = new Icon(s, 256, 256);
+                        // Form.Icon fornece o HICON usado pelo Windows. Pedir
+                        // 256 px ao leitor do .NET Framework nao seleciona essa
+                        // entrada de forma confiavel; use o tamanho da janela.
+                        if (s != null) _app = new Icon(s, SystemInformation.IconSize);
                 }
                 catch (Exception ex) { Log.Error("carregamento do icone do aplicativo", ex); }
 

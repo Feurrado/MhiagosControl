@@ -15,7 +15,7 @@ namespace MhiagosControl
     /// controle vivo exigiria que todos guardassem sua chave; reconstruir sai
     /// de graca e nao deixa canto por traduzir.
     /// </summary>
-    public static class T
+    public static partial class T
     {
         public const string PtBr = "pt-BR";
         public const string EnUs = "en-US";

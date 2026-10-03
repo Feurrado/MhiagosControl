@@ -12,12 +12,14 @@ namespace MhiagosControl
     {
         private const int KeepaliveMs = 800;
         internal const int MinDispatchMs = 250;
+        internal const int MaxReadingAgeMs = 5000;
         private readonly IPanelDevice _panel;
         private readonly ManualResetEvent _stop = new ManualResetEvent(false);
         private readonly AutoResetEvent _changed = new AutoResetEvent(false);
         private readonly Action<bool> _connectionChanged;
         private Thread _thread;
         private PanelFrame _latest;
+        private PanelFrame _lastFrame;
         private volatile bool _enabled = true;
         private volatile bool _lastSent;
         private bool? _reported;
@@ -30,6 +32,7 @@ namespace MhiagosControl
         }
 
         public bool LastSent { get { return _lastSent; } }
+        public PanelFrame LastFrame { get { return Interlocked.CompareExchange(ref _lastFrame, null, null); } }
         public bool Enabled
         {
             get { return _enabled; }
@@ -90,8 +93,16 @@ namespace MhiagosControl
 
         internal bool DispatchOnce()
         {
+            return DispatchOnce(Stopwatch.GetTimestamp());
+        }
+
+        internal bool DispatchOnce(long nowTicks)
+        {
             PanelFrame frame = Interlocked.CompareExchange(ref _latest, null, null);
             if (frame == null) return false;
+
+            if (nowTicks - frame.SampleTicks > (long)MaxReadingAgeMs * Stopwatch.Frequency / 1000)
+                frame = new PanelFrame(null, null, frame.Fahrenheit, frame.Percent, frame.Profile);
 
             bool sent = false;
             try
@@ -99,6 +110,7 @@ namespace MhiagosControl
                 sent = _panel.Send(frame.Panel1, frame.Panel2, frame.Fahrenheit, frame.Percent);
             }
             catch (Exception ex) { Log.Error("envio do keepalive", ex); }
+            if (sent) Interlocked.Exchange(ref _lastFrame, frame);
             _lastSent = sent;
 
             if (!_reported.HasValue || _reported.Value != sent)

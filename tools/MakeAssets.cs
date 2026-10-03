@@ -200,10 +200,9 @@ static class MakeAssets
     /// <summary>
     /// Escreve um .ico. Cabecalho: ICONDIR (6 bytes) + ICONDIRENTRY (16 bytes).
     ///
-    /// Tamanhos ate 128 px vao em DIB (bitmap 32 bits + mascara). A classe
-    /// System.Drawing.Icon do .NET Framework NAO le entradas em PNG de forma
-    /// confiavel - o Explorer le, mas o icone da bandeja sai quebrado. Apenas
-    /// 256 px usa PNG, onde DIB ficaria grande e a classe Icon nao e usada.
+    /// Todos os tamanhos usam DIB (bitmap 32 bits + mascara), inclusive 256 px,
+    /// para manter o mesmo formato nos leitores nativos e no .NET Framework.
+    /// A janela seleciona o tamanho do sistema; 256 px atende ao Explorer.
     /// </summary>
     static void WriteIco(Bitmap source, int[] sizes, string path)
     {
@@ -213,8 +212,7 @@ static class MakeAssets
             using (Bitmap b = Scale(source, s, s))
             using (MemoryStream ms = new MemoryStream())
             {
-                if (s >= 256) b.Save(ms, ImageFormat.Png);
-                else WriteDib(b, ms);
+                WriteDib(b, ms);
                 blobs.Add(ms.ToArray());
             }
         }

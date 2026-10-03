@@ -17,7 +17,7 @@ namespace MhiagosControl
     /// (MSR, SMART, NVMe) leva dezenas a centenas de milissegundos, e fazer
     /// isso na thread de UI travaria a bomba de mensagens a cada ciclo.
     /// </summary>
-    public class TrayContext : ApplicationContext, ISettingsData
+    public class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData
     {
         // Hardware continua em 1 Hz. FPS e frametime usam um caminho proprio
         // a 4 Hz: fluido no LCD sem fazer o numero oscilar depressa demais.
@@ -100,7 +100,7 @@ namespace MhiagosControl
 
         private volatile bool _paused = false;
         private volatile bool _snapshotWanted = false;
-        private Dictionary<string, float> _snapshot = new Dictionary<string, float>();
+        private ReadingSnapshot _snapshot = ReadingSnapshot.Empty;
 
         private List<SensorEntry> _cache = new List<SensorEntry>();
         private MenuItem _miPause, _miAutostart, _miProfiles;
@@ -432,20 +432,32 @@ namespace MhiagosControl
                 return;
             }
 
-            // Escolha manual cancela o retorno automatico: se a pessoa trocou de
-            // perfil com o jogo aberto, ela quer ESTE perfil, e voltar ao padrao
-            // quando o jogo fechar seria desfazer o que ela acabou de mandar.
-            _perfilDeJogoAplicado = false;
+            RegistrarEscolhaManual();
 
             Publicar();
             RebuildProfileMenu();
             Log.Write("perfil ativo: " + p.Name);
         }
 
+        private void RegistrarEscolhaManual()
+        {
+            _ativacaoDeJogoPendente = false;
+            string jogo = _cfg.GameProfiles ? Rtss.JogoAtual : null;
+            string vinculo = string.IsNullOrEmpty(jogo) ? null : _cfg.PerfilDoJogo(jogo);
+            if (string.IsNullOrEmpty(vinculo) || !_cfg.NameExists(vinculo)) return;
+            // Inclui a escolha feita antes do primeiro tick ou depois de uma
+            // ativacao que falhou. O retorno ao padrao pertence ao jogo.
+            _jogoVisto = jogo;
+            _vinculoVisto = vinculo;
+            _perfilDeJogoAplicado = true;
+        }
+
         // ---------------- perfil por jogo ----------------
 
         private System.Windows.Forms.Timer _relogioDoJogo;
         private string _jogoVisto;            // o executavel do ciclo anterior
+        private string _vinculoVisto;
+        private bool _ativacaoDeJogoPendente;
         private bool _perfilDeJogoAplicado;
 
         /// <summary>
@@ -470,50 +482,34 @@ namespace MhiagosControl
         {
             try
             {
-                // Com a janela aberta, quem manda na configuracao e ela. A janela
-                // edita um RASCUNHO tirado na abertura e o grava por cima do vivo;
-                // uma troca automatica aqui seria escrita no disco e desfeita no
-                // primeiro Salvar, deixando ainda _perfilDeJogoAplicado ligado
-                // para uma segunda troca ao fim do jogo. O estado nao se perde:
-                // _jogoVisto continua o de antes e o proximo tick, com a janela ja
-                // fechada, ve a diferenca e faz a troca.
+                // A automacao espera o fim da edicao e reavalia tambem o vinculo.
                 if (_janelaAberta) return;
 
                 string agora = _cfg.GameProfiles ? Rtss.JogoAtual : null;
-                if (string.Equals(agora, _jogoVisto, StringComparison.OrdinalIgnoreCase))
+                string alvo = string.IsNullOrEmpty(agora) ? null : _cfg.PerfilDoJogo(agora);
+                if (string.IsNullOrEmpty(alvo) || !_cfg.NameExists(alvo)) alvo = null;
+                if (!string.Equals(agora, _jogoVisto, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(alvo, _vinculoVisto, StringComparison.Ordinal))
                 {
-                    // Se a gravação do retorno falhou, tenta novamente enquanto
-                    // continuarmos fora de um jogo vinculado.
-                    string vinculo = !string.IsNullOrEmpty(agora)
-                        ? _cfg.PerfilDoJogo(agora) : null;
-                    if (_perfilDeJogoAplicado && string.IsNullOrEmpty(vinculo))
-                        VoltarAoPadrao("retentativa apos jogo");
+                    _jogoVisto = agora;
+                    _vinculoVisto = alvo;
+                    _ativacaoDeJogoPendente = alvo != null;
+                }
+
+                if (alvo == null)
+                {
+                    if (_perfilDeJogoAplicado) VoltarAoPadrao("fim do jogo vinculado");
                     return;
                 }
 
-                string antes = _jogoVisto;
-                _jogoVisto = agora;
-
-                if (!string.IsNullOrEmpty(agora))
+                // Uma falha de disco fica pendente para o proximo tick. Depois
+                // do sucesso, nao desfazer uma escolha manual no mesmo jogo.
+                if (_ativacaoDeJogoPendente &&
+                    (alvo == _cfg.ActiveName || TrocarPorJogo(alvo, "jogo " + agora)))
                 {
-                    string alvo = _cfg.PerfilDoJogo(agora);
-                    if (string.IsNullOrEmpty(alvo) || !_cfg.NameExists(alvo))
-                    {
-                        if (_perfilDeJogoAplicado)
-                            VoltarAoPadrao("jogo sem vinculo " + agora);
-                        return;
-                    }
-
-                    if (alvo == _cfg.ActiveName) _perfilDeJogoAplicado = true;
-                    else if (TrocarPorJogo(alvo, "jogo " + agora))
-                        _perfilDeJogoAplicado = true;
-                    return;
+                    _perfilDeJogoAplicado = true;
+                    _ativacaoDeJogoPendente = false;
                 }
-
-                // O jogo fechou: o destino é explícito e estável, nunca o perfil
-                // incidental que estava ativo antes de o jogo abrir.
-                if (_perfilDeJogoAplicado)
-                    VoltarAoPadrao("fim de " + (antes ?? "jogo"));
             }
             catch (Exception ex) { Log.Error("vigia de perfil por jogo", ex); }
         }
@@ -557,8 +553,8 @@ namespace MhiagosControl
             try
             {
                 _live = _cfg.Active.Clone();
-                _idleBlankMs = Math.Max(0, _cfg.IdleBlankMinutes) * 60000;
-                _rotateMs = Math.Max(0, _cfg.RotateSeconds) * 1000;
+                _idleBlankMs = ConfigTiming.IdleMilliseconds(_cfg.IdleBlankMinutes);
+                _rotateMs = ConfigTiming.RotationMilliseconds(_cfg.RotateSeconds);
 
                 List<Profile> roda = _cfg.Rotation;
                 if (roda.Count < 2 || _rotateMs <= 0) _rotation = null;
@@ -570,6 +566,7 @@ namespace MhiagosControl
                 }
 
                 AjustarFoco();
+                MetricHistory.SeguirTambem(IdsAcompanhados());
             }
             catch (Exception ex) { Log.Error("publicacao do perfil ativo", ex); }
         }
@@ -626,11 +623,9 @@ namespace MhiagosControl
                 if (s != null && !string.IsNullOrEmpty(s.Id) && !ids.Contains(s.Id))
                     ids.Add(s.Id);
 
-            // E as duas leituras que vao para a peca: a tela de bordo desenha a
-            // curva delas ao lado do mostrador, e sem historico as duas maiores
-            // areas de grafico da tela ficariam em branco.
-            Profile a = _cfg.Active;
-            if (a != null)
+            // Inclui os perfis que podem entrar por jogo ou rodizio. Assim uma
+            // troca nao remove a curva anterior nem estreia sem historico.
+            foreach (Profile a in _cfg.Profiles)
                 foreach (string id in new string[] { a.Panel1Id, a.Panel2Id })
                     if (!string.IsNullOrEmpty(id) && !ids.Contains(id)) ids.Add(id);
 
@@ -718,6 +713,13 @@ namespace MhiagosControl
                     }
                     catch (Exception ex)
                     {
+                        Interlocked.Exchange(ref _snapshot, ReadingSnapshot.Failed);
+                        // Avancar o prazo mesmo quando o ciclo falha. Um prazo
+                        // vencido faria o laço repetir a excecao a cada 1 ms.
+                        nextFull = ProximoInstante(nextFull, clock.ElapsedMilliseconds, FullPeriodMs);
+                        // O caminho rapido reutiliza hardware do ultimo ciclo
+                        // completo. Nao renovar a validade desses dados na falha.
+                        nextFast = nextFull;
                         Log.Error("ciclo de atualizacao", ex);
                         SetTooltip("Mhiagos Control - erro: " + ex.Message);
                     }
@@ -798,7 +800,7 @@ namespace MhiagosControl
 
                     readings = _sensorCycle.Refresh(cfg);
                     if (_snapshotWanted)
-                        Interlocked.Exchange(ref _snapshot, _sensors.Snapshot());
+                        Interlocked.Exchange(ref _snapshot, ReadingSnapshot.Full(_sensors.Snapshot(), Stopwatch.GetTimestamp()));
 
                     if (amostrar)
                     {
@@ -841,14 +843,8 @@ namespace MhiagosControl
         /// <summary>Mescla somente FPS/frametime no instantâneo da janela.</summary>
         private void PublicarSnapshotRapido()
         {
-            Dictionary<string, float> next = new Dictionary<string, float>(GetSnapshot());
-            List<string> remove = new List<string>();
-            foreach (string id in next.Keys)
-                if (EhRtss(id)) remove.Add(id);
-            foreach (string id in remove) next.Remove(id);
-            foreach (KeyValuePair<string, float> value in _fastSensors.FastSnapshot())
-                next[value.Key] = value.Value;
-            Interlocked.Exchange(ref _snapshot, next);
+            ReadingSnapshot previous = Interlocked.CompareExchange(ref _snapshot, null, null) ?? ReadingSnapshot.Empty;
+            Interlocked.Exchange(ref _snapshot, previous.WithFast(_fastSensors.FastSnapshot(), Stopwatch.GetTimestamp()));
         }
 
         private void OnPanelConnectionChanged(bool connected)
@@ -1022,7 +1018,7 @@ namespace MhiagosControl
                 {
                     _sensors.Refresh();
                     list = _sensors.List();
-                    Interlocked.Exchange(ref _snapshot, _sensors.Snapshot());
+                    Interlocked.Exchange(ref _snapshot, ReadingSnapshot.Full(_sensors.Snapshot(), Stopwatch.GetTimestamp()));
                 }
                 _cache = list;
                 _snapshotWanted = true;
@@ -1039,7 +1035,12 @@ namespace MhiagosControl
                         // Aplicar dentro da janela ja vale no mostrador: sem
                         // isto o perfil so mudaria ao fechar, o que faria o
                         // botao parecer sem efeito.
-                        f.Applied += delegate { Publicar(); };
+                        f.Applied += delegate
+                        {
+                            if (_live != null && _live.Name != _cfg.ActiveName)
+                                RegistrarEscolhaManual();
+                            Publicar();
+                        };
                         r = f.ShowDialog();
                         _settingsForm = null;
                     }
@@ -1087,10 +1088,22 @@ namespace MhiagosControl
 
         private Dictionary<string, float> GetSnapshot()
         {
-            return Interlocked.CompareExchange(ref _snapshot, null, null);
+            ReadingSnapshot current = Interlocked.CompareExchange(ref _snapshot, null, null) ?? ReadingSnapshot.Empty;
+            return current.Read(Stopwatch.GetTimestamp(), _paused);
+        }
+
+        ReadingState IReadingStatusData.CurrentReadingState(string sensorId)
+        {
+            ReadingSnapshot current = Interlocked.CompareExchange(ref _snapshot, null, null) ?? ReadingSnapshot.Empty;
+            return current.State(sensorId, Stopwatch.GetTimestamp(), _paused);
         }
 
         Dictionary<string, float> ISettingsData.CurrentSnapshot() { return GetSnapshot(); }
+
+        PanelStatus IPanelStatusData.CurrentPanelStatus()
+        {
+            return new PanelStatus(_panelKeepalive.LastFrame, _panelKeepalive.LastSent, _paused);
+        }
 
         /// <summary>Remonta a lista de sensores sob o lock, para a janela de configuracao.</summary>
         private List<SensorEntry> ReListSensors()
@@ -1112,6 +1125,7 @@ namespace MhiagosControl
         private void OnPause(object sender, EventArgs e)
         {
             _paused = !_paused;
+            Interlocked.Exchange(ref _snapshot, ReadingSnapshot.Empty);
             _panelKeepalive.Enabled = !_paused;
             _miPause.Text = _paused ? T.TrayResume : T.TrayPause;
             Log.Write(_paused ? "pausado" : "retomado");
@@ -1268,6 +1282,7 @@ namespace MhiagosControl
 
                 // precisa vir antes de qualquer janela: define o modo escuro do
                 // processo, do qual dependem as barras de rolagem nativas
+                TaskbarIdentity.Initialize();
                 Theme.InitProcess();
 
                 Application.EnableVisualStyles();

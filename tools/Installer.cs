@@ -4,6 +4,8 @@ using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -30,7 +32,7 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.16.10";
+        public const string Versao = "2.16.14";
         public const string TaskName = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
@@ -234,30 +236,45 @@ namespace MhiagosSetup
 
             diz("");
             diz("Desinstalado. O desinstalador se remove ao fechar esta janela.");
-            AgendarAutoRemocao(destino);
         }
 
         /// <summary>
         /// Remove o proprio desinstalador depois que ele sair.
         ///
-        /// Um executavel em uso nao pode se apagar, entao quem apaga e um cmd
-        /// que espera. O "rd" vai sem /s e sem /q de proposito: ele so remove a
-        /// pasta se ela ja estiver vazia, e uma apagada recursiva com caminho
-        /// errado aqui destruiria o que estivesse do outro lado.
+        /// Aguarda o processo terminar; a pasta so e removida se estiver vazia.
         /// </summary>
-        private static void AgendarAutoRemocao(string destino)
+        public static void AgendarAutoRemocao()
         {
             try
             {
                 string eu = Assembly.GetExecutingAssembly().Location;
-                ProcessStartInfo p = new ProcessStartInfo("cmd.exe",
-                    "/c ping 127.0.0.1 -n 3 >nul & del /f /q \"" + eu + "\" & rd \"" + destino + "\"");
+                string script = CleanupScript(eu, Process.GetCurrentProcess().Id);
+                string powershell = Path.Combine(Environment.SystemDirectory,
+                    @"WindowsPowerShell\v1.0\powershell.exe");
+                ProcessStartInfo p = new ProcessStartInfo(powershell,
+                    "-NoProfile -NonInteractive -EncodedCommand " +
+                    Convert.ToBase64String(Encoding.Unicode.GetBytes(script)));
                 p.CreateNoWindow = true;
                 p.UseShellExecute = false;
                 p.WindowStyle = ProcessWindowStyle.Hidden;
                 Process.Start(p);
             }
             catch { }
+        }
+
+        internal static string CleanupScript(string executable, int processId)
+        {
+            string file = Path.GetFullPath(executable);
+            string folder = Path.GetDirectoryName(file);
+            // Caminhos sao dados literais: aspas, %, $ e acentos nao viram codigo.
+            return "$cleanupFile = '" + file.Replace("'", "''") + "'\r\n" +
+                "$cleanupFolder = '" + folder.Replace("'", "''") + "'\r\n" +
+                "Wait-Process -Id " + processId + " -ErrorAction SilentlyContinue\r\n" +
+                "for ($cleanupAttempt = 0; $cleanupAttempt -lt 40; $cleanupAttempt++) {\r\n" +
+                "  try { Remove-Item -LiteralPath $cleanupFile -Force -ErrorAction Stop; break }\r\n" +
+                "  catch { if (-not (Test-Path -LiteralPath $cleanupFile)) { break }; Start-Sleep -Milliseconds 250 }\r\n" +
+                "}\r\n" +
+                "try { [IO.Directory]::Delete($cleanupFolder, $false) } catch {}\r\n";
         }
 
         // ---------------- utilidades ----------------
@@ -344,15 +361,35 @@ namespace MhiagosSetup
                 psi.CreateNoWindow = true;
                 psi.RedirectStandardOutput = true;
                 psi.RedirectStandardError = true;
-                using (Process p = Process.Start(psi))
-                {
-                    string saida = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
-                    p.WaitForExit(15000);
-                    codigo = p.HasExited ? p.ExitCode : -1;
-                    return saida;
-                }
+                return RunProcess(psi, 15000, out codigo);
             }
             catch { return ""; }
+        }
+
+        internal static string RunProcess(ProcessStartInfo psi, int timeoutMs, out int code)
+        {
+            code = -1;
+            psi.UseShellExecute = false;
+            psi.CreateNoWindow = true;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            Stopwatch elapsed = Stopwatch.StartNew();
+            using (Process process = Process.Start(psi))
+            {
+                Task<string> output = process.StandardOutput.ReadToEndAsync();
+                Task<string> error = process.StandardError.ReadToEndAsync();
+                if (!process.WaitForExit(Math.Max(0, timeoutMs)))
+                {
+                    try { process.Kill(); } catch { }
+                    return "processo excedeu o prazo de " + timeoutMs + " ms";
+                }
+                // Drenagem tambem tem prazo: um descendente pode herdar os pipes.
+                if (!Task.WaitAll(new Task[] { output, error },
+                    Math.Max(0, timeoutMs - (int)elapsed.ElapsedMilliseconds)))
+                    return "saida do processo excedeu o prazo";
+                code = process.ExitCode;
+                return output.Result + error.Result;
+            }
         }
 
         public static string DestinoPadrao
@@ -637,6 +674,12 @@ namespace MhiagosSetup
                 _acao.Enabled = true;
             }
             finally { _fechar.Enabled = true; }
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (_desinstalar && _pronto) Setup.AgendarAutoRemocao();
+            base.OnFormClosed(e);
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
@@ -972,7 +972,30 @@ namespace MhiagosControl
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             Font = Ui.FontBase;
+            TabStop = true;
+            AccessibleRole = AccessibleRole.PageTabList;
+            AccessibleName = T.AppName;
         }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            Keys key = keyData & Keys.KeyCode;
+            return key == Keys.Up || key == Keys.Down || key == Keys.Home || key == Keys.End
+                || base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Up) SelectedIndex = Math.Max(0, SelectedIndex - 1);
+            else if (e.KeyCode == Keys.Down) SelectedIndex = Math.Min(_items.Count - 1, SelectedIndex + 1);
+            else if (e.KeyCode == Keys.Home) SelectedIndex = 0;
+            else if (e.KeyCode == Keys.End) SelectedIndex = _items.Count - 1;
+            else { base.OnKeyDown(e); return; }
+            e.Handled = true;
+        }
+
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
 
         public void Add(NavItem item) { _items.Add(item); Invalidate(); }
 
@@ -1150,6 +1173,7 @@ namespace MhiagosControl
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            Focus();
             if (_botao.Contains(e.Location)) { Collapsed = !Collapsed; base.OnMouseDown(e); return; }
             int h = HitTest(e.Location);
             if (h >= 0) SelectedIndex = h;
