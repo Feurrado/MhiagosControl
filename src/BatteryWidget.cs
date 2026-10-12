@@ -408,7 +408,7 @@ namespace MhiagosControl
             }
 
             RectangleF lNome = new RectangleF(x, z.Y, Math.Max(0f, lValor.X - x - 6f * s), 21f * s);
-            Texto(g, p.Nome, f.NomeForte, Primario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
+            Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
 
             RectangleF barra = new RectangleF(x, z.Y + 25f * s, w, 8f * s);
             Capsula(g, barra, p, escuro, q.Fase);
@@ -584,15 +584,14 @@ namespace MhiagosControl
         /// <summary>As fontes de um desenho, no tamanho em pixels da escala da tela.</summary>
         private sealed class Fontes : IDisposable
         {
-            public readonly Font Pct, Nome, NomeForte, Nota;
+            public readonly Font Pct, Nome, Nota;
 
             public Fontes(float s)
             {
                 // pesos mais grossos: sobre o vidro nitido o traco fino se perde
                 Pct = Criar("Segoe UI", 15f * s, FontStyle.Bold);
                 Nome = Criar("Segoe UI", 12.5f * s, FontStyle.Bold);
-                NomeForte = Criar("Segoe UI", 13f * s, FontStyle.Bold);
-                Nota = Criar("Segoe UI Semibold", 11.5f * s, FontStyle.Regular);
+                Nota = Criar("Segoe UI", 11.5f * s, FontStyle.Bold);
             }
 
             /// <summary>Sem o Semibold instalado, o GDI+ cairia numa fonte qualquer; o negrito comum chega perto.</summary>
@@ -607,7 +606,7 @@ namespace MhiagosControl
 
             public void Dispose()
             {
-                Pct.Dispose(); Nome.Dispose(); NomeForte.Dispose(); Nota.Dispose();
+                Pct.Dispose(); Nome.Dispose(); Nota.Dispose();
             }
         }
     }
