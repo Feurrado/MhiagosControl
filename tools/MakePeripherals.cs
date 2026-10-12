@@ -110,114 +110,136 @@ class MakePeripherals
         }
     }
 
+    /// <summary>
+    /// G325 de lado, como nas fotos da Logitech: tiara fina, concha oval com
+    /// a tampa lisa e o G em relevo, a outra concha aparecendo atras e a haste
+    /// curta e reta do microfone saindo da frente da concha esquerda.
+    /// </summary>
     static Bitmap Headset()
     {
         Bitmap b = new Bitmap(256, 256, PixelFormat.Format32bppArgb);
         using (Graphics g = Abrir(b))
         {
-            // microfone primeiro, para a concha do lado esquerdo cobrir a raiz
-            using (GraphicsPath mic = new GraphicsPath())
+            // concha de tras, mais escura e deslocada, so para dar volume
+            using (GraphicsPath tras = new GraphicsPath())
             {
-                mic.AddBezier(52, 196, 54, 222, 72, 236, 104, 236);
-                Faixa(g, mic, 8, Branco);
+                tras.AddEllipse(138, 92, 64, 98);
+                using (SolidBrush br = new SolidBrush(Almofada)) g.FillPath(br, tras);
+                using (Pen pen = new Pen(Contorno, 3.5f)) g.DrawPath(pen, tras);
             }
-            using (GraphicsPath capsula = Arredondado(new RectangleF(98, 228, 22, 16), 8))
-                Corpo(g, capsula, 3);
 
-            // tiara: arco largo branco com a almofada cinza por dentro
+            // tiara: arco fino, da concha de tras ate a da frente
             using (GraphicsPath tiara = new GraphicsPath())
             {
-                tiara.AddArc(36, 22, 184, 184, 192, 156);
-                Faixa(g, tiara, 18, Branco);
+                tiara.AddBezier(102, 104, 74, 6, 196, 2, 170, 98);
+                Faixa(g, tiara, 13, Branco);
             }
             using (GraphicsPath almofada = new GraphicsPath())
-            using (Pen pen = new Pen(Almofada, 7))
+            using (Pen pen = new Pen(Almofada, 5))
             {
                 pen.StartCap = pen.EndCap = LineCap.Round;
-                almofada.AddArc(54, 40, 148, 148, 212, 116);
+                almofada.AddBezier(102, 76, 92, 28, 180, 24, 168, 72);
                 g.DrawPath(pen, almofada);
             }
 
-            // garfos que descem da tiara ate as conchas
-            using (GraphicsPath ge = Arredondado(new RectangleF(34, 102, 14, 40), 6))
-                Corpo(g, ge, 3);
-            using (GraphicsPath gd = Arredondado(new RectangleF(208, 102, 14, 40), 6))
-                Corpo(g, gd, 3);
+            // haste do microfone: reta, saindo da frente e descendo para a boca
+            using (GraphicsPath haste = new GraphicsPath())
+            {
+                haste.AddLine(74, 196, 34, 230);
+                Faixa(g, haste, 10, Branco);
+            }
+            using (GraphicsPath ponta = Arredondado(new RectangleF(20, 222, 26, 20), 9))
+                Corpo(g, ponta, 3);
 
-            // conchas vistas de frente: casco branco e espuma voltada para dentro
-            Concha(g, 22, false);
-            Concha(g, 198, true);
+            // concha da frente: espuma cinza aparecendo atras do casco
+            using (GraphicsPath espuma = new GraphicsPath())
+            {
+                espuma.AddEllipse(86, 98, 70, 112);
+                using (SolidBrush br = new SolidBrush(Almofada)) g.FillPath(br, espuma);
+                using (Pen pen = new Pen(Contorno, 3)) g.DrawPath(pen, espuma);
+            }
+            using (GraphicsPath casco = new GraphicsPath())
+            {
+                casco.AddEllipse(62, 94, 82, 120);
+                Corpo(g, casco, 4);
+            }
+            // tampa lisa por dentro do casco
+            using (GraphicsPath tampa = new GraphicsPath())
+            using (Pen pen = new Pen(Sombra, 3))
+            {
+                tampa.AddEllipse(74, 110, 58, 88);
+                g.DrawPath(pen, tampa);
+            }
+            // o G da Logitech em relevo na tampa
+            using (Pen pen = new Pen(Contorno, 6))
+            {
+                pen.StartCap = pen.EndCap = LineCap.Round;
+                g.DrawArc(pen, 88, 136, 30, 36, 20, 290);
+                g.DrawLine(pen, 117, 156, 104, 156);
+                g.DrawLine(pen, 117, 156, 117, 166);
+            }
         }
         return b;
     }
 
-    static void Concha(Graphics g, float x, bool direita)
-    {
-        RectangleF casco = new RectangleF(x, 124, 36, 90);
-        RectangleF espuma = direita
-            ? new RectangleF(x - 10, 132, 18, 74)
-            : new RectangleF(x + 28, 132, 18, 74);
-
-        using (GraphicsPath p = Arredondado(espuma, 8))
-        {
-            using (SolidBrush br = new SolidBrush(Almofada)) g.FillPath(br, p);
-            using (Pen pen = new Pen(Contorno, 3)) g.DrawPath(pen, p);
-        }
-        using (GraphicsPath p = Arredondado(casco, 16))
-            Corpo(g, p, 3.5f);
-
-        // friso discreto no casco, para nao ficar um bloco liso
-        using (Pen pen = new Pen(Sombra, 3))
-        {
-            pen.StartCap = pen.EndCap = LineCap.Round;
-            float cx = x + 18;
-            g.DrawLine(pen, cx, 146, cx, 192);
-        }
-    }
-
+    /// <summary>
+    /// X11 visto de cima: corpo simetrico e baixo, botoes separados da
+    /// carcaca por um vinco, roda com o botao de DPI logo atras, os dois
+    /// botoes laterais na esquerda e a barbatana da Attack Shark na palma.
+    /// </summary>
     static Bitmap Mouse()
     {
         Bitmap b = new Bitmap(256, 256, PixelFormat.Format32bppArgb);
         using (Graphics g = Abrir(b))
         {
-            // vista de cima: frente mais estreita, traseira cheia
             GraphicsPath corpo = new GraphicsPath();
-            corpo.AddBezier(128, 22, 170, 22, 186, 48, 188, 94);
-            corpo.AddBezier(188, 94, 190, 132, 196, 172, 188, 202);
-            corpo.AddBezier(188, 202, 180, 228, 154, 236, 128, 236);
-            corpo.AddBezier(128, 236, 102, 236, 76, 228, 68, 202);
-            corpo.AddBezier(68, 202, 60, 172, 66, 132, 68, 94);
-            corpo.AddBezier(68, 94, 70, 48, 86, 22, 128, 22);
+            corpo.AddBezier(128, 20, 166, 20, 180, 44, 182, 90);
+            corpo.AddBezier(182, 90, 184, 130, 192, 168, 186, 200);
+            corpo.AddBezier(186, 200, 180, 228, 156, 238, 128, 238);
+            corpo.AddBezier(128, 238, 100, 238, 76, 228, 70, 200);
+            corpo.AddBezier(70, 200, 64, 168, 72, 130, 74, 90);
+            corpo.AddBezier(74, 90, 76, 44, 90, 20, 128, 20);
             corpo.CloseFigure();
+
+            // botoes laterais, saindo um pouco pela borda esquerda
+            using (GraphicsPath l1 = Arredondado(new RectangleF(64, 104, 14, 26), 6)) Corpo(g, l1, 3);
+            using (GraphicsPath l2 = Arredondado(new RectangleF(66, 134, 14, 24), 6)) Corpo(g, l2, 3);
+
             Corpo(g, corpo, 4);
 
-            using (Pen pen = new Pen(Contorno, 2.5f))
+            using (Pen pen = new Pen(Contorno, 3f))
             {
                 pen.StartCap = pen.EndCap = LineCap.Round;
-                // separacao entre os dois botoes
-                g.DrawLine(pen, 128, 25, 128, 104);
-                // fim dos botoes, curvado como a palma
-                g.DrawBezier(pen, 70, 106, 100, 118, 156, 118, 186, 106);
+                // vao entre os dois botoes, aberto como nos mouses leves
+                g.DrawLine(pen, 124, 23, 124, 100);
+                g.DrawLine(pen, 132, 23, 132, 100);
+                // vinco que solta os botoes da carcaca
+                g.DrawBezier(pen, 76, 112, 100, 124, 156, 124, 180, 112);
             }
+            using (SolidBrush br = new SolidBrush(Sombra))
+                g.FillRectangle(br, 125.5f, 24, 5, 76);
 
             // roda de rolagem
-            using (GraphicsPath roda = Arredondado(new RectangleF(119, 46, 18, 38), 8))
+            using (GraphicsPath roda = Arredondado(new RectangleF(119, 40, 18, 36), 8))
             {
                 using (SolidBrush br = new SolidBrush(Escuro)) g.FillPath(br, roda);
                 using (Pen pen = new Pen(Color.FromArgb(0x6E, 0x73, 0x7D), 2))
-                    for (int y = 54; y <= 76; y += 7) g.DrawLine(pen, 122, y, 134, y);
+                    for (int y = 47; y <= 69; y += 7) g.DrawLine(pen, 122, y, 134, y);
+            }
+            // botao de DPI atras da roda
+            using (GraphicsPath dpi = Arredondado(new RectangleF(121, 84, 14, 12), 5))
+            {
+                using (SolidBrush br = new SolidBrush(Almofada)) g.FillPath(br, dpi);
+                using (Pen pen = new Pen(Contorno, 2)) g.DrawPath(pen, dpi);
             }
 
-            // brilho suave na traseira
-            using (GraphicsPath brilho = new GraphicsPath())
+            // barbatana de tubarao na palma
+            using (GraphicsPath fin = new GraphicsPath())
             {
-                brilho.AddEllipse(96, 140, 64, 60);
-                using (PathGradientBrush pg = new PathGradientBrush(brilho))
-                {
-                    pg.CenterColor = Color.FromArgb(160, 255, 255, 255);
-                    pg.SurroundColors = new Color[] { Color.FromArgb(0, 255, 255, 255) };
-                    g.FillPath(pg, brilho);
-                }
+                fin.AddBezier(108, 196, 116, 182, 126, 166, 146, 156);
+                fin.AddBezier(146, 156, 140, 170, 140, 184, 148, 196);
+                fin.CloseFigure();
+                using (SolidBrush br = new SolidBrush(Contorno)) g.FillPath(br, fin);
             }
             corpo.Dispose();
         }

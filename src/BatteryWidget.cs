@@ -137,8 +137,8 @@ namespace MhiagosControl
     /// num bitmap e conferir o tamanho de cada formato sem abrir nada na tela.
     ///
     /// O desfoque do que esta atras vem do Windows; tudo o que fica por cima e
-    /// daqui: a tinta do vidro, o brilho do topo, a luz que volta pela base, o
-    /// aro claro nas bordas, os aneis e as barras. Medidas em pixels de 96 dpi,
+    /// daqui: a tinta do vidro, o brilho do topo, a luz que volta pela base,
+    /// os aneis e as barras. Medidas em pixels de 96 dpi,
     /// multiplicadas pela escala da tela.
     /// </summary>
     internal static class PintorDoWidget
@@ -254,9 +254,8 @@ namespace MhiagosControl
         // ---------------- o vidro ----------------
 
         /// <summary>
-        /// A placa de vidro. Pouca tinta, para o desfoque de tras aparecer, e
-        /// luz nas bordas: e o aro claro e o brilho de cima que fazem uma
-        /// mancha translucida parecer vidro grosso, e nao plastico fosco.
+        /// A placa de vidro: a tinta e a luz de cima e de baixo, que fazem uma
+        /// mancha translucida parecer vidro, sem borda desenhada.
         /// </summary>
         internal static void Vidro(Graphics g, RectangleF area, float s, bool escuro, bool fosco, bool nitido, bool sobre)
         {
@@ -299,31 +298,7 @@ namespace MhiagosControl
                 }
                 finally { g.Clip = antes; antes.Dispose(); }
 
-                // aro: claro no canto de cima a esquerda, quase sumindo no meio,
-                // e de novo aceso embaixo a direita, como a borda de um vidro
-                // grosso refletindo a luz dos dois lados
-                float e = 1.25f * s;
-                RectangleF ra = RectangleF.Inflate(r, -e / 2f, -e / 2f);
-                using (GraphicsPath aro = Arredondado(ra, raio - e / 2f))
-                using (LinearGradientBrush b = new LinearGradientBrush(r, Color.White, Color.White, 45f))
-                {
-                    ColorBlend cb = new ColorBlend(4);
-                    cb.Colors = new Color[] {
-                        Color.FromArgb(escuro ? 190 : 230, 255, 255, 255),
-                        Color.FromArgb(escuro ? 36 : 70, 255, 255, 255),
-                        Color.FromArgb(escuro ? 24 : 60, 255, 255, 255),
-                        Color.FromArgb(escuro ? 120 : 200, 255, 255, 255) };
-                    cb.Positions = new float[] { 0f, 0.42f, 0.62f, 1f };
-                    b.InterpolationColors = cb;
-                    using (Pen pen = new Pen(b, e)) g.DrawPath(pen, aro);
-                }
-
-                // contorno escuro bem fino por dentro do aro: separa o vidro de
-                // um papel de parede claro, onde o aro branco sozinho some
-                RectangleF rd = RectangleF.Inflate(r, -2.2f * s, -2.2f * s);
-                using (GraphicsPath dentro = Arredondado(rd, raio - 2.2f * s))
-                using (Pen pen = new Pen(Color.FromArgb(escuro ? 34 : 18, 0, 0, 0), 1f * s))
-                    g.DrawPath(pen, dentro);
+                // sem aro nem contorno: marcavam demais a placa (pedido do Thiago)
             }
         }
 
@@ -613,10 +588,11 @@ namespace MhiagosControl
 
             public Fontes(float s)
             {
-                Pct = Criar("Segoe UI Semibold", 15f * s, FontStyle.Regular);
-                Nome = Criar("Segoe UI", 12f * s, FontStyle.Regular);
-                NomeForte = Criar("Segoe UI Semibold", 13f * s, FontStyle.Regular);
-                Nota = Criar("Segoe UI", 11.5f * s, FontStyle.Regular);
+                // pesos mais grossos: sobre o vidro nitido o traco fino se perde
+                Pct = Criar("Segoe UI", 15f * s, FontStyle.Bold);
+                Nome = Criar("Segoe UI Semibold", 12f * s, FontStyle.Regular);
+                NomeForte = Criar("Segoe UI", 13f * s, FontStyle.Bold);
+                Nota = Criar("Segoe UI Semibold", 11.5f * s, FontStyle.Regular);
             }
 
             /// <summary>Sem o Semibold instalado, o GDI+ cairia numa fonte qualquer; o negrito comum chega perto.</summary>
