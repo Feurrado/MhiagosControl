@@ -33,7 +33,7 @@ $arguments = @(
 foreach ($r in $refs) { $arguments += ('/reference:' + $r) }
 $arguments += $srcs
 
-Copy-Item (Join-Path $root 'lib\LibreHardwareMonitorLib.dll') (Join-Path $root 'bin') -Force -ErrorAction SilentlyContinue
+Get-ChildItem (Join-Path $root 'lib') -Filter *.dll | Where-Object { $_.Name -ne 'api-ms-win-core-sysinfo-825-64.dll' } | Copy-Item -Destination (Join-Path $root 'bin') -Force -ErrorAction SilentlyContinue
 & $csc $arguments 2>&1 | Out-String | Write-Output
 $rc = $LASTEXITCODE
 

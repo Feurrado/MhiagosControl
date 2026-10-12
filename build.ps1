@@ -22,8 +22,12 @@ if ($Assets) {
     & $mk (Join-Path $root 'assets') (Join-Path $root 'assets')
 }
 
-# a biblioteca de sensores precisa ficar ao lado do executavel
-Copy-Item (Join-Path $root 'lib\LibreHardwareMonitorLib.dll') $bin -Force
+# a biblioteca de sensores e as dependencias dela precisam ficar ao lado do
+# executavel. Desde a 0.9.5 a LibreHardwareMonitor vem em varias DLLs; o motor
+# do HWiNFO fica de fora porque mora em engine\, logo abaixo.
+Get-ChildItem (Join-Path $root 'lib') -Filter *.dll |
+    Where-Object { $_.Name -ne 'api-ms-win-core-sysinfo-825-64.dll' } |
+    Copy-Item -Destination $bin -Force
 
 # motor do HWiNFO: cobre temperatura, potencia e clock real da CPU, que a
 # LibreHardwareMonitor nao consegue ler porque seu driver esta bloqueado.

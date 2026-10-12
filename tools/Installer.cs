@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -32,7 +33,7 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.16.14";
+        public const string Versao = "2.17.0";
         public const string TaskName = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
@@ -68,28 +69,23 @@ namespace MhiagosSetup
             catch { return false; }
         }
 
-        /// <summary>Caminho do winget, ou nulo quando ele nao existe na maquina.</summary>
+        /// <summary>
+        /// Caminho do winget, ou nulo quando ele nao existe na maquina. So o
+        /// atalho do App Installer, e nao o PATH: o instalador roda elevado, e
+        /// o PATH do usuario e gravavel sem privilegio. Mesma regra do Rtss.Winget.
+        /// </summary>
         public static string Winget()
         {
             try
             {
-                string path = Environment.GetEnvironmentVariable("PATH");
-                if (string.IsNullOrEmpty(path)) return null;
-
-                foreach (string dir in path.Split(';'))
-                {
-                    string d = dir.Trim();
-                    if (d.Length == 0) continue;
-                    try
-                    {
-                        string alvo = Path.Combine(d, "winget.exe");
-                        if (File.Exists(alvo)) return alvo;
-                    }
-                    catch { }
-                }
+                string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                if (string.IsNullOrEmpty(local)) return null;
+                string alvo = Path.Combine(local, @"Microsoft\WindowsApps\winget.exe");
+                if (!File.Exists(alvo)) return null;
+                if ((File.GetAttributes(alvo) & FileAttributes.ReparsePoint) == 0) return null;
+                return alvo;
             }
-            catch { }
-            return null;
+            catch { return null; }
         }
 
         /// <summary>Recurso embutido -> caminho relativo ao destino.</summary>
@@ -101,8 +97,24 @@ namespace MhiagosSetup
             // do binario, e nao so do codigo. O repositorio ja o tinha; o
             // instalador nao levava, e passou a levar quando virou Release.
             new string[] { "payload.lhm-license.txt",             "LibreHardwareMonitor-LICENSE.txt" },
+            new string[] { "payload.notices.txt",                 "THIRD-PARTY-NOTICES.txt" },
             new string[] { "payload.engine.dll",                  @"engine\api-ms-win-core-sysinfo-825-64.dll" },
         };
+
+        /// <summary>
+        /// O Payload fixo mais as dependencias da LibreHardwareMonitor, que
+        /// entram como payload.lib.&lt;arquivo&gt;. A lista delas muda a cada versao
+        /// da biblioteca; ler dos recursos evita mante-la em dois lugares.
+        /// </summary>
+        private static List<string[]> Itens()
+        {
+            List<string[]> itens = new List<string[]>(Payload);
+            const string Prefixo = "payload.lib.";
+            foreach (string nome in Assembly.GetExecutingAssembly().GetManifestResourceNames())
+                if (nome.StartsWith(Prefixo, StringComparison.Ordinal))
+                    itens.Add(new string[] { nome, nome.Substring(Prefixo.Length) });
+            return itens;
+        }
 
         [STAThread]
         public static void Main(string[] args)
@@ -138,7 +150,7 @@ namespace MhiagosSetup
             Directory.CreateDirectory(Path.Combine(destino, "engine"));
 
             Assembly asm = Assembly.GetExecutingAssembly();
-            foreach (string[] item in Payload)
+            foreach (string[] item in Itens())
             {
                 string alvo = Path.Combine(destino, item[1]);
                 using (Stream s = asm.GetManifestResourceStream(item[0]))
@@ -264,7 +276,7 @@ namespace MhiagosSetup
             catch (Exception ex) { diz("  aviso: " + ex.Message); }
 
             diz("Apagando arquivos");
-            foreach (string[] item in Payload) Apagar(Path.Combine(destino, item[1]));
+            foreach (string[] item in Itens()) Apagar(Path.Combine(destino, item[1]));
             Apagar(Path.Combine(destino, "engine"), true);
 
             if (apagarDados)
@@ -760,7 +772,8 @@ namespace MhiagosSetup
                                Chamada(winget, Setup.PacoteRtss) + " & " +
                                "\"" + app + "\" --config-rtss";
 
-                ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", "/s /k \"" + linha + "\"");
+                ProcessStartInfo psi = new ProcessStartInfo(
+                    Path.Combine(Environment.SystemDirectory, "cmd.exe"), "/s /k \"" + linha + "\"");
                 psi.UseShellExecute = true;
                 Process.Start(psi);
                 Diz("RTSS: instalacao entregue ao winget, numa janela a parte.");

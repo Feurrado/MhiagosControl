@@ -37,7 +37,8 @@ jobs:
           $setup = (Resolve-Path .\dist\MhiagosControlSetup.exe).Path
           $assembly = [Reflection.Assembly]::LoadFile($setup)
           $names = $assembly.GetManifestResourceNames()
-          @('payload.MhiagosControl.exe', 'payload.LibreHardwareMonitorLib.dll', 'payload.lhm-license.txt') | ForEach-Object {
+          @('payload.MhiagosControl.exe', 'payload.LibreHardwareMonitorLib.dll', 'payload.lhm-license.txt',
+            'payload.notices.txt', 'payload.lib.HidSharp.dll', 'payload.lib.System.Memory.dll') | ForEach-Object {
             if ($names -notcontains $_) { throw "recurso obrigatorio ausente: $_" }
           }
           # Assertiva NEGATIVA, e nao so a lista do que precisa estar presente:

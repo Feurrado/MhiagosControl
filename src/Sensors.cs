@@ -151,11 +151,12 @@ namespace MhiagosControl
             bool primary = _primary.Open();
 
             // A LibreHardwareMonitor so entra quando o HWiNFO nao esta disponivel.
-            // Abri-la cobra um preco fixo: ela tenta instalar seu driver de kernel
-            // a cada inicializacao e, como esse driver consta na lista de bloqueio
-            // do Windows, o antivirus o remove e emite um alerta - toda vez. Com o
-            // HWiNFO ativo nao ha o que ganhar pagando isso, porque ele entrega os
-            // mesmos sensores (e mais alguns) por um driver que o sistema aceita.
+            // Ate a 0.9.4 abri-la cobrava um preco fixo: ela instalava o WinRing0,
+            // que consta na lista de bloqueio do Windows, e o antivirus emitia um
+            // alerta a cada arranque. Da 0.9.5 em diante ela usa o PawnIO, que o
+            // sistema aceita, mas so le os sensores de baixo nivel (temperatura
+            // da CPU, Super I/O) se o PawnIO estiver instalado. Com o HWiNFO ativo
+            // ela segue de fora: ele entrega os mesmos sensores e mais alguns.
             bool fallback = false;
             if (!primary) fallback = _fallback.Open();
             _auxiliary.Open();
