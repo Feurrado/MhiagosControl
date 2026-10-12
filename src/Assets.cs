@@ -85,6 +85,44 @@ namespace MhiagosControl
             }
         }
 
+        private static Image _headset, _mouse, _bluetooth;
+        private static bool _perifTried = false;
+
+        /// <summary>Headset G325 branco, desenhado por tools\MakePeripherals.cs.</summary>
+        public static Image Headset { get { CarregarPerifericos(); return _headset; } }
+
+        /// <summary>Mouse X11 branco, desenhado por tools\MakePeripherals.cs.</summary>
+        public static Image Mouse { get { CarregarPerifericos(); return _mouse; } }
+
+        /// <summary>Simbolo do Bluetooth, para os aparelhos lidos pelo Windows.</summary>
+        public static Image Bluetooth { get { CarregarPerifericos(); return _bluetooth; } }
+
+        private static void CarregarPerifericos()
+        {
+            if (_perifTried) return;
+            _perifTried = true;
+            try
+            {
+                _headset = Copia("g325.png");
+                _mouse = Copia("x11.png");
+                _bluetooth = Copia("bluetooth.png");
+            }
+            catch (Exception ex) { Log.Error("carregamento das imagens dos perifericos", ex); }
+        }
+
+        /// <summary>
+        /// Copia em memoria: o GDI+ volta a ler o fluxo de Image.FromStream
+        /// quando desenha, e o recurso ja estaria fechado.
+        /// </summary>
+        private static Image Copia(string name)
+        {
+            using (Stream s = Open(name))
+            {
+                if (s == null) return null;
+                using (Image img = Image.FromStream(s)) return new Bitmap(img);
+            }
+        }
+
         private static Stream Open(string name)
         {
             Assembly asm = Assembly.GetExecutingAssembly();

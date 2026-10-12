@@ -59,7 +59,10 @@ $arguments = @(
     ('/win32icon:'     + (Join-Path $root 'assets\MhiagosControl.ico')),
     ('/resource:' + (Join-Path $root 'assets\tray.ico')            + ',MhiagosControl.tray.ico'),
     ('/resource:' + (Join-Path $root 'assets\MhiagosControl.ico')  + ',MhiagosControl.app.ico'),
-    ('/resource:' + (Join-Path $root 'assets\cooler.png')          + ',MhiagosControl.cooler.png')
+    ('/resource:' + (Join-Path $root 'assets\cooler.png')          + ',MhiagosControl.cooler.png'),
+    ('/resource:' + (Join-Path $root 'assets\g325.png')            + ',MhiagosControl.g325.png'),
+    ('/resource:' + (Join-Path $root 'assets\x11.png')             + ',MhiagosControl.x11.png'),
+    ('/resource:' + (Join-Path $root 'assets\bluetooth.png')       + ',MhiagosControl.bluetooth.png')
 )
 foreach ($r in $refs) { $arguments += ('/reference:' + $r) }
 $arguments += $srcs

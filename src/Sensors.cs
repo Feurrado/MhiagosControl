@@ -134,14 +134,25 @@ namespace MhiagosControl
             @"#\s*\d+|\bCore\s+\d+\b|\bT\d\b|\(perf[^)]*\)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        public Sensors() : this(new HwInfoSensorSource(), new LibreSensorSource(), new RtssSensorSource()) { }
+        /// <summary>
+        /// Fontes que so acrescentam leituras e nao participam do caminho
+        /// rapido nem da escolha entre HWiNFO e LibreHardwareMonitor - hoje, a
+        /// bateria dos perifericos.
+        /// </summary>
+        private readonly ISensorSource _extra;
+
+        public Sensors() : this(new HwInfoSensorSource(), new LibreSensorSource(), new RtssSensorSource(),
+                                new BateriaSensorSource()) { }
 
         internal Sensors(ISensorSource primary, ISensorSource fallback, ISensorSource auxiliary)
+            : this(primary, fallback, auxiliary, null) { }
+
+        internal Sensors(ISensorSource primary, ISensorSource fallback, ISensorSource auxiliary, ISensorSource extra)
         {
             if (primary == null) throw new ArgumentNullException("primary");
             if (fallback == null) throw new ArgumentNullException("fallback");
             if (auxiliary == null) throw new ArgumentNullException("auxiliary");
-            _primary = primary; _fallback = fallback; _auxiliary = auxiliary;
+            _primary = primary; _fallback = fallback; _auxiliary = auxiliary; _extra = extra;
         }
 
         public bool HwInfoActive { get { return _primary.Available; } }
@@ -160,6 +171,7 @@ namespace MhiagosControl
             bool fallback = false;
             if (!primary) fallback = _fallback.Open();
             _auxiliary.Open();
+            if (_extra != null) _extra.Open();
 
             if (!primary && !fallback)
                 throw new Exception("nenhuma fonte de sensores disponivel");
@@ -236,7 +248,8 @@ namespace MhiagosControl
             if (_primary.Available) raw.AddRange(_primary.Read(focus));
             if (_fallback.Available) raw.AddRange(_fallback.Read(focus));
             if (_auxiliary.Available) raw.AddRange(_auxiliary.Read(focus));
-            _dirigida = (_primary.Available && !_primary.LastReadComplete) ||
+            if (_extra != null && _extra.Available) raw.AddRange(_extra.Read(focus));
+            _dirigida =(_primary.Available && !_primary.LastReadComplete) ||
                         (_fallback.Available && !_fallback.LastReadComplete) ||
                         (_auxiliary.Available && !_auxiliary.LastReadComplete);
             return raw;
@@ -332,9 +345,12 @@ namespace MhiagosControl
         /// </summary>
         public const string CategoriaJogos = "Jogos";
 
+        /// <summary>Categoria da bateria do headset, do mouse e dos aparelhos Bluetooth.</summary>
+        public const string CategoriaPerifericos = "Periféricos";
+
         public static readonly string[] Categories = new string[]
         {
-            "CPU", "GPU", CategoriaJogos, "Placa-mãe", "Memória", "Disco", "Rede", "Outros"
+            "CPU", "GPU", CategoriaJogos, "Placa-mãe", "Memória", "Disco", "Rede", CategoriaPerifericos, "Outros"
         };
 
         internal static string CategoryOf(HardwareType t)
@@ -743,6 +759,7 @@ namespace MhiagosControl
         public void Dispose()
         {
             try { _auxiliary.Dispose(); } catch { }
+            try { if (_extra != null) _extra.Dispose(); } catch { }
             try { _fallback.Dispose(); } catch { }
             try { _primary.Dispose(); } catch { }
         }

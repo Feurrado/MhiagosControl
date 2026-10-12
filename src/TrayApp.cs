@@ -155,6 +155,7 @@ namespace MhiagosControl
             BuildMenu();
 
             IniciarVigiaDeAtivacao();
+            Perifericos.Iniciar(_stop);
 
             // A abertura das fontes NAO acontece aqui. Ela e agendada para
             // depois que Application.Run assumir: veja AbrirSensores.
@@ -843,7 +844,21 @@ namespace MhiagosControl
             if (ocioso) text += T.TagIdle;
             if (v1.Clamped || v2.Clamped) text += T.TagOver;
             if (!ok) text += T.TagNoDevice;
-            SetTooltip(text);
+            SetTooltip(ComBateria(text, Perifericos.Resumo()));
+
+            Periferico[] perifericos = Perifericos.Atual;
+            foreach (KeyValuePair<Periferico, int> aviso in _avisosDeBateria.Verificar(perifericos))
+                AvisarBateria(aviso.Key, aviso.Value);
+            try { HistoricoDeBateria.Registrar(perifericos, DateTime.Now); }
+            catch (Exception ex) { Log.Error("historico de bateria", ex); }
+
+            foreach (Periferico cheio in _avisosDeBateria.VerificarCargaCompleta(perifericos))
+                Notificar(T.BatteryFullTitle(cheio.Nome), T.BatteryFullText, ToolTipIcon.Info, "carga completa: " + cheio.Nome);
+            foreach (KeyValuePair<Periferico, double> pouco in _avisosDeBateria.VerificarTempo(perifericos, HistoricoDeBateria.Restante))
+                Notificar(T.BatteryTimeTitle(pouco.Key.Nome, HistoricoDeBateria.DuracaoAproximada(pouco.Value)),
+                          T.BatteryTimeText, ToolTipIcon.Warning, "pouco tempo de bateria: " + pouco.Key.Nome);
+
+            AtualizarIconeDaBandeja(perifericos);
         }
 
         /// <summary>Mescla somente FPS/frametime no instantâneo da janela.</summary>
@@ -954,6 +969,131 @@ namespace MhiagosControl
             if (ocioso == _apagado) return;
             _apagado = ocioso;
             Log.Write(ocioso ? "mostrador apagado por ociosidade" : "mostrador religado");
+        }
+
+        /// <summary>
+        /// Acrescenta a linha da bateria dos perifericos a dica do icone.
+        ///
+        /// O NotifyIcon do .NET Framework recusa mais de 63 caracteres. Quando
+        /// nao cabe, quem encolhe e a primeira linha: as etiquetas do fim dela
+        /// ([ocioso], [painel ausente]) valem menos que a carga, que e o que a
+        /// pessoa veio olhar ao passar o mouse.
+        /// </summary>
+        /// <summary>So a thread de atualizacao toca nele.</summary>
+        private readonly AvisosDeBateria _avisosDeBateria = new AvisosDeBateria();
+
+        /// <summary>
+        /// Notificacao do Windows pela bandeja. No Windows 10 e 11 o balao do
+        /// NotifyIcon vira uma notificacao comum, com o nome do app e lugar
+        /// na central de notificacoes - sem registrar AUMID nem atalho.
+        /// </summary>
+        private void AvisarBateria(Periferico p, int limiar)
+        {
+            string titulo = T.BatteryLowTitle(p.Nome, p.Bateria ?? limiar);
+            string texto = limiar <= AvisosDeBateria.Critica ? T.BatteryCriticalText : T.BatteryLowText;
+            Notificar(titulo, texto, ToolTipIcon.Warning, "aviso de bateria: " + p.Nome + " " + p.Bateria + "%");
+        }
+
+        private void Notificar(string titulo, string texto, ToolTipIcon icone, string registro)
+        {
+            Log.Write(registro);
+            Marshal(delegate
+            {
+                try
+                {
+                    if (_icon != null && _icon.Visible)
+                        _icon.ShowBalloonTip(10000, titulo, texto, icone);
+                }
+                catch (Exception ex) { Log.Error("notificacao de bateria", ex); }
+            });
+        }
+
+        // ---------------- icone da bandeja com alerta ----------------
+
+        private Icon _iconBaixa;
+        private IntPtr _hIconBaixa = IntPtr.Zero;
+        private bool _mostrandoBaixa = false;
+
+        [DllImport("user32.dll")]
+        private static extern bool DestroyIcon(IntPtr handle);
+
+        /// <summary>
+        /// Algum aparelho fora do cabo com 30% ou menos? O mesmo limiar do
+        /// primeiro aviso: a notificacao passa, a pilhinha no icone fica.
+        /// </summary>
+        internal static bool AlgumBaixo(Periferico[] itens)
+        {
+            if (itens == null) return false;
+            foreach (Periferico p in itens)
+                if (p != null && p.Bateria.HasValue && !p.Carregando && p.Bateria.Value <= AvisosDeBateria.Baixa)
+                    return true;
+            return false;
+        }
+
+        /// <summary>Troca o icone so na mudanca de estado; o desenho e feito uma vez.</summary>
+        private void AtualizarIconeDaBandeja(Periferico[] itens)
+        {
+            bool baixo = AlgumBaixo(itens);
+            if (baixo == _mostrandoBaixa) return;
+            _mostrandoBaixa = baixo;
+            Marshal(delegate
+            {
+                try
+                {
+                    if (_icon == null || IsStopping) return;
+                    if (baixo && _iconBaixa == null) _iconBaixa = IconeComPilha(_iconNormal);
+                    _icon.Icon = baixo && _iconBaixa != null ? _iconBaixa : _iconNormal;
+                }
+                catch (Exception ex) { Log.Error("icone da bandeja com alerta", ex); }
+            });
+        }
+
+        /// <summary>O icone do app com uma pilhinha vermelha no canto de baixo.</summary>
+        private Icon IconeComPilha(Icon baseIcon)
+        {
+            if (baseIcon == null) return null;
+            using (Bitmap bmp = DesenharIconeComPilha(baseIcon, System.Windows.Forms.SystemInformation.SmallIconSize))
+            {
+                _hIconBaixa = bmp.GetHicon();
+                return Icon.FromHandle(_hIconBaixa);
+            }
+        }
+
+        internal static Bitmap DesenharIconeComPilha(Icon baseIcon, Size tam)
+        {
+            Bitmap bmp = new Bitmap(tam.Width, tam.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawIcon(baseIcon, new Rectangle(0, 0, tam.Width, tam.Height));
+
+                // Pilha deitada na metade de baixo, sobre um fundo escuro para
+                // ler em qualquer cor de barra de tarefas. Em 16 px cada pixel
+                // conta: corpo, polo e um nivel curto, nada mais.
+                float u = tam.Width / 16f;
+                RectangleF corpo = new RectangleF(3 * u, tam.Height - 8 * u, 10.5f * u, 7 * u);
+                using (SolidBrush fundo = new SolidBrush(Color.FromArgb(240, 24, 24, 24)))
+                    g.FillRectangle(fundo, corpo.X - u, corpo.Y - u, corpo.Width + 3.5f * u, corpo.Height + 2 * u);
+                using (Pen pen = new Pen(Ui.Danger, 1.2f * u))
+                    g.DrawRectangle(pen, corpo.X, corpo.Y, corpo.Width, corpo.Height);
+                using (SolidBrush b = new SolidBrush(Ui.Danger))
+                {
+                    g.FillRectangle(b, corpo.Right + 0.6f * u, corpo.Y + 2 * u, 1.4f * u, corpo.Height - 4 * u);
+                    g.FillRectangle(b, corpo.X + 1.8f * u, corpo.Y + 1.8f * u, 2.6f * u, corpo.Height - 3.6f * u);
+                }
+            }
+            return bmp;
+        }
+
+        internal static string ComBateria(string text, string bateria)
+        {
+            if (string.IsNullOrEmpty(bateria)) return text;
+            const int Max = 63;
+            if (bateria.Length > Max - 10) bateria = bateria.Substring(0, Max - 13) + "...";
+            int sobra = Max - 1 - bateria.Length;
+            if (text.Length > sobra) text = text.Substring(0, sobra - 3) + "...";
+            return text + "\n" + bateria;
         }
 
         private void SetTooltip(string text)
@@ -1186,18 +1326,26 @@ namespace MhiagosControl
             bool painelParou = EsperarKeepalive(budget);
             bool aberturaParou = EsperarThread(_sensorInit, "abertura de sensores", budget);
             bool ativacaoParou = EsperarThread(_activationWatcher, "ativacao", budget);
+            bool bateriaParou = Perifericos.Esperar(ShutdownTimeoutMs - (int)budget.ElapsedMilliseconds);
+            if (!bateriaParou) Log.Write("leitores de bateria nao encerraram a tempo");
 
             // Depois de a thread parar: gravar com ela viva copiaria uma serie
             // no meio de um balde sendo fechado. Pelo mesmo motivo, se uma
             // thread resistir ao timeout, nao fechamos painel ou sensores sob os
             // pes dela: o processo esta saindo e o Windows libera os handles.
+            // Os leitores de bateria nao tocam no painel nem nos sensores: um G HUB
+            // lento para responder nao pode impedir o painel de ser fechado. So o
+            // _stop, em que eles esperam, depende de terem parado.
             bool podeDescartarRecursos = workerParou && painelParou && aberturaParou && ativacaoParou;
             try { MetricHistory.Salvar(); } catch (Exception ex) { Log.Error("gravacao do historico", ex); }
+            try { HistoricoDeBateria.Salvar(); } catch (Exception ex) { Log.Error("gravacao do historico de bateria", ex); }
             if (!podeDescartarRecursos)
                 Log.Write("encerramento: recursos de hardware ficarao para o termino do processo");
 
             if (_icon != null) { _icon.Visible = false; _icon.Dispose(); }
             if (_iconNormal != null) _iconNormal.Dispose();
+            if (_iconBaixa != null) _iconBaixa.Dispose();
+            if (_hIconBaixa != IntPtr.Zero) { DestroyIcon(_hIconBaixa); _hIconBaixa = IntPtr.Zero; }
 
             if (podeDescartarRecursos)
             {
@@ -1209,7 +1357,7 @@ namespace MhiagosControl
             }
             _panelKeepalive.Dispose();
             if (_marshal != null) _marshal.Dispose();
-            if (podeDescartarRecursos) _stop.Dispose();
+            if (podeDescartarRecursos && bateriaParou) _stop.Dispose();
 
             Volatile.Write(ref _runtimeState, (int)RuntimeState.Stopped);
             Log.Write("=== encerrado ===");

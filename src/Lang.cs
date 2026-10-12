@@ -402,6 +402,7 @@ namespace MhiagosControl
                 case "Memória": return "Memory";
                 case "Disco": return "Disk";
                 case "Rede": return "Network";
+                case "Periféricos": return "Peripherals";
                 case "Outros": return "Other";
                 default: return canonical;      // CPU e GPU nao mudam
             }
@@ -821,6 +822,100 @@ namespace MhiagosControl
         public static string TagIdle { get { return P("  [ocioso]", "  [idle]"); } }
         public static string TagOver { get { return P("  [excede 999]", "  [over 999]"); } }
         public static string TagNoDevice { get { return P("  [painel ausente]", "  [panel missing]"); } }
+
+        // Bateria dos perifericos sem fio, na Visao geral
+        public static string NoPeripherals
+        {
+            get { return P("Nenhum periférico sem fio encontrado (o G HUB precisa estar aberto para o headset)",
+                           "No wireless peripherals found (G HUB must be running for the headset)"); }
+        }
+        public static string PeripheralOff { get { return P("desligado", "off"); } }
+        public static string PeripheralCharging { get { return P("carregando", "charging"); } }
+        public static string PeripheralNoReading { get { return P("conectado, sem leitura de bateria", "connected, no battery reading"); } }
+        public static string BluetoothNone { get { return P("Ligado - nenhum conectado", "On - none connected"); } }
+        public static string BluetoothOff { get { return P("Desligado", "Off"); } }
+
+        // Pagina Baterias
+        public static string NavBatteries { get { return P("Baterias", "Batteries"); } }
+        public static string BatNoDevices
+        {
+            get { return P("Nenhum periférico com bateria lido ainda. Ligue o headset ou o mouse e a análise começa sozinha.",
+                           "No battery reading yet. Turn the headset or mouse on and tracking starts by itself."); }
+        }
+        public static string ChargingSince(string hora, int pct)
+        {
+            return P("carregando desde " + hora + " (a partir de " + pct + "%)", "charging since " + hora + " (from " + pct + "%)");
+        }
+        public static string BatRemaining { get { return P("Restante estimado", "Estimated remaining"); } }
+        public static string BatRemainingOurs { get { return P("Restante estimado (Mhiagos Control)", "Estimated remaining (Mhiagos Control)"); } }
+        public static string BatRemainingGHub { get { return P("Restante estimado (G HUB)", "Estimated remaining (G HUB)"); } }
+        public static string BatPace { get { return P("Ritmo por faixa", "Pace by range"); } }
+        public static string PaceEven { get { return P("parecido em todas as faixas", "about the same in every range"); } }
+        public static string PaceFastest(int de, int ate)
+        {
+            return P("gasta mais rápido entre " + de + "% e " + ate + "%", "drains fastest between " + de + "% and " + ate + "%");
+        }
+        public static string BatTotalUse { get { return P("Uso total acompanhado", "Total use tracked"); } }
+        public static string OpenGHubToRead { get { return P("abra o G HUB para ler", "open G HUB to read"); } }
+        public static string FullyCharged { get { return P("carga completa", "fully charged"); } }
+        public static string FullIn(string duracao) { return P("cheio em ~" + duracao, "full in ~" + duracao); }
+        public static string BatHealth { get { return P("Saúde da bateria", "Battery health"); } }
+        public static string HealthMeasuring
+        {
+            get { return P("medindo (precisa de algumas semanas de uso)", "measuring (needs a few weeks of use)"); }
+        }
+        public static string HealthPerCharge(string duracao, string mes) { return P(duracao + " por carga (" + mes + ")", duracao + " per charge (" + mes + ")"); }
+        public static string HealthFirstMonth { get { return P("1º mês medido", "1st month measured"); } }
+        public static string HealthVersus(string duracao, string mes, string variacao)
+        {
+            return P(variacao + " desde " + mes, variacao + " since " + mes);
+        }
+        public static string BatteryFullTitle(string nome) { return P(nome + " carregado", nome + " charged"); }
+        public static string BatteryFullText { get { return P("Chegou a 100%. Já pode tirar do cabo.", "It reached 100%. You can unplug it."); } }
+        public static string BatteryTimeTitle(string nome, string duracao)
+        {
+            return P(nome + ": ~" + duracao + " de uso restante", nome + ": ~" + duracao + " of use left");
+        }
+        public static string BatteryTimeText
+        {
+            get { return P("Pelo seu ritmo de uso, a bateria está perto do fim.", "At your usual pace, the battery is about to run out."); }
+        }
+        public static string MetricBattery(string nome) { return P("Bateria do " + nome, nome + " battery"); }
+        public static string OpenBatteriesPage { get { return P("Ver detalhes na página Baterias", "See details on the Batteries page"); } }
+        public static string BatPerCharge { get { return P("Duração de uma carga cheia", "Full charge lasts"); } }
+        public static string BatLastCharge { get { return P("Última carga", "Last charge"); } }
+        public static string BatSinceCharge { get { return P("Desde a última carga", "Since last charge"); } }
+        public static string BatLastDischarge { get { return P("Última descarga completa", "Last full discharge"); } }
+        public static string BatMeasuring { get { return P("medindo (precisa de 10% gastos)", "measuring (needs 10% used)"); } }
+        public static string BatNotSeenYet { get { return P("ainda não registrada", "not recorded yet"); } }
+        public static string BatNoCurve { get { return P("a curva aparece com as primeiras leituras", "the curve shows up with the first readings"); } }
+        public static string ByGHub(int horas) { return P("G HUB: " + horas + " h", "G HUB: " + horas + " h"); }
+        public static string UseHours(string duracao) { return P(duracao + " de uso", duracao + " of use"); }
+        public static string Discharges(int n)
+        {
+            return P(n == 1 ? "1 descarga" : n + " descargas", n == 1 ? "1 discharge" : n + " discharges");
+        }
+        public static string UpTo(int pct) { return P("até " + pct + "%", "up to " + pct + "%"); }
+        public static string TookTime(string duracao) { return P("levou " + duracao, "took " + duracao); }
+        public static string SinceTracking(string quando) { return P("acompanhando desde " + quando, "tracking since " + quando); }
+        public static string EndedAt(string quando) { return P("terminou " + quando, "ended " + quando); }
+        public static string Today { get { return P("hoje", "today"); } }
+        public static string Yesterday { get { return P("ontem", "yesterday"); } }
+        public static string Now { get { return P("agora", "now"); } }
+        public static string HoursAgo(int h) { return P(h + " h atrás", h + " h ago"); }
+        public static string OpenBluetooth { get { return P("Abrir o painel de Bluetooth", "Open the Bluetooth panel"); } }
+        public static string OpenApp(string app) { return P("Abrir o " + app, "Open " + app); }
+
+        // Avisos do Windows quando a carga cai
+        public static string BatteryLowTitle(string nome, int pct)
+        {
+            return P(nome + " com " + pct + "% de bateria", nome + " at " + pct + "% battery");
+        }
+        public static string BatteryLowText { get { return P("A bateria está acabando.", "The battery is running low."); } }
+        public static string BatteryCriticalText
+        {
+            get { return P("Bateria quase no fim, coloque para carregar.", "Battery almost empty, plug it in to charge."); }
+        }
 
         // Identificacao do painel na aba Sobre. So o Temp 6 Pro Black foi
         // testado; quem tiver outro modelo do fabricante copia esta linha para

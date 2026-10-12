@@ -128,6 +128,13 @@ namespace MhiagosControl
         public bool SidebarCollapsed = false;
 
         /// <summary>
+        /// Ordem das paginas na barra lateral, como chaves separadas por
+        /// virgula. Vazio e a ordem de fabrica; chave desconhecida e ignorada e
+        /// pagina nova que nao esta na lista entra no fim, antes de Sobre.
+        /// </summary>
+        public string NavOrder = "";
+
+        /// <summary>
         /// Cartoes da aba Metricas, na ordem em que aparecem.
         ///
         /// Vazio significa "ainda nao escolhido", e nao "nenhum": a primeira
@@ -205,6 +212,7 @@ namespace MhiagosControl
             IdleBlankMinutes = other.IdleBlankMinutes;
             RotateSeconds = other.RotateSeconds;
             SidebarCollapsed = other.SidebarCollapsed;
+            NavOrder = other.NavOrder;
             MetricsChosen = other.MetricsChosen;
             MetricRange = other.MetricRange;
             WindowW = other.WindowW;
@@ -544,6 +552,7 @@ namespace MhiagosControl
                         else if (k == "idleblank") c.IdleBlankMinutes = ParseTiming(v, strictTiming);
                         else if (k == "rotateseconds") c.RotateSeconds = ParseTiming(v, strictTiming);
                         else if (k == "sidebarcollapsed") c.SidebarCollapsed = (v == "1");
+                        else if (k == "navorder") c.NavOrder = v;
                         else if (k == "metricschosen") c.MetricsChosen = (v == "1");
                         else if (k == "metricrange") c.MetricRange = MetricHistory.JanelaValida(ParseInt(v));
                         else if (k == "windoww") c.WindowW = ParseInt(v);
@@ -751,6 +760,7 @@ namespace MhiagosControl
                 sb.AppendLine("idleblank=" + IdleBlankMinutes.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("rotateseconds=" + RotateSeconds.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("sidebarcollapsed=" + (SidebarCollapsed ? "1" : "0"));
+                if (!string.IsNullOrEmpty(NavOrder)) sb.AppendLine("navorder=" + NavOrder);
                 sb.AppendLine("metricschosen=" + (MetricsChosen ? "1" : "0"));
                 sb.AppendLine("metricrange=" + MetricRange.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("windoww=" + WindowW.ToString(CultureInfo.InvariantCulture));

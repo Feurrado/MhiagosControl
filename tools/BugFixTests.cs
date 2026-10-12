@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
@@ -43,6 +44,299 @@ namespace MhiagosControl
             RegressionBugGeometry(root);
             RegressionVideoMemory();
             RegressionReviewFixes();
+            RegressionPeripheralBattery();
+            RegressionBatteryHistory();
+            RegressionNavOrder(root);
+        }
+
+        private static void RegressionNavOrder(string root)
+        {
+            Secao("barra lateral: ordem escolhida pela pessoa");
+
+            string[] chaves = { "visao", "paineis", "metricas", "specs", "perfis", "config", "baterias", "sobre" };
+            NavItem[] fabrica = new NavItem[chaves.Length];
+            for (int i = 0; i < chaves.Length; i++) { fabrica[i] = new NavItem(); fabrica[i].Key = chaves[i]; }
+            Func<List<NavItem>, string> junta = delegate(List<NavItem> l)
+            {
+                List<string> s = new List<string>();
+                foreach (NavItem it in l) s.Add(it.Key);
+                return string.Join(",", s.ToArray());
+            };
+
+            Igual(string.Join(",", chaves), junta(SettingsForm.OrdemDaBarra(fabrica, "")), "sem ordem gravada vale a de fabrica");
+            string trocada = "baterias,visao,paineis,metricas,specs,perfis,config,sobre";
+            Igual(trocada, junta(SettingsForm.OrdemDaBarra(fabrica, trocada)), "ordem gravada e respeitada");
+            Igual(trocada, junta(SettingsForm.OrdemDaBarra(fabrica, "baterias,fantasma,visao,visao,paineis,metricas,specs,perfis,config,sobre")),
+                "chave desconhecida e repetida sao ignoradas");
+            Igual("visao,paineis,metricas,specs,perfis,config,baterias,sobre",
+                junta(SettingsForm.OrdemDaBarra(fabrica, "visao,paineis,metricas,specs,perfis,config,sobre")),
+                "pagina nova entra no lugar dela, depois da vizinha de fabrica");
+
+            using (NavBar nav = new NavBar())
+            {
+                foreach (NavItem it in fabrica) nav.Add(it);
+                nav.SelectedIndex = 2;   // metricas aberta
+                int avisos = 0;
+                nav.OrderChanged += delegate { avisos++; };
+                nav.MoverItem(2, 6);
+                Igual("metricas", nav.Items[6].Key, "item vai para a posicao pedida");
+                Igual(6, nav.SelectedIndex, "a pagina aberta continua aberta depois de arrastada");
+                Igual(1, avisos, "mudar a ordem avisa uma vez");
+                nav.MoverItem(0, 1);
+                Igual("metricas", nav.Selected.Key, "mover outra pagina nao troca a aberta");
+                nav.MoverItem(3, 3);
+                Igual(2, avisos, "mover para o mesmo lugar nao avisa");
+            }
+
+            // janela de verdade: a ordem gravada vale, o atalho da Visao geral acha
+            // Baterias onde ela estiver, e reordenar grava sozinho
+            Config config = AuditConfig(root, "nav-order");
+            config.NavOrder = trocada;
+            config.Save();
+            using (SettingsForm form = BugForm(config, new FreshData()))
+            {
+                NavBar nav = (NavBar)Field(form, "_nav");
+                Igual("baterias", nav.Items[0].Key, "janela abre com a ordem gravada");
+                nav.SelectedIndex = 3;
+                InvokePrivate(form, "AbrirPaginaPelaChave", "baterias");
+                Igual("baterias", nav.Selected.Key, "clique no aparelho da Visao geral abre Baterias");
+                nav.MoverItem(0, 7);
+                Igual("baterias", Config.LoadFrom(config.SavePath, false).NavOrder.Split(',')[7],
+                    "reordenar grava a ordem nova na hora");
+
+                PeripheralStrip tira = (PeripheralStrip)Field(form, "_cardPerif");
+                MethodInfo vai = typeof(PeripheralStrip).GetMethod("VaiParaBaterias", BindingFlags.NonPublic | BindingFlags.Instance);
+                Verdade((bool)vai.Invoke(tira, new object[] {
+                    Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 70, false) }),
+                    "headset da Visao geral leva a Baterias");
+                Verdade((bool)vai.Invoke(tira, new object[] {
+                    Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado) }),
+                    "mouse desligado tambem leva a Baterias, onde esta o historico dele");
+                Verdade(!(bool)vai.Invoke(tira, new object[] {
+                    Periferico.Sem("Bluetooth", TipoPeriferico.Outro, FontePeriferico.Bluetooth, EstadoPeriferico.RadioDesligado) }),
+                    "campo Bluetooth vazio continua abrindo o painel do Windows");
+            }
+        }
+
+        private static void RegressionBatteryHistory()
+        {
+            Secao("bateria dos perifericos: historico de cargas e descargas");
+
+            string pasta = Path.Combine(Path.GetTempPath(), "mhiagos-bat-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(pasta);
+            HistoricoDeBateria.Caminho = Path.Combine(pasta, "baterias.dat");
+            HistoricoDeBateria.Zerar();
+            try
+            {
+                const string Nome = "MouseDeTeste";
+                string chave = FontePeriferico.AttackShark + "|" + Nome;
+                DateTime t = new DateTime(2026, 10, 1, 8, 0, 0);
+                Func<int, bool, Periferico[]> leitura = delegate(int pct, bool cabo)
+                {
+                    return new Periferico[] { Periferico.Lido(Nome, TipoPeriferico.Mouse, FontePeriferico.AttackShark, pct, cabo) };
+                };
+                // sem leitura viva: a analise sai so do historico
+                Func<AnaliseDeBateria> analise = delegate
+                {
+                    foreach (AnaliseDeBateria a in HistoricoDeBateria.Analisar(null))
+                        if (a.Chave == chave) return a;
+                    return null;
+                };
+
+                // 2 h de uso, de 90 a 70%, em passos de 10 s
+                for (int s = 0; s <= 7200; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(90 - 20 * s / 7200, false), t.AddSeconds(s));
+                AnaliseDeBateria r = analise();
+                Verdade(r.Atual != null && r.Atual.Parcial, "abrir no meio da descarga marca a medicao como parcial");
+                Igual(2.0, Math.Round(r.Atual.UsoSegundos / 3600.0, 2), "uso conta o tempo ligado");
+
+                // uma hora desligado nao e uso
+                t = t.AddSeconds(7200 + 3600);
+                HistoricoDeBateria.Registrar(leitura(70, false), t);
+                Igual(2.0, Math.Round(analise().Atual.UsoSegundos / 3600.0, 2), "lacuna de aparelho desligado nao conta como uso");
+
+                // carregador: 70 a 100% em 30 min
+                for (int s = 10; s <= 1800; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(70 + 30 * s / 1800, true), t.AddSeconds(s));
+                r = analise();
+                Verdade(r.Atual == null, "ir para o carregador encerra a descarga");
+                Igual(10.0, Math.Round(r.HorasPorCargaCheia.Value, 1), "20 pontos em 2 h dao 10 h por carga cheia");
+                Igual(1, r.DescargasMedidas, "uma descarga medida");
+
+                t = t.AddSeconds(1810);
+                HistoricoDeBateria.Registrar(leitura(100, false), t);
+                r = analise();
+                Igual(100, r.UltimaCarga.PctFim, "ultima carga registra ate onde foi");
+                Igual(70, r.UltimaCarga.PctInicio, "e de onde partiu");
+                Igual(30.0, Math.Round((r.UltimaCarga.Fim - r.UltimaCarga.Inicio).TotalMinutes), "e quanto levou");
+                Verdade(r.Atual != null && !r.Atual.Parcial, "descarga que comeca no fim de uma carga nao e parcial");
+
+                // fora do cabo a leitura assenta (100 cai a 95 sozinha) e so depois gasta
+                for (int s = 10; s <= 600; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(95, false), t.AddSeconds(s));
+                Igual(95, analise().Atual.PctInicio, "queda logo depois do cabo nao conta como gasto");
+
+                // 1 h de uso, 95 a 75%: a media passa a incluir a descarga em andamento
+                t = t.AddSeconds(600);
+                for (int s = 10; s <= 3600; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(95 - 20 * s / 3600, false), t.AddSeconds(s));
+                r = analise();
+                // faixas: 71-80% gastou 15 pontos em 4500 s, 81-90% 20 em 5400 s,
+                // 91-100% 5 em 900 s; as demais ficam na media (270 s/ponto),
+                // e cada faixa e puxada para a media com peso de 5 pontos
+                Igual(7.4, Math.Round(r.HorasPorCargaCheia.Value, 1), "duracao soma o ritmo de cada faixa");
+                Verdade(r.HorasPorPontoNaFaixa[9].Value < r.HorasPorPontoNaFaixa[7].Value,
+                    "faixa que gastou mais depressa fica com ritmo mais curto");
+                Verdade(!r.HorasPorPontoNaFaixa[3].HasValue, "faixa sem gasto medido fica sem ritmo proprio");
+                Igual(3.17, Math.Round(r.UsoTotalHoras, 2), "uso total soma todas as descargas, assentamento incluido");
+                Verdade(!r.HorasRestantes.HasValue, "sem leitura viva nao ha previsao de restante");
+                AnaliseDeBateria viva = null;
+                foreach (AnaliseDeBateria a in HistoricoDeBateria.Analisar(leitura(75, false)))
+                    if (a.Chave == chave) viva = a;
+                Igual(5.7, Math.Round(viva.HorasRestantes.Value, 1), "restante soma as faixas abaixo da carga atual");
+                Igual(viva.HorasRestantes, HistoricoDeBateria.Restante(leitura(75, false)[0]),
+                    "a Visao geral usa a mesma previsao da pagina Baterias");
+
+                // um degrau de volta (como o G325 faz em repouso) nao e carga
+                t = t.AddSeconds(3610);
+                HistoricoDeBateria.Registrar(leitura(84, false), t);
+                Verdade(analise().UltimaCarga != null && !analise().UltimaCarga.Deduzida, "subida pequena nao vira carga");
+
+                // subir muito sem aviso de carga conta como carga feita fora da vista
+                t = t.AddSeconds(10);
+                HistoricoDeBateria.Registrar(leitura(97, false), t);
+                r = analise();
+                Verdade(r.UltimaCarga.Deduzida, "subida sem aviso vira carga deduzida");
+                Igual(2, r.DescargasMedidas, "e fecha a descarga anterior");
+
+                // gravar e reler preserva o essencial
+                HistoricoDeBateria.Salvar();
+                HistoricoDeBateria.Recarregar();
+                AnaliseDeBateria lida = analise();
+                Verdade(lida != null, "historico sobrevive a gravacao");
+                Igual(r.HorasPorCargaCheia.Value, lida.HorasPorCargaCheia.Value, "media igual depois de reler");
+                Igual(r.UltimaCarga.Fim, lida.UltimaCarga.Fim, "ultima carga igual depois de reler");
+                Igual(r.Amostras.Length, lida.Amostras.Length, "amostras iguais depois de reler");
+
+                Igual("45 min", HistoricoDeBateria.Duracao(0.75), "duracao curta em minutos");
+                Igual("12 h 30 min", HistoricoDeBateria.Duracao(12.5), "duracao em horas e minutos");
+                Igual("3 d 4 h", HistoricoDeBateria.Duracao(76), "duracao longa em dias");
+
+                // a carga de 70 a 100% levou 60 s por ponto: de 50 faltam 50 pontos
+                Igual(0.83, Math.Round(HistoricoDeBateria.AteEncher(leitura(50, true)[0]).Value, 2),
+                    "cheio em sai do ritmo de carga registrado");
+                Igual(0.0, HistoricoDeBateria.AteEncher(leitura(100, true)[0]).Value, "em 100% no cabo ja esta cheio");
+                Verdade(!HistoricoDeBateria.AteEncher(leitura(50, false)[0]).HasValue, "fora do cabo nao ha cheio em");
+
+                // saude: o mes de outubro mediu 40 pontos em 3 h de uso
+                Igual(1, lida.SaudePorMes.Count, "um mes com dado bastante");
+                Igual(7.5, Math.Round(lida.SaudePorMes[0].Value, 1), "horas por carga cheia do mes");
+
+                // bateria como sensor: o aparelho conhecido entra na lista mesmo desligado
+                SensorEntry sensor = null;
+                foreach (SensorEntry e in new BateriaSensorSource().Read(null))
+                    if (e.Id == "bat:attackshark:" + Nome) sensor = e;
+                Verdade(sensor != null, "aparelho do historico vira sensor");
+                Igual("%", sensor.EffectiveUnit, "sensor de bateria em porcentagem");
+                Igual(Sensors.CategoriaPerifericos, sensor.Category, "na categoria Perifericos");
+                float? atencao, perigo;
+                MetricPicker.Faixas("%", sensor.Id, out atencao, out perigo);
+                Verdade(!atencao.HasValue && !perigo.HasValue, "bateria cheia nao pinta o grafico de vermelho");
+                Igual("41 h", HistoricoDeBateria.DuracaoAproximada(40.69), "previsao longa arredonda na hora");
+                Igual("2 h 20 min", HistoricoDeBateria.DuracaoAproximada(2.37), "previsao curta arredonda de 10 em 10 min");
+                Igual("20 min", HistoricoDeBateria.DuracaoAproximada(0.31), "previsao de minutos arredonda de 5 em 5");
+            }
+            finally
+            {
+                HistoricoDeBateria.Caminho = null;
+                // Rele o arquivo de verdade em vez de zerar: com o historico vazio
+                // e marcado como lido, o proximo Registrar dos testes da bandeja
+                // gravaria por cima do baterias.dat de quem roda a suite.
+                HistoricoDeBateria.Recarregar();
+                try { Directory.Delete(pasta, true); } catch { }
+            }
+        }
+
+        private static void RegressionPeripheralBattery()
+        {
+            Secao("bateria dos perifericos: dica da bandeja e avisos");
+
+            string dica = TrayContext.ComBateria("Mhiagos Control  63C / 42%", "G325 70%  X11 90%");
+            Igual("Mhiagos Control  63C / 42%\nG325 70%  X11 90%", dica, "bateria vira a segunda linha da dica");
+            Igual("abc", TrayContext.ComBateria("abc", null), "sem perifericos a dica nao muda");
+            string longa = TrayContext.ComBateria(new string('x', 80), "G325 70%  X11 90%");
+            Verdade(longa.Length <= 63, "dica nunca passa do limite do NotifyIcon");
+            Verdade(longa.EndsWith("\nG325 70%  X11 90%"), "quem encolhe e a primeira linha, nao a bateria");
+
+            AvisosDeBateria avisos = new AvisosDeBateria();
+            Func<int, bool, int> passo = delegate(int pct, bool carregando)
+            {
+                List<KeyValuePair<Periferico, int>> r = avisos.Verificar(new Periferico[] {
+                    Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, pct, carregando) });
+                return r.Count == 0 ? 0 : r[0].Value;
+            };
+            Igual(0, passo(50, false), "carga alta nao avisa");
+            Igual(30, passo(30, false), "30% avisa");
+            Igual(0, passo(29, false), "aviso de 30% sai uma vez so");
+            Igual(0, passo(31, false), "oscilar perto do limiar nao repete o aviso");
+            Igual(10, passo(10, false), "10% avisa de novo");
+            Igual(0, passo(8, false), "aviso de 10% sai uma vez so");
+            Igual(0, passo(9, true), "no carregador nao avisa");
+            Igual(30, passo(12, false), "tirar do carregador ainda abaixo de 30 avisa de novo");
+            Igual(10, passo(10, false), "depois do carregador, 10% volta a avisar");
+            Igual(0, avisos.Verificar(new Periferico[] {
+                Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado) }).Count,
+                "aparelho desligado nao avisa");
+
+            AvisosDeBateria inicio = new AvisosDeBateria();
+            List<KeyValuePair<Periferico, int>> ja = inicio.Verificar(new Periferico[] {
+                Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 7, false) });
+            Igual(1, ja.Count, "abrir o app ja abaixo de 10% gera um aviso so");
+            Igual(10, ja[0].Value, "e e o aviso critico");
+
+            // carga completa: uma vez por passagem pelo cabo
+            AvisosDeBateria cheio = new AvisosDeBateria();
+            Func<int, bool, int> cabo = delegate(int pct, bool carregando)
+            {
+                return cheio.VerificarCargaCompleta(new Periferico[] {
+                    Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, pct, carregando) }).Count;
+            };
+            Igual(0, cabo(90, true), "no cabo antes de 100% nao avisa");
+            Igual(1, cabo(100, true), "chegar a 100% no cabo avisa");
+            Igual(0, cabo(100, true), "continuar em 100% nao repete");
+            Igual(0, cabo(99, false), "tirar do cabo nao avisa");
+            Igual(1, cabo(100, true), "nova passagem pelo cabo avisa de novo");
+
+            // aviso por tempo: 2 h ou menos, uma vez, rearmando acima de 3 h
+            AvisosDeBateria tempo = new AvisosDeBateria();
+            double? previsto = null;
+            Func<double?, bool, int> horas = delegate(double? h, bool carregando)
+            {
+                previsto = h;
+                return tempo.VerificarTempo(new Periferico[] {
+                    Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 40, carregando) },
+                    delegate(Periferico p) { return previsto; }).Count;
+            };
+            Igual(0, horas(null, false), "sem previsao nao avisa");
+            Igual(0, horas(5, false), "longe do fim nao avisa");
+            Igual(1, horas(1.9, false), "2 h ou menos avisa");
+            Igual(0, horas(1.5, false), "aviso por tempo sai uma vez so");
+            Igual(0, horas(2.5, false), "oscilar perto do limite nao rearma");
+            Igual(0, horas(1.8, false), "e nao repete");
+            Igual(0, horas(3.5, false), "previsao acima de 3 h rearma");
+            Igual(1, horas(1.8, false), "e o aviso volta");
+            Igual(0, horas(1.0, true), "no cabo nao avisa");
+
+            // pilhinha no icone: alguem fora do cabo com 30% ou menos
+            Verdade(!TrayContext.AlgumBaixo(new Periferico[] {
+                Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 31, false) }), "31% nao marca o icone");
+            Verdade(TrayContext.AlgumBaixo(new Periferico[] {
+                Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 70, false),
+                Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 30, false) }), "30% em qualquer aparelho marca");
+            Verdade(!TrayContext.AlgumBaixo(new Periferico[] {
+                Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 12, true) }), "baixo mas no cabo nao marca");
+            Verdade(!TrayContext.AlgumBaixo(new Periferico[] {
+                Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado) }), "desligado nao marca");
         }
 
         private static void RegressionVideoMemory()
@@ -327,7 +621,7 @@ namespace MhiagosControl
                         foreach (int sidebar in new int[] { 60, 210, 330 })
                         {
                             form.Size = size; nav.Width = sidebar;
-                            foreach (int index in new int[] { 2, 6 })
+                            foreach (int index in new int[] { 2, 6, 7 })
                             {
                                 nav.SelectedIndex = index; InvokePrivate(form, "ShowPage");
                                 Control page = nav.Selected.Page;
