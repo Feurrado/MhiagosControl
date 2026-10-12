@@ -266,8 +266,8 @@ namespace MhiagosControl
             {
                 // tinta leve: a de antes (78/92) fechava o desfoque numa mancha
                 // lisa. Sem desfoque precisa de um pouco mais, para o texto
-                // nao brigar com um fundo nitido.
-                int a = nitido ? (escuro ? 64 : 72) : fosco ? (escuro ? 150 : 165) : (escuro ? 36 : 44);
+                // nao brigar com um fundo nitido (com 64 ele sumia em listras).
+                int a = nitido ? (escuro ? 125 : 135) : fosco ? (escuro ? 150 : 165) : (escuro ? 36 : 44);
                 if (sobre) a = Math.Min(255, a + 18);
                 using (SolidBrush tinta = new SolidBrush(escuro ? Color.FromArgb(a, 14, 16, 22) : Color.FromArgb(a, 248, 249, 252)))
                     g.FillPath(tinta, forma);
@@ -527,11 +527,18 @@ namespace MhiagosControl
                 sf.Alignment = h;
                 sf.LineAlignment = v;
                 sf.Trimming = StringTrimming.EllipsisCharacter;
-                if (escuro)
+                // halo em volta das letras, na cor oposta: com o vidro nitido o
+                // fundo aparece inteiro, e sem isso o texto se perde nele
+                using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(90, 0, 0, 0) : Color.FromArgb(110, 255, 255, 255)))
                 {
-                    RectangleF sombra = r;
-                    sombra.Offset(0, 1f);
-                    using (SolidBrush b = new SolidBrush(Color.FromArgb(70, 0, 0, 0))) g.DrawString(texto, fonte, b, sombra, sf);
+                    for (int dx = -1; dx <= 1; dx++)
+                        for (int dy = -1; dy <= 1; dy++)
+                        {
+                            if (dx == 0 && dy == 0) continue;
+                            RectangleF halo = r;
+                            halo.Offset(dx, dy);
+                            g.DrawString(texto, fonte, b, halo, sf);
+                        }
                 }
                 using (SolidBrush b = new SolidBrush(cor)) g.DrawString(texto, fonte, b, r, sf);
             }
