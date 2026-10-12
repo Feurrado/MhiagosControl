@@ -367,7 +367,7 @@ namespace MhiagosControl
             Texto(g, Valor(p), f.Pct, Apagado(p) ? Secundario(escuro) : Primario(escuro), escuro, lPct,
                   StringAlignment.Center, StringAlignment.Center);
             RectangleF lNome = new RectangleF(z.X, y + 20f * s, z.Width, 17f * s);
-            Texto(g, p.Nome, f.Nome, Secundario(escuro), escuro, lNome, StringAlignment.Center, StringAlignment.Center);
+            Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Center, StringAlignment.Center);
         }
 
         // ---------------- lista ----------------
@@ -590,7 +590,7 @@ namespace MhiagosControl
             {
                 // pesos mais grossos: sobre o vidro nitido o traco fino se perde
                 Pct = Criar("Segoe UI", 15f * s, FontStyle.Bold);
-                Nome = Criar("Segoe UI Semibold", 12f * s, FontStyle.Regular);
+                Nome = Criar("Segoe UI", 12.5f * s, FontStyle.Bold);
                 NomeForte = Criar("Segoe UI", 13f * s, FontStyle.Bold);
                 Nota = Criar("Segoe UI Semibold", 11.5f * s, FontStyle.Regular);
             }
