@@ -697,7 +697,8 @@ namespace MhiagosControl
             {
                 CreateParams cp = base.CreateParams;
                 cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
-                if (_cfg.NaFrente) cp.ExStyle |= WS_EX_TOPMOST;
+                // o construtor do Form ja pergunta isto, antes de _cfg existir
+                if (_cfg != null && _cfg.NaFrente) cp.ExStyle |= WS_EX_TOPMOST;
                 return cp;
             }
         }
@@ -738,7 +739,7 @@ namespace MhiagosControl
                 _conferirDesktop.Stop(); _conferirDesktop.Dispose();
                 _dica.Dispose();
                 if (_menu != null) { _menu.Dispose(); _menu = null; }
-                _preferencias.Dispose();
+                if (_preferencias != null) _preferencias.Dispose();
             }
             if (_gancho != IntPtr.Zero) { UnhookWinEvent(_gancho); _gancho = IntPtr.Zero; }
             base.Dispose(disposing);
@@ -1163,7 +1164,7 @@ namespace MhiagosControl
                 m.Result = (IntPtr)MA_NOACTIVATE;
                 return;
             }
-            if (m.Msg == WM_WINDOWPOSCHANGING && !_cfg.NaFrente && !_sobreDesktop && m.LParam != IntPtr.Zero)
+            if (m.Msg == WM_WINDOWPOSCHANGING && _cfg != null && !_cfg.NaFrente && !_sobreDesktop && m.LParam != IntPtr.Zero)
             {
                 try
                 {
