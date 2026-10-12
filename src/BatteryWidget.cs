@@ -312,19 +312,20 @@ namespace MhiagosControl
             float cx = z.X + z.Width / 2f;
             RectangleF anel = new RectangleF(cx - d / 2f + st / 2f, z.Y + st / 2f, d - st, d - st);
 
-            using (Pen trilho = new Pen(Trilho(escuro), st)) g.DrawEllipse(trilho, anel);
-
             Color cor = CorDoNivel(p);
+            // trilho na cor do proprio nivel, apagada, como os aneis do relogio
+            // da Apple: o branco translucido de antes pegava a cor do fundo e
+            // deixava cada anel com cara de lavado
+            Color trilho = p.Bateria.HasValue ? Color.FromArgb(escuro ? 70 : 60, cor) : Trilho(escuro);
+            using (Pen pen = new Pen(trilho, st)) g.DrawEllipse(pen, anel);
+
             if (p.Bateria.HasValue && p.Bateria.Value > 0)
             {
                 float arco = 360f * Math.Min(100, p.Bateria.Value) / 100f;
+                // brilho suave da mesma cor por baixo do arco, no lugar do fio
+                // branco, que parecia uma costura
+                using (Pen luz = Redonda(Color.FromArgb(55, cor), st * 2f)) g.DrawArc(luz, anel, -90f, arco);
                 using (Pen pen = Redonda(cor, st)) g.DrawArc(pen, anel, -90f, arco);
-
-                // um fio de luz na beira de fora do arco: le como um tubo, e nao
-                // como uma faixa pintada
-                RectangleF fora = RectangleF.Inflate(anel, st * 0.22f, st * 0.22f);
-                using (Pen luz = Redonda(Color.FromArgb(105, 255, 255, 255), st * 0.28f))
-                    g.DrawArc(luz, fora, -90f, arco);
 
                 if (p.Carregando && arco > 30f)
                 {
@@ -471,7 +472,9 @@ namespace MhiagosControl
         /// <summary>Gota de vidro menor, dentro da placa, para o icone do aparelho.</summary>
         private static void Bolha(Graphics g, RectangleF r, bool escuro)
         {
-            using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(22, 255, 255, 255) : Color.FromArgb(30, 0, 0, 0)))
+            // miolo denso e neutro, sem contorno: o icone salta e nao sobram
+            // dois circulos translucidos de tons diferentes
+            using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(130, 12, 14, 20) : Color.FromArgb(150, 255, 255, 255)))
                 g.FillEllipse(b, r);
             RectangleF topo = new RectangleF(r.X, r.Y, r.Width, r.Height * 0.6f);
             using (GraphicsPath elipse = new GraphicsPath())
@@ -480,13 +483,11 @@ namespace MhiagosControl
                 Region antes = g.Clip;
                 g.SetClip(elipse, CombineMode.Intersect);
                 using (LinearGradientBrush b = new LinearGradientBrush(RectangleF.Inflate(topo, 0, 1f),
-                    Color.FromArgb(escuro ? 40 : 90, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Vertical))
+                    Color.FromArgb(escuro ? 34 : 80, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Vertical))
                     g.FillRectangle(b, topo);
                 g.Clip = antes;
                 antes.Dispose();
             }
-            using (Pen pen = new Pen(Color.FromArgb(escuro ? 60 : 140, 255, 255, 255), 1f))
-                g.DrawEllipse(pen, r);
         }
 
         /// <summary>
