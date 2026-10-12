@@ -26,6 +26,61 @@ namespace MhiagosControl
     /// </summary>
     public static class WidgetPreview
     {
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
+        [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+        private static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, int rop);
+        private const int SRCCOPY = 0x00CC0020, CAPTUREBLT = 0x40000000;
+
+        /// <summary>
+        /// A tela como o DWM compoe, com as janelas em camadas. O CopyFromScreen
+        /// do .NET recusa SourceCopy junto com CaptureBlt, e sem o CaptureBlt a
+        /// janela em camadas nao sai na foto.
+        /// </summary>
+        private static Bitmap Fotografar(Rectangle r)
+        {
+            Bitmap b = new Bitmap(r.Width, r.Height, PixelFormat.Format32bppArgb);
+            IntPtr tela = GetDC(IntPtr.Zero);
+            try
+            {
+                using (Graphics g = Graphics.FromImage(b))
+                {
+                    IntPtr hdc = g.GetHdc();
+                    try { BitBlt(hdc, 0, 0, r.Width, r.Height, tela, r.X, r.Y, SRCCOPY | CAPTUREBLT); }
+                    finally { g.ReleaseHdc(hdc); }
+                }
+            }
+            finally { ReleaseDC(IntPtr.Zero, tela); }
+            return b;
+        }
+
+        /// <summary>
+        /// Um quadro de listras coloridas e letras grandes logo atras do widget:
+        /// com isso a foto mostra se o desfoque existe, qualquer que seja o
+        /// papel de parede ou a janela que estiver ali.
+        /// </summary>
+        private static void Listras(Form widget)
+        {
+            Form f = new Form();
+            f.FormBorderStyle = FormBorderStyle.None;
+            f.ShowInTaskbar = false;
+            f.StartPosition = FormStartPosition.Manual;
+            f.Bounds = Rectangle.Inflate(widget.Bounds, 30, 30);
+            f.Paint += delegate(object s, PaintEventArgs e)
+            {
+                Color[] cores = { Color.Crimson, Color.Gold, Color.DodgerBlue, Color.LimeGreen, Color.White, Color.Black };
+                for (int i = 0; i * 18 < f.Width + f.Height; i++)
+                    using (Pen p = new Pen(cores[i % cores.Length], 9))
+                        e.Graphics.DrawLine(p, i * 18, 0, i * 18 - f.Height, f.Height);
+                using (Font fonte = new Font("Segoe UI", 28f, FontStyle.Bold))
+                    e.Graphics.DrawString("MHIAGOS 123", fonte, Brushes.Black, 36, f.Height / 2 - 24);
+            };
+            widget.FormClosed += delegate { f.Close(); };
+            // sem dono: janela com dono fica sempre acima dele, e as listras
+            // tem de ficar atras do widget, que na previa e sempre na frente
+            f.Show();
+        }
+
         [STAThread]
         public static int Main(string[] args)
         {
@@ -42,7 +97,7 @@ namespace MhiagosControl
             cfg.NaFrente = true;
             int segundos = 4;
             string foto = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "widget-preview.png");
-            bool real = false;
+            bool real = false, listras = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -53,6 +108,7 @@ namespace MhiagosControl
                 else if (a == "--escuro") cfg.Cor = CorDoVidro.Escura;
                 else if (a == "--claro") cfg.Cor = CorDoVidro.Clara;
                 else if (a == "--fundo") cfg.NaFrente = false;
+                else if (a == "--listras") listras = true;
                 else if (a == "--segundos" && i + 1 < args.Length) segundos = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (a == "--foto" && i + 1 < args.Length) foto = Path.GetFullPath(args[++i]);
             }
@@ -81,12 +137,8 @@ namespace MhiagosControl
                 try
                 {
                     Rectangle r = Rectangle.Inflate(w.Bounds, 40, 40);
-                    using (Bitmap b = new Bitmap(r.Width, r.Height, PixelFormat.Format32bppArgb))
-                    {
-                        using (Graphics g = Graphics.FromImage(b))
-                            g.CopyFromScreen(r.Location, Point.Empty, r.Size, CopyPixelOperation.SourceCopy | CopyPixelOperation.CaptureBlt);
-                        b.Save(foto, ImageFormat.Png);
-                    }
+                    Directory.CreateDirectory(Path.GetDirectoryName(foto));
+                    using (Bitmap b = Fotografar(r)) b.Save(foto, ImageFormat.Png);
                     Console.WriteLine("foto: " + foto);
                 }
                 catch (Exception ex) { Console.WriteLine("foto falhou: " + ex.Message); }
@@ -103,6 +155,7 @@ namespace MhiagosControl
             };
 
             w.Show();
+            if (listras) Listras(w);
             foto1.Start();
             fim.Start();
             Application.Run();

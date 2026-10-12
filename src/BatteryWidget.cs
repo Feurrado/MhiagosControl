@@ -407,8 +407,12 @@ namespace MhiagosControl
 
             float x = bolha.Right + 12f * s, w = z.Right - x;
             string valor = Valor(p);
-            SizeF tamValor = g.MeasureString(valor, f.Pct, PointF.Empty, StringFormat.GenericTypographic);
-            RectangleF lValor = new RectangleF(z.Right - tamValor.Width - 2f * s, z.Y, tamValor.Width + 2f * s, 21f * s);
+            // medido com o mesmo formato do desenho: o tipografico nao conta a
+            // folga que o DrawString poe dos lados, e "72%" virava "7..."
+            float largValor;
+            using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
+                largValor = g.MeasureString(valor, f.Pct, PointF.Empty, sf).Width + 2f * s;
+            RectangleF lValor = new RectangleF(z.Right - largValor, z.Y, largValor, 21f * s);
             Texto(g, valor, f.Pct, Apagado(p) ? Secundario(escuro) : Primario(escuro), escuro, lValor,
                   StringAlignment.Far, StringAlignment.Center);
 
@@ -717,6 +721,7 @@ namespace MhiagosControl
             base.OnLoad(e);
             Atualizar(true);
             Posicionar();
+            Afundar();
             _leitura.Start();
 
             try
@@ -906,11 +911,24 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("desfoque do widget", ex); }
         }
 
+        /// <summary>
+        /// Pelo RtlGetVersion, e nao pelo Environment.OSVersion: sem manifesto
+        /// de compatibilidade (a previa, por exemplo) o .NET responde 6.2 num
+        /// Windows 11.
+        /// </summary>
         private static bool Windows11
         {
             get
             {
                 Version v = Environment.OSVersion.Version;
+                try
+                {
+                    OSVERSIONINFOEX info = new OSVERSIONINFOEX();
+                    info.dwOSVersionInfoSize = Marshal.SizeOf(typeof(OSVERSIONINFOEX));
+                    if (RtlGetVersion(ref info) == 0)
+                        v = new Version(info.dwMajorVersion, info.dwMinorVersion, info.dwBuildNumber);
+                }
+                catch (Exception ex) { Log.Error("versao do Windows", ex); }
                 return v.Major > 10 || (v.Major == 10 && v.Build >= 22000);
             }
         }
@@ -1266,6 +1284,14 @@ namespace MhiagosControl
             return c == "Progman" || c == "WorkerW";
         }
 
+        private static bool Escondida(IntPtr h)
+        {
+            int cloaked = 0;
+            try { DwmGetWindowAttribute(h, DWMWA_CLOAKED, out cloaked, sizeof(int)); }
+            catch { }
+            return cloaked != 0;
+        }
+
         private static string NomeDaClasse(IntPtr h)
         {
             StringBuilder sb = new StringBuilder(64);
@@ -1277,14 +1303,23 @@ namespace MhiagosControl
         internal string Diagnostico()
         {
             StringBuilder sb = new StringBuilder();
-            sb.Append("windows ").Append(Environment.OSVersion.Version);
+            sb.Append("windows 11: ").Append(Windows11 ? "sim" : "nao");
             sb.Append(" | escala ").Append(_escala.ToString("0.##", CultureInfo.InvariantCulture));
             sb.Append(" | ").Append(Width).Append('x').Append(Height).Append(" em ").Append(Left).Append(',').Append(Top);
             if (!IsHandleCreated) return sb.ToString();
             IntPtr desktop = AreaDeTrabalho();
             sb.Append(" | area de trabalho: ").Append(desktop == IntPtr.Zero ? "nao achada" : NomeDaClasse(desktop));
             if (desktop != IntPtr.Zero)
-                sb.Append(" | widget logo acima dela: ").Append(GetWindow(desktop, GW_HWNDPREV) == Handle ? "sim" : "nao");
+            {
+                // janelas invisiveis ou escondidas pelo DWM (apps suspensos) nao
+                // contam: o que importa e se ha algo visivel entre os dois
+                int entre = 0, limite = 4096;
+                IntPtr h = GetWindow(Handle, GW_HWNDNEXT);
+                for (; h != IntPtr.Zero && h != desktop && limite-- > 0; h = GetWindow(h, GW_HWNDNEXT))
+                    if (IsWindowVisible(h) && !Escondida(h)) entre++;
+                if (h == desktop) sb.Append(" | janelas visiveis entre o widget e ela: ").Append(entre);
+                else sb.Append(" | area de trabalho nao esta abaixo do widget");
+            }
             sb.Append(" | ela por cima do widget: ").Append(DesktopPorCima() ? "sim" : "nao");
             sb.Append(" | sempre na frente: ").Append(_cfg.NaFrente || _sobreDesktop ? "sim" : "nao");
             return sb.ToString();
@@ -1345,7 +1380,8 @@ namespace MhiagosControl
         private const byte AC_SRC_OVER = 0;
         private const byte AC_SRC_ALPHA = 1;
         private const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10;
-        private const uint GW_HWNDPREV = 3;
+        private const uint GW_HWNDNEXT = 2, GW_HWNDPREV = 3;
+        private const int DWMWA_CLOAKED = 14;
         private const uint EVENT_SYSTEM_FOREGROUND = 3;
         private const uint WINEVENT_OUTOFCONTEXT = 0;
         private const int WCA_ACCENT_POLICY = 19;
@@ -1378,6 +1414,19 @@ namespace MhiagosControl
 
         [StructLayout(LayoutKind.Sequential)]
         private struct WindowCompositionAttributeData { public int Attribute; public IntPtr Data; public int SizeOfData; }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct OSVERSIONINFOEX
+        {
+            public int dwOSVersionInfoSize, dwMajorVersion, dwMinorVersion, dwBuildNumber, dwPlatformId;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szCSDVersion;
+            public ushort wServicePackMajor, wServicePackMinor, wSuiteMask;
+            public byte wProductType, wReserved;
+        }
+
+        [DllImport("ntdll.dll")] private static extern int RtlGetVersion(ref OSVERSIONINFOEX info);
+        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+        [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
 
         private delegate void WinEventDelegate(IntPtr hook, uint evento, IntPtr hwnd, int objeto, int filho, uint thread, uint tempo);
 
