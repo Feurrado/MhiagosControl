@@ -17,6 +17,7 @@ namespace MhiagosControl
     ///   powershell -ExecutionPolicy Bypass -File .\tools\build-widget-preview.ps1
     ///   bin\WidgetPreview.exe [--real] [--lista] [--fosco] [--escuro|--claro]
     ///                         [--fundo] [--listras] [--sem-recorte]
+    ///                         [--sem-camada] [--cantos-do-windows]
     ///                         [--segundos N] [--foto arquivo.png]
     ///
     /// Sem --real os aparelhos sao de mentira (um carregando, um com pouca
@@ -32,6 +33,9 @@ namespace MhiagosControl
         [System.Runtime.InteropServices.DllImport("gdi32.dll")]
         private static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, int rop);
         private const int SRCCOPY = 0x00CC0020, CAPTUREBLT = 0x40000000;
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        private const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10;
 
         /// <summary>
         /// A tela como o DWM compoe, com as janelas em camadas. O CopyFromScreen
@@ -78,8 +82,12 @@ namespace MhiagosControl
             };
             widget.FormClosed += delegate { f.Close(); };
             // sem dono: janela com dono fica sempre acima dele, e as listras
-            // tem de ficar atras do widget, que na previa e sempre na frente
+            // tem de ficar atras do widget. Sempre na frente tambem, senao o
+            // bloqueio de primeiro plano deixa o quadro atras da janela ativa;
+            // depois o widget sobe acima dele.
+            f.TopMost = true;
             f.Show();
+            SetWindowPos(widget.Handle, new IntPtr(-1), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         }
 
         [STAThread]
@@ -111,6 +119,8 @@ namespace MhiagosControl
                 else if (a == "--fundo") cfg.NaFrente = false;
                 else if (a == "--listras") listras = true;
                 else if (a == "--sem-recorte") WidgetDeBateria.RecortarDesfoque = false;
+                else if (a == "--sem-camada") WidgetDeBateria.SemCamada = true;
+                else if (a == "--cantos-do-windows") WidgetDeBateria.CantosDoWindows = true;
                 else if (a == "--segundos" && i + 1 < args.Length) segundos = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (a == "--foto" && i + 1 < args.Length) foto = Path.GetFullPath(args[++i]);
             }

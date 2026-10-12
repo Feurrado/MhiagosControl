@@ -693,6 +693,9 @@ namespace MhiagosControl
             _conferirDesktop.Tick += delegate { _conferirDesktop.Stop(); ConferirDesktop(); };
 
             _preferencias = new AvisosDoSistema(this);
+
+            // so a janela comum (SemCamada) recebe WM_PAINT; o fundo e todo do bitmap
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.Opaque, true);
         }
 
         protected override CreateParams CreateParams
@@ -700,7 +703,8 @@ namespace MhiagosControl
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+                cp.ExStyle |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+                if (!SemCamada) cp.ExStyle |= WS_EX_LAYERED;
                 // o construtor do Form ja pergunta isto, antes de _cfg existir
                 if (_cfg != null && _cfg.NaFrente) cp.ExStyle |= WS_EX_TOPMOST;
                 return cp;
@@ -713,6 +717,15 @@ namespace MhiagosControl
         {
             base.OnHandleCreated(e);
             using (Graphics g = Graphics.FromHwnd(Handle)) _escala = Math.Max(1f, g.DpiX / 96f);
+            if (CantosDoWindows)
+            {
+                try
+                {
+                    int redondo = DWMWCP_ROUND;
+                    DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref redondo, 4);
+                }
+                catch (Exception ex) { Log.Error("cantos do widget", ex); }
+            }
             AplicarDesfoque();
         }
 
@@ -746,6 +759,7 @@ namespace MhiagosControl
                 if (_menu != null) { _menu.Dispose(); _menu = null; }
                 if (_preferencias != null) _preferencias.Dispose();
             }
+            if (_quadro != IntPtr.Zero) { DeleteObject(_quadro); _quadro = IntPtr.Zero; }
             if (_gancho != IntPtr.Zero) { UnhookWinEvent(_gancho); _gancho = IntPtr.Zero; }
             base.Dispose(disposing);
         }
@@ -839,8 +853,46 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>
+        /// Experimentos para o desfoque respeitar os cantos; so a previa liga.
+        /// SemCamada: janela comum com SetWindowRgn, desenhada no WM_PAINT.
+        /// CantosDoWindows: arredondamento do proprio DWM (8 px, Windows 11).
+        /// </summary>
+        internal static bool SemCamada, CantosDoWindows;
+
+        /// <summary>Ultimo quadro, para o WM_PAINT da janela comum.</summary>
+        private IntPtr _quadro = IntPtr.Zero;
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            if (!SemCamada || _quadro == IntPtr.Zero) return;
+            IntPtr hdc = e.Graphics.GetHdc();
+            IntPtr mem = CreateCompatibleDC(hdc);
+            try
+            {
+                IntPtr antigo = SelectObject(mem, _quadro);
+                // copia o alfa junto: o DWM mostra o desfoque onde o bitmap e transparente
+                BitBlt(hdc, 0, 0, ClientSize.Width, ClientSize.Height, mem, 0, 0, SRCCOPY);
+                SelectObject(mem, antigo);
+            }
+            finally
+            {
+                DeleteDC(mem);
+                e.Graphics.ReleaseHdc(hdc);
+            }
+        }
+
         private void AplicarBitmap(Bitmap bmp)
         {
+            if (SemCamada)
+            {
+                IntPtr novo = bmp.GetHbitmap(Color.FromArgb(0));
+                if (_quadro != IntPtr.Zero) DeleteObject(_quadro);
+                _quadro = novo;
+                Invalidate();
+                Update();
+                return;
+            }
             IntPtr tela = GetDC(IntPtr.Zero);
             IntPtr mem = CreateCompatibleDC(tela);
             IntPtr hbmp = IntPtr.Zero, antigo = IntPtr.Zero;
@@ -1459,6 +1511,12 @@ namespace MhiagosControl
         }
 
         private const int DWM_BB_ENABLE = 1, DWM_BB_BLURREGION = 2;
+        private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2;
+        private const int SRCCOPY = 0x00CC0020;
+
+        [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+        [DllImport("gdi32.dll")]
+        private static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, int rop);
 
         [DllImport("dwmapi.dll")] private static extern int DwmEnableBlurBehindWindow(IntPtr hwnd, ref DWM_BLURBEHIND bb);
         [DllImport("ntdll.dll")] private static extern int RtlGetVersion(ref OSVERSIONINFOEX info);
