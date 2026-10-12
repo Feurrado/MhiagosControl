@@ -888,7 +888,8 @@ namespace MhiagosControl
         public static string WidgetRings { get { return P("Anéis", "Rings"); } }
         public static string WidgetList { get { return P("Lista", "List"); } }
         public static string WidgetGlass { get { return P("Vidro", "Glass"); } }
-        public static string WidgetClear { get { return P("Transparente", "Clear"); } }
+        public static string WidgetSharp { get { return P("Nítido (sem desfoque)", "Sharp (no blur)"); } }
+        public static string WidgetClear { get { return P("Desfocado", "Blurred"); } }
         public static string WidgetFrosted { get { return P("Fosco", "Frosted"); } }
         public static string WidgetTintAuto { get { return P("Cor do tema do Windows", "Windows theme color"); } }
         public static string WidgetTintDark { get { return P("Escuro", "Dark"); } }

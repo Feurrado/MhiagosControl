@@ -15,7 +15,7 @@ namespace MhiagosControl
     /// verdade; o bitmap dos testes mostra o desenho, nao o vidro.
     ///
     ///   powershell -ExecutionPolicy Bypass -File .\tools\build-widget-preview.ps1
-    ///   bin\WidgetPreview.exe [--real] [--lista] [--fosco] [--escuro|--claro]
+    ///   bin\WidgetPreview.exe [--real] [--lista] [--fosco|--desfoque] [--escuro|--claro]
     ///                         [--fundo] [--listras]
     ///                         [--segundos N] [--foto arquivo.png]
     ///
@@ -112,7 +112,8 @@ namespace MhiagosControl
                 string a = args[i].ToLowerInvariant();
                 if (a == "--real") real = true;
                 else if (a == "--lista") cfg.Layout = LayoutDoWidget.Lista;
-                else if (a == "--fosco") cfg.Fosco = true;
+                else if (a == "--fosco") { cfg.Fosco = true; cfg.Nitido = false; }
+                else if (a == "--desfoque") cfg.Nitido = false;
                 else if (a == "--escuro") cfg.Cor = CorDoVidro.Escura;
                 else if (a == "--claro") cfg.Cor = CorDoVidro.Clara;
                 else if (a == "--fundo") cfg.NaFrente = false;

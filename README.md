@@ -197,7 +197,7 @@ aparelho, verde e com um brilho correndo enquanto carrega. Fica logo acima dos
 ícones, atrás das janelas, como os antigos gadgets; com **Win+D** ele continua à
 vista. Arrastar muda o lugar (gruda nas bordas da tela), clicar abre a página
 **Baterias**, e o botão direito escolhe entre **anéis** e **lista**, vidro
-**transparente** ou **fosco**, a cor do vidro (do tema do Windows, escura ou
+**nítido** (padrão, sem desfoque), **desfocado** ou **fosco**, a cor do vidro (do tema do Windows, escura ou
 clara), **sempre na frente das janelas** e **travar posição**.
 
 O Windows avisa em **30%**, em **10%**, quando restarem **~2 h de uso** e quando

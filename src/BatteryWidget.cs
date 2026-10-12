@@ -34,6 +34,8 @@ namespace MhiagosControl
         public int X = SemPosicao, Y = SemPosicao;
         public LayoutDoWidget Layout = LayoutDoWidget.Aneis;
         public bool Fosco = false;
+        /// <summary>Sem desfoque: o fundo aparece nitido atras de uma tinta leve. Vence o Fosco.</summary>
+        public bool Nitido = true;
         public CorDoVidro Cor = CorDoVidro.Automatica;
         public bool NaFrente = false;
         public bool Travado = false;
@@ -90,6 +92,7 @@ namespace MhiagosControl
             }
             sb.AppendLine("layout=" + (Layout == LayoutDoWidget.Lista ? "lista" : "aneis"));
             sb.AppendLine("fosco=" + (Fosco ? "1" : "0"));
+            sb.AppendLine("nitido=" + (Nitido ? "1" : "0"));
             sb.AppendLine("cor=" + (Cor == CorDoVidro.Escura ? "escura" : Cor == CorDoVidro.Clara ? "clara" : "auto"));
             sb.AppendLine("frente=" + (NaFrente ? "1" : "0"));
             sb.AppendLine("travado=" + (Travado ? "1" : "0"));
@@ -118,6 +121,7 @@ namespace MhiagosControl
                     case "y": if (numero) c.Y = n; break;
                     case "layout": c.Layout = v == "lista" ? LayoutDoWidget.Lista : LayoutDoWidget.Aneis; break;
                     case "fosco": c.Fosco = v == "1"; break;
+                    case "nitido": c.Nitido = v == "1"; break;
                     case "cor": c.Cor = v == "escura" ? CorDoVidro.Escura : v == "clara" ? CorDoVidro.Clara : CorDoVidro.Automatica; break;
                     case "frente": c.NaFrente = v == "1"; break;
                     case "travado": c.Travado = v == "1"; break;
@@ -211,6 +215,7 @@ namespace MhiagosControl
             public LayoutDoWidget Layout = LayoutDoWidget.Aneis;
             public bool Escuro = true;
             public bool Fosco = false;
+            public bool Nitido = false;
             public bool Sobre = false;
             public float Escala = 1f;
             /// <summary>De 0 a 1: onde esta o brilho que corre nos aparelhos carregando.</summary>
@@ -226,7 +231,7 @@ namespace MhiagosControl
             g.TextRenderingHint = TextRenderingHint.AntiAlias;
 
             float s = q.Escala;
-            Vidro(g, new RectangleF(0, 0, tamanho.Width, tamanho.Height), s, q.Escuro, q.Fosco, q.Sobre);
+            Vidro(g, new RectangleF(0, 0, tamanho.Width, tamanho.Height), s, q.Escuro, q.Fosco, q.Nitido, q.Sobre);
 
             using (Fontes f = new Fontes(s))
             {
@@ -253,13 +258,16 @@ namespace MhiagosControl
         /// luz nas bordas: e o aro claro e o brilho de cima que fazem uma
         /// mancha translucida parecer vidro grosso, e nao plastico fosco.
         /// </summary>
-        internal static void Vidro(Graphics g, RectangleF area, float s, bool escuro, bool fosco, bool sobre)
+        internal static void Vidro(Graphics g, RectangleF area, float s, bool escuro, bool fosco, bool nitido, bool sobre)
         {
             RectangleF r = new RectangleF(area.X + 0.5f, area.Y + 0.5f, area.Width - 1f, area.Height - 1f);
             float raio = RaioDoVidro * s;
             using (GraphicsPath forma = Arredondado(r, raio))
             {
-                int a = fosco ? (escuro ? 150 : 165) : (escuro ? 78 : 92);
+                // tinta leve: a de antes (78/92) fechava o desfoque numa mancha
+                // lisa. Sem desfoque precisa de um pouco mais, para o texto
+                // nao brigar com um fundo nitido.
+                int a = nitido ? (escuro ? 64 : 72) : fosco ? (escuro ? 150 : 165) : (escuro ? 36 : 44);
                 if (sobre) a = Math.Min(255, a + 18);
                 using (SolidBrush tinta = new SolidBrush(escuro ? Color.FromArgb(a, 14, 16, 22) : Color.FromArgb(a, 248, 249, 252)))
                     g.FillPath(tinta, forma);
@@ -817,7 +825,8 @@ namespace MhiagosControl
                 q.Notas = _notas;
                 q.Layout = _cfg.Layout;
                 q.Escuro = Escuro;
-                q.Fosco = _cfg.Fosco;
+                q.Fosco = _cfg.Fosco && !_cfg.Nitido;
+                q.Nitido = _cfg.Nitido;
                 q.Sobre = _sobre;
                 q.Escala = _escala;
                 q.Fase = (Environment.TickCount & int.MaxValue) % CicloMs / (float)CicloMs;
@@ -910,8 +919,9 @@ namespace MhiagosControl
             try
             {
                 AccentPolicy ap = new AccentPolicy();
-                bool acrilico = _cfg.Fosco && Windows11;
-                ap.AccentState = acrilico ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_ENABLE_BLURBEHIND;
+                bool acrilico = _cfg.Fosco && !_cfg.Nitido && Windows11;
+                ap.AccentState = _cfg.Nitido ? ACCENT_DISABLED
+                               : acrilico ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_ENABLE_BLURBEHIND;
                 // tinta quase nula: com alfa zero o acrilico some em algumas versoes
                 ap.GradientColor = acrilico ? 0x01000000u : 0u;
                 int tamanho = Marshal.SizeOf(ap);
@@ -1109,8 +1119,9 @@ namespace MhiagosControl
             menu.MenuItems.Add(layout);
 
             MenuItem vidro = new MenuItem(T.WidgetGlass);
-            vidro.MenuItems.Add(Opcao(T.WidgetClear, !_cfg.Fosco, delegate { TrocarFosco(false); }));
-            vidro.MenuItems.Add(Opcao(T.WidgetFrosted, _cfg.Fosco, delegate { TrocarFosco(true); }));
+            vidro.MenuItems.Add(Opcao(T.WidgetSharp, _cfg.Nitido, delegate { TrocarVidro(true, false); }));
+            vidro.MenuItems.Add(Opcao(T.WidgetClear, !_cfg.Nitido && !_cfg.Fosco, delegate { TrocarVidro(false, false); }));
+            vidro.MenuItems.Add(Opcao(T.WidgetFrosted, !_cfg.Nitido && _cfg.Fosco, delegate { TrocarVidro(false, true); }));
             vidro.MenuItems.Add("-");
             vidro.MenuItems.Add(Opcao(T.WidgetTintAuto, _cfg.Cor == CorDoVidro.Automatica, delegate { TrocarCor(CorDoVidro.Automatica); }));
             vidro.MenuItems.Add(Opcao(T.WidgetTintDark, _cfg.Cor == CorDoVidro.Escura, delegate { TrocarCor(CorDoVidro.Escura); }));
@@ -1157,9 +1168,10 @@ namespace MhiagosControl
             ManterNaTela();
         }
 
-        private void TrocarFosco(bool fosco)
+        private void TrocarVidro(bool nitido, bool fosco)
         {
-            if (_cfg.Fosco == fosco) return;
+            if (_cfg.Nitido == nitido && _cfg.Fosco == fosco) return;
+            _cfg.Nitido = nitido;
             _cfg.Fosco = fosco;
             _cfg.Salvar();
             AplicarDesfoque();
@@ -1404,6 +1416,7 @@ namespace MhiagosControl
         private const uint EVENT_SYSTEM_FOREGROUND = 3;
         private const uint WINEVENT_OUTOFCONTEXT = 0;
         private const int WCA_ACCENT_POLICY = 19;
+        private const int ACCENT_DISABLED = 0;
         private const int ACCENT_ENABLE_BLURBEHIND = 3;
         private const int ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
         private static readonly IntPtr HWND_TOP = IntPtr.Zero;
