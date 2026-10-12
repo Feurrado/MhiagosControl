@@ -16,7 +16,8 @@ namespace MhiagosControl
     ///
     ///   powershell -ExecutionPolicy Bypass -File .\tools\build-widget-preview.ps1
     ///   bin\WidgetPreview.exe [--real] [--lista] [--fosco] [--escuro|--claro]
-    ///                         [--fundo] [--segundos N] [--foto arquivo.png]
+    ///                         [--fundo] [--listras] [--sem-recorte]
+    ///                         [--segundos N] [--foto arquivo.png]
     ///
     /// Sem --real os aparelhos sao de mentira (um carregando, um com pouca
     /// carga), e os leitores nao disputam o receptor com o Mhiagos aberto. Por
@@ -109,6 +110,7 @@ namespace MhiagosControl
                 else if (a == "--claro") cfg.Cor = CorDoVidro.Clara;
                 else if (a == "--fundo") cfg.NaFrente = false;
                 else if (a == "--listras") listras = true;
+                else if (a == "--sem-recorte") WidgetDeBateria.RecortarDesfoque = false;
                 else if (a == "--segundos" && i + 1 < args.Length) segundos = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (a == "--foto" && i + 1 < args.Length) foto = Path.GetFullPath(args[++i]);
             }

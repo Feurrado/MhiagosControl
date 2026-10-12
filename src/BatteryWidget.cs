@@ -866,19 +866,44 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Recorta a janela no formato da placa. Sem isso o desfoque do Windows
-        /// ocupa o retangulo inteiro e os cantos aparecem quadrados.
+        /// Desliga o recorte do desfoque; so a previa usa, para comparar.
+        /// </summary>
+        internal static bool RecortarDesfoque = true;
+
+        /// <summary>
+        /// Recorta a janela e o desfoque no formato da placa.
+        ///
+        /// Numa janela em camadas o SetWindowRgn so vale para o clique: o
+        /// desfoque do Windows continuava no retangulo inteiro e aparecia
+        /// quadrado fora da curva dos cantos (visto no Windows 11). Quem limita
+        /// a area do desfoque e a regiao do DwmEnableBlurBehindWindow; depois
+        /// dele o desfoque e pedido de novo.
         /// </summary>
         private void AplicarRegiao(Size tam)
         {
+            int d = (int)Math.Round(PintorDoWidget.RaioDoVidro * 2f * _escala);
             try
             {
-                int d = (int)Math.Round(PintorDoWidget.RaioDoVidro * 2f * _escala);
                 IntPtr rgn = CreateRoundRectRgn(0, 0, tam.Width + 1, tam.Height + 1, d, d);
                 // a regiao passa a ser do sistema: nao se apaga depois de entregar
                 if (SetWindowRgn(Handle, rgn, true) == 0) DeleteObject(rgn);
             }
             catch (Exception ex) { Log.Error("regiao do widget", ex); }
+
+            if (!RecortarDesfoque) return;
+            IntPtr area = IntPtr.Zero;
+            try
+            {
+                area = CreateRoundRectRgn(0, 0, tam.Width + 1, tam.Height + 1, d, d);
+                DWM_BLURBEHIND bb = new DWM_BLURBEHIND();
+                bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+                bb.fEnable = true;
+                bb.hRgnBlur = area;
+                DwmEnableBlurBehindWindow(Handle, ref bb);
+            }
+            catch (Exception ex) { Log.Error("recorte do desfoque do widget", ex); }
+            finally { if (area != IntPtr.Zero) DeleteObject(area); }   // esta regiao continua nossa
+            AplicarDesfoque();
         }
 
         /// <summary>
@@ -1424,6 +1449,18 @@ namespace MhiagosControl
             public byte wProductType, wReserved;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DWM_BLURBEHIND
+        {
+            public int dwFlags;
+            public bool fEnable;
+            public IntPtr hRgnBlur;
+            public bool fTransitionOnMaximized;
+        }
+
+        private const int DWM_BB_ENABLE = 1, DWM_BB_BLURREGION = 2;
+
+        [DllImport("dwmapi.dll")] private static extern int DwmEnableBlurBehindWindow(IntPtr hwnd, ref DWM_BLURBEHIND bb);
         [DllImport("ntdll.dll")] private static extern int RtlGetVersion(ref OSVERSIONINFOEX info);
         [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
         [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
