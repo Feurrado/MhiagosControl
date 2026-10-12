@@ -95,7 +95,12 @@ namespace MhiagosControl
 
             System.Windows.Forms.Timer fim = new System.Windows.Forms.Timer();
             fim.Interval = Math.Max(2, segundos) * 1000;
-            fim.Tick += delegate { fim.Stop(); w.Close(); };
+            fim.Tick += delegate
+            {
+                fim.Stop();
+                Console.WriteLine("no fim: " + w.Diagnostico());
+                w.Close();
+            };
 
             w.Show();
             foto1.Start();
