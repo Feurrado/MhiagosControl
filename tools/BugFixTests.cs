@@ -47,6 +47,128 @@ namespace MhiagosControl
             RegressionPeripheralBattery();
             RegressionBatteryHistory();
             RegressionNavOrder(root);
+            RegressionBatteryWidget(root);
+        }
+
+        private static void RegressionBatteryWidget(string root)
+        {
+            Secao("widget de bateria: preferencias, formato e desenho");
+
+            ConfigDoWidget padrao = ConfigDoWidget.DeTexto(null);
+            Verdade(!padrao.Ativo && !padrao.TemPosicao, "sem arquivo o widget comeca desligado e sem posicao");
+            Igual(LayoutDoWidget.Aneis, padrao.Layout, "formato padrao sao os aneis");
+
+            ConfigDoWidget c = new ConfigDoWidget();
+            c.Ativo = true; c.X = -1500; c.Y = 40; c.Layout = LayoutDoWidget.Lista; c.Fosco = true;
+            c.Cor = CorDoVidro.Clara; c.NaFrente = true; c.Travado = true;
+            ConfigDoWidget volta = ConfigDoWidget.DeTexto(c.ParaTexto());
+            Igual(c.ParaTexto(), volta.ParaTexto(), "preferencias do widget fazem ida e volta");
+            Igual(-1500, volta.X, "posicao em monitor a esquerda (negativa) sobrevive");
+
+            ConfigDoWidget torto = ConfigDoWidget.DeTexto("ativo=1\nx=abc\ny=10\nlayout=hexagono\ncor=roxa\nlixo\n=1");
+            Verdade(torto.Ativo, "linha boa vale mesmo com vizinhas estragadas");
+            Verdade(!torto.TemPosicao, "meia posicao conta como nenhuma");
+            Igual(LayoutDoWidget.Aneis, torto.Layout, "formato desconhecido volta ao padrao");
+            Igual(CorDoVidro.Automatica, torto.Cor, "cor desconhecida volta ao padrao");
+
+            string antes = ConfigDoWidget.Caminho;
+            try
+            {
+                ConfigDoWidget.Caminho = Path.Combine(root, "widget.ini");
+                Verdade(c.Salvar(), "widget.ini grava");
+                c.X = 12;
+                Verdade(c.Salvar(), "widget.ini regrava por cima");
+                Igual(12, ConfigDoWidget.Carregar().X, "widget.ini carrega o que gravou");
+                Verdade(!File.Exists(ConfigDoWidget.Caminho + ".tmp"), "gravacao nao deixa temporario");
+            }
+            finally { ConfigDoWidget.Caminho = antes; }
+
+            Periferico[] todos = {
+                Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 72, false),
+                Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado),
+                Periferico.Sem("Bluetooth", TipoPeriferico.Outro, FontePeriferico.Bluetooth, EstadoPeriferico.NenhumConectado),
+                Periferico.Sem("Fone BT", TipoPeriferico.Outro, FontePeriferico.Bluetooth, EstadoPeriferico.SemLeitura),
+                Periferico.Lido("WH-1000XM4", TipoPeriferico.Outro, FontePeriferico.Bluetooth, 18, true) };
+            Periferico[] vis = PintorDoWidget.Visiveis(todos);
+            Igual(3, vis.Length, "Bluetooth sem leitura fica fora do widget");
+            Igual("X11", vis[1].Nome, "mouse desligado continua no widget, com --");
+            Igual(0, PintorDoWidget.Visiveis(null).Length, "sem lista o widget fica vazio");
+
+            foreach (LayoutDoWidget layout in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
+            {
+                Size um = PintorDoWidget.Medir(layout, 1, 1f), tres = PintorDoWidget.Medir(layout, 3, 1f);
+                Verdade(tres.Width * tres.Height > um.Width * um.Height, layout + ": mais aparelhos, placa maior");
+                Size dobro = PintorDoWidget.Medir(layout, 3, 2f);
+                Verdade(Math.Abs(dobro.Width - 2 * tres.Width) <= 1, layout + ": escala de 200% dobra a largura");
+                RectangleF[] zonas = PintorDoWidget.Zonas(layout, 3, 1.5f);
+                Size caixa = PintorDoWidget.Medir(layout, 3, 1.5f);
+                for (int i = 0; i < zonas.Length; i++)
+                {
+                    Verdade(zonas[i].Left >= 0 && zonas[i].Top >= 0 && zonas[i].Right <= caixa.Width && zonas[i].Bottom <= caixa.Height,
+                        layout + ": aparelho " + i + " cabe na placa");
+                    if (i > 0) Verdade(!zonas[i].IntersectsWith(zonas[i - 1]), layout + ": aparelhos " + (i - 1) + " e " + i + " nao se sobrepoem");
+                }
+
+                foreach (bool escuro in new bool[] { true, false })
+                {
+                    PintorDoWidget.Quadro q = new PintorDoWidget.Quadro();
+                    q.Itens = vis;
+                    q.Notas = new string[] { "~25 h", T.PeripheralOff, T.PeripheralCharging };
+                    q.Layout = layout;
+                    q.Escuro = escuro;
+                    q.Escala = 1.5f;
+                    q.Fase = 0.5f;
+                    Size t = PintorDoWidget.Medir(layout, vis.Length, q.Escala);
+                    using (Bitmap bmp = new Bitmap(t.Width, t.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                    {
+                        using (Graphics g = Graphics.FromImage(bmp)) { g.Clear(Color.Transparent); PintorDoWidget.Pintar(g, t, q); }
+                        Igual(0, (int)bmp.GetPixel(0, 0).A, layout + (escuro ? " escuro" : " claro") + ": canto fora do vidro fica transparente");
+                        int meio = bmp.GetPixel(t.Width / 2, t.Height / 2).A;
+                        Verdade(meio > 0, layout + ": miolo desenhado");
+                        Verdade(bmp.GetPixel(t.Width / 2, 3).A > 0, layout + ": vidro chega na borda de cima");
+                        string pasta = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                        if (!string.IsNullOrEmpty(pasta))
+                        {
+                            Directory.CreateDirectory(pasta);
+                            bmp.Save(Path.Combine(pasta, "widget-" + layout + (escuro ? "-escuro" : "-claro") + ".png"),
+                                     System.Drawing.Imaging.ImageFormat.Png);
+                        }
+                    }
+                }
+            }
+
+            Rectangle area = new Rectangle(0, 0, 1920, 1040);
+            Size tam = new Size(300, 130);
+            Igual(new Point(0, 0), WidgetDeBateria.Encaixar(new Point(9, 7), tam, area, 12), "perto do canto gruda nele");
+            Igual(new Point(1620, 910), WidgetDeBateria.Encaixar(new Point(1611, 903), tam, area, 12), "perto do canto oposto tambem");
+            Igual(new Point(500, 400), WidgetDeBateria.Encaixar(new Point(500, 400), tam, area, 12), "longe das bordas fica onde soltou");
+            Verdade(!WidgetDeBateria.Visivel(new Rectangle(-40000, -40000, 300, 130)), "posicao de um monitor que saiu nao conta como visivel");
+
+            // a janela de verdade, com o arquivo apontado para a pasta do teste
+            antes = ConfigDoWidget.Caminho;
+            string log = File.Exists(Log.Path) ? File.ReadAllText(Log.Path) : "";
+            try
+            {
+                ConfigDoWidget.Caminho = Path.Combine(root, "widget-janela.ini");
+                ConfigDoWidget cfg = new ConfigDoWidget();
+                using (WidgetDeBateria w = new WidgetDeBateria(cfg))
+                {
+                    w.Show();
+                    Application.DoEvents();
+                    Verdade(w.Visible, "widget abre");
+                    Verdade(w.Width > 0 && w.Height > 0, "widget tem tamanho depois do primeiro desenho");
+                    Verdade(WidgetDeBateria.Visivel(w.Bounds), "primeira abertura cai dentro da tela");
+                    w.Renderizar();
+                    w.Close();
+                }
+                string depois = File.Exists(Log.Path) ? File.ReadAllText(Log.Path) : "";
+                string novo = depois.Length >= log.Length ? depois.Substring(log.Length) : depois;
+                bool erro = false;
+                foreach (string linha in novo.Split('\n'))
+                    if (linha.IndexOf("widget", StringComparison.OrdinalIgnoreCase) >= 0 && linha.Contains(" :: ")) erro = true;
+                Verdade(!erro, "widget abre e desenha sem erro no log");
+            }
+            finally { ConfigDoWidget.Caminho = antes; }
         }
 
         private static void RegressionNavOrder(string root)
@@ -100,6 +222,10 @@ namespace MhiagosControl
                 nav.SelectedIndex = 3;
                 InvokePrivate(form, "AbrirPaginaPelaChave", "baterias");
                 Igual("baterias", nav.Selected.Key, "clique no aparelho da Visao geral abre Baterias");
+                form.MostrarPagina("metricas");
+                Igual("metricas", nav.Selected.Key, "clique no widget leva a janela aberta para a pagina pedida");
+                form.MostrarPagina(null);
+                Igual("metricas", nav.Selected.Key, "abrir pela bandeja nao mexe na pagina aberta");
                 nav.MoverItem(0, 7);
                 Igual("baterias", Config.LoadFrom(config.SavePath, false).NavOrder.Split(',')[7],
                     "reordenar grava a ordem nova na hora");

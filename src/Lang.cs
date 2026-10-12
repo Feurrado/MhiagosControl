@@ -881,6 +881,22 @@ namespace MhiagosControl
             get { return P("Pelo seu ritmo de uso, a bateria está perto do fim.", "At your usual pace, the battery is about to run out."); }
         }
         public static string MetricBattery(string nome) { return P("Bateria do " + nome, nome + " battery"); }
+        // Widget de bateria na area de trabalho
+        public static string TrayBatteryWidget { get { return P("Widget de bateria", "Battery widget"); } }
+        public static string WidgetOpenBatteries { get { return P("Abrir a página Baterias", "Open the Batteries page"); } }
+        public static string WidgetLayout { get { return P("Formato", "Layout"); } }
+        public static string WidgetRings { get { return P("Anéis", "Rings"); } }
+        public static string WidgetList { get { return P("Lista", "List"); } }
+        public static string WidgetGlass { get { return P("Vidro", "Glass"); } }
+        public static string WidgetClear { get { return P("Transparente", "Clear"); } }
+        public static string WidgetFrosted { get { return P("Fosco", "Frosted"); } }
+        public static string WidgetTintAuto { get { return P("Cor do tema do Windows", "Windows theme color"); } }
+        public static string WidgetTintDark { get { return P("Escuro", "Dark"); } }
+        public static string WidgetTintLight { get { return P("Claro", "Light"); } }
+        public static string WidgetOnTop { get { return P("Sempre na frente das janelas", "Always on top"); } }
+        public static string WidgetLock { get { return P("Travar posição", "Lock position"); } }
+        public static string WidgetHide { get { return P("Ocultar widget", "Hide widget"); } }
+        public static string WidgetNoDevices { get { return P("Nenhum periférico com bateria", "No battery devices"); } }
         public static string OpenBatteriesPage { get { return P("Ver detalhes na página Baterias", "See details on the Batteries page"); } }
         public static string BatPerCharge { get { return P("Duração de uma carga cheia", "Full charge lasts"); } }
         public static string BatLastCharge { get { return P("Última carga", "Last charge"); } }

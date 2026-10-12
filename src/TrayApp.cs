@@ -103,11 +103,17 @@ namespace MhiagosControl
         private ReadingSnapshot _snapshot = ReadingSnapshot.Empty;
 
         private List<SensorEntry> _cache = new List<SensorEntry>();
-        private MenuItem _miPause, _miAutostart, _miProfiles;
+        private MenuItem _miPause, _miAutostart, _miProfiles, _miWidget;
         private bool _sensorsOk = false;
         private bool _openWhenReady = false;
         private SettingsForm _settingsForm;
         private readonly WindowOpenGate _settingsGate = new WindowOpenGate();
+
+        /// <summary>Pagina que a proxima abertura da configuracao deve mostrar; nulo e a de sempre.</summary>
+        private string _paginaPedida;
+
+        private ConfigDoWidget _cfgWidget = new ConfigDoWidget();
+        private WidgetDeBateria _widget;
 
         public TrayContext() : this(new Sensors(), new HidPanel(), null) { }
 
@@ -152,6 +158,7 @@ namespace MhiagosControl
             _icon.Visible = true;
             _icon.Click += new EventHandler(OnIconClick);
             _icon.DoubleClick += new EventHandler(OnConfig);
+            _cfgWidget = ConfigDoWidget.Carregar();
             BuildMenu();
 
             IniciarVigiaDeAtivacao();
@@ -160,6 +167,9 @@ namespace MhiagosControl
             // A abertura das fontes NAO acontece aqui. Ela e agendada para
             // depois que Application.Run assumir: veja AbrirSensores.
             _marshal.BeginInvoke(new MethodInvoker(AbrirSensores));
+
+            // O widget nao depende dos sensores: a bateria tem leitores proprios
+            if (_cfgWidget.Ativo) _marshal.BeginInvoke(new MethodInvoker(MostrarWidget));
         }
 
         /// <summary>
@@ -385,6 +395,10 @@ namespace MhiagosControl
             RebuildProfileMenu();
 
             menu.MenuItems.Add(new MenuItem(T.TrayConfigure, new EventHandler(OnConfig)));
+
+            _miWidget = new MenuItem(T.TrayBatteryWidget, new EventHandler(OnToggleWidget));
+            _miWidget.Checked = _cfgWidget.Ativo;
+            menu.MenuItems.Add(_miWidget);
             menu.MenuItems.Add("-");
 
             _miPause = new MenuItem(T.TrayPause, new EventHandler(OnPause));
@@ -1117,7 +1131,59 @@ namespace MhiagosControl
 
         private void OnConfig(object sender, EventArgs e)
         {
+            _paginaPedida = null;
             PedirConfiguracao();
+        }
+
+        // ---------------- widget de bateria ----------------
+
+        private void OnToggleWidget(object sender, EventArgs e)
+        {
+            LigarWidget(!_cfgWidget.Ativo);
+        }
+
+        private void LigarWidget(bool ligar)
+        {
+            _cfgWidget.Ativo = ligar;
+            _cfgWidget.Salvar();
+            if (_miWidget != null) _miWidget.Checked = ligar;
+            if (ligar) MostrarWidget();
+            else FecharWidget();
+        }
+
+        private void MostrarWidget()
+        {
+            if (IsStopping || (_widget != null && !_widget.IsDisposed)) return;
+            try
+            {
+                _widget = new WidgetDeBateria(_cfgWidget);
+                // Fora do clique: a janela de configuracao e modal, e o widget
+                // nao pode ser fechado dentro do proprio menu
+                _widget.BateriasPedidas += delegate
+                {
+                    Marshal(delegate
+                    {
+                        _paginaPedida = "baterias";
+                        PedirConfiguracao();
+                    });
+                };
+                _widget.OcultarPedido += delegate { Marshal(delegate { LigarWidget(false); }); };
+                _widget.Show();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("abertura do widget de bateria", ex);
+                FecharWidget();
+            }
+        }
+
+        private void FecharWidget()
+        {
+            WidgetDeBateria w = _widget;
+            _widget = null;
+            if (w == null || w.IsDisposed) return;
+            try { w.Close(); w.Dispose(); }
+            catch (Exception ex) { Log.Error("fechamento do widget de bateria", ex); }
         }
 
         private void PedirConfiguracao()
@@ -1137,6 +1203,8 @@ namespace MhiagosControl
 
             if (_settingsForm != null && !_settingsForm.IsDisposed)
             {
+                _settingsForm.MostrarPagina(_paginaPedida);
+                _paginaPedida = null;
                 TrazerParaFrente(_settingsForm);
                 return;
             }
@@ -1178,6 +1246,8 @@ namespace MhiagosControl
                     using (SettingsForm f = new SettingsForm(_cfg, _cache, this))
                     {
                         _settingsForm = f;
+                        f.PaginaInicial = _paginaPedida;
+                        _paginaPedida = null;
                         // Aplicar dentro da janela ja vale no mostrador: sem
                         // isto o perfil so mudaria ao fechar, o que faria o
                         // botao parecer sem efeito.
@@ -1342,6 +1412,7 @@ namespace MhiagosControl
             if (!podeDescartarRecursos)
                 Log.Write("encerramento: recursos de hardware ficarao para o termino do processo");
 
+            FecharWidget();
             if (_icon != null) { _icon.Visible = false; _icon.Dispose(); }
             if (_iconNormal != null) _iconNormal.Dispose();
             if (_iconBaixa != null) _iconBaixa.Dispose();

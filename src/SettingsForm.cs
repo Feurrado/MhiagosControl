@@ -365,6 +365,15 @@ namespace MhiagosControl
             return l;
         }
 
+        /// <summary>Pagina da primeira exibicao, pela chave; nulo abre a de sempre.</summary>
+        internal string PaginaInicial;
+
+        /// <summary>Leva a janela ja aberta para a pagina pedida de fora, como o clique no widget.</summary>
+        internal void MostrarPagina(string chave)
+        {
+            if (!string.IsNullOrEmpty(chave)) AbrirPaginaPelaChave(chave);
+        }
+
         /// <summary>Abre a pagina pela chave, onde quer que a pessoa a tenha posto na barra.</summary>
         private void AbrirPaginaPelaChave(string chave)
         {
@@ -4237,6 +4246,7 @@ namespace MhiagosControl
         {
             base.OnShown(e);
             Theme.ApplyScrollbars(this);
+            MostrarPagina(PaginaInicial);
             ArranjarPaginaVisivel();
 
             if (_roda == null)

@@ -188,6 +188,18 @@ próprio G HUB. Há também a última carga, a última descarga completa, o uso
 total, a curva das últimas 48 horas e a **saúde da bateria**, que compara quanto
 dura uma carga cheia mês a mês.
 
+#### Widget na área de trabalho
+
+*Widget de bateria*, no menu da bandeja, põe a carga dos periféricos numa placa
+de vidro sobre a área de trabalho: o Windows desfoca o que está atrás e o
+Mhiagos desenha o brilho, o aro claro das bordas e um anel (ou barra) por
+aparelho, verde e com um brilho correndo enquanto carrega. Fica logo acima dos
+ícones, atrás das janelas, como os antigos gadgets; com **Win+D** ele continua à
+vista. Arrastar muda o lugar (gruda nas bordas da tela), clicar abre a página
+**Baterias**, e o botão direito escolhe entre **anéis** e **lista**, vidro
+**transparente** ou **fosco**, a cor do vidro (do tema do Windows, escura ou
+clara), **sempre na frente das janelas** e **travar posição**.
+
 O Windows avisa em **30%**, em **10%**, quando restarem **~2 h de uso** e quando
 o aparelho **chega a 100% no cabo**. A carga também vira sensor (categoria
 *Periféricos*): pode ir para o mostrador de baixo do cooler, para os cartões de
@@ -415,6 +427,7 @@ Ficam em `%LOCALAPPDATA%\MhiagosControl\` — acessível pelo menu da bandeja em
 |---------|----------|
 | `config.ini` | perfis do painel e de métricas, sensores, unidades, rodízio e idioma |
 | `baterias.dat` | histórico de bateria dos periféricos: cargas, descargas e a curva dos últimos 7 dias |
+| `widget.ini` | lugar e aparência do widget de bateria |
 | `log.txt` | diagnóstico, com rotação em 512 KB (`log.txt.1`) |
 
 Configurações de versões antigas (inclusive da época em que o projeto se

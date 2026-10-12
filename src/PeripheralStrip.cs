@@ -208,7 +208,7 @@ namespace MhiagosControl
             return p.Bateria.HasValue ? p.Bateria.Value + "%" : "--";
         }
 
-        private static string Nota(Periferico p, string previsao)
+        internal static string Nota(Periferico p, string previsao)
         {
             if (p.Bateria.HasValue)
             {
@@ -387,7 +387,7 @@ namespace MhiagosControl
         }
 
         /// <summary>O raio no meio da pilha, branco com contorno escuro para ler sobre o verde e sobre o vazio.</summary>
-        private static void Raio(Graphics g, RectangleF corpo)
+        internal static void Raio(Graphics g, RectangleF corpo)
         {
             float h = corpo.Height + 1f, w = h * 0.62f;
             float x = corpo.X + (corpo.Width - w) / 2f, y = corpo.Y + (corpo.Height - h) / 2f;
