@@ -421,6 +421,37 @@ namespace MhiagosControl
         /// shell. O "isolamento" nao isolava nada e a suite gravou por cima da
         /// configuracao real da maquina. Caminho explicito nao mente.
         /// </summary>
+        /// <summary>
+        /// Le o arquivo aceitando quem o tenha aberto para escrita, e insiste
+        /// por pouco mais de um segundo: no logon o antivirus e sincronizadores
+        /// abrem o config.ini por instantes.
+        /// </summary>
+        private static string[] LerLinhas(string path)
+        {
+            for (int tentativa = 0; ; tentativa++)
+            {
+                try
+                {
+                    using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read,
+                                                          FileShare.ReadWrite | FileShare.Delete))
+                    using (StreamReader r = new StreamReader(fs, Encoding.UTF8, true))
+                    {
+                        List<string> linhas = new List<string>();
+                        string linha;
+                        while ((linha = r.ReadLine()) != null) linhas.Add(linha);
+                        return linhas.ToArray();
+                    }
+                }
+                catch (FileNotFoundException) { throw; }
+                catch (DirectoryNotFoundException) { throw; }
+                catch (IOException)
+                {
+                    if (tentativa >= 5) throw;
+                    System.Threading.Thread.Sleep(250);
+                }
+            }
+        }
+
         public static Config LoadFrom(string path, bool migrar)
         {
             Config c = new Config();
@@ -435,13 +466,33 @@ namespace MhiagosControl
                     return c;
                 }
 
-                ReadLines(c, File.ReadAllLines(path));
+                ReadLines(c, LerLinhas(path));
 
                 if (c.Profiles.Count == 0) c.Profiles.Add(new Profile());
             }
             catch (Exception ex)
             {
                 Log.Error("leitura da configuracao", ex);
+
+                // Ler falhou com o arquivo la: antivirus ou sincronizador
+                // segurando-o no logon, por exemplo. A versao anterior subia com o
+                // padrao e o gravava por cima na primeira troca de perfil - os
+                // perfis do usuario sumiam. Tenta a copia .bak; sem ela, a sessao
+                // roda com o padrao mas sem destino de gravacao, e o arquivo real
+                // fica intacto para o proximo arranque.
+                c = new Config();
+                try
+                {
+                    ReadLines(c, LerLinhas(path + ".bak"));
+                    c._savePath = Path.GetFullPath(path);
+                    Log.Write("configuracao lida da copia .bak");
+                }
+                catch (Exception bak)
+                {
+                    Log.Error("leitura da copia .bak", bak);
+                    c = new Config();
+                    Log.Write("configuracao em memoria, sem gravar: o arquivo real fica intacto");
+                }
                 if (c.Profiles.Count == 0) c.Profiles.Add(new Profile());
             }
             ConfigTiming.NormalizeLegacy(c);
@@ -519,10 +570,15 @@ namespace MhiagosControl
                             // formato antigo, e vale o tamanho pequeno.
                             if (string.IsNullOrEmpty(v)) continue;
                             int tam = 0; string id = v;
+                            // O prefixo so vale quando e um numero: IDs do HWiNFO
+                            // trazem barras proprias ("hw:grupo|1|rotulo"), e uma
+                            // linha antiga assim virava tamanho 0 e ID "1|rotulo".
                             int barra = v.IndexOf('|');
-                            if (barra > 0)
+                            int lido;
+                            if (barra > 0 && int.TryParse(v.Substring(0, barra), NumberStyles.Integer,
+                                                          CultureInfo.InvariantCulture, out lido))
                             {
-                                tam = ParseInt(v.Substring(0, barra));
+                                tam = lido;
                                 id = v.Substring(barra + 1);
                             }
                             if (id.Length > 0 && !c.MetricIds.Contains(id))

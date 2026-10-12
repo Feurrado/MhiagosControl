@@ -126,7 +126,15 @@ namespace MhiagosSetup
             Encerrar();
 
             diz("Criando " + destino);
+            bool nossa = !Directory.Exists(destino) || atualizando ||
+                         Directory.GetFileSystemEntries(destino).Length == 0;
             Directory.CreateDirectory(destino);
+            // O aplicativo roda como administrador, e a tarefa de inicio
+            // automatico o abre sem UAC. Fora de Program Files a pasta herdaria
+            // escrita para usuarios comuns, e qualquer programa trocaria o exe
+            // ou as DLLs. So mexe em pasta que e nossa: escolher D:\Jogos como
+            // destino nao pode trancar o resto do disco.
+            if (nossa) Proteger(destino, diz);
             Directory.CreateDirectory(Path.Combine(destino, "engine"));
 
             Assembly asm = Assembly.GetExecutingAssembly();
@@ -195,6 +203,41 @@ namespace MhiagosSetup
             diz("");
             diz((atualizando ? "Atualizado em " : "Instalado em ") + destino);
             if (atualizando) diz("Os perfis e as configurações foram conservados.");
+        }
+
+        /// <summary>
+        /// Deixa a pasta como a de Program Files: administradores e sistema
+        /// gravam, usuarios comuns so leem e executam.
+        /// </summary>
+        internal static void Proteger(string destino, Action<string> diz)
+        {
+            try
+            {
+                var acl = new System.Security.AccessControl.DirectorySecurity();
+                acl.SetAccessRuleProtection(true, false);
+                var heranca = System.Security.AccessControl.InheritanceFlags.ContainerInherit |
+                              System.Security.AccessControl.InheritanceFlags.ObjectInherit;
+                var nenhuma = System.Security.AccessControl.PropagationFlags.None;
+                var permitir = System.Security.AccessControl.AccessControlType.Allow;
+                var admins = new System.Security.Principal.SecurityIdentifier(
+                    System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid, null);
+                acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(admins,
+                    System.Security.AccessControl.FileSystemRights.FullControl, heranca, nenhuma, permitir));
+                acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                    new System.Security.Principal.SecurityIdentifier(
+                        System.Security.Principal.WellKnownSidType.LocalSystemSid, null),
+                    System.Security.AccessControl.FileSystemRights.FullControl, heranca, nenhuma, permitir));
+                acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                    new System.Security.Principal.SecurityIdentifier(
+                        System.Security.Principal.WellKnownSidType.BuiltinUsersSid, null),
+                    System.Security.AccessControl.FileSystemRights.ReadAndExecute, heranca, nenhuma, permitir));
+                acl.SetOwner(admins);
+                Directory.SetAccessControl(destino, acl);
+            }
+            catch (Exception ex)
+            {
+                diz("  aviso: não foi possível proteger a pasta (" + ex.Message + ")");
+            }
         }
 
         // ---------------- desinstalar ----------------
