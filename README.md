@@ -53,7 +53,9 @@ diferente do esperado no seu aparelho.
 
 ## Telas
 
-A janela abre na **Visão geral** e tem sete páginas na barra lateral:
+A janela tem oito páginas na barra lateral e abre na primeira delas, a
+**Visão geral** de fábrica. A ordem é sua: arraste um item para cima ou para
+baixo (ou use Ctrl+↑ e Ctrl+↓), e ela fica gravada.
 
 | Página | Responde |
 |---|---|
@@ -63,6 +65,7 @@ A janela abre na **Visão geral** e tem sete páginas na barra lateral:
 | **Especificações** | o retrato completo da máquina, no espírito do CPU-Z |
 | **Perfis** | conjuntos salvos, rodízio, exportação e perfil por jogo |
 | **Configurações** | idioma, início automático, ociosidade e a fonte de FPS |
+| **Baterias** | quanto dura a carga do headset, do mouse e dos aparelhos Bluetooth |
 
 *Salvar* e *Fechar* moram no pé da barra lateral, que já é a coluna de comandos;
 recolhida, os dois viram ícone. *Salvar* fica esmaecido quando não há o que
@@ -159,6 +162,36 @@ saem do que a lista de sensores já publicou mais o que o próprio sistema
 responde: nenhuma consulta WMI, que custaria centenas de milissegundos na
 abertura. A linha da placa-mãe só aparece quando a fonte publica um nome que
 identifique alguma placa.
+
+### Bateria dos periféricos
+
+Acima das especificações, a **Visão geral** mostra a carga dos periféricos sem
+fio: imagem, porcentagem, uma pilha que fica verde com um raio quando o aparelho
+está no cabo e, embaixo, quanto ainda resta de uso (ou em quanto tempo enche).
+Passar o mouse no ícone da bandeja mostra as mesmas porcentagens, e o ícone
+ganha uma pilhinha vermelha quando algum aparelho fora do cabo chega a 30%.
+
+| Aparelho | De onde vem a carga |
+|---|---|
+| **Logitech G325** (e o que mais o G HUB mostrar) | serviço local do G HUB; **o G HUB precisa estar aberto** |
+| **Attack Shark X11** | mensagem que o receptor 2.4 GHz manda sozinho a cada 2 s |
+| **Bluetooth** | a mesma informação que o Windows mostra em Configurações |
+
+Nada disso pede administrador nem escreve nos aparelhos. Clicar num aparelho
+abre a página **Baterias**; lá, clicar na imagem abre o app dele (G HUB, Attack
+Shark ou o painel de Bluetooth do Windows).
+
+A página **Baterias** mede o **uso**, e não o calendário: só conta o tempo com o
+aparelho ligado. A previsão soma o ritmo de cada faixa de 10%, porque a bateria
+não descarrega em linha reta, e no headset aparece ao lado da estimativa do
+próprio G HUB. Há também a última carga, a última descarga completa, o uso
+total, a curva das últimas 48 horas e a **saúde da bateria**, que compara quanto
+dura uma carga cheia mês a mês.
+
+O Windows avisa em **30%**, em **10%**, quando restarem **~2 h de uso** e quando
+o aparelho **chega a 100% no cabo**. A carga também vira sensor (categoria
+*Periféricos*): pode ir para o mostrador de baixo do cooler, para os cartões de
+*Métricas* e para os perfis.
 
 ### Especificações
 
@@ -381,6 +414,7 @@ Ficam em `%LOCALAPPDATA%\MhiagosControl\` — acessível pelo menu da bandeja em
 | Arquivo | Conteúdo |
 |---------|----------|
 | `config.ini` | perfis do painel e de métricas, sensores, unidades, rodízio e idioma |
+| `baterias.dat` | histórico de bateria dos periféricos: cargas, descargas e a curva dos últimos 7 dias |
 | `log.txt` | diagnóstico, com rotação em 512 KB (`log.txt.1`) |
 
 Configurações de versões antigas (inclusive da época em que o projeto se

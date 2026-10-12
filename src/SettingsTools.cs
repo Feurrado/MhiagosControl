@@ -136,7 +136,8 @@ namespace MhiagosControl
             if ((keyData & Keys.Modifiers) == Keys.Alt)
             {
                 int index = (int)(keyData & Keys.KeyCode) - (int)Keys.D1;
-                if (index >= 0 && index < 7) { _nav.SelectedIndex = index; return true; }
+                // Alt+1 a Alt+9 seguem a ordem que esta na barra, mesmo reorganizada
+                if (index >= 0 && index < Math.Min(9, _nav.Items.Count)) { _nav.SelectedIndex = index; return true; }
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }

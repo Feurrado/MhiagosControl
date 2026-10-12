@@ -310,7 +310,17 @@ namespace MhiagosControl
             NavItem sobre = new NavItem();
             sobre.Text = T.NavAbout; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
 
-            foreach (NavItem it in new NavItem[] { visao, paineis, metricas, specs, perfis, config, sobre })
+            // E83F e a bateria cheia da Segoe MDL2. ESCAPADO, como todos.
+            // Entra antes de Sobre, e nao junto de Metricas: os atalhos Alt+1
+            // a Alt+6 e os testes de navegacao contam as paginas pela posicao.
+            NavItem baterias = new NavItem();
+            baterias.Text = T.NavBatteries; baterias.Glyph = "\uE83F"; baterias.Page = BuildPageBaterias();
+
+            visao.Key = "visao"; paineis.Key = "paineis"; metricas.Key = "metricas"; specs.Key = "specs";
+            perfis.Key = "perfis"; config.Key = "config"; baterias.Key = "baterias"; sobre.Key = "sobre";
+
+            NavItem[] fabrica = { visao, paineis, metricas, specs, perfis, config, baterias, sobre };
+            foreach (NavItem it in OrdemDaBarra(fabrica, _cfg.NavOrder))
             {
                 _nav.Add(it);
                 it.Page.Dock = DockStyle.Fill;
@@ -322,7 +332,62 @@ namespace MhiagosControl
                 Control pg = it.Page;
                 pg.Resize += delegate { ArranjarPagina(pg); };
             }
+            _nav.OrderChanged += delegate { GravarOrdemDaBarra(); };
             ShowPage();
+        }
+
+        /// <summary>
+        /// A ordem de fabrica rearranjada pela ordem gravada. Chave que nao
+        /// existe mais e ignorada; pagina que nao estava na lista gravada (uma
+        /// aba nova de uma versao futura) entra no lugar dela na ordem de
+        /// fabrica, para nao sumir de quem ja tinha reorganizado o menu.
+        /// </summary>
+        internal static List<NavItem> OrdemDaBarra(NavItem[] fabrica, string gravada)
+        {
+            List<NavItem> l = new List<NavItem>();
+            if (!string.IsNullOrEmpty(gravada))
+                foreach (string chave in gravada.Split(','))
+                    foreach (NavItem it in fabrica)
+                        if (it.Key == chave.Trim() && !l.Contains(it)) l.Add(it);
+
+            for (int i = 0; i < fabrica.Length; i++)
+            {
+                if (l.Contains(fabrica[i])) continue;
+                // logo depois de quem vinha antes dela na fabrica, ou no comeco
+                int pos = 0;
+                for (int j = i - 1; j >= 0; j--)
+                {
+                    int k = l.IndexOf(fabrica[j]);
+                    if (k >= 0) { pos = k + 1; break; }
+                }
+                l.Insert(pos, fabrica[i]);
+            }
+            return l;
+        }
+
+        /// <summary>Abre a pagina pela chave, onde quer que a pessoa a tenha posto na barra.</summary>
+        private void AbrirPaginaPelaChave(string chave)
+        {
+            IList<NavItem> itens = _nav.Items;
+            for (int i = 0; i < itens.Count; i++)
+                if (itens[i].Key == chave) { _nav.SelectedIndex = i; return; }
+        }
+
+        /// <summary>Grava na hora, como a barra recolhida: e arrumacao da tela, nao edicao de perfil.</summary>
+        private void GravarOrdemDaBarra()
+        {
+            try
+            {
+                List<string> chaves = new List<string>();
+                foreach (NavItem it in _nav.Items) chaves.Add(it.Key);
+                _cfg.NavOrder = string.Join(",", chaves.ToArray());
+                string erro;
+                if (!_session.TrySavePreferences(delegate(Config draft, Config target)
+                {
+                    target.NavOrder = draft.NavOrder;
+                }, out erro)) Log.Write("ordem da barra lateral nao persistiu: " + erro);
+            }
+            catch (Exception ex) { Log.Error("gravar ordem da barra lateral", ex); }
         }
 
         private void ShowPage()
@@ -523,6 +588,7 @@ namespace MhiagosControl
             if (pagina == _pgMetricas) ArranjarMetricas();
             else if (pagina == _pgVisao) { if (pagina.Visible) ArranjarVisaoGeral(); }
             else if (pagina == _pgSpecs) { if (pagina.Visible) ArranjarSpecsPagina(); }
+            else if (pagina == _pgBaterias) ArranjarBaterias();
             else if (pagina == _pgPaineis) ArranjarPaineis();
             else if (pagina == _pgConfig) ArrangeSettings();
             else if (pagina == _pgPerfis) ArrangeProfiles();
@@ -753,6 +819,7 @@ namespace MhiagosControl
         private readonly List<string> _vgIds = new List<string>();
 
         private Card _cardCooler, _cardSpecs;
+        private PeripheralStrip _cardPerif;
         private PanelPreview _vgPreview;
         private Label _vgPerfil, _vgPainel;
         private Label[] _vgSpecCap, _vgSpecVal;
@@ -814,6 +881,13 @@ namespace MhiagosControl
             // sempre ou se subiu agora.
             _vgP1 = MostradorEmCurva();
             _vgP2 = MostradorEmCurva();
+
+            // Carga do headset e do mouse, logo acima das especificacoes: muda
+            // devagar e se consulta de passagem, entao fica na faixa de baixo,
+            // longe das leituras que pedem o olho.
+            _cardPerif = new PeripheralStrip();
+            _cardPerif.BateriasPedidas += delegate { AbrirPaginaPelaChave("baterias"); };
+            _pgVisao.Controls.Add(_cardPerif);
 
             _cardSpecs = new Card();
             _cardSpecs.Title = null;    // tira sozinho: e uma tira de referencia
@@ -890,7 +964,7 @@ namespace MhiagosControl
             c.Sub = SystemInfo.Limpar(s.Hardware);
 
             float? at, pe;
-            MetricPicker.Faixas(s.EffectiveUnit, out at, out pe);
+            MetricPicker.Faixas(s.EffectiveUnit, s.Id, out at, out pe);
             c.Atencao = at; c.Perigo = pe;
         }
 
@@ -960,7 +1034,7 @@ namespace MhiagosControl
                 c.SensorId = s.Id;
                 c.Janela = MetricHistory.JanelaValida(_cfg.MetricRange);
                 float? at, pe;
-                MetricPicker.Faixas(s.EffectiveUnit, out at, out pe);
+                MetricPicker.Faixas(s.EffectiveUnit, s.Id, out at, out pe);
                 c.Atencao = at; c.Perigo = pe;
 
                 _pgVisao.Controls.Add(c);
@@ -993,6 +1067,7 @@ namespace MhiagosControl
             const int Esp = 10;
             const int AlturaBloco = 148;
             const int AlturaSpecs = 56;
+            const int AlturaPerif = 80;
             const int MeioMin = 240;
 
             int disp = _pgVisao.Width - 4;
@@ -1019,8 +1094,14 @@ namespace MhiagosControl
 
                 int yMeio = (n > 0 ? AlturaBloco + Esp : 0);
                 int ySpecs = _pgVisao.Height - AlturaSpecs;
-                int hMeio = ySpecs - Esp - yMeio;
-                if (hMeio < MeioMin) { hMeio = MeioMin; ySpecs = yMeio + hMeio + Esp; }
+                int yPerif = ySpecs - Esp - AlturaPerif;
+                int hMeio = yPerif - Esp - yMeio;
+                if (hMeio < MeioMin)
+                {
+                    hMeio = MeioMin;
+                    yPerif = yMeio + hMeio + Esp;
+                    ySpecs = yPerif + AlturaPerif + Esp;
+                }
 
                 // Duas colunas na faixa do meio. A esquerda e mais estreita: o
                 // que ela guarda e uma foto quadrada e quatro linhas curtas, e
@@ -1039,6 +1120,7 @@ namespace MhiagosControl
                 if (_vgP2 != null)
                     _vgP2.SetBounds(x0 + wEsq + Esp, yMeio + hCurva + Esp, wDir, hMeio - hCurva - Esp);
 
+                _cardPerif.SetBounds(x0, yPerif, alvo, AlturaPerif);
                 _cardSpecs.SetBounds(x0, ySpecs, alvo, AlturaSpecs);
 
                 ArranjarCooler();
@@ -1183,6 +1265,8 @@ namespace MhiagosControl
             PorLinha(_vgPerfil, displayed.Name);
             PorLinha(_vgPainel, IdDoPainel());
 
+            if (_cardPerif != null) _cardPerif.Atualizar(Perifericos.Atual);
+
             ApontarMostrador(_vgP1, id1, T.OnPanel(T.Top));
             ApontarMostrador(_vgP2, id2, T.OnPanel(T.Bottom));
             if (snap != null)
@@ -1238,6 +1322,90 @@ namespace MhiagosControl
                 ? achado.Value.Value.ToString("0")
                 : achado.Value.Value.ToString("0.0");
             return nome + "  ·  " + v + (string.IsNullOrEmpty(achado.Unit) ? "" : " " + achado.Unit);
+        }
+
+        // ---------------- pagina: Baterias ----------------
+
+        private Pagina _pgBaterias;
+        private Label _lbBateriasVazio;
+        private readonly List<CartaoDeBateria> _cartoesDeBateria = new List<CartaoDeBateria>();
+        private DateTime _bateriasLidas = DateTime.MinValue;
+
+        /// <summary>
+        /// Quanto dura a carga de cada periferico, quando foi a ultima e como a
+        /// porcentagem andou. Os numeros vem de HistoricoDeBateria, que a thread
+        /// de atualizacao alimenta mesmo com esta janela fechada.
+        /// </summary>
+        private Control BuildPageBaterias()
+        {
+            _pgBaterias = new Pagina();
+            _pgBaterias.RolarNaVertical();
+
+            _lbBateriasVazio = MakeLabel(T.BatNoDevices, 2, 4, Ui.FontBase);
+            _lbBateriasVazio.ForeColor = Ui.Muted;
+            _lbBateriasVazio.AutoSize = false;
+            _lbBateriasVazio.Visible = false;
+            _pgBaterias.Controls.Add(_lbBateriasVazio);
+            return _pgBaterias;
+        }
+
+        private void AtualizarBaterias()
+        {
+            if (_pgBaterias == null) return;
+            // o tick e de 250 ms; a bateria anda em minutos
+            if ((DateTime.Now - _bateriasLidas).TotalMilliseconds < 1000) return;
+            _bateriasLidas = DateTime.Now;
+
+            Periferico[] vivos = Perifericos.Atual;
+            List<AnaliseDeBateria> analises = HistoricoDeBateria.Analisar(vivos);
+
+            bool mudouLista = analises.Count != _cartoesDeBateria.Count;
+            for (int i = 0; !mudouLista && i < analises.Count; i++)
+                mudouLista = analises[i].Chave != _cartoesDeBateria[i].Chave;
+
+            if (mudouLista)
+            {
+                foreach (CartaoDeBateria c in _cartoesDeBateria) { _pgBaterias.Controls.Remove(c); c.Dispose(); }
+                _cartoesDeBateria.Clear();
+                foreach (AnaliseDeBateria a in analises)
+                {
+                    CartaoDeBateria c = new CartaoDeBateria();
+                    _pgBaterias.Controls.Add(c);
+                    _cartoesDeBateria.Add(c);
+                }
+            }
+
+            for (int i = 0; i < analises.Count; i++)
+            {
+                int? autonomia = null;
+                foreach (Periferico p in vivos)
+                    if (HistoricoDeBateria.Chave(p) == analises[i].Chave) autonomia = p.Autonomia;
+                _cartoesDeBateria[i].Mostrar(analises[i], autonomia);
+            }
+
+            if (mudouLista) ArranjarBaterias();
+        }
+
+        private void ArranjarBaterias()
+        {
+            if (_pgBaterias == null) return;
+            const int Esp = 12;
+
+            int disp = _pgBaterias.Width - 4 - Pagina.LarguraDaBarra;
+            int larg = disp > LarguraMaxDaPagina ? LarguraMaxDaPagina : disp;
+            if (larg < 460) larg = 460;
+            int x = 2 + Math.Max(0, (disp - larg) / 2);
+
+            _lbBateriasVazio.Visible = _cartoesDeBateria.Count == 0;
+            _lbBateriasVazio.SetBounds(x, 4, larg, 40);
+
+            int y = 2;
+            foreach (CartaoDeBateria c in _cartoesDeBateria)
+            {
+                c.SetBounds(x, y, larg, CartaoDeBateria.Altura);
+                y += CartaoDeBateria.Altura + Esp;
+            }
+            _pgBaterias.Sincronizar();
         }
 
         // ---------------- pagina: Especificacoes ----------------
@@ -3295,7 +3463,7 @@ namespace MhiagosControl
                 c.Unidade = s == null ? "" : s.EffectiveUnit;
                 c.Janela = janela;
                 float? at, pe;
-                MetricPicker.Faixas(c.Unidade, out at, out pe);
+                MetricPicker.Faixas(c.Unidade, c.SensorId, out at, out pe);
                 c.Atencao = at; c.Perigo = pe;
 
                 string alvo = id;
@@ -3534,7 +3702,7 @@ namespace MhiagosControl
                 if (card.Titulo != title || card.Sub != footer || card.Unidade != unit)
                 {
                     card.Titulo = title; card.Sub = footer; card.Unidade = unit;
-                    float? attention, danger; MetricPicker.Faixas(unit, out attention, out danger);
+                    float? attention, danger; MetricPicker.Faixas(unit, id, out attention, out danger);
                     card.Atencao = attention; card.Perigo = danger; card.Invalidate();
                 }
                 float value;
@@ -3919,6 +4087,8 @@ namespace MhiagosControl
 
             if (snap != null && ativa == _pgVisao)
                 AtualizarVisaoGeral(snap);
+
+            if (ativa == _pgBaterias) AtualizarBaterias();
 
             if (snap != null && ativa == _pgMetricas)
                 AtualizarMetricas(snap);

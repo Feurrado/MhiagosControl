@@ -933,6 +933,9 @@ namespace MhiagosControl
         public string Text;
         public string Glyph;     // caractere de Segoe MDL2 Assets
         public Control Page;
+
+        /// <summary>Nome estavel da pagina, para gravar a ordem; nao muda com o idioma.</summary>
+        public string Key;
         internal Rectangle Bounds;
     }
 
@@ -986,6 +989,16 @@ namespace MhiagosControl
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
+            // Ctrl+setas leva a pagina selecionada junto: o mesmo que arrastar,
+            // para quem prefere o teclado.
+            if (e.Control && (e.KeyCode == Keys.Up || e.KeyCode == Keys.Down))
+            {
+                int de = SelectedIndex;
+                int para = e.KeyCode == Keys.Up ? de - 1 : de + 1;
+                if (para >= 0 && para < _items.Count) MoverItem(de, para);
+                e.Handled = true;
+                return;
+            }
             if (e.KeyCode == Keys.Up) SelectedIndex = Math.Max(0, SelectedIndex - 1);
             else if (e.KeyCode == Keys.Down) SelectedIndex = Math.Min(_items.Count - 1, SelectedIndex + 1);
             else if (e.KeyCode == Keys.Home) SelectedIndex = 0;
@@ -998,6 +1011,34 @@ namespace MhiagosControl
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
 
         public void Add(NavItem item) { _items.Add(item); Invalidate(); }
+
+        /// <summary>As paginas na ordem em que aparecem.</summary>
+        public System.Collections.Generic.IList<NavItem> Items { get { return _items.AsReadOnly(); } }
+
+        /// <summary>A pessoa mudou a ordem, arrastando ou com Ctrl+setas.</summary>
+        public event EventHandler OrderChanged;
+
+        /// <summary>
+        /// Leva o item da posicao "de" para a posicao "para" (ja contada sem
+        /// ele). A selecao acompanha a PAGINA, e nao a posicao: arrastar a
+        /// pagina aberta para baixo nao pode trocar o que esta na tela.
+        /// </summary>
+        public void MoverItem(int de, int para)
+        {
+            if (de < 0 || de >= _items.Count) return;
+            if (para < 0) para = 0;
+            if (para > _items.Count - 1) para = _items.Count - 1;
+            if (para == de) return;
+
+            NavItem selecionado = Selected;
+            NavItem it = _items[de];
+            _items.RemoveAt(de);
+            _items.Insert(para, it);
+            _selected = selecionado != null ? _items.IndexOf(selecionado) : 0;
+            _hover = -1;
+            Invalidate();
+            if (OrderChanged != null) OrderChanged(this, EventArgs.Empty);
+        }
 
         public NavItem Selected
         {
@@ -1153,8 +1194,71 @@ namespace MhiagosControl
 
         private int TopoDosItens { get { return Estreita ? 104 : HeaderH; } }
 
+        // ---------------- arrastar para reordenar ----------------
+
+        /// <summary>Item pressionado, candidato a arraste; -1 sem botao apertado.</summary>
+        private int _pressionado = -1;
+        private Point _pontoDoClique;
+        private bool _arrastando = false;
+
+        /// <summary>Onde o item cairia se soltasse agora, contado como posicao de insercao (0..Count).</summary>
+        private int _destino = -1;
+
+        /// <summary>Px de folga antes de um clique virar arraste: mao tremula nao reordena nada.</summary>
+        private const int LimiarDeArraste = 6;
+
+        private int PosicaoDeInsercao(int y)
+        {
+            int pos = (int)Math.Floor((y - TopoDosItens + (RowH + 2) / 2.0) / (RowH + 2));
+            return Math.Max(0, Math.Min(_items.Count, pos));
+        }
+
+        private void TerminarArraste(bool aplicar)
+        {
+            int de = _pressionado, ate = _destino;
+            bool estava = _arrastando;
+            _pressionado = -1; _arrastando = false; _destino = -1;
+            Capture = false;
+            Cursor = Cursors.Default;
+            Invalidate();
+            if (!estava || !aplicar || de < 0 || ate < 0) return;
+            // posicao de insercao conta o proprio item; depois de tira-lo, quem
+            // estava abaixo sobe uma casa
+            int para = ate > de ? ate - 1 : ate;
+            MoverItem(de, para);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left) TerminarArraste(true);
+            base.OnMouseUp(e);
+        }
+
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            if (_arrastando && !Capture) TerminarArraste(false);
+            base.OnMouseCaptureChanged(e);
+        }
+
         protected override void OnMouseMove(MouseEventArgs e)
         {
+            if (_pressionado >= 0 && (e.Button & MouseButtons.Left) != 0)
+            {
+                if (!_arrastando && Math.Abs(e.Y - _pontoDoClique.Y) >= LimiarDeArraste)
+                {
+                    _arrastando = true;
+                    Capture = true;
+                    Cursor = Cursors.SizeNS;
+                }
+                if (_arrastando)
+                {
+                    int d = PosicaoDeInsercao(e.Y);
+                    if (d != _destino) { _destino = d; Invalidate(); }
+                    base.OnMouseMove(e);
+                    return;
+                }
+            }
+
             bool nb = _botao.Contains(e.Location);
             int h = nb ? -1 : HitTest(e.Location);
             if (h != _hover || nb != _sobreBotao)
@@ -1177,6 +1281,7 @@ namespace MhiagosControl
             if (_botao.Contains(e.Location)) { Collapsed = !Collapsed; base.OnMouseDown(e); return; }
             int h = HitTest(e.Location);
             if (h >= 0) SelectedIndex = h;
+            if (h >= 0 && e.Button == MouseButtons.Left) { _pressionado = h; _pontoDoClique = e.Location; }
             base.OnMouseDown(e);
         }
 
@@ -1239,6 +1344,19 @@ namespace MhiagosControl
                 y += RowH + 2;
             }
 
+            // Arrastando: uma linha marca onde a pagina vai cair.
+            if (_arrastando && _destino >= 0)
+            {
+                int ly = TopoDosItens + _destino * (RowH + 2) - 1;
+                int x0 = Estreita ? 6 : 8, x1 = Width - (Estreita ? 6 : 8);
+                using (Pen pen = new Pen(Ui.Accent, 2f))
+                    g.DrawLine(pen, x0 + 4, ly, x1 - 4, ly);
+                using (SolidBrush b = new SolidBrush(Ui.Accent))
+                {
+                    g.FillEllipse(b, x0, ly - 3, 6, 6);
+                    g.FillEllipse(b, x1 - 6, ly - 3, 6, 6);
+                }
+            }
         }
 
         /// <summary>
