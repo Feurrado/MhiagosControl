@@ -16,8 +16,7 @@ namespace MhiagosControl
     ///
     ///   powershell -ExecutionPolicy Bypass -File .\tools\build-widget-preview.ps1
     ///   bin\WidgetPreview.exe [--real] [--lista] [--fosco] [--escuro|--claro]
-    ///                         [--fundo] [--listras] [--sem-recorte]
-    ///                         [--sem-camada] [--cantos-do-windows]
+    ///                         [--fundo] [--listras]
     ///                         [--segundos N] [--foto arquivo.png]
     ///
     /// Sem --real os aparelhos sao de mentira (um carregando, um com pouca
@@ -118,9 +117,6 @@ namespace MhiagosControl
                 else if (a == "--claro") cfg.Cor = CorDoVidro.Clara;
                 else if (a == "--fundo") cfg.NaFrente = false;
                 else if (a == "--listras") listras = true;
-                else if (a == "--sem-recorte") WidgetDeBateria.RecortarDesfoque = false;
-                else if (a == "--sem-camada") WidgetDeBateria.SemCamada = true;
-                else if (a == "--cantos-do-windows") WidgetDeBateria.CantosDoWindows = true;
                 else if (a == "--segundos" && i + 1 < args.Length) segundos = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (a == "--foto" && i + 1 < args.Length) foto = Path.GetFullPath(args[++i]);
             }

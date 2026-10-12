@@ -139,7 +139,7 @@ namespace MhiagosControl
     /// </summary>
     internal static class PintorDoWidget
     {
-        internal const float RaioDoVidro = 22f;
+        internal const float RaioDoVidro = 8f;
         private const float Margem = 16f;
 
         // aneis
@@ -628,8 +628,8 @@ namespace MhiagosControl
     /// Janela em camadas (UpdateLayeredWindow) com o desenho inteiro num bitmap
     /// com transparencia por pixel - o WinForms nao desenha cantos suaves nem
     /// meio-transparencia numa janela comum. O desfoque do que fica atras e do
-    /// proprio Windows, pedido pela mesma API que a barra de tarefas usa; a
-    /// regiao arredondada corta esse desfoque no formato da placa.
+    /// proprio Windows, pedido pela mesma API que a barra de tarefas usa; o
+    /// arredondamento do DWM corta esse desfoque nos cantos da placa.
     ///
     /// Fica logo acima dos icones da area de trabalho e abaixo de todo o resto,
     /// como um gadget. Nao rouba o foco, nao aparece na barra de tarefas nem no
@@ -693,9 +693,6 @@ namespace MhiagosControl
             _conferirDesktop.Tick += delegate { _conferirDesktop.Stop(); ConferirDesktop(); };
 
             _preferencias = new AvisosDoSistema(this);
-
-            // so a janela comum (SemCamada) recebe WM_PAINT; o fundo e todo do bitmap
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.Opaque, true);
         }
 
         protected override CreateParams CreateParams
@@ -703,8 +700,7 @@ namespace MhiagosControl
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.ExStyle |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
-                if (!SemCamada) cp.ExStyle |= WS_EX_LAYERED;
+                cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
                 // o construtor do Form ja pergunta isto, antes de _cfg existir
                 if (_cfg != null && _cfg.NaFrente) cp.ExStyle |= WS_EX_TOPMOST;
                 return cp;
@@ -717,15 +713,7 @@ namespace MhiagosControl
         {
             base.OnHandleCreated(e);
             using (Graphics g = Graphics.FromHwnd(Handle)) _escala = Math.Max(1f, g.DpiX / 96f);
-            if (CantosDoWindows)
-            {
-                try
-                {
-                    int redondo = DWMWCP_ROUND;
-                    DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref redondo, 4);
-                }
-                catch (Exception ex) { Log.Error("cantos do widget", ex); }
-            }
+            ArredondarCantos();
             AplicarDesfoque();
         }
 
@@ -759,7 +747,6 @@ namespace MhiagosControl
                 if (_menu != null) { _menu.Dispose(); _menu = null; }
                 if (_preferencias != null) _preferencias.Dispose();
             }
-            if (_quadro != IntPtr.Zero) { DeleteObject(_quadro); _quadro = IntPtr.Zero; }
             if (_gancho != IntPtr.Zero) { UnhookWinEvent(_gancho); _gancho = IntPtr.Zero; }
             base.Dispose(disposing);
         }
@@ -853,46 +840,8 @@ namespace MhiagosControl
             }
         }
 
-        /// <summary>
-        /// Experimentos para o desfoque respeitar os cantos; so a previa liga.
-        /// SemCamada: janela comum com SetWindowRgn, desenhada no WM_PAINT.
-        /// CantosDoWindows: arredondamento do proprio DWM (8 px, Windows 11).
-        /// </summary>
-        internal static bool SemCamada, CantosDoWindows;
-
-        /// <summary>Ultimo quadro, para o WM_PAINT da janela comum.</summary>
-        private IntPtr _quadro = IntPtr.Zero;
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            if (!SemCamada || _quadro == IntPtr.Zero) return;
-            IntPtr hdc = e.Graphics.GetHdc();
-            IntPtr mem = CreateCompatibleDC(hdc);
-            try
-            {
-                IntPtr antigo = SelectObject(mem, _quadro);
-                // copia o alfa junto: o DWM mostra o desfoque onde o bitmap e transparente
-                BitBlt(hdc, 0, 0, ClientSize.Width, ClientSize.Height, mem, 0, 0, SRCCOPY);
-                SelectObject(mem, antigo);
-            }
-            finally
-            {
-                DeleteDC(mem);
-                e.Graphics.ReleaseHdc(hdc);
-            }
-        }
-
         private void AplicarBitmap(Bitmap bmp)
         {
-            if (SemCamada)
-            {
-                IntPtr novo = bmp.GetHbitmap(Color.FromArgb(0));
-                if (_quadro != IntPtr.Zero) DeleteObject(_quadro);
-                _quadro = novo;
-                Invalidate();
-                Update();
-                return;
-            }
             IntPtr tela = GetDC(IntPtr.Zero);
             IntPtr mem = CreateCompatibleDC(tela);
             IntPtr hbmp = IntPtr.Zero, antigo = IntPtr.Zero;
@@ -918,18 +867,7 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Desliga o recorte do desfoque; so a previa usa, para comparar.
-        /// </summary>
-        internal static bool RecortarDesfoque = true;
-
-        /// <summary>
-        /// Recorta a janela e o desfoque no formato da placa.
-        ///
-        /// Numa janela em camadas o SetWindowRgn so vale para o clique: o
-        /// desfoque do Windows continuava no retangulo inteiro e aparecia
-        /// quadrado fora da curva dos cantos (visto no Windows 11). Quem limita
-        /// a area do desfoque e a regiao do DwmEnableBlurBehindWindow; depois
-        /// dele o desfoque e pedido de novo.
+        /// Recorta a janela no formato da placa, para o clique.
         /// </summary>
         private void AplicarRegiao(Size tam)
         {
@@ -941,21 +879,25 @@ namespace MhiagosControl
                 if (SetWindowRgn(Handle, rgn, true) == 0) DeleteObject(rgn);
             }
             catch (Exception ex) { Log.Error("regiao do widget", ex); }
+        }
 
-            if (!RecortarDesfoque) return;
-            IntPtr area = IntPtr.Zero;
+        /// <summary>
+        /// O desfoque do Windows ignora a regiao da janela e saia quadrado fora
+        /// da curva dos cantos (SetWindowRgn e DwmEnableBlurBehindWindow nao
+        /// recortam, nem numa janela comum; visto no Windows 11). So o
+        /// arredondamento do proprio DWM corta o desfoque, e o raio dele e fixo
+        /// em 8 px na escala 1: por isso a placa e desenhada com esse raio. No
+        /// Windows 10 a chamada falha calada e o desfoque fica retangular.
+        /// </summary>
+        private void ArredondarCantos()
+        {
+            if (!Windows11) return;
             try
             {
-                area = CreateRoundRectRgn(0, 0, tam.Width + 1, tam.Height + 1, d, d);
-                DWM_BLURBEHIND bb = new DWM_BLURBEHIND();
-                bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-                bb.fEnable = true;
-                bb.hRgnBlur = area;
-                DwmEnableBlurBehindWindow(Handle, ref bb);
+                int redondo = DWMWCP_ROUND;
+                DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref redondo, 4);
             }
-            catch (Exception ex) { Log.Error("recorte do desfoque do widget", ex); }
-            finally { if (area != IntPtr.Zero) DeleteObject(area); }   // esta regiao continua nossa
-            AplicarDesfoque();
+            catch (Exception ex) { Log.Error("cantos do widget", ex); }
         }
 
         /// <summary>
@@ -1501,24 +1443,9 @@ namespace MhiagosControl
             public byte wProductType, wReserved;
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct DWM_BLURBEHIND
-        {
-            public int dwFlags;
-            public bool fEnable;
-            public IntPtr hRgnBlur;
-            public bool fTransitionOnMaximized;
-        }
-
-        private const int DWM_BB_ENABLE = 1, DWM_BB_BLURREGION = 2;
         private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2;
-        private const int SRCCOPY = 0x00CC0020;
 
         [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
-        [DllImport("gdi32.dll")]
-        private static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, int rop);
-
-        [DllImport("dwmapi.dll")] private static extern int DwmEnableBlurBehindWindow(IntPtr hwnd, ref DWM_BLURBEHIND bb);
         [DllImport("ntdll.dll")] private static extern int RtlGetVersion(ref OSVERSIONINFOEX info);
         [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
         [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
