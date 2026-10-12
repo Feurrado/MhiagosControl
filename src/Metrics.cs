@@ -964,6 +964,8 @@ namespace MhiagosControl
             "gpu core current (vddcr_gfx)", "Corrente do núcleo da GPU", "GPU core current",
             "gpu memory used",        "Memória de vídeo em uso",    "GPU memory used",
             "gpu memory usage",       "Uso da memória de vídeo",    "GPU memory usage",
+            "gpu d3d memory dedicated", "Memória de vídeo em uso",  "GPU memory used",
+            "gpu d3d memory dynamic", "Memória compartilhada da GPU", "GPU shared memory",
 
             // memoria
             "load:memory",            "Uso da memória",             "Memory usage",

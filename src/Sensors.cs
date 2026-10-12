@@ -273,6 +273,47 @@ namespace MhiagosControl
             e.Unit = "GB";
         }
 
+        /// <summary>
+        /// Troca o "GPU Memory Usage" das Radeon pelo valor do Direct3D.
+        ///
+        /// Esse numero vem do driver da AMD, e o driver erra: numa RX 580 de
+        /// 8 GB ele marcava 86 mil MB - 84 GB no mostrador - com 1,8 GB de fato
+        /// em uso, e ficava parado ali com a placa ociosa ou em jogo. O proprio
+        /// HWiNFO recomenda o "GPU D3D Memory Dedicated", que bate com o
+        /// Adrenalin e com o contador do Windows. O valor e trocado, e nao o
+        /// sensor, porque o ID salvo nos perfis e no history.dat e o do
+        /// "GPU Memory Usage": trocar o sensor deixaria esses cartoes em branco.
+        ///
+        /// So mexe em memoria (MB ou GB) do mesmo dispositivo e so quando o
+        /// D3D existe. Na NVIDIA o "GPU Memory Usage" e porcentagem e passa
+        /// intacto.
+        /// </summary>
+        internal static void CorrigirMemoriaDeVideo(List<SensorEntry> entries)
+        {
+            if (entries == null) return;
+            foreach (SensorEntry dedicada in entries)
+            {
+                if (dedicada == null || !dedicada.Value.HasValue) continue;
+                if (!string.Equals(dedicada.Name, "GPU D3D Memory Dedicated", StringComparison.OrdinalIgnoreCase)) continue;
+
+                foreach (SensorEntry e in entries)
+                {
+                    if (e == null || e == dedicada || e.Hardware != dedicada.Hardware) continue;
+                    if (!string.Equals(e.Name, "GPU Memory Usage", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (e.Unit != "GB" && e.Unit != "MB") continue;
+                    e.Value = Converter(dedicada.Value.Value, dedicada.Unit, e.Unit);
+                }
+            }
+        }
+
+        private static float Converter(float valor, string de, string para)
+        {
+            if (de == para) return valor;
+            if (de == "MB" && para == "GB") return valor / 1024f;
+            if (de == "GB" && para == "MB") return valor * 1024f;
+            return valor;
+        }
+
         // ---------------- categorias ----------------
 
         /// <summary>

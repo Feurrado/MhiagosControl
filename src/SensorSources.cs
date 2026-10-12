@@ -114,6 +114,7 @@ namespace MhiagosControl
                 e.Label = Sensors.Describe(r.Group, r.Label, r.Type);
                 result.Add(e);
             }
+            Sensors.CorrigirMemoriaDeVideo(result);
             return result;
         }
 
