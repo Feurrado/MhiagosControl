@@ -473,8 +473,9 @@ namespace MhiagosControl
         private static void Bolha(Graphics g, RectangleF r, bool escuro)
         {
             // miolo denso e neutro, sem contorno: o icone salta e nao sobram
-            // dois circulos translucidos de tons diferentes
-            using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(130, 12, 14, 20) : Color.FromArgb(150, 255, 255, 255)))
+            // dois circulos translucidos de tons diferentes. No vidro claro o
+            // miolo e cinza-chumbo, porque os icones sao brancos
+            using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(130, 12, 14, 20) : Color.FromArgb(150, 72, 78, 90)))
                 g.FillEllipse(b, r);
             RectangleF topo = new RectangleF(r.X, r.Y, r.Width, r.Height * 0.6f);
             using (GraphicsPath elipse = new GraphicsPath())
@@ -483,7 +484,7 @@ namespace MhiagosControl
                 Region antes = g.Clip;
                 g.SetClip(elipse, CombineMode.Intersect);
                 using (LinearGradientBrush b = new LinearGradientBrush(RectangleF.Inflate(topo, 0, 1f),
-                    Color.FromArgb(escuro ? 34 : 80, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Vertical))
+                    Color.FromArgb(escuro ? 34 : 50, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Vertical))
                     g.FillRectangle(b, topo);
                 g.Clip = antes;
                 antes.Dispose();
