@@ -8,7 +8,7 @@ $out  = Join-Path $bin 'Tests.exe'
 
 if (-not (Test-Path $csc)) { Write-Output "ERRO: csc.exe nao encontrado em $fw"; exit 1 }
 New-Item -ItemType Directory -Force -Path $bin | Out-Null
-Copy-Item (Join-Path $root 'lib\LibreHardwareMonitorLib.dll') $bin -Force -ErrorAction SilentlyContinue
+Get-ChildItem (Join-Path $root 'lib') -Filter *.dll | Where-Object { $_.Name -ne 'api-ms-win-core-sysinfo-825-64.dll' } | Copy-Item -Destination (Join-Path $root 'bin') -Force -ErrorAction SilentlyContinue
 
 $refs = @(
     (Join-Path $fw 'System.dll'),

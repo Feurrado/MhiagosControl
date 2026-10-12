@@ -36,11 +36,22 @@ foreach ($f in @($app, $lhm, $lic)) {
 
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
+$avisos = Join-Path $root 'lib\THIRD-PARTY-NOTICES.txt'
+if (-not (Test-Path $avisos)) { Write-Output "ERRO: falta $avisos"; exit 1 }
+
 $recursos = @(
     ('/resource:' + $app + ',payload.MhiagosControl.exe'),
     ('/resource:' + $lhm + ',payload.LibreHardwareMonitorLib.dll'),
-    ('/resource:' + $lic + ',payload.lhm-license.txt')
+    ('/resource:' + $lic + ',payload.lhm-license.txt'),
+    ('/resource:' + $avisos + ',payload.notices.txt')
 )
+
+# Dependencias da LibreHardwareMonitor (0.9.5+): cada DLL de lib\ vira um
+# recurso payload.lib.<nome>, e o instalador copia todas para o lado do exe.
+# O motor do HWiNFO nunca entra por aqui - ele tem tratamento proprio abaixo.
+Get-ChildItem (Join-Path $root 'lib') -Filter *.dll |
+    Where-Object { $_.Name -ne 'api-ms-win-core-sysinfo-825-64.dll' -and $_.Name -ne 'LibreHardwareMonitorLib.dll' } |
+    ForEach-Object { $recursos += ('/resource:' + $_.FullName + ',payload.lib.' + $_.Name) }
 
 if ($SemMotor) {
     Write-Output "sem o motor do HWiNFO: instalador distribuivel, e o app sobe na fonte de reserva"

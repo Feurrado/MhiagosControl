@@ -718,6 +718,14 @@ namespace MhiagosControl
                          "Could not change the automatic startup.\nDetails in:\n");
             }
         }
+        public static string AutostartUnsafeFolder
+        {
+            get
+            {
+                return P("A inicialização automática roda o aplicativo como administrador, e a pasta dele pode ser alterada por qualquer programa:\n\n{0}\n\nInstale pelo instalador (em Arquivos de Programas) para ativar esta opção.",
+                         "Automatic startup runs the application as administrator, and its folder can be changed by any program:\n\n{0}\n\nInstall it with the installer (in Program Files) to enable this option.");
+            }
+        }
 
         // ---------------- motor de sensores ----------------
 

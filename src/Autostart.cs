@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Reflection;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 
 namespace MhiagosControl
@@ -50,10 +52,29 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("consulta da tarefa agendada", ex); return false; }
         }
 
+        /// <summary>
+        /// Mensagem pronta da ultima recusa do Enable, ou null quando a falha
+        /// foi do schtasks e o detalhe esta no log.
+        /// </summary>
+        public static string UltimaRecusa { get; private set; }
+
         public static bool Enable()
         {
+            UltimaRecusa = null;
             try
             {
+                // A tarefa roda o executavel como administrador e sem UAC. Numa
+                // pasta que o usuario comum grava (Downloads, bin\, D:\Apps),
+                // qualquer programa troca o exe ou deixa uma DLL ao lado e ganha
+                // administrador no proximo logon.
+                string pasta = System.IO.Path.GetDirectoryName(ExePath);
+                if (!PastaProtegida(pasta))
+                {
+                    UltimaRecusa = string.Format(T.AutostartUnsafeFolder, pasta);
+                    Log.Write("autostart recusado: pasta gravavel por usuario comum (" + pasta + ")");
+                    return false;
+                }
+
                 int code;
                 Run("/create /tn \"" + TaskName + "\" /tr \"\\\"" + ExePath + "\\\"\" /sc onlogon /rl highest /f", out code);
                 bool ok = (code == 0);
@@ -153,6 +174,73 @@ namespace MhiagosControl
         /// so torna a falha pior - apareceria numa maquina qualquer, um dia,
         /// sem jeito de reproduzir.
         /// </summary>
+        /// <summary>
+        /// Verdadeiro quando nenhum usuario comum consegue alterar a pasta do
+        /// executavel, a subpasta engine\, o proprio executavel ou trocar a
+        /// pasta inteira pela de cima.
+        /// </summary>
+        internal static bool PastaProtegida(string pasta)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(pasta) || !System.IO.Directory.Exists(pasta)) return false;
+                const FileSystemRights Escrita =
+                    FileSystemRights.WriteData | FileSystemRights.AppendData |
+                    FileSystemRights.Delete | FileSystemRights.DeleteSubdirectoriesAndFiles |
+                    FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership;
+                const FileSystemRights TrocaDeFilho =
+                    FileSystemRights.DeleteSubdirectoriesAndFiles |
+                    FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership;
+
+                if (UsuarioComumPode(System.IO.Directory.GetAccessControl(pasta), Escrita)) return false;
+
+                string engine = System.IO.Path.Combine(pasta, "engine");
+                if (System.IO.Directory.Exists(engine) &&
+                    UsuarioComumPode(System.IO.Directory.GetAccessControl(engine), Escrita)) return false;
+
+                string exe = System.IO.Path.Combine(pasta, System.IO.Path.GetFileName(ExePath));
+                if (System.IO.File.Exists(exe) &&
+                    UsuarioComumPode(System.IO.File.GetAccessControl(exe), Escrita)) return false;
+
+                System.IO.DirectoryInfo pai = System.IO.Directory.GetParent(pasta);
+                if (pai != null && UsuarioComumPode(pai.GetAccessControl(), TrocaDeFilho)) return false;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("verificacao da pasta do executavel", ex);
+                return false;
+            }
+        }
+
+        private static bool UsuarioComumPode(FileSystemSecurity acl, FileSystemRights direitos)
+        {
+            SecurityIdentifier eu = WindowsIdentity.GetCurrent().User;
+            SecurityIdentifier[] comuns =
+            {
+                new SecurityIdentifier(WellKnownSidType.WorldSid, null),
+                new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
+                new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null),
+                new SecurityIdentifier(WellKnownSidType.InteractiveSid, null),
+                eu,
+            };
+
+            // O dono muda as permissoes quando quiser, com ou sem regra explicita.
+            IdentityReference dono = acl.GetOwner(typeof(SecurityIdentifier));
+            if (dono != null && eu != null && dono.Equals(eu)) return true;
+
+            foreach (FileSystemAccessRule regra in acl.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+            {
+                if (regra.AccessControlType != AccessControlType.Allow) continue;
+                if ((regra.FileSystemRights & direitos) == 0) continue;
+                // Regra que so vale para os filhos nao da escrita nesta pasta.
+                if ((regra.PropagationFlags & PropagationFlags.InheritOnly) != 0) continue;
+                foreach (SecurityIdentifier sid in comuns)
+                    if (sid != null && sid.Equals(regra.IdentityReference)) return true;
+            }
+            return false;
+        }
+
         private static string Run(string args, out int exitCode)
         {
             ProcessStartInfo psi = new ProcessStartInfo("schtasks.exe", args);

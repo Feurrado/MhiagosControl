@@ -1082,9 +1082,12 @@ namespace MhiagosControl
                     v.Write(12, (uint)Inicio);
                     v.Write(16, (uint)Quantas);
 
-                    // Entrada 0 vazia, para o leitor ter de pular buraco.
-                    Entrada(v, Inicio + TamEntrada * 1, 1111, @"C:\Jogos\alpha.exe", 1000, 2000, 120, 8333);
-                    Entrada(v, Inicio + TamEntrada * 2, 2222, @"D:\Jogos\beta.exe", 1000, 3000, 120, 16666);
+                    // Entrada 0 vazia, para o leitor ter de pular buraco. Os
+                    // tempos sao GetTickCount, como no RTSS: entrada parada ha
+                    // mais de 3 s e jogo minimizado, e nao leitura ao vivo.
+                    uint agora = unchecked((uint)Environment.TickCount);
+                    Entrada(v, Inicio + TamEntrada * 1, 1111, @"C:\Jogos\alpha.exe", agora - 2500, agora - 1500, 120, 8333);
+                    Entrada(v, Inicio + TamEntrada * 2, 2222, @"D:\Jogos\beta.exe", agora - 2000, agora, 120, 16666);
 
                     List<SensorEntry> lidas = new Rtss().Ler();
                     Igual(6, lidas.Count, "seis leituras tambem com o RTSS presente");
@@ -1107,6 +1110,13 @@ namespace MhiagosControl
                             "minimo espera a janela ter amostras suficientes");
                     Verdade(!Achar(lidas, "rtss:frametime.max").Value.HasValue,
                             "pior caso espera a mesma coisa");
+
+                    // Jogo minimizado ou pausado: o RTSS para de renovar a entrada e
+                    // o ultimo FPS ficava no painel como se fosse ao vivo.
+                    Entrada(v, Inicio + TamEntrada * 1, 1111, @"C:\Jogos\alpha.exe", agora - 60000, agora - 10000, 120, 8333);
+                    Entrada(v, Inicio + TamEntrada * 2, 2222, @"D:\Jogos\beta.exe", agora - 60000, agora - 9000, 120, 16666);
+                    Verdade(!Achar(new Rtss().Ler(), "rtss:fps").Value.HasValue,
+                            "entrada sem quadro novo ha mais de 3 s nao vira FPS ao vivo");
                 }
             }
             finally { if (mmf != null) mmf.Dispose(); }

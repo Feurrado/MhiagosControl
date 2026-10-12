@@ -42,6 +42,7 @@ namespace MhiagosControl
             RegressionMissingMetrics(root);
             RegressionBugGeometry(root);
             RegressionVideoMemory();
+            RegressionReviewFixes();
         }
 
         private static void RegressionVideoMemory()
@@ -80,6 +81,55 @@ namespace MhiagosControl
             semantica.Add(usage); semantica.Add(dedicada);
             Igual("d3d", SensorSemantics.ResolveId(semantica, "semantic:vram-used"),
                   "recuperacao da memoria de video prefere o D3D dedicado");
+        }
+
+        private static void RegressionReviewFixes()
+        {
+            Secao("bugs: revisao de outubro (config, metricas, autostart, winget)");
+
+            string caixa = Path.Combine(Path.GetTempPath(), "MhiagosControlTeste" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(caixa);
+            try
+            {
+                string ini = Path.Combine(caixa, "config.ini");
+                File.WriteAllText(ini, "[general]\r\nactive=Meu\r\n" +
+                    "metric=hw:CPU [#0]: AMD Ryzen 5 5600X: Enhanced|1|CPU (Tctl/Tdie)\r\n" +
+                    "metric=2|rtss:fps\r\n\r\n[profile]\r\nname=Meu\r\npanel1=a\r\npanel2=b\r\n");
+                Config lida = Config.LoadFrom(ini, false);
+                Igual("hw:CPU [#0]: AMD Ryzen 5 5600X: Enhanced|1|CPU (Tctl/Tdie)", lida.MetricIds[0],
+                      "metrica antiga do HWiNFO sem tamanho preserva o ID inteiro");
+                Igual(0, lida.MetricSizes[0], "metrica antiga recebe tamanho pequeno");
+                Igual("rtss:fps", lida.MetricIds[1], "prefixo numerico continua sendo tamanho");
+                Igual(2, lida.MetricSizes[1], "tamanho lido do prefixo");
+
+                // Arquivo travado: o .bak entra e o original nao e sobrescrito por um padrao.
+                File.Copy(ini, ini + ".bak", true);
+                using (new FileStream(ini, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    Config travada = Config.LoadFrom(ini, false);
+                    Igual("Meu", travada.Active.Name, "arquivo travado le a copia .bak");
+                }
+                File.Delete(ini + ".bak");
+                string original = File.ReadAllText(ini);
+                Config semCopia;
+                using (new FileStream(ini, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    semCopia = Config.LoadFrom(ini, false);
+                Verdade(!semCopia.Save(), "sem copia, a sessao nao grava por cima do arquivo real");
+                Igual(original, File.ReadAllText(ini), "config real permanece intacto");
+
+                Verdade(!Autostart.PastaProtegida(caixa), "pasta temporaria do usuario nao serve para autostart elevado");
+                Verdade(!Autostart.PastaProtegida(Path.Combine(caixa, "inexistente")), "pasta inexistente e recusada");
+            }
+            finally { try { Directory.Delete(caixa, true); } catch { } }
+
+            string programas = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            Verdade(Autostart.PastaProtegida(Path.Combine(windows, "System32")) || !Directory.Exists(programas),
+                    "pasta do sistema conta como protegida");
+
+            string winget = Rtss.Winget();
+            Verdade(winget == null || winget.EndsWith(@"\Microsoft\WindowsApps\winget.exe", StringComparison.OrdinalIgnoreCase),
+                    "winget so vem do atalho do App Installer, nunca do PATH");
         }
 
         private static SensorEntry Memoria(string placa, string nome, float valor, string unidade)

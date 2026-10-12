@@ -72,6 +72,9 @@ namespace MhiagosControl
         private const int EntTempoDeQuadro = 280;   // microssegundos
         private const int EntMinimo = 284;          // tamanho minimo utilizavel
 
+        /// <summary>Entrada sem quadro novo ha mais que isto nao e leitura ao vivo.</summary>
+        private const uint EntradaVencidaMs = 3000;
+
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 
@@ -146,28 +149,26 @@ namespace MhiagosControl
         ///
         /// Windows 10 sem o App Installer nao tem winget, e nesse caso o botao
         /// de instalar precisa virar "abrir a pagina" em vez de falhar.
+        ///
+        /// So o atalho que o App Installer instala, e nao o PATH: o aplicativo
+        /// roda como administrador, e o PATH do usuario e gravavel sem
+        /// privilegio - um winget.exe falso numa pasta anterior da lista rodava
+        /// elevado, sem UAC, no clique em "Instalar RTSS".
         /// </summary>
         public static string Winget()
         {
             try
             {
-                string path = Environment.GetEnvironmentVariable("PATH");
-                if (string.IsNullOrEmpty(path)) return null;
-
-                foreach (string dir in path.Split(';'))
-                {
-                    string d = dir.Trim();
-                    if (d.Length == 0) continue;
-                    try
-                    {
-                        string alvo = Path.Combine(d, "winget.exe");
-                        if (File.Exists(alvo)) return alvo;
-                    }
-                    catch { }   // entrada invalida no PATH nao derruba a busca
-                }
+                string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                if (string.IsNullOrEmpty(local)) return null;
+                string alvo = Path.Combine(local, @"Microsoft\WindowsApps\winget.exe");
+                if (!File.Exists(alvo)) return null;
+                // O atalho do App Installer e um ponto de reparse, e nao um
+                // executavel comum largado na pasta.
+                if ((File.GetAttributes(alvo) & FileAttributes.ReparsePoint) == 0) return null;
+                return alvo;
             }
-            catch { }
-            return null;
+            catch { return null; }
         }
 
         /// <summary>Identificador do pacote oficial no repositorio do winget.</summary>
@@ -326,9 +327,11 @@ namespace MhiagosControl
 
             try
             {
-                string antes = File.Exists(caminho) ? File.ReadAllText(caminho) : "";
+                // O RTSS grava o Config em ANSI. Ler como UTF-8 trocava cada byte
+                // acentuado por U+FFFD e a regravacao corrompia ajustes dele.
+                string antes = File.Exists(caminho) ? File.ReadAllText(caminho, Encoding.Default) : "";
                 string depois = AjustarIni(antes);
-                if (depois != antes) File.WriteAllText(caminho, depois);
+                if (depois != antes) File.WriteAllText(caminho, depois, Encoding.Default);
                 Log.Write("RTSS: inicio com o Windows ligado em " + caminho);
             }
             catch (Exception ex)
@@ -481,6 +484,13 @@ namespace MhiagosControl
                     uint t0 = v.ReadUInt32(b + EntTempo0);
                     uint t1 = v.ReadUInt32(b + EntTempo1);
                     if (t1 <= t0 || v.ReadUInt32(b + EntQuadros) == 0) continue;
+
+                    // O RTSS so renova a entrada enquanto o jogo apresenta quadros.
+                    // Minimizado ou pausado, o processo segue vivo e a entrada fica
+                    // congelada no ultimo FPS, que o painel mostrava como se fosse
+                    // ao vivo. dwTime1 e GetTickCount; a subtracao sem sinal atravessa
+                    // a volta dos 49 dias.
+                    if (unchecked((uint)Environment.TickCount - t1) > EntradaVencidaMs) continue;
 
                     // O jogo em primeiro plano ganha de qualquer outro; sem ele,
                     // vale quem desenhou por ultimo. Varios programas podem estar

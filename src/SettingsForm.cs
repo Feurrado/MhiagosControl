@@ -2810,7 +2810,8 @@ namespace MhiagosControl
                                "\"" + Application.ExecutablePath + "\" " + Rtss.ArgConfigurar;
 
                 System.Diagnostics.ProcessStartInfo psi =
-                    new System.Diagnostics.ProcessStartInfo("cmd.exe", "/s /k \"" + linha + "\"");
+                    new System.Diagnostics.ProcessStartInfo(
+                        System.IO.Path.Combine(Environment.SystemDirectory, "cmd.exe"), "/s /k \"" + linha + "\"");
                 psi.UseShellExecute = true;
                 System.Diagnostics.Process.Start(psi);
 
@@ -3797,7 +3798,7 @@ namespace MhiagosControl
             bool ok = target ? Autostart.Enable() : Autostart.Disable();
             if (!ok)
             {
-                Warn(T.AutostartFailed + Log.Path);
+                Warn(Autostart.UltimaRecusa ?? T.AutostartFailed + Log.Path);
                 _loading = true; _tgAutostart.Checked = !target; _loading = false;
             }
         }

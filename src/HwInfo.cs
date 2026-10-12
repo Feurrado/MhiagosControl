@@ -57,8 +57,11 @@ namespace MhiagosControl
         private const int CLS_MIN = 1;
         private const int CLS_MAX = 8;
 
-        [DllImport("kernel32", CharSet = CharSet.Ansi, SetLastError = true)]
-        private static extern IntPtr LoadLibraryA(string path);
+        // Unicode: com a versao ANSI, um caminho com caracteres fora da pagina de
+        // codigo (perfil de usuario em outro alfabeto) chegava com "?", o motor
+        // nao carregava e o app caia em silencio na LibreHardwareMonitor.
+        [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr LoadLibraryW(string path);
         [DllImport("kernel32", SetLastError = true)]
         private static extern IntPtr GetProcAddress(IntPtr h, IntPtr ordinal);
         [DllImport("kernel32", SetLastError = true)]
@@ -185,7 +188,7 @@ namespace MhiagosControl
         {
             try
             {
-                IntPtr h = LoadLibraryA(path);
+                IntPtr h = LoadLibraryW(path);
                 if (h == IntPtr.Zero)
                 {
                     Log.Write("HWiNFO: LoadLibrary falhou em " + path + " (erro " + Marshal.GetLastWin32Error() + ")");

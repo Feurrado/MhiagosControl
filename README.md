@@ -295,6 +295,8 @@ explicação. Fechá-la não interrompe nada.
 
 - Windows 10/11 x64
 - .NET Framework 4.7.2+ (presente por padrão)
+- [PawnIO](https://pawnio.eu), opcional. Só importa sem o HWiNFO: sem ele a
+  LibreHardwareMonitor não lê a temperatura da CPU
 - **Privilégio administrativo** — ler temperatura da CPU exige acesso em modo
   kernel, e isso não existe sem elevação
 
@@ -404,7 +406,10 @@ própria e não são cobertas por ela:
 | Componente | Licença |
 |------------|---------|
 | `src/`, `tools/`, `build.ps1`, `assets/` gerados | MIT |
-| `lib/LibreHardwareMonitorLib.dll` | MPL 2.0 (veja `lib/LibreHardwareMonitor-LICENSE.txt`) |
+| `lib/LibreHardwareMonitorLib.dll` 0.9.6 | MPL 2.0 (veja `lib/LibreHardwareMonitor-LICENSE.txt`) |
+| `lib/DiskInfoToolkit.dll`, `RAMSPDToolkit-NDD.dll`, `BlackSharp.Core.dll` | MPL 2.0 |
+| `lib/HidSharp.dll` | Apache 2.0 |
+| `lib/System.Memory.dll`, `System.Buffers.dll`, `System.Numerics.Vectors.dll`, `System.Runtime.CompilerServices.Unsafe.dll` | MIT (.NET Foundation) |
 | `engine\api-ms-win-core-sysinfo-825-64.dll` | © REALiX s.r.o. |
 
 ---
@@ -412,7 +417,8 @@ própria e não são cobertas por ela:
 ## Créditos
 
 - [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) —
-  fonte de reserva (MPL 2.0). Licença em `lib/LibreHardwareMonitor-LICENSE.txt`.
+  fonte de reserva (MPL 2.0). Licença em `lib/LibreHardwareMonitor-LICENSE.txt`;
+  as dependências dela estão listadas em `lib/THIRD-PARTY-NOTICES.txt`.
 - **HWiNFO32 Client Library** — © REALiX s.r.o.
 - Protocolo do painel: engenharia reversa para interoperabilidade com hardware
   próprio.

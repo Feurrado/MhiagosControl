@@ -149,6 +149,16 @@ namespace MhiagosControl
                                 if (HidP_GetCaps(pp, out caps) != 0x110000 || caps.UsagePage != USAGE_PAGE)
                                     continue;
 
+                                // A pagina FF01 sozinha nao basta: o VID 1A2C e de uma
+                                // controladora usada em muitos perifericos genericos, e um
+                                // deles com FF01 receberia o quadro 0x07 a cada 800 ms.
+                                // A colecao do painel, medida no Temp 6 Pro Black: uso 1,
+                                // sem relatorio de entrada, relatorio de recurso de 64 bytes
+                                // - exatamente o que o HidD_SetFeature do quadro exige.
+                                if (caps.Usage != 1 || caps.InputReportByteLength != 0 ||
+                                    caps.FeatureReportByteLength != 64)
+                                    continue;
+
                                 if (attr.ProductID == PID) found = path;
                                 else if (alternativo == null)
                                 {

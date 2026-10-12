@@ -317,7 +317,7 @@ namespace MhiagosControl
 
             WarnAboutOriginalTask();
 
-            Microsoft.Win32.SystemEvents.SessionEnding += new Microsoft.Win32.SessionEndingEventHandler(OnSessionEnding);
+            Microsoft.Win32.SystemEvents.SessionEnded += new Microsoft.Win32.SessionEndedEventHandler(OnSessionEnded);
 
             IniciarVigiaDeJogo();
 
@@ -655,7 +655,7 @@ namespace MhiagosControl
             bool target = !_miAutostart.Checked;
             bool ok = target ? Autostart.Enable() : Autostart.Disable();
             if (ok) _miAutostart.Checked = target;
-            else MessageBox.Show(T.AutostartFailed + Log.Path,
+            else MessageBox.Show(Autostart.UltimaRecusa ?? T.AutostartFailed + Log.Path,
                     T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
@@ -672,15 +672,21 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("verificacao da tarefa original", ex); }
         }
 
+        /// <summary>
+        /// Preenche so o painel vazio. Trocar os dois quando faltava um apagava
+        /// a escolha do usuario no outro.
+        /// </summary>
         private void PickDefaults(Profile p)
         {
-            foreach (SensorEntry s in _cache)
-                if (s.Type == SensorType.Temperature && s.Label.IndexOf("CPU", StringComparison.OrdinalIgnoreCase) >= 0)
-                { p.Panel1Id = s.Id; break; }
+            if (string.IsNullOrEmpty(p.Panel1Id))
+                foreach (SensorEntry s in _cache)
+                    if (s.Type == SensorType.Temperature && s.Label.IndexOf("CPU", StringComparison.OrdinalIgnoreCase) >= 0)
+                    { p.Panel1Id = s.Id; break; }
 
-            foreach (SensorEntry s in _cache)
-                if (s.Type == SensorType.Load && s.Label.IndexOf("Total", StringComparison.OrdinalIgnoreCase) >= 0)
-                { p.Panel2Id = s.Id; break; }
+            if (string.IsNullOrEmpty(p.Panel2Id))
+                foreach (SensorEntry s in _cache)
+                    if (s.Type == SensorType.Load && s.Label.IndexOf("Total", StringComparison.OrdinalIgnoreCase) >= 0)
+                    { p.Panel2Id = s.Id; break; }
         }
 
         // ---------------- thread de atualizacao ----------------
@@ -1138,10 +1144,17 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("abrir pasta de dados", ex); }
         }
 
-        private void OnSessionEnding(object sender, Microsoft.Win32.SessionEndingEventArgs e)
+        /// <summary>
+        /// SessionEnded, e nao SessionEnding: o logoff ainda pode ser cancelado
+        /// depois do SessionEnding, por outro programa ou pelo usuario. Parar
+        /// tudo ali deixava o processo vivo sem icone, sem threads e dono do
+        /// mutex - o painel apagava e abrir o app de novo nao fazia nada.
+        /// </summary>
+        private void OnSessionEnded(object sender, Microsoft.Win32.SessionEndedEventArgs e)
         {
             Log.Write("sessao do Windows encerrando");
             Shutdown();
+            Application.Exit();
         }
 
         private void OnExit(object sender, EventArgs e)
@@ -1155,7 +1168,7 @@ namespace MhiagosControl
             int previous = Interlocked.Exchange(ref _runtimeState, (int)RuntimeState.Stopping);
             if (previous >= (int)RuntimeState.Stopping) return;
 
-            try { Microsoft.Win32.SystemEvents.SessionEnding -= new Microsoft.Win32.SessionEndingEventHandler(OnSessionEnding); } catch { }
+            try { Microsoft.Win32.SystemEvents.SessionEnded -= new Microsoft.Win32.SessionEndedEventHandler(OnSessionEnded); } catch { }
 
             if (_relogioDoJogo != null)
             {
