@@ -83,9 +83,9 @@ namespace MhiagosControl
                 case "memory-used": return BestAny(sensors, SensorType.Data, "physical memory used", "memory used");
                 case "vrm-temp": return NamedAny(sensors, SensorType.Temperature, "vrm mos", "vrm");
                 case "vram-used": return Best(sensors, "GPU", SensorType.SmallData,
-                                                "gpu memory used", "gpu memory usage", "d3d dedicated memory used", "dedicated memory used", "memory used")
+                                                "gpu d3d memory dedicated", "d3d dedicated memory used", "gpu memory used", "dedicated memory used", "gpu memory usage", "memory used")
                                       ?? Best(sensors, "GPU", SensorType.Data,
-                                              "gpu memory used", "gpu memory usage", "d3d dedicated memory used", "dedicated memory used", "memory used");
+                                              "gpu d3d memory dedicated", "d3d dedicated memory used", "gpu memory used", "dedicated memory used", "gpu memory usage", "memory used");
                 case "gpu-3d": return Best(sensors, "GPU", SensorType.Load, "d3d 3d", "3d usage", "gpu d3d");
             }
             return null;

@@ -41,6 +41,54 @@ namespace MhiagosControl
             RegressionMouseButtons();
             RegressionMissingMetrics(root);
             RegressionBugGeometry(root);
+            RegressionVideoMemory();
+        }
+
+        private static void RegressionVideoMemory()
+        {
+            Secao("bugs: memoria de video da Radeon vem do Direct3D");
+
+            const string Placa = "GPU [#0]: AMD Radeon RX 580: Sapphire RX 580 Pulse";
+            const string Outra = "GPU [#1]: AMD Radeon RX 6600";
+            List<SensorEntry> lista = new List<SensorEntry>();
+            SensorEntry driver = Memoria(Placa, "GPU Memory Usage", 86354f, "MB");
+            SensorEntry d3d = Memoria(Placa, "GPU D3D Memory Dedicated", 1885f, "MB");
+            SensorEntry outraPlaca = Memoria(Outra, "GPU Memory Usage", 50000f, "MB");
+            lista.Add(driver); lista.Add(d3d); lista.Add(outraPlaca);
+            foreach (SensorEntry e in lista) Sensors.ToGigabytes(e);
+
+            Sensors.CorrigirMemoriaDeVideo(lista);
+            Verdade(Math.Abs(driver.Value.Value - 1885f / 1024f) < 0.001f,
+                    "GPU Memory Usage do driver passa a mostrar o D3D dedicado");
+            Igual("GB", driver.Unit, "unidade preservada");
+            Igual("hw:" + Placa + "|8|GPU Memory Usage", driver.Id, "ID salvo nos perfis nao muda");
+            Verdade(Math.Abs(outraPlaca.Value.Value - 50000f / 1024f) < 0.001f,
+                    "placa sem D3D dedicado nao recebe valor de outra placa");
+
+            SensorEntry nvidia = Memoria(Placa, "GPU Memory Usage", 37f, "%");
+            nvidia.Type = SensorType.Load;
+            List<SensorEntry> porcentagem = new List<SensorEntry>();
+            porcentagem.Add(nvidia); porcentagem.Add(Memoria(Placa, "GPU D3D Memory Dedicated", 2.5f, "GB"));
+            Sensors.CorrigirMemoriaDeVideo(porcentagem);
+            Igual(37f, nvidia.Value.Value, "uso em porcentagem nao e tocado");
+
+            List<SensorEntry> semantica = new List<SensorEntry>();
+            SensorEntry usage = Memoria(Placa, "GPU Memory Usage", 84f, "GB");
+            usage.Id = "usage"; usage.Category = "GPU";
+            SensorEntry dedicada = Memoria(Placa, "GPU D3D Memory Dedicated", 1.8f, "GB");
+            dedicada.Id = "d3d"; dedicada.Category = "GPU";
+            semantica.Add(usage); semantica.Add(dedicada);
+            Igual("d3d", SensorSemantics.ResolveId(semantica, "semantic:vram-used"),
+                  "recuperacao da memoria de video prefere o D3D dedicado");
+        }
+
+        private static SensorEntry Memoria(string placa, string nome, float valor, string unidade)
+        {
+            SensorEntry e = new SensorEntry();
+            e.Hardware = placa; e.Name = nome; e.Label = nome; e.Category = "GPU";
+            e.Type = SensorType.Data; e.Value = valor; e.Unit = unidade;
+            e.Id = "hw:" + placa + "|8|" + nome; e.Source = "HWiNFO";
+            return e;
         }
 
         private static void RegressionFileProtection(string root)
