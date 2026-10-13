@@ -33,7 +33,7 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.19.0";
+        public const string Versao = "2.20.0";
         public const string TaskName = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
@@ -191,6 +191,9 @@ namespace MhiagosSetup
                 AppName + ".lnk");
             if (atalhoArea) Atalho(naArea, exe, destino);
             else Apagar(naArea);
+            // avisa o Explorer para recarregar os icones ja em cache, sem esperar
+            // o proximo logon
+            AvisarIcones();
 
             diz("Registrando em Aplicativos Instalados");
             Registrar(destino, exe, desinst);
@@ -389,6 +392,11 @@ namespace MhiagosSetup
         /// <summary>Atalho por COM tardio, para nao depender do IWshRuntimeLibrary.</summary>
         private static void Atalho(string lnk, string alvo, string dirTrabalho)
         {
+            // Sempre do zero: o CreateShortcut sobre um .lnk existente reaproveita
+            // a lista de itens antiga, com tamanho e datas de um exe de versoes
+            // atras, e o Windows passa a mostrar o atalho (e o botao da barra de
+            // tarefas, que o acha pela AUMID) com o icone de arquivo em branco.
+            try { if (File.Exists(lnk)) File.Delete(lnk); } catch { }
             object shell = null;
             try
             {
@@ -408,6 +416,16 @@ namespace MhiagosSetup
             catch { }
             finally { if (shell != null) try { Marshal.ReleaseComObject(shell); } catch { } }
             CarimbarAppId(lnk);
+        }
+
+        [DllImport("shell32.dll")]
+        private static extern void SHChangeNotify(int eventId, uint flags, IntPtr item1, IntPtr item2);
+
+        private static void AvisarIcones()
+        {
+            const int SHCNE_ASSOCCHANGED = 0x08000000;
+            const uint SHCNF_IDLIST = 0x0000;
+            try { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, IntPtr.Zero, IntPtr.Zero); } catch { }
         }
 
         /// <summary>A mesma AUMID que o app define para si (TaskbarIdentity.AppId).</summary>

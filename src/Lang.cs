@@ -927,6 +927,29 @@ namespace MhiagosControl
         public static string Yesterday { get { return P("ontem", "yesterday"); } }
         public static string Now { get { return P("agora", "now"); } }
         public static string HoursAgo(int h) { return P(h + " h atrás", h + " h ago"); }
+        // Resumo do cartao de bateria
+        public static string StatusCharging { get { return P("Carregando", "Charging"); } }
+        public static string StatusOnBattery { get { return P("Na bateria", "On battery"); } }
+        public static string StatusOff { get { return P("Desligado", "Off"); } }
+        public static string HoursLeft(string duracao) { return P(duracao + " restantes", duracao + " left"); }
+        public static string TileRemaining { get { return P("Restante", "Remaining"); } }
+        public static string TileFullCharge { get { return P("Carga cheia dura", "Full charge lasts"); } }
+        public static string TileChargingSince { get { return P("Carregando desde", "Charging since"); } }
+        public static string TileHealth { get { return P("Saúde", "Health"); } }
+        public static string GHubSays(string valor) { return "G HUB: " + valor; }
+        public static string EstimatedFromUse { get { return P("estimado pelo seu uso", "estimated from your use"); } }
+        public static string Measuring { get { return P("medindo", "measuring"); } }
+        public static string Needs10Used { get { return P("precisa de 10% gastos", "needs 10% used"); } }
+        public static string NeedsWeeks { get { return P("precisa de algumas semanas", "needs a few weeks"); } }
+        public static string AverageOfDischarges(int n)
+        {
+            return P(n == 1 ? "média de 1 descarga" : "média de " + n + " descargas",
+                     n == 1 ? "average of 1 discharge" : "average of " + n + " discharges");
+        }
+        public static string FromPct(int pct) { return P("a partir de " + pct + "%", "from " + pct + "%"); }
+        public static string PerChargeShort(string duracao) { return P(duracao + " por carga", duracao + " per charge"); }
+        public static string MoreDetails { get { return P("Mais detalhes", "More details"); } }
+        public static string LessDetails { get { return P("Menos detalhes", "Fewer details"); } }
         public static string OpenBluetooth { get { return P("Abrir o painel de Bluetooth", "Open the Bluetooth panel"); } }
         public static string OpenApp(string app) { return P("Abrir o " + app, "Open " + app); }
 

@@ -75,6 +75,10 @@ namespace MhiagosControl
         /// rotulo de tres palavras pesa demais.
         /// </summary>
         public static readonly Font FontSemi = Semi(9f);
+        /// <summary>Valor dos blocos de resumo da pagina Baterias.</summary>
+        public static readonly Font FontTileValue = Semi(11f);
+        /// <summary>A porcentagem grande do cartao de bateria.</summary>
+        public static readonly Font FontBigPct = new Font("Segoe UI", 20f, FontStyle.Bold);
 
         private static Font Semi(float tamanho)
         {

@@ -1519,6 +1519,7 @@ namespace MhiagosControl
                 foreach (AnaliseDeBateria a in analises)
                 {
                     CartaoDeBateria c = new CartaoDeBateria();
+                    c.AlturaMudou += delegate { ArranjarBaterias(); };
                     _pgBaterias.Controls.Add(c);
                     _cartoesDeBateria.Add(c);
                 }
@@ -1561,8 +1562,9 @@ namespace MhiagosControl
 
             foreach (CartaoDeBateria c in _cartoesDeBateria)
             {
-                c.SetBounds(x, y, larg, CartaoDeBateria.Altura);
-                y += CartaoDeBateria.Altura + Esp;
+                int alt = c.AlturaDesejada(larg);
+                c.SetBounds(x, y, larg, alt);
+                y += alt + Esp;
             }
             _pgBaterias.Sincronizar();
         }
