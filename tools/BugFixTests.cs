@@ -48,6 +48,7 @@ namespace MhiagosControl
             RegressionBatteryHistory();
             RegressionNavOrder(root);
             RegressionBatteryWidget(root);
+            RegressionWidgetCard(root);
         }
 
         private static void RegressionBatteryWidget(string root)
@@ -723,6 +724,54 @@ namespace MhiagosControl
             public List<SensorEntry> RefreshSensorList() { return Sensors; }
             public void SetShowAllSensors(bool value) { }
             public ReadingState CurrentReadingState(string id) { return State; }
+        }
+
+        /// <summary>Hospedeiro de mentira que tambem entrega o controle do widget.</summary>
+        private sealed class DadosComWidget : ISettingsData, IControleDoWidget
+        {
+            public readonly ConfigDoWidget Widget = new ConfigDoWidget();
+            public int Mudancas, AoCanto;
+            public bool? Ligado;
+            public Dictionary<string, float> CurrentSnapshot() { return new Dictionary<string, float>(); }
+            public List<SensorEntry> RefreshSensorList() { return new List<SensorEntry>(); }
+            public void SetShowAllSensors(bool value) { }
+            public ConfigDoWidget ConfigDoWidget { get { return Widget; } }
+            public void LigarWidget(bool ligar) { Ligado = ligar; Widget.Ativo = ligar; }
+            public void WidgetMudou() { Mudancas++; }
+            public void WidgetAoCanto() { AoCanto++; }
+        }
+
+        private static void RegressionWidgetCard(string root)
+        {
+            Secao("widget de bateria: cartao na pagina Baterias");
+            DadosComWidget dados = new DadosComWidget();
+            dados.Widget.Fosco = true; dados.Widget.Nitido = false; dados.Widget.NaFrente = true;
+            Config config = AuditConfig(root, "widget-card");
+            using (SettingsForm form = new SettingsForm(config, new List<SensorEntry>(), dados))
+            {
+                form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
+                form.Show(); ((Timer)Field(form, "_tick")).Stop();
+                Verdade(Field(form, "_cardWidget") != null, "com o controle do widget, a pagina Baterias ganha o cartao");
+                Segmented vidro = (Segmented)Field(form, "_sgWidgetVidro");
+                Toggle frente = (Toggle)Field(form, "_tgWidgetFrente");
+                Igual(2, vidro.SelectedIndex, "o cartao abre com o vidro que esta valendo");
+                Verdade(frente.Checked, "e com o sempre na frente que esta valendo");
+                Igual(0, dados.Mudancas, "preencher o cartao nao conta como mudanca");
+
+                vidro.SelectedIndex = 0;
+                Verdade(dados.Widget.Nitido && !dados.Widget.Fosco, "escolher nitido no cartao muda a configuracao do widget");
+                Igual(1, dados.Mudancas, "e avisa a bandeja para salvar e redesenhar");
+                ((Segmented)Field(form, "_sgWidgetLayout")).SelectedIndex = 1;
+                Igual(LayoutDoWidget.Lista, dados.Widget.Layout, "o formato tambem vale na hora");
+                ((Toggle)Field(form, "_tgWidget")).Checked = true;
+                Verdade(dados.Ligado == true, "ligar no cartao liga o widget");
+
+                dados.Widget.Cor = CorDoVidro.Clara;
+                InvokePrivate(form, "SincronizarWidget");
+                Igual(2, ((Segmented)Field(form, "_sgWidgetCor")).SelectedIndex, "mudanca feita pelo menu do widget aparece no cartao");
+                Igual(2, dados.Mudancas, "sincronizar nao devolve a mudanca para a bandeja");
+                form.Close();
+            }
         }
 
         private static SettingsForm BugForm(Config config, FreshData data)
