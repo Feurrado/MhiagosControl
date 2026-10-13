@@ -17,13 +17,15 @@ namespace MhiagosControl
     ///   powershell -ExecutionPolicy Bypass -File .\tools\build-widget-preview.ps1
     ///   bin\WidgetPreview.exe [--real] [--lista] [--fosco|--desfoque] [--escuro|--claro]
     ///                         [--fundo] [--listras]
-    ///                         [--segundos N] [--foto arquivo.png]
+    ///                         [--segundos N] [--foto arquivo.png] [--alternar-carga N]
     ///
     /// Sem --real os aparelhos sao de mentira (um carregando, um com pouca
     /// carga), e os leitores nao disputam o receptor com o Mhiagos aberto. Por
     /// padrao o widget fica na frente das janelas, para a foto sair; --fundo
     /// testa o lugar dele de verdade, logo acima dos icones da area de trabalho.
     /// As preferencias vao para uma pasta temporaria, nunca para o widget.ini.
+    /// --alternar-carga liga e desliga o cabo dos aparelhos de mentira a cada
+    /// N segundos (3 sem numero), para ver a transicao de entrada e saida.
     /// </summary>
     public static class WidgetPreview
     {
@@ -106,6 +108,7 @@ namespace MhiagosControl
             int segundos = 4;
             string foto = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "widget-preview.png");
             bool real = false, listras = false;
+            int alternar = 0;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -120,6 +123,12 @@ namespace MhiagosControl
                 else if (a == "--listras") listras = true;
                 else if (a == "--segundos" && i + 1 < args.Length) segundos = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (a == "--foto" && i + 1 < args.Length) foto = Path.GetFullPath(args[++i]);
+                else if (a == "--alternar-carga")
+                {
+                    alternar = 3;
+                    int n;
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) { alternar = n; i++; }
+                }
             }
 
             ManualResetEvent parar = new ManualResetEvent(false);
@@ -163,8 +172,22 @@ namespace MhiagosControl
                 w.Close();
             };
 
+            bool cabo = true;
+            System.Windows.Forms.Timer carga = new System.Windows.Forms.Timer();
+            carga.Interval = Math.Max(1, alternar) * 1000;
+            carga.Tick += delegate
+            {
+                // o headset vai ao contrario do mouse: uma entrada e uma saida por vez
+                cabo = !cabo;
+                Perifericos.PublicarLogitech(new Periferico[] {
+                    Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 72, !cabo, 48) });
+                Perifericos.PublicarShark(Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 46, cabo));
+                Console.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " cabo: X11 " + (cabo ? "sim" : "nao") + ", G325 " + (cabo ? "nao" : "sim"));
+            };
+
             w.Show();
             if (listras) Listras(w);
+            if (alternar > 0 && !real) carga.Start();
             foto1.Start();
             fim.Start();
             Application.Run();

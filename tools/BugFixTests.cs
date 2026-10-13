@@ -64,6 +64,32 @@ namespace MhiagosControl
             Verdade(typeof(IControleDoWidget).IsAssignableFrom(typeof(TrayContext)),
                     "a bandeja entrega o controle do widget para a pagina Baterias");
 
+            // transicao de carga: primeira vista ja no estado certo, depois anda suave
+            TransicaoDeCarga.Limpar();
+            bool anima;
+            int t0 = 1000000, dur = TransicaoDeCarga.DuracaoMs;
+            Igual(1f, TransicaoDeCarga.Valor("teste|X11", true, out anima, t0), "aparelho visto pela primeira vez no cabo ja entra cheio");
+            Verdade(!anima, "primeira vista nao anima");
+            Igual(1f, TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10), "no instante em que sai do cabo ainda esta em 1");
+            Verdade(anima, "sair do cabo comeca uma transicao");
+            float noMeio = TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10 + dur / 2);
+            Verdade(noMeio > 0.4f && noMeio < 0.6f && anima, "no meio da transicao a carga esta no meio");
+            float perto = TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10 + dur / 10);
+            Verdade(perto > 0.95f, "a saida comeca devagar, sem tranco");
+            float virou = TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 10 + dur / 2);
+            Verdade(Math.Abs(virou - noMeio) < 0.001f && anima, "virar no meio do caminho parte de onde estava, sem salto");
+            Igual(1f, TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 20 + dur * 2), "no fim chega exatamente ao alvo");
+            Verdade(!anima, "terminada a transicao o relogio pode parar");
+            Igual(0f, TransicaoDeCarga.Valor(null, false), "sem chave vale o estado de agora");
+            TransicaoDeCarga.Limpar();
+
+            Periferico x11 = Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 46, true);
+            Igual(PeripheralStrip.Verde.ToArgb(), PintorDoWidget.CorDoNivel(x11, 1f).ToArgb(), "carga 1 e o verde do cabo");
+            Igual(PeripheralStrip.CorFora(x11).ToArgb(), PintorDoWidget.CorDoNivel(x11, 0f).ToArgb(), "carga 0 e a cor do nivel");
+            Color metade = PeripheralStrip.Cor(x11, 0.5f);
+            Verdade(metade.ToArgb() != PeripheralStrip.Verde.ToArgb() && metade.ToArgb() != PeripheralStrip.CorFora(x11).ToArgb(),
+                    "no meio da transicao a cor fica entre as duas");
+
             ConfigDoWidget c = new ConfigDoWidget();
             c.Ativo = true; c.X = -1500; c.Y = 40; c.Layout = LayoutDoWidget.Lista; c.Fosco = true;
             c.Cor = CorDoVidro.Clara; c.NaFrente = true; c.Travado = true;
@@ -124,6 +150,7 @@ namespace MhiagosControl
                     q.Escuro = escuro;
                     q.Escala = 1.5f;
                     q.Fase = 0.5f;
+                    q.Carga = new float[] { 0f, 0f, 0.5f };   // o ultimo no meio da entrada no cabo
                     Size t = PintorDoWidget.Medir(layout, vis.Length, q.Escala);
                     using (Bitmap bmp = new Bitmap(t.Width, t.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
                     {

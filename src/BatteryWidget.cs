@@ -220,6 +220,20 @@ namespace MhiagosControl
             public float Escala = 1f;
             /// <summary>De 0 a 1: em que ponto do ciclo esta a respiracao dos aparelhos carregando.</summary>
             public float Fase = 0f;
+            /// <summary>
+            /// De 0 a 1 por item: quanto cada um ja entrou na carga (ver
+            /// TransicaoDeCarga). Sem valor, vale o estado de agora, sem transicao.
+            /// </summary>
+            public float[] Carga = new float[0];
+        }
+
+        /// <summary>A carga do item i no quadro: a da transicao, ou 0/1 se ninguem a mediu.</summary>
+        internal static float CargaDe(Quadro q, int i)
+        {
+            Periferico p = q.Itens[i];
+            if (!p.Bateria.HasValue) return 0f;
+            if (i < q.Carga.Length) return Math.Max(0f, Math.Min(1f, q.Carga[i]));
+            return p.Carregando ? 1f : 0f;
         }
 
         internal static void Pintar(Graphics g, Size tamanho, Quadro q)
@@ -245,8 +259,9 @@ namespace MhiagosControl
                 for (int i = 0; i < q.Itens.Length; i++)
                 {
                     string nota = i < q.Notas.Length ? q.Notas[i] : null;
-                    if (q.Layout == LayoutDoWidget.Lista) ItemDaLista(g, zonas[i], q.Itens[i], nota, q, f);
-                    else ItemDoAnel(g, zonas[i], q.Itens[i], q, f);
+                    float carga = CargaDe(q, i);
+                    if (q.Layout == LayoutDoWidget.Lista) ItemDaLista(g, zonas[i], q.Itens[i], nota, carga, q, f);
+                    else ItemDoAnel(g, zonas[i], q.Itens[i], carga, q, f);
                 }
             }
         }
@@ -304,7 +319,7 @@ namespace MhiagosControl
 
         // ---------------- aneis ----------------
 
-        private static void ItemDoAnel(Graphics g, RectangleF z, Periferico p, Quadro q, Fontes f)
+        private static void ItemDoAnel(Graphics g, RectangleF z, Periferico p, float carga, Quadro q, Fontes f)
         {
             float s = q.Escala;
             bool escuro = q.Escuro;
@@ -312,7 +327,7 @@ namespace MhiagosControl
             float cx = z.X + z.Width / 2f;
             RectangleF anel = new RectangleF(cx - d / 2f + st / 2f, z.Y + st / 2f, d - st, d - st);
 
-            Color cor = CorDoNivel(p);
+            Color cor = CorDoNivel(p, carga);
             // trilho na cor do proprio nivel, apagada, como os aneis do relogio
             // da Apple: o branco translucido de antes pegava a cor do fundo e
             // deixava cada anel com cara de lavado
@@ -327,7 +342,8 @@ namespace MhiagosControl
                 // carregando, esse brilho respira: sobe e desce em seno. Um
                 // brilho correndo pelo arco andava varios graus por quadro e
                 // parecia travado; aqui cada quadro muda quase nada.
-                float pulso = p.Carregando ? Pulso(q.Fase) : 0f;
+                // na entrada e na saida do cabo a respiracao cresce e some com a carga
+                float pulso = Pulso(q.Fase) * carga;
                 using (Pen luz = Redonda(Color.FromArgb(55 + (int)(120 * pulso), cor), st * (2f + 0.7f * pulso)))
                     g.DrawArc(luz, anel, -90f, arco);
                 using (Pen pen = Redonda(cor, st)) g.DrawArc(pen, anel, -90f, arco);
@@ -346,17 +362,19 @@ namespace MhiagosControl
                 else g.DrawImage(img, ri);
             }
 
-            if (p.Carregando && p.Bateria.HasValue)
+            if (carga > 0.01f)
             {
-                // selo com o raio, no canto de baixo a direita do anel
-                float ds = 19f * s;
+                // selo com o raio, no canto de baixo a direita do anel; entra
+                // crescendo e acendendo, e sai encolhendo e apagando
+                float ds = 19f * s * (0.5f + 0.5f * carga);
                 float r = anel.Width / 2f;
                 PointF c = new PointF(cx + r * 0.72f, anel.Y + anel.Height / 2f + r * 0.72f);
                 RectangleF selo = new RectangleF(c.X - ds / 2f, c.Y - ds / 2f, ds, ds);
-                using (SolidBrush b = new SolidBrush(PeripheralStrip.Verde)) g.FillEllipse(b, selo);
-                using (Pen pen = new Pen(escuro ? Color.FromArgb(200, 20, 22, 28) : Color.FromArgb(230, 255, 255, 255), 1.6f * s))
+                using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(255 * carga), PeripheralStrip.Verde))) g.FillEllipse(b, selo);
+                using (Pen pen = new Pen(escuro ? Color.FromArgb((int)(200 * carga), 20, 22, 28) : Color.FromArgb((int)(230 * carga), 255, 255, 255), 1.6f * s))
                     g.DrawEllipse(pen, selo);
-                PeripheralStrip.Raio(g, RectangleF.Inflate(selo, -4.5f * s, -4.5f * s));
+                float folga = 4.5f * s * (0.5f + 0.5f * carga);
+                PeripheralStrip.Raio(g, RectangleF.Inflate(selo, -folga, -folga), carga);
             }
 
             float y = z.Y + d + 7f * s;
@@ -369,7 +387,7 @@ namespace MhiagosControl
 
         // ---------------- lista ----------------
 
-        private static void ItemDaLista(Graphics g, RectangleF z, Periferico p, string nota, Quadro q, Fontes f)
+        private static void ItemDaLista(Graphics g, RectangleF z, Periferico p, string nota, float carga, Quadro q, Fontes f)
         {
             float s = q.Escala;
             bool escuro = q.Escuro;
@@ -396,19 +414,21 @@ namespace MhiagosControl
             Texto(g, valor, f.Pct, Apagado(p) ? Secundario(escuro) : Primario(escuro), escuro, lValor,
                   StringAlignment.Far, StringAlignment.Center);
 
-            if (p.Carregando && p.Bateria.HasValue)
+            if (carga > 0.01f)
             {
+                // o raio acende aos poucos e o nome cede o lugar dele junto,
+                // sem pular de uma vez
                 float hr = 13f * s;
                 RectangleF raio = new RectangleF(lValor.X - hr * 0.9f, lValor.Y + (lValor.Height - hr) / 2f, hr * 0.7f, hr);
-                PeripheralStrip.Raio(g, raio);
-                lValor = RectangleF.FromLTRB(raio.X, lValor.Y, lValor.Right, lValor.Bottom);
+                PeripheralStrip.Raio(g, raio, carga);
+                lValor = RectangleF.FromLTRB(lValor.X - hr * 0.9f * carga, lValor.Y, lValor.Right, lValor.Bottom);
             }
 
             RectangleF lNome = new RectangleF(x, z.Y, Math.Max(0f, lValor.X - x - 6f * s), 21f * s);
             Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
 
             RectangleF barra = new RectangleF(x, z.Y + 25f * s, w, 8f * s);
-            Capsula(g, barra, p, escuro, q.Fase);
+            Capsula(g, barra, p, escuro, q.Fase, carga);
 
             if (!string.IsNullOrEmpty(nota))
             {
@@ -418,7 +438,7 @@ namespace MhiagosControl
         }
 
         /// <summary>A barra de carga: trilho em capsula e o nivel com um reflexo em cima.</summary>
-        private static void Capsula(Graphics g, RectangleF r, Periferico p, bool escuro, float fase)
+        private static void Capsula(Graphics g, RectangleF r, Periferico p, bool escuro, float fase, float carga)
         {
             float raio = r.Height / 2f;
             using (GraphicsPath trilho = Arredondado(r, raio))
@@ -428,7 +448,7 @@ namespace MhiagosControl
             if (!p.Bateria.HasValue || p.Bateria.Value <= 0) return;
             float w = Math.Max(r.Height, r.Width * Math.Min(100, p.Bateria.Value) / 100f);
             RectangleF cheio = new RectangleF(r.X, r.Y, w, r.Height);
-            Color cor = CorDoNivel(p);
+            Color cor = CorDoNivel(p, carga);
             using (GraphicsPath nivel = Arredondado(cheio, raio))
             {
                 using (LinearGradientBrush b = new LinearGradientBrush(RectangleF.Inflate(cheio, 0, 1f),
@@ -442,10 +462,10 @@ namespace MhiagosControl
                     using (SolidBrush b = new SolidBrush(Color.FromArgb(110, 255, 255, 255)))
                         g.FillPath(b, rp);
 
-                if (p.Carregando)
+                if (carga > 0.01f)
                 {
                     // a barra inteira clareia e volta, no mesmo ritmo dos aneis
-                    int a = (int)(90 * Pulso(fase));
+                    int a = (int)(90 * Pulso(fase) * carga);
                     if (a > 0)
                         using (SolidBrush b = new SolidBrush(Color.FromArgb(a, 255, 255, 255)))
                             g.FillPath(b, nivel);
@@ -534,11 +554,14 @@ namespace MhiagosControl
         /// <summary>Mesma regra da Visao geral: verde no cabo, vermelho em 10%, amarelo em 30%.</summary>
         internal static Color CorDoNivel(Periferico p)
         {
+            return CorDoNivel(p, p.Carregando ? 1f : 0f);
+        }
+
+        /// <summary>A cor do nivel a caminho do verde do cabo: 0 fora, 1 carregando.</summary>
+        internal static Color CorDoNivel(Periferico p, float carga)
+        {
             if (!p.Bateria.HasValue) return Color.Gray;
-            if (p.Carregando) return PeripheralStrip.Verde;
-            if (p.Bateria.Value <= 10) return Ui.Danger;
-            if (p.Bateria.Value <= 30) return Ui.Warn;
-            return Ui.Accent;
+            return PeripheralStrip.Misturar(PeripheralStrip.CorFora(p), PeripheralStrip.Verde, carga);
         }
 
         private static Color Primario(bool escuro)
@@ -643,6 +666,8 @@ namespace MhiagosControl
         private readonly ConfigDoWidget _cfg;
         private readonly Timer _leitura = new Timer();
         private readonly Timer _animacao = new Timer();
+        /// <summary>Algum aparelho entrava ou saia da carga no ultimo quadro.</summary>
+        private bool _transicao;
         private readonly Timer _conferirDesktop = new Timer();
         private readonly ToolTip _dica = new ToolTip();
         private ContextMenu _menu;
@@ -781,6 +806,7 @@ namespace MhiagosControl
         {
             bool carregando = false;
             foreach (Periferico p in _itens) if (p.Carregando && p.Bateria.HasValue) carregando = true;
+            carregando |= _transicao;
             if (carregando && !_animacao.Enabled) _animacao.Start();
             else if (!carregando && _animacao.Enabled) _animacao.Stop();
         }
@@ -819,6 +845,16 @@ namespace MhiagosControl
                 q.Sobre = _sobre;
                 q.Escala = _escala;
                 q.Fase = (Environment.TickCount & int.MaxValue) % CicloMs / (float)CicloMs;
+                bool transicao = false;
+                q.Carga = new float[_itens.Length];
+                for (int i = 0; i < _itens.Length; i++)
+                {
+                    bool animando;
+                    q.Carga[i] = TransicaoDeCarga.Valor(HistoricoDeBateria.Chave(_itens[i]),
+                        _itens[i].Carregando && _itens[i].Bateria.HasValue, out animando);
+                    transicao |= animando;
+                }
+                _transicao = transicao;
 
                 using (Bitmap bmp = new Bitmap(tam.Width, tam.Height, PixelFormat.Format32bppArgb))
                 {
@@ -829,6 +865,8 @@ namespace MhiagosControl
                     }
                     AplicarBitmap(bmp);
                 }
+                // o ultimo quadro da transicao desliga o relogio se nada mais carrega
+                AjustarAnimacao();
             }
             catch (Exception ex)
             {

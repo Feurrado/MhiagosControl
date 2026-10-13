@@ -139,13 +139,16 @@ namespace MhiagosControl
 
             int yVal = 44;
             string valor = _a.PctAtual.HasValue ? _a.PctAtual.Value + "%" : "--";
-            Color cor = PeripheralStrip.Cor(p);
-            TextRenderer.DrawText(g, valor, PeripheralStrip.FontPct, new Point(tx, yVal), cor, TextFormatFlags.NoPadding);
+            // a mesma passagem suave da Visao geral ao entrar e sair do cabo
+            bool animando;
+            float carga = TransicaoDeCarga.Valor(_a.Chave, _a.Carregando && _a.PctAtual.HasValue, out animando);
+            if (animando) _animador.Transicao();
+            TextRenderer.DrawText(g, valor, PeripheralStrip.FontPct, new Point(tx, yVal), PeripheralStrip.Cor(p, carga), TextFormatFlags.NoPadding);
             int fim = tx + TextRenderer.MeasureText(g, valor, PeripheralStrip.FontPct, Size.Empty, TextFormatFlags.NoPadding).Width;
             if (_a.PctAtual.HasValue)
             {
                 Rectangle pilha = new Rectangle(new Point(fim + 8, yVal + 4), PeripheralStrip.TamanhoDaPilha);
-                PeripheralStrip.DesenharPilha(g, pilha, _a.PctAtual.Value, cor, _a.Carregando);
+                PeripheralStrip.DesenharPilha(g, pilha, _a.PctAtual.Value, PeripheralStrip.CorFora(p), carga);
                 if (_a.Carregando) _animador.Registrar(pilha);
                 fim += 8 + PeripheralStrip.TamanhoDaPilha.Width;
             }
