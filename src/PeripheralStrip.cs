@@ -54,6 +54,8 @@ namespace MhiagosControl
             for (int i = 0; igual && i < itens.Length; i++)
                 igual = itens[i].Equals(_itens[i]) && previsoes[i] == _previsoes[i];
             if (igual) return;
+            foreach (Periferico p in itens)
+                TransicaoDeCarga.Informar(HistoricoDeBateria.Chave(p), p.Carregando && p.Bateria.HasValue);
             _itens = itens;
             _previsoes = previsoes;
             Invalidate();
@@ -208,7 +210,7 @@ namespace MhiagosControl
             return p.Bateria.HasValue ? p.Bateria.Value + "%" : "--";
         }
 
-        private static string Nota(Periferico p, string previsao)
+        internal static string Nota(Periferico p, string previsao)
         {
             if (p.Bateria.HasValue)
             {
@@ -267,6 +269,12 @@ namespace MhiagosControl
             // Tres linhas empilhadas: nome, porcentagem com a pilha, e embaixo
             // a previsao (ou o "carregando"). Ao lado da pilha ela esticava o
             // item e abria buracos entre os aparelhos.
+            // consultada mesmo sem numero na tela, para o estado nao ficar
+            // velho e animar do nada quando a leitura voltar
+            bool animando;
+            float carga = TransicaoDeCarga.Valor(HistoricoDeBateria.Chave(p), p.Carregando && p.Bateria.HasValue, out animando);
+            if (animando) _animador.Transicao();
+
             int tx = x + Icone + 10;
             int yNome = Height / 2 - 27;
             TextRenderer.DrawText(g, p.Nome, Ui.FontSmall, new Point(tx, yNome), Ui.Faint, TextFormatFlags.NoPadding);
@@ -279,15 +287,14 @@ namespace MhiagosControl
             }
 
             string valor = Valor(p);
-            Color cor = Cor(p);
-            TextRenderer.DrawText(g, valor, FontPct, new Point(tx, yVal), cor, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, valor, FontPct, new Point(tx, yVal), Cor(p, carga), TextFormatFlags.NoPadding);
             int fim = tx + TextRenderer.MeasureText(g, valor, FontPct, Size.Empty, TextFormatFlags.NoPadding).Width;
 
             if (p.Bateria.HasValue)
             {
                 fim += 8;
                 Rectangle pilha = new Rectangle(fim, yVal + 4, Barra, TamanhoDaPilha.Height);
-                DesenharPilha(g, pilha, p.Bateria.Value, cor, p.Carregando);
+                DesenharPilha(g, pilha, p.Bateria.Value, CorFora(p), carga);
                 if (p.Carregando) _animador.Registrar(pilha);
                 fim += Barra;
             }
@@ -331,13 +338,26 @@ namespace MhiagosControl
         /// </summary>
         internal static void DesenharPilha(Graphics g, Rectangle r, int pct, Color cor, bool carregando)
         {
+            DesenharPilha(g, r, pct, cor, carregando ? 1f : 0f);
+        }
+
+        /// <summary>
+        /// A pilha no meio do caminho entre fora e dentro do cabo: carga 0 e a
+        /// pilha comum na cor <paramref name="cor"/>, 1 e a de carregando, e o
+        /// que fica entre as duas mistura as cores e acende o raio aos poucos
+        /// (ver <see cref="TransicaoDeCarga"/>).
+        /// </summary>
+        internal static void DesenharPilha(Graphics g, Rectangle r, int pct, Color cor, float carga)
+        {
             SmoothingMode antes = g.SmoothingMode;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             try
             {
                 pct = Math.Max(0, Math.Min(100, pct));
-                Color traco = carregando ? Verde : Ui.Muted;
-                Color nivel = carregando ? Verde : cor;
+                carga = Math.Max(0f, Math.Min(1f, carga));
+                bool carregando = carga > 0.01f;
+                Color traco = Misturar(Ui.Muted, Verde, carga);
+                Color nivel = Misturar(cor, Verde, carga);
 
                 RectangleF corpo = new RectangleF(r.X + 0.75f, r.Y + 0.75f, r.Width - 5f, r.Height - 1.5f);
                 using (GraphicsPath p = Arredondado(corpo, 3.5f))
@@ -358,17 +378,17 @@ namespace MhiagosControl
                     using (GraphicsPath p = Arredondado(cheio, 1.5f))
                     {
                         using (SolidBrush b = new SolidBrush(nivel)) g.FillPath(b, p);
-                        if (carregando) Brilho(g, p, dentro);
+                        if (carregando) Brilho(g, p, dentro, carga);
                     }
                 }
 
-                if (carregando) Raio(g, corpo);
+                if (carregando) Raio(g, corpo, carga);
             }
             finally { g.SmoothingMode = antes; }
         }
 
         /// <summary>Faixa clara que atravessa o nivel a cada ciclo do animador.</summary>
-        private static void Brilho(Graphics g, GraphicsPath nivel, RectangleF dentro)
+        private static void Brilho(Graphics g, GraphicsPath nivel, RectangleF dentro, float opacidade)
         {
             float faixa = Math.Max(6f, dentro.Width * 0.5f);
             float x = dentro.X - faixa + (dentro.Width + faixa) * AnimadorDePilhas.Fase;
@@ -376,7 +396,7 @@ namespace MhiagosControl
             using (LinearGradientBrush b = new LinearGradientBrush(area, Color.Transparent, Color.Transparent, 0f))
             {
                 ColorBlend cb = new ColorBlend(3);
-                cb.Colors = new Color[] { Color.FromArgb(0, 255, 255, 255), Color.FromArgb(120, 255, 255, 255), Color.FromArgb(0, 255, 255, 255) };
+                cb.Colors = new Color[] { Color.FromArgb(0, 255, 255, 255), Color.FromArgb((int)(120 * opacidade), 255, 255, 255), Color.FromArgb(0, 255, 255, 255) };
                 cb.Positions = new float[] { 0f, 0.5f, 1f };
                 b.InterpolationColors = cb;
                 Region antes = g.Clip;
@@ -387,8 +407,15 @@ namespace MhiagosControl
         }
 
         /// <summary>O raio no meio da pilha, branco com contorno escuro para ler sobre o verde e sobre o vazio.</summary>
-        private static void Raio(Graphics g, RectangleF corpo)
+        internal static void Raio(Graphics g, RectangleF corpo)
         {
+            Raio(g, corpo, 1f);
+        }
+
+        /// <summary>O raio meio apagado, enquanto entra ou sai da carga.</summary>
+        internal static void Raio(Graphics g, RectangleF corpo, float opacidade)
+        {
+            opacidade = Math.Max(0f, Math.Min(1f, opacidade));
             float h = corpo.Height + 1f, w = h * 0.62f;
             float x = corpo.X + (corpo.Width - w) / 2f, y = corpo.Y + (corpo.Height - h) / 2f;
             PointF[] pts = {
@@ -401,12 +428,12 @@ namespace MhiagosControl
             using (GraphicsPath p = new GraphicsPath())
             {
                 p.AddPolygon(pts);
-                using (Pen contorno = new Pen(Color.FromArgb(200, 0x14, 0x3D, 0x22), 1.6f))
+                using (Pen contorno = new Pen(Color.FromArgb((int)(200 * opacidade), 0x14, 0x3D, 0x22), 1.6f))
                 {
                     contorno.LineJoin = LineJoin.Round;
                     g.DrawPath(contorno, p);
                 }
-                using (SolidBrush b = new SolidBrush(Color.White)) g.FillPath(b, p);
+                using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(255 * opacidade), Color.White))) g.FillPath(b, p);
             }
         }
 
@@ -425,11 +452,138 @@ namespace MhiagosControl
 
         internal static Color Cor(Periferico p)
         {
+            return Cor(p, p.Bateria.HasValue && p.Carregando ? 1f : 0f);
+        }
+
+        /// <summary>A cor do nivel a caminho do verde: 0 fora do cabo, 1 carregando.</summary>
+        internal static Color Cor(Periferico p, float carga)
+        {
             if (!p.Bateria.HasValue) return Ui.Muted;
-            if (p.Carregando) return Verde;
+            return Misturar(CorFora(p), Verde, carga);
+        }
+
+        /// <summary>A cor do nivel ignorando o cabo: vermelho em 10%, amarelo em 30%.</summary>
+        internal static Color CorFora(Periferico p)
+        {
+            if (!p.Bateria.HasValue) return Ui.Muted;
             if (p.Bateria.Value <= 10) return Ui.Danger;
             if (p.Bateria.Value <= 30) return Ui.Warn;
             return Ui.Accent;
+        }
+
+        /// <summary>De a ate b, alfa incluido; t fora de 0 a 1 fica na ponta.</summary>
+        internal static Color Misturar(Color a, Color b, float t)
+        {
+            if (t <= 0f) return a;
+            if (t >= 1f) return b;
+            return Color.FromArgb((int)(a.A + (b.A - a.A) * t),
+                (int)(a.R + (b.R - a.R) * t), (int)(a.G + (b.G - a.G) * t), (int)(a.B + (b.B - a.B) * t));
+        }
+    }
+
+    /// <summary>
+    /// A passagem suave entre fora e dentro do cabo, igual em todo lugar que
+    /// mostra o aparelho: tira da Visao geral, pagina Baterias e widget.
+    ///
+    /// Cada aparelho tem um valor de 0 (fora do cabo) a 1 (carregando) que
+    /// corre ate o alvo em <see cref="DuracaoMs"/>, com saida e chegada
+    /// suaves. Quem desenha pergunta o valor a cada quadro e, enquanto ele
+    /// anda, continua pedindo quadros. A primeira vez que um aparelho aparece
+    /// ja entra no estado certo, sem animar: abrir o app com o mouse no cabo
+    /// nao e uma transicao.
+    ///
+    /// O alvo so muda por Informar, chamado quando chega leitura nova. O
+    /// desenho nao muda o alvo: o widget le a cada 2 s e a Visao geral a cada
+    /// 1 s, e se cada um puxasse o alvo para o que viu por ultimo, os dois
+    /// discordariam por ate 2 s e a animacao recomecaria a cada quadro.
+    /// </summary>
+    internal static class TransicaoDeCarga
+    {
+        internal const int DuracaoMs = 700;
+
+        private sealed class Estado { public float De, Alvo; public int Inicio; }
+
+        private static readonly Dictionary<string, Estado> _estados = new Dictionary<string, Estado>();
+        private static readonly object _trava = new object();
+
+        /// <summary>Leitura nova do aparelho: se o cabo mudou, comeca a transicao.</summary>
+        public static void Informar(string chave, bool carregando)
+        {
+            Informar(chave, carregando, Environment.TickCount);
+        }
+
+        internal static void Informar(string chave, bool carregando, int agora)
+        {
+            if (chave == null) return;
+            float alvo = carregando ? 1f : 0f;
+            lock (_trava)
+            {
+                Estado e = Obter(chave, alvo, agora);
+                if (e.Alvo == alvo) return;
+                // virou no meio do caminho: parte de onde estava, sem salto
+                e.De = Em(e, agora);
+                e.Alvo = alvo;
+                e.Inicio = agora;
+            }
+        }
+
+        public static float Valor(string chave, bool carregando)
+        {
+            bool animando;
+            return Valor(chave, carregando, out animando, Environment.TickCount);
+        }
+
+        /// <summary>
+        /// O valor agora. <paramref name="carregando"/> so vale para um
+        /// aparelho que ninguem informou ainda; o alvo vem de Informar.
+        /// </summary>
+        public static float Valor(string chave, bool carregando, out bool animando)
+        {
+            return Valor(chave, carregando, out animando, Environment.TickCount);
+        }
+
+        /// <summary>O valor em <paramref name="agora"/> (TickCount); separado para os testes.</summary>
+        internal static float Valor(string chave, bool carregando, out bool animando, int agora)
+        {
+            float alvo = carregando ? 1f : 0f;
+            animando = false;
+            if (chave == null) return alvo;
+            lock (_trava)
+            {
+                Estado e = Obter(chave, alvo, agora);
+                float atual = Em(e, agora);
+                animando = atual != e.Alvo;
+                return atual;
+            }
+        }
+
+        /// <summary>O estado do aparelho; o primeiro ja nasce parado no alvo.</summary>
+        private static Estado Obter(string chave, float alvo, int agora)
+        {
+            Estado e;
+            if (!_estados.TryGetValue(chave, out e))
+            {
+                e = new Estado();
+                e.De = e.Alvo = alvo;
+                e.Inicio = agora - DuracaoMs;
+                _estados[chave] = e;
+            }
+            return e;
+        }
+
+        private static float Em(Estado e, int agora)
+        {
+            int passou = unchecked(agora - e.Inicio);
+            if (passou < 0 || passou >= DuracaoMs) return e.Alvo;
+            float u = passou / (float)DuracaoMs;
+            u = u * u * (3f - 2f * u);
+            return e.De + (e.Alvo - e.De) * u;
+        }
+
+        /// <summary>Esquece tudo; so para os testes.</summary>
+        internal static void Limpar()
+        {
+            lock (_trava) _estados.Clear();
         }
     }
 
@@ -447,6 +601,7 @@ namespace MhiagosControl
         private readonly Control _dono;
         private readonly Timer _relogio = new Timer();
         private readonly List<Rectangle> _pilhas = new List<Rectangle>();
+        private bool _transicao;
 
         /// <summary>De 0 a 1 ao longo do ciclo; o mesmo para todas as pilhas da tela.</summary>
         public static float Fase
@@ -461,18 +616,23 @@ namespace MhiagosControl
             _relogio.Tick += delegate
             {
                 if (!_dono.Visible) { _relogio.Stop(); return; }
+                // na transicao muda tambem a cor do numero: vai o controle todo
+                if (_transicao) { _dono.Invalidate(); return; }
                 foreach (Rectangle r in _pilhas) _dono.Invalidate(Rectangle.Inflate(r, 2, 2));
             };
         }
 
-        public void ComecarQuadro() { _pilhas.Clear(); }
+        public void ComecarQuadro() { _pilhas.Clear(); _transicao = false; }
 
         public void Registrar(Rectangle r) { _pilhas.Add(r); }
+
+        /// <summary>Algum aparelho deste quadro esta entrando ou saindo da carga.</summary>
+        public void Transicao() { _transicao = true; }
 
         /// <summary>Liga o relogio se algo carrega na tela, desliga se nada carrega.</summary>
         public void Ajustar()
         {
-            bool ligar = _pilhas.Count > 0 && _dono.Visible;
+            bool ligar = (_pilhas.Count > 0 || _transicao) && _dono.Visible;
             if (ligar && !_relogio.Enabled) _relogio.Start();
             else if (!ligar && _relogio.Enabled) _relogio.Stop();
         }

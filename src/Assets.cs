@@ -123,6 +123,28 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>O app.ico embutido, em bytes, para gravar em disco (o Windows pede um arquivo).</summary>
+        internal static byte[] AppIconBytes()
+        {
+            using (Stream s = Open("app.ico"))
+            {
+                if (s == null) return null;
+                using (MemoryStream m = new MemoryStream()) { s.CopyTo(m); return m.ToArray(); }
+            }
+        }
+
+        /// <summary>O icone do app num tamanho pedido, para a notificacao.</summary>
+        internal static Icon AppIconDe(Size tamanho)
+        {
+            try
+            {
+                using (Stream s = Open("app.ico"))
+                    if (s != null) return new Icon(s, tamanho);
+            }
+            catch (Exception ex) { Log.Error("icone do app em " + tamanho, ex); }
+            return null;
+        }
+
         private static Stream Open(string name)
         {
             Assembly asm = Assembly.GetExecutingAssembly();

@@ -104,6 +104,54 @@ namespace MhiagosControl
 
         private static Color C(int r, int g, int b) { return Color.FromArgb(r, g, b); }
 
+        /// <summary>
+        /// Pilha deitada em traco fino, no peso dos glifos da Segoe MDL2: o
+        /// E83F da fonte, todo cheio, virava um bloco que nao lia como bateria.
+        /// </summary>
+        public static void IconeDeBateria(Graphics g, RectangleF em, Color cor)
+        {
+            SmoothingMode antes = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            try
+            {
+                float st = Math.Max(1.2f, em.Width * 0.085f);
+                float h = em.Height * 0.56f, polo = em.Width * 0.1f;
+                float w = em.Width - polo - st;
+                RectangleF corpo = new RectangleF(em.X + st / 2f, em.Y + (em.Height - h) / 2f, w, h);
+                using (GraphicsPath p = Arredondar(corpo, h * 0.22f))
+                using (Pen pen = new Pen(cor, st))
+                {
+                    pen.LineJoin = LineJoin.Round;
+                    g.DrawPath(pen, p);
+                }
+                RectangleF bico = new RectangleF(corpo.Right + st * 0.5f, corpo.Y + h * 0.3f, polo, h * 0.4f);
+                using (GraphicsPath p = Arredondar(bico, polo * 0.45f))
+                using (SolidBrush b = new SolidBrush(cor))
+                    g.FillPath(b, p);
+                // nivel em dois tercos, com folga do contorno, para ler como carga
+                float folga = st * 1.4f;
+                RectangleF dentro = RectangleF.Inflate(corpo, -folga, -folga);
+                RectangleF nivel = new RectangleF(dentro.X, dentro.Y, dentro.Width * 0.66f, dentro.Height);
+                using (GraphicsPath p = Arredondar(nivel, Math.Min(nivel.Height, nivel.Width) * 0.2f))
+                using (SolidBrush b = new SolidBrush(cor))
+                    g.FillPath(b, p);
+            }
+            finally { g.SmoothingMode = antes; }
+        }
+
+        private static GraphicsPath Arredondar(RectangleF r, float raio)
+        {
+            float d = Math.Min(raio * 2, Math.Min(r.Width, r.Height));
+            GraphicsPath p = new GraphicsPath();
+            if (d <= 0.5f) { p.AddRectangle(r); return p; }
+            p.AddArc(r.X, r.Y, d, d, 180, 90);
+            p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
+
         public static GraphicsPath RoundRect(Rectangle r, int radius)
         {
             GraphicsPath p = new GraphicsPath();
@@ -932,6 +980,11 @@ namespace MhiagosControl
     {
         public string Text;
         public string Glyph;     // caractere de Segoe MDL2 Assets
+        /// <summary>
+        /// Icone desenhado a mao no lugar do glifo, quando a fonte nao tem um
+        /// que sirva. Recebe o quadrado que o glifo ocuparia e a cor dele.
+        /// </summary>
+        public Action<Graphics, RectangleF, Color> Icone;
         public Control Page;
 
         /// <summary>Nome estavel da pagina, para gravar a ordem; nao muda com o idioma.</summary>
@@ -1321,7 +1374,15 @@ namespace MhiagosControl
                 }
 
                 Color fore = sel ? Ui.Text : Ui.Muted;
-                if (!string.IsNullOrEmpty(it.Glyph))
+                if (it.Icone != null)
+                {
+                    // o mesmo quadrado que um glifo de 11 pt ocuparia ali
+                    float em = Ui.FontGlyph11.SizeInPoints * g.DpiY / 72f;
+                    float gx = Estreita ? it.Bounds.X + (it.Bounds.Width - em) / 2f : it.Bounds.X + 14 + em / 6f;
+                    RectangleF cel = new RectangleF(gx, it.Bounds.Y + (RowH - em) / 2f, em, em);
+                    it.Icone(g, cel, sel ? Ui.Accent : fore);
+                }
+                else if (!string.IsNullOrEmpty(it.Glyph))
                 {
                     using (SolidBrush b = new SolidBrush(sel ? Ui.Accent : fore))
                     {

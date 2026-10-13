@@ -47,6 +47,203 @@ namespace MhiagosControl
             RegressionPeripheralBattery();
             RegressionBatteryHistory();
             RegressionNavOrder(root);
+            RegressionBatteryWidget(root);
+            RegressionWidgetCard(root);
+        }
+
+        private static void RegressionBatteryWidget(string root)
+        {
+            Secao("widget de bateria: preferencias, formato e desenho");
+
+            ConfigDoWidget padrao = ConfigDoWidget.DeTexto(null);
+            Verdade(!padrao.Ativo && !padrao.TemPosicao, "sem arquivo o widget comeca desligado e sem posicao");
+            Igual(LayoutDoWidget.Aneis, padrao.Layout, "formato padrao sao os aneis");
+            Verdade(padrao.Nitido && !padrao.Fosco, "vidro padrao e o nitido, sem desfoque");
+            Verdade(PintorDoWidget.Pulso(0f) < 0.001f && PintorDoWidget.Pulso(0.5f) > 0.999f && PintorDoWidget.Pulso(1f) < 0.001f,
+                    "a respiracao da carga sai de 0, chega a 1 no meio do ciclo e volta");
+            Verdade(typeof(IControleDoWidget).IsAssignableFrom(typeof(TrayContext)),
+                    "a bandeja entrega o controle do widget para a pagina Baterias");
+
+            // transicao de carga: primeira vista ja no estado certo, depois anda suave
+            TransicaoDeCarga.Limpar();
+            bool anima;
+            int t0 = 1000000, dur = TransicaoDeCarga.DuracaoMs;
+            Igual(1f, TransicaoDeCarga.Valor("teste|X11", true, out anima, t0), "aparelho visto pela primeira vez no cabo ja entra cheio");
+            Verdade(!anima, "primeira vista nao anima");
+            TransicaoDeCarga.Informar("teste|X11", false, t0 + 10);
+            Igual(1f, TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10), "no instante em que sai do cabo ainda esta em 1");
+            Verdade(anima, "sair do cabo comeca uma transicao");
+            float noMeio = TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10 + dur / 2);
+            Verdade(noMeio > 0.4f && noMeio < 0.6f && anima, "no meio da transicao a carga esta no meio");
+            float atrasado = TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 10 + dur / 2);
+            Verdade(Math.Abs(atrasado - noMeio) < 0.001f, "quem desenha com leitura velha nao puxa o alvo de volta");
+            float perto = TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10 + dur / 10);
+            Verdade(perto > 0.95f, "a saida comeca devagar, sem tranco");
+            TransicaoDeCarga.Informar("teste|X11", true, t0 + 10 + dur / 2);
+            float virou = TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 10 + dur / 2);
+            Verdade(Math.Abs(virou - noMeio) < 0.001f && anima, "virar no meio do caminho parte de onde estava, sem salto");
+            Igual(1f, TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 20 + dur * 2), "no fim chega exatamente ao alvo");
+            Verdade(!anima, "terminada a transicao o relogio pode parar");
+            Igual(0f, TransicaoDeCarga.Valor(null, false), "sem chave vale o estado de agora");
+            TransicaoDeCarga.Limpar();
+
+            Periferico x11 = Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 46, true);
+            Igual(PeripheralStrip.Verde.ToArgb(), PintorDoWidget.CorDoNivel(x11, 1f).ToArgb(), "carga 1 e o verde do cabo");
+            Igual(PeripheralStrip.CorFora(x11).ToArgb(), PintorDoWidget.CorDoNivel(x11, 0f).ToArgb(), "carga 0 e a cor do nivel");
+            Color metade = PeripheralStrip.Cor(x11, 0.5f);
+            Verdade(metade.ToArgb() != PeripheralStrip.Verde.ToArgb() && metade.ToArgb() != PeripheralStrip.CorFora(x11).ToArgb(),
+                    "no meio da transicao a cor fica entre as duas");
+
+            // notificacoes: nome do app no cabecalho e icone dele no corpo
+            Igual("Mhiagos Control", TaskbarIdentity.NomeVisivel, "notificacao mostra o nome do app, nao a AUMID");
+            Verdade(TaskbarIdentity.ChaveDoRegistro.EndsWith(@"AppUserModelId\" + TaskbarIdentity.AppId),
+                    "nome registrado na chave da propria AUMID");
+            Verdade(typeof(NotifyIcon).GetField("id", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) != null &&
+                    typeof(NotifyIcon).GetField("window", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) != null,
+                    "NotifyIcon do framework expoe janela e id para o aviso com icone do app");
+            Igual(TaskbarIdentity.AppId, MhiagosSetup.Setup.AppUserModelId, "atalho do instalador leva a mesma AUMID do app");
+            {
+                string pastaLnk = Path.Combine(Path.GetTempPath(), "mhiagos-atalho-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(pastaLnk);
+                try
+                {
+                    string lnk = Path.Combine(pastaLnk, "Mhiagos Control.lnk");
+                    string alvo = Path.Combine(Environment.SystemDirectory, "notepad.exe");
+                    MhiagosSetup.Setup.CriarAtalho(lnk, alvo, pastaLnk);
+                    Verdade(File.Exists(lnk), "instalador cria o atalho");
+                    Igual(TaskbarIdentity.AppId, MhiagosSetup.Setup.LerAppId(lnk), "atalho do Menu Iniciar sai carimbado com a AUMID do app");
+                }
+                finally { try { Directory.Delete(pastaLnk, true); } catch { } }
+            }
+            Verdade(Assets.AppIconBytes() != null && Assets.AppIconBytes().Length > 1000, "icone do app embutido para gravar o da notificacao");
+
+            // icone da aba Baterias, desenhado: contorno, polo e nivel
+            using (Bitmap ic = new Bitmap(24, 24, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(ic)) { g.Clear(Color.Transparent); Ui.IconeDeBateria(g, new RectangleF(2, 2, 20, 20), Color.White); }
+                Verdade(ic.GetPixel(12, 2).A == 0 && ic.GetPixel(12, 21).A == 0, "icone de bateria e deitado: sobra em cima e embaixo");
+                Verdade(ic.GetPixel(9, 12).A > 200, "icone de bateria tem o nivel preenchido");
+                Verdade(ic.GetPixel(21, 12).A > 100, "icone de bateria tem o polo a direita");
+                string pastaIc = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                if (!string.IsNullOrEmpty(pastaIc))
+                {
+                    Directory.CreateDirectory(pastaIc);
+                    using (Bitmap big = new Bitmap(ic, 96, 96)) big.Save(Path.Combine(pastaIc, "icone-baterias.png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+            }
+
+            ConfigDoWidget c = new ConfigDoWidget();
+            c.Ativo = true; c.X = -1500; c.Y = 40; c.Layout = LayoutDoWidget.Lista; c.Fosco = true;
+            c.Cor = CorDoVidro.Clara; c.NaFrente = true; c.Travado = true;
+            ConfigDoWidget volta = ConfigDoWidget.DeTexto(c.ParaTexto());
+            Igual(c.ParaTexto(), volta.ParaTexto(), "preferencias do widget fazem ida e volta");
+            Igual(-1500, volta.X, "posicao em monitor a esquerda (negativa) sobrevive");
+
+            ConfigDoWidget torto = ConfigDoWidget.DeTexto("ativo=1\nx=abc\ny=10\nlayout=hexagono\ncor=roxa\nlixo\n=1");
+            Verdade(torto.Ativo, "linha boa vale mesmo com vizinhas estragadas");
+            Verdade(!torto.TemPosicao, "meia posicao conta como nenhuma");
+            Igual(LayoutDoWidget.Aneis, torto.Layout, "formato desconhecido volta ao padrao");
+            Igual(CorDoVidro.Automatica, torto.Cor, "cor desconhecida volta ao padrao");
+
+            string antes = ConfigDoWidget.Caminho;
+            try
+            {
+                ConfigDoWidget.Caminho = Path.Combine(root, "widget.ini");
+                Verdade(c.Salvar(), "widget.ini grava");
+                c.X = 12;
+                Verdade(c.Salvar(), "widget.ini regrava por cima");
+                Igual(12, ConfigDoWidget.Carregar().X, "widget.ini carrega o que gravou");
+                Verdade(!File.Exists(ConfigDoWidget.Caminho + ".tmp"), "gravacao nao deixa temporario");
+            }
+            finally { ConfigDoWidget.Caminho = antes; }
+
+            Periferico[] todos = {
+                Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 72, false),
+                Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado),
+                Periferico.Sem("Bluetooth", TipoPeriferico.Outro, FontePeriferico.Bluetooth, EstadoPeriferico.NenhumConectado),
+                Periferico.Sem("Fone BT", TipoPeriferico.Outro, FontePeriferico.Bluetooth, EstadoPeriferico.SemLeitura),
+                Periferico.Lido("WH-1000XM4", TipoPeriferico.Outro, FontePeriferico.Bluetooth, 18, true) };
+            Periferico[] vis = PintorDoWidget.Visiveis(todos);
+            Igual(3, vis.Length, "Bluetooth sem leitura fica fora do widget");
+            Igual("X11", vis[1].Nome, "mouse desligado continua no widget, com --");
+            Igual(0, PintorDoWidget.Visiveis(null).Length, "sem lista o widget fica vazio");
+
+            foreach (LayoutDoWidget layout in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
+            {
+                Size um = PintorDoWidget.Medir(layout, 1, 1f), tres = PintorDoWidget.Medir(layout, 3, 1f);
+                Verdade(tres.Width * tres.Height > um.Width * um.Height, layout + ": mais aparelhos, placa maior");
+                Size dobro = PintorDoWidget.Medir(layout, 3, 2f);
+                Verdade(Math.Abs(dobro.Width - 2 * tres.Width) <= 1, layout + ": escala de 200% dobra a largura");
+                RectangleF[] zonas = PintorDoWidget.Zonas(layout, 3, 1.5f);
+                Size caixa = PintorDoWidget.Medir(layout, 3, 1.5f);
+                for (int i = 0; i < zonas.Length; i++)
+                {
+                    Verdade(zonas[i].Left >= 0 && zonas[i].Top >= 0 && zonas[i].Right <= caixa.Width && zonas[i].Bottom <= caixa.Height,
+                        layout + ": aparelho " + i + " cabe na placa");
+                    if (i > 0) Verdade(!zonas[i].IntersectsWith(zonas[i - 1]), layout + ": aparelhos " + (i - 1) + " e " + i + " nao se sobrepoem");
+                }
+
+                foreach (bool escuro in new bool[] { true, false })
+                {
+                    PintorDoWidget.Quadro q = new PintorDoWidget.Quadro();
+                    q.Itens = vis;
+                    q.Notas = new string[] { "~25 h", T.PeripheralOff, T.PeripheralCharging };
+                    q.Layout = layout;
+                    q.Escuro = escuro;
+                    q.Escala = 1.5f;
+                    q.Fase = 0.5f;
+                    q.Carga = new float[] { 0f, 0f, 0.5f };   // o ultimo no meio da entrada no cabo
+                    Size t = PintorDoWidget.Medir(layout, vis.Length, q.Escala);
+                    using (Bitmap bmp = new Bitmap(t.Width, t.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                    {
+                        using (Graphics g = Graphics.FromImage(bmp)) { g.Clear(Color.Transparent); PintorDoWidget.Pintar(g, t, q); }
+                        Igual(0, (int)bmp.GetPixel(0, 0).A, layout + (escuro ? " escuro" : " claro") + ": canto fora do vidro fica transparente");
+                        int meio = bmp.GetPixel(t.Width / 2, t.Height / 2).A;
+                        Verdade(meio > 0, layout + ": miolo desenhado");
+                        Verdade(bmp.GetPixel(t.Width / 2, 3).A > 0, layout + ": vidro chega na borda de cima");
+                        string pasta = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                        if (!string.IsNullOrEmpty(pasta))
+                        {
+                            Directory.CreateDirectory(pasta);
+                            bmp.Save(Path.Combine(pasta, "widget-" + layout + (escuro ? "-escuro" : "-claro") + ".png"),
+                                     System.Drawing.Imaging.ImageFormat.Png);
+                        }
+                    }
+                }
+            }
+
+            Rectangle area = new Rectangle(0, 0, 1920, 1040);
+            Size tam = new Size(300, 130);
+            Igual(new Point(0, 0), WidgetDeBateria.Encaixar(new Point(9, 7), tam, area, 12), "perto do canto gruda nele");
+            Igual(new Point(1620, 910), WidgetDeBateria.Encaixar(new Point(1611, 903), tam, area, 12), "perto do canto oposto tambem");
+            Igual(new Point(500, 400), WidgetDeBateria.Encaixar(new Point(500, 400), tam, area, 12), "longe das bordas fica onde soltou");
+            Verdade(!WidgetDeBateria.Visivel(new Rectangle(-40000, -40000, 300, 130)), "posicao de um monitor que saiu nao conta como visivel");
+
+            // a janela de verdade, com o arquivo apontado para a pasta do teste
+            antes = ConfigDoWidget.Caminho;
+            string log = File.Exists(Log.Path) ? File.ReadAllText(Log.Path) : "";
+            try
+            {
+                ConfigDoWidget.Caminho = Path.Combine(root, "widget-janela.ini");
+                ConfigDoWidget cfg = new ConfigDoWidget();
+                using (WidgetDeBateria w = new WidgetDeBateria(cfg))
+                {
+                    w.Show();
+                    Application.DoEvents();
+                    Verdade(w.Visible, "widget abre");
+                    Verdade(w.Width > 0 && w.Height > 0, "widget tem tamanho depois do primeiro desenho");
+                    Verdade(WidgetDeBateria.Visivel(w.Bounds), "primeira abertura cai dentro da tela");
+                    w.Renderizar();
+                    w.Close();
+                }
+                string depois = File.Exists(Log.Path) ? File.ReadAllText(Log.Path) : "";
+                string novo = depois.Length >= log.Length ? depois.Substring(log.Length) : depois;
+                bool erro = false;
+                foreach (string linha in novo.Split('\n'))
+                    if (linha.IndexOf("widget", StringComparison.OrdinalIgnoreCase) >= 0 && linha.Contains(" :: ")) erro = true;
+                Verdade(!erro, "widget abre e desenha sem erro no log");
+            }
+            finally { ConfigDoWidget.Caminho = antes; }
         }
 
         private static void RegressionNavOrder(string root)
@@ -100,6 +297,10 @@ namespace MhiagosControl
                 nav.SelectedIndex = 3;
                 InvokePrivate(form, "AbrirPaginaPelaChave", "baterias");
                 Igual("baterias", nav.Selected.Key, "clique no aparelho da Visao geral abre Baterias");
+                form.MostrarPagina("metricas");
+                Igual("metricas", nav.Selected.Key, "clique no widget leva a janela aberta para a pagina pedida");
+                form.MostrarPagina(null);
+                Igual("metricas", nav.Selected.Key, "abrir pela bandeja nao mexe na pagina aberta");
                 nav.MoverItem(0, 7);
                 Igual("baterias", Config.LoadFrom(config.SavePath, false).NavOrder.Split(',')[7],
                     "reordenar grava a ordem nova na hora");
@@ -592,6 +793,54 @@ namespace MhiagosControl
             public List<SensorEntry> RefreshSensorList() { return Sensors; }
             public void SetShowAllSensors(bool value) { }
             public ReadingState CurrentReadingState(string id) { return State; }
+        }
+
+        /// <summary>Hospedeiro de mentira que tambem entrega o controle do widget.</summary>
+        private sealed class DadosComWidget : ISettingsData, IControleDoWidget
+        {
+            public readonly ConfigDoWidget Widget = new ConfigDoWidget();
+            public int Mudancas, AoCanto;
+            public bool? Ligado;
+            public Dictionary<string, float> CurrentSnapshot() { return new Dictionary<string, float>(); }
+            public List<SensorEntry> RefreshSensorList() { return new List<SensorEntry>(); }
+            public void SetShowAllSensors(bool value) { }
+            public ConfigDoWidget ConfigDoWidget { get { return Widget; } }
+            public void LigarWidget(bool ligar) { Ligado = ligar; Widget.Ativo = ligar; }
+            public void WidgetMudou() { Mudancas++; }
+            public void WidgetAoCanto() { AoCanto++; }
+        }
+
+        private static void RegressionWidgetCard(string root)
+        {
+            Secao("widget de bateria: cartao na pagina Baterias");
+            DadosComWidget dados = new DadosComWidget();
+            dados.Widget.Fosco = true; dados.Widget.Nitido = false; dados.Widget.NaFrente = true;
+            Config config = AuditConfig(root, "widget-card");
+            using (SettingsForm form = new SettingsForm(config, new List<SensorEntry>(), dados))
+            {
+                form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
+                form.Show(); ((Timer)Field(form, "_tick")).Stop();
+                Verdade(Field(form, "_cardWidget") != null, "com o controle do widget, a pagina Baterias ganha o cartao");
+                Segmented vidro = (Segmented)Field(form, "_sgWidgetVidro");
+                Toggle frente = (Toggle)Field(form, "_tgWidgetFrente");
+                Igual(2, vidro.SelectedIndex, "o cartao abre com o vidro que esta valendo");
+                Verdade(frente.Checked, "e com o sempre na frente que esta valendo");
+                Igual(0, dados.Mudancas, "preencher o cartao nao conta como mudanca");
+
+                vidro.SelectedIndex = 0;
+                Verdade(dados.Widget.Nitido && !dados.Widget.Fosco, "escolher nitido no cartao muda a configuracao do widget");
+                Igual(1, dados.Mudancas, "e avisa a bandeja para salvar e redesenhar");
+                ((Segmented)Field(form, "_sgWidgetLayout")).SelectedIndex = 1;
+                Igual(LayoutDoWidget.Lista, dados.Widget.Layout, "o formato tambem vale na hora");
+                ((Toggle)Field(form, "_tgWidget")).Checked = true;
+                Verdade(dados.Ligado == true, "ligar no cartao liga o widget");
+
+                dados.Widget.Cor = CorDoVidro.Clara;
+                InvokePrivate(form, "SincronizarWidget");
+                Igual(2, ((Segmented)Field(form, "_sgWidgetCor")).SelectedIndex, "mudanca feita pelo menu do widget aparece no cartao");
+                Igual(2, dados.Mudancas, "sincronizar nao devolve a mudanca para a bandeja");
+                form.Close();
+            }
         }
 
         private static SettingsForm BugForm(Config config, FreshData data)
