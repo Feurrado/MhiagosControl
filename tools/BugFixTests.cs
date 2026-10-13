@@ -97,6 +97,20 @@ namespace MhiagosControl
             Verdade(typeof(NotifyIcon).GetField("id", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) != null &&
                     typeof(NotifyIcon).GetField("window", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) != null,
                     "NotifyIcon do framework expoe janela e id para o aviso com icone do app");
+            Igual(TaskbarIdentity.AppId, MhiagosSetup.Setup.AppUserModelId, "atalho do instalador leva a mesma AUMID do app");
+            {
+                string pastaLnk = Path.Combine(Path.GetTempPath(), "mhiagos-atalho-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(pastaLnk);
+                try
+                {
+                    string lnk = Path.Combine(pastaLnk, "Mhiagos Control.lnk");
+                    string alvo = Path.Combine(Environment.SystemDirectory, "notepad.exe");
+                    MhiagosSetup.Setup.CriarAtalho(lnk, alvo, pastaLnk);
+                    Verdade(File.Exists(lnk), "instalador cria o atalho");
+                    Igual(TaskbarIdentity.AppId, MhiagosSetup.Setup.LerAppId(lnk), "atalho do Menu Iniciar sai carimbado com a AUMID do app");
+                }
+                finally { try { Directory.Delete(pastaLnk, true); } catch { } }
+            }
             Verdade(Assets.AppIconBytes() != null && Assets.AppIconBytes().Length > 1000, "icone do app embutido para gravar o da notificacao");
 
             // icone da aba Baterias, desenhado: contorno, polo e nivel

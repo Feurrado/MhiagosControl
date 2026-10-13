@@ -407,6 +407,109 @@ namespace MhiagosSetup
             }
             catch { }
             finally { if (shell != null) try { Marshal.ReleaseComObject(shell); } catch { } }
+            CarimbarAppId(lnk);
+        }
+
+        /// <summary>A mesma AUMID que o app define para si (TaskbarIdentity.AppId).</summary>
+        internal const string AppUserModelId = "Feurrado.MhiagosControl";
+
+        [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+        private class ShellLinkCom { }
+
+        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("0000010b-0000-0000-C000-000000000046")]
+        private interface IPersistFileCom
+        {
+            void GetClassID(out Guid clsid);
+            [PreserveSig] int IsDirty();
+            void Load([MarshalAs(UnmanagedType.LPWStr)] string arquivo, int modo);
+            void Save([MarshalAs(UnmanagedType.LPWStr)] string arquivo, bool lembrar);
+            void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string arquivo);
+            void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string arquivo);
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 4)]
+        private struct PropertyKey
+        {
+            public Guid Fmtid;
+            public int Pid;
+            public PropertyKey(Guid fmtid, int pid) { Fmtid = fmtid; Pid = pid; }
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct PropVariant
+        {
+            [FieldOffset(0)] public ushort Vt;
+            [FieldOffset(8)] public IntPtr Ptr;
+            [FieldOffset(16)] private long _resto;   // o PROPVARIANT tem 16 bytes no x86 e 24 no x64
+        }
+
+        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+        private interface IPropertyStoreCom
+        {
+            void GetCount(out uint quantos);
+            void GetAt(uint i, out PropertyKey chave);
+            void GetValue(ref PropertyKey chave, out PropVariant valor);
+            void SetValue(ref PropertyKey chave, ref PropVariant valor);
+            void Commit();
+        }
+
+        /// <summary>
+        /// Grava System.AppUserModel.ID no atalho. Sem isso o Windows nao liga
+        /// as notificacoes do app (que usa essa AUMID) a nome nenhum e mostra
+        /// "Feurrado.MhiagosControl" no cabecalho; com o atalho do Menu Iniciar
+        /// carimbado, o aviso usa o nome e o icone do atalho.
+        /// </summary>
+        /// <summary>A AUMID gravada no atalho, ou nulo; para os testes e o diagnostico.</summary>
+        internal static string LerAppId(string lnk)
+        {
+            if (!File.Exists(lnk)) return null;
+            object link = null;
+            try
+            {
+                link = new ShellLinkCom();
+                ((IPersistFileCom)link).Load(lnk, 0);
+                PropertyKey chave = new PropertyKey(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
+                PropVariant v;
+                ((IPropertyStoreCom)link).GetValue(ref chave, out v);
+                if (v.Vt != 31 || v.Ptr == IntPtr.Zero) return null;
+                string id = Marshal.PtrToStringUni(v.Ptr);
+                Marshal.FreeCoTaskMem(v.Ptr);
+                return id;
+            }
+            catch { return null; }
+            finally { if (link != null) try { Marshal.ReleaseComObject(link); } catch { } }
+        }
+
+        /// <summary>Cria o atalho como na instalacao; para os testes.</summary>
+        internal static void CriarAtalho(string lnk, string alvo, string dirTrabalho) { Atalho(lnk, alvo, dirTrabalho); }
+
+        internal static bool CarimbarAppId(string lnk)
+        {
+            if (!File.Exists(lnk)) return false;
+            object link = null;
+            IntPtr texto = IntPtr.Zero;
+            try
+            {
+                link = new ShellLinkCom();
+                IPersistFileCom arquivo = (IPersistFileCom)link;
+                arquivo.Load(lnk, 2);   // STGM_READWRITE
+                IPropertyStoreCom props = (IPropertyStoreCom)link;
+                PropertyKey chave = new PropertyKey(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
+                PropVariant v = new PropVariant();
+                v.Vt = 31;              // VT_LPWSTR
+                texto = Marshal.StringToCoTaskMemUni(AppUserModelId);
+                v.Ptr = texto;
+                props.SetValue(ref chave, ref v);
+                props.Commit();
+                arquivo.Save(lnk, true);
+                return true;
+            }
+            catch { return false; }
+            finally
+            {
+                if (texto != IntPtr.Zero) Marshal.FreeCoTaskMem(texto);
+                if (link != null) try { Marshal.ReleaseComObject(link); } catch { }
+            }
         }
 
         private static string Schtasks(string argumentos, out int codigo)
