@@ -530,7 +530,11 @@ namespace MhiagosControl
                     if (!am[i].Carregando) continue;
                     DateTime ate = i + 1 < am.Length ? am[i + 1].Quando : agora;
                     if (ate < inicio) continue;
-                    float x0 = Math.Max(area.X, X(am[i].Quando)), x1 = Math.Min(area.Right, X(ate));
+                    // a primeira amostra no cabo ja chega com a carga subindo:
+                    // o cabo entrou no trecho anterior, que a faixa tambem cobre
+                    DateTime de = am[i].Quando;
+                    if (i > 0 && !am[i - 1].Carregando && (de - am[i - 1].Quando).TotalMinutes <= 30) de = am[i - 1].Quando;
+                    float x0 = Math.Max(area.X, X(de)), x1 = Math.Min(area.Right, X(ate));
                     if (x1 > x0) g.FillRectangle(sombra, x0, area.Y, x1 - x0, area.Height);
                 }
 
