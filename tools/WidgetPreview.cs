@@ -17,7 +17,7 @@ namespace MhiagosControl
     ///   powershell -ExecutionPolicy Bypass -File .\tools\build-widget-preview.ps1
     ///   bin\WidgetPreview.exe [--real] [--lista] [--fosco|--desfoque] [--escuro|--claro]
     ///                         [--fundo] [--listras]
-    ///                         [--segundos N] [--foto arquivo.png] [--alternar-carga N]
+    ///                         [--segundos N] [--foto arquivo.png] [--alternar-carga N] [--aviso]
     ///
     /// Sem --real os aparelhos sao de mentira (um carregando, um com pouca
     /// carga), e os leitores nao disputam o receptor com o Mhiagos aberto. Por
@@ -26,6 +26,8 @@ namespace MhiagosControl
     /// As preferencias vao para uma pasta temporaria, nunca para o widget.ini.
     /// --alternar-carga liga e desliga o cabo dos aparelhos de mentira a cada
     /// N segundos (3 sem numero), para ver a transicao de entrada e saida.
+    /// --aviso mostra uma notificacao de bateria como a do app, com a mesma
+    /// identidade (nome e icone registrados no HKCU, como o app faz).
     /// </summary>
     public static class WidgetPreview
     {
@@ -109,6 +111,7 @@ namespace MhiagosControl
             string foto = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "widget-preview.png");
             bool real = false, listras = false;
             int alternar = 0;
+            bool aviso = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -123,6 +126,7 @@ namespace MhiagosControl
                 else if (a == "--listras") listras = true;
                 else if (a == "--segundos" && i + 1 < args.Length) segundos = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (a == "--foto" && i + 1 < args.Length) foto = Path.GetFullPath(args[++i]);
+                else if (a == "--aviso") aviso = true;
                 else if (a == "--alternar-carga")
                 {
                     alternar = 3;
@@ -185,6 +189,19 @@ namespace MhiagosControl
                 Console.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " cabo: X11 " + (cabo ? "sim" : "nao") + ", G325 " + (cabo ? "nao" : "sim"));
             };
 
+            NotifyIcon bandeja = null;
+            if (aviso)
+            {
+                TaskbarIdentity.Initialize();
+                bandeja = new NotifyIcon();
+                bandeja.Icon = Assets.TrayIcon;
+                bandeja.Text = "Mhiagos Control (previa)";
+                bandeja.Visible = true;
+                bool comIcone = AvisoComIcone.Mostrar(bandeja, T.BatteryLowTitle("G325", 30), T.BatteryLowText);
+                if (!comIcone) bandeja.ShowBalloonTip(10000, T.BatteryLowTitle("G325", 30), T.BatteryLowText, ToolTipIcon.Warning);
+                Console.WriteLine("aviso mostrado " + (comIcone ? "com o icone do app" : "pelo balao comum (caminho nativo falhou)"));
+            }
+
             w.Show();
             if (listras) Listras(w);
             if (alternar > 0 && !real) carga.Start();
@@ -192,6 +209,7 @@ namespace MhiagosControl
             fim.Start();
             Application.Run();
 
+            if (bandeja != null) { bandeja.Visible = false; bandeja.Dispose(); }
             parar.Set();
             Perifericos.Esperar(2000);
             string log = Log.Path;

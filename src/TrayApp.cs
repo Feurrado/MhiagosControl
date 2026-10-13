@@ -1015,7 +1015,9 @@ namespace MhiagosControl
             {
                 try
                 {
-                    if (_icon != null && _icon.Visible)
+                    // com o icone do app no lugar do triangulo/i do Windows;
+                    // se o caminho nativo falhar, cai no balao comum
+                    if (_icon != null && _icon.Visible && !AvisoComIcone.Mostrar(_icon, titulo, texto))
                         _icon.ShowBalloonTip(10000, titulo, texto, icone);
                 }
                 catch (Exception ex) { Log.Error("notificacao de bateria", ex); }

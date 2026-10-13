@@ -90,6 +90,15 @@ namespace MhiagosControl
             Verdade(metade.ToArgb() != PeripheralStrip.Verde.ToArgb() && metade.ToArgb() != PeripheralStrip.CorFora(x11).ToArgb(),
                     "no meio da transicao a cor fica entre as duas");
 
+            // notificacoes: nome do app no cabecalho e icone dele no corpo
+            Igual("Mhiagos Control", TaskbarIdentity.NomeVisivel, "notificacao mostra o nome do app, nao a AUMID");
+            Verdade(TaskbarIdentity.ChaveDoRegistro.EndsWith(@"AppUserModelId\" + TaskbarIdentity.AppId),
+                    "nome registrado na chave da propria AUMID");
+            Verdade(typeof(NotifyIcon).GetField("id", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) != null &&
+                    typeof(NotifyIcon).GetField("window", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) != null,
+                    "NotifyIcon do framework expoe janela e id para o aviso com icone do app");
+            Verdade(Assets.AppIconBytes() != null && Assets.AppIconBytes().Length > 1000, "icone do app embutido para gravar o da notificacao");
+
             // icone da aba Baterias, desenhado: contorno, polo e nivel
             using (Bitmap ic = new Bitmap(24, 24, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
             {

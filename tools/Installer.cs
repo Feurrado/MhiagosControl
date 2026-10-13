@@ -274,6 +274,9 @@ namespace MhiagosSetup
             diz("Removendo o registro");
             try { Registry.LocalMachine.DeleteSubKeyTree(UninstallKey, false); }
             catch (Exception ex) { diz("  aviso: " + ex.Message); }
+            // nome e icone das notificacoes, que o app grava no HKCU de quem o usa
+            try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\AppUserModelId\Feurrado.MhiagosControl", false); }
+            catch (Exception ex) { diz("  aviso: " + ex.Message); }
 
             diz("Apagando arquivos");
             foreach (string[] item in Itens()) Apagar(Path.Combine(destino, item[1]));
