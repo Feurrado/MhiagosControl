@@ -174,7 +174,24 @@ namespace MhiagosControl
             return l.ToArray();
         }
 
-        internal static Size Medir(LayoutDoWidget layout, int quantos, float escala)
+        /// <summary>
+        /// O nome so aparece onde a imagem nao diz quem e o aparelho: o G325 e o
+        /// X11 se reconhecem pelo desenho, mas todo aparelho Bluetooth ganha o
+        /// mesmo simbolo.
+        /// </summary>
+        internal static bool MostraNome(Periferico p)
+        {
+            return p != null && p.Fonte == FontePeriferico.Bluetooth;
+        }
+
+        /// <summary>Algum aparelho do widget precisa da linha do nome.</summary>
+        internal static bool ComNome(Periferico[] itens)
+        {
+            if (itens != null) foreach (Periferico p in itens) if (MostraNome(p)) return true;
+            return false;
+        }
+
+        internal static Size Medir(LayoutDoWidget layout, int quantos, float escala, bool comNome)
         {
             float w, h;
             if (quantos <= 0) { w = 240f; h = 64f; }
@@ -186,16 +203,16 @@ namespace MhiagosControl
             else
             {
                 w = 2 * Margem + quantos * Coluna + (quantos - 1) * VaoDeColuna;
-                h = 2 * Margem + Anel + 8f + 20f + 18f;
+                h = 2 * Margem + Anel + 8f + 20f + (comNome ? 18f : 0f);
             }
             return new Size((int)Math.Ceiling(w * escala), (int)Math.Ceiling(h * escala));
         }
 
         /// <summary>Retangulo de cada aparelho no ultimo desenho, para a dica do mouse.</summary>
-        internal static RectangleF[] Zonas(LayoutDoWidget layout, int quantos, float escala)
+        internal static RectangleF[] Zonas(LayoutDoWidget layout, int quantos, float escala, bool comNome)
         {
             RectangleF[] z = new RectangleF[Math.Max(0, quantos)];
-            Size tam = Medir(layout, quantos, escala);
+            Size tam = Medir(layout, quantos, escala, comNome);
             for (int i = 0; i < z.Length; i++)
             {
                 if (layout == LayoutDoWidget.Lista)
@@ -256,7 +273,7 @@ namespace MhiagosControl
                           new RectangleF(0, 0, tamanho.Width, tamanho.Height), StringAlignment.Center, StringAlignment.Center);
                     return;
                 }
-                RectangleF[] zonas = Zonas(q.Layout, q.Itens.Length, s);
+                RectangleF[] zonas = Zonas(q.Layout, q.Itens.Length, s, ComNome(q.Itens));
                 for (int i = 0; i < q.Itens.Length; i++)
                 {
                     string nota = i < q.Notas.Length ? q.Notas[i] : null;
@@ -382,8 +399,11 @@ namespace MhiagosControl
             RectangleF lPct = new RectangleF(z.X, y, z.Width, 20f * s);
             Texto(g, Valor(p), f.Pct, Apagado(p) ? Secundario(escuro) : Primario(escuro), escuro, lPct,
                   StringAlignment.Center, StringAlignment.Center);
-            RectangleF lNome = new RectangleF(z.X, y + 20f * s, z.Width, 17f * s);
-            Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Center, StringAlignment.Center);
+            if (MostraNome(p))
+            {
+                RectangleF lNome = new RectangleF(z.X, y + 20f * s, z.Width, 17f * s);
+                Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Center, StringAlignment.Center);
+            }
         }
 
         // ---------------- lista ----------------
@@ -411,11 +431,24 @@ namespace MhiagosControl
             float largValor;
             using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
                 largValor = g.MeasureString(valor, f.Pct, PointF.Empty, sf).Width + 2f * s;
-            RectangleF lValor = new RectangleF(z.Right - largValor, z.Y, largValor, 21f * s);
+            // sem o nome, a porcentagem vai para o lugar dele, a esquerda, e o
+            // raio da carga logo depois dela
+            bool nome = MostraNome(p);
+            RectangleF lValor = nome ? new RectangleF(z.Right - largValor, z.Y, largValor, 21f * s)
+                                     : new RectangleF(x, z.Y, largValor, 21f * s);
             Texto(g, valor, f.Pct, Apagado(p) ? Secundario(escuro) : Primario(escuro), escuro, lValor,
-                  StringAlignment.Far, StringAlignment.Center);
+                  nome ? StringAlignment.Far : StringAlignment.Near, StringAlignment.Center);
 
-            if (carga > 0.01f)
+            if (!nome)
+            {
+                if (carga > 0.01f)
+                {
+                    float hr = 13f * s;
+                    RectangleF raio = new RectangleF(lValor.Right + 2f * s, lValor.Y + (lValor.Height - hr) / 2f, hr * 0.7f, hr);
+                    PeripheralStrip.Raio(g, raio, carga);
+                }
+            }
+            else if (carga > 0.01f)
             {
                 // o raio acende aos poucos e o nome cede o lugar dele junto,
                 // sem pular de uma vez
@@ -425,8 +458,11 @@ namespace MhiagosControl
                 lValor = RectangleF.FromLTRB(lValor.X - hr * 0.9f * carga, lValor.Y, lValor.Right, lValor.Bottom);
             }
 
-            RectangleF lNome = new RectangleF(x, z.Y, Math.Max(0f, lValor.X - x - 6f * s), 21f * s);
-            Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
+            if (nome)
+            {
+                RectangleF lNome = new RectangleF(x, z.Y, Math.Max(0f, lValor.X - x - 6f * s), 21f * s);
+                Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
+            }
 
             RectangleF barra = new RectangleF(x, z.Y + 25f * s, w, 8f * s);
             Capsula(g, barra, p, escuro, q.Fase, carga);
@@ -831,7 +867,7 @@ namespace MhiagosControl
             if (IsDisposed || !IsHandleCreated) return;
             try
             {
-                Size tam = PintorDoWidget.Medir(_cfg.Layout, _itens.Length, _escala);
+                Size tam = PintorDoWidget.Medir(_cfg.Layout, _itens.Length, _escala, PintorDoWidget.ComNome(_itens));
                 if (tam != Size)
                 {
                     Size = tam;
@@ -997,7 +1033,7 @@ namespace MhiagosControl
         /// <summary>Volta onde estava; na primeira vez, ou se a tela sumiu, no canto de cima a direita.</summary>
         private void Posicionar()
         {
-            Size tam = PintorDoWidget.Medir(_cfg.Layout, _itens.Length, _escala);
+            Size tam = PintorDoWidget.Medir(_cfg.Layout, _itens.Length, _escala, PintorDoWidget.ComNome(_itens));
             Point p;
             if (_cfg.TemPosicao && Visivel(new Rectangle(_cfg.X, _cfg.Y, tam.Width, tam.Height)))
                 p = new Point(_cfg.X, _cfg.Y);
@@ -1141,7 +1177,7 @@ namespace MhiagosControl
         /// <summary>Nome, carga e a previsao do aparelho sob o ponteiro.</summary>
         private void AtualizarDica(Point p)
         {
-            RectangleF[] zonas = PintorDoWidget.Zonas(_cfg.Layout, _itens.Length, _escala);
+            RectangleF[] zonas = PintorDoWidget.Zonas(_cfg.Layout, _itens.Length, _escala, PintorDoWidget.ComNome(_itens));
             int zona = -1;
             for (int i = 0; i < zonas.Length; i++) if (zonas[i].Contains(p)) { zona = i; break; }
             if (zona == _zonaDaDica) return;

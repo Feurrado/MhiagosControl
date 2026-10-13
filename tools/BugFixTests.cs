@@ -182,14 +182,21 @@ namespace MhiagosControl
             Igual("X11", vis[1].Nome, "mouse desligado continua no widget, com --");
             Igual(0, PintorDoWidget.Visiveis(null).Length, "sem lista o widget fica vazio");
 
+            // nomes: o G325 e o X11 se reconhecem pelo desenho; Bluetooth tem simbolo generico
+            Verdade(!PintorDoWidget.MostraNome(todos[0]) && !PintorDoWidget.MostraNome(todos[1]), "G325 e X11 sem nome no widget");
+            Verdade(PintorDoWidget.MostraNome(todos[4]), "aparelho Bluetooth continua com o nome");
+            Verdade(!PintorDoWidget.ComNome(new Periferico[] { todos[0], todos[1] }), "so G325 e X11: widget sem linha de nome");
+            Verdade(PintorDoWidget.Medir(LayoutDoWidget.Aneis, 2, 1f, false).Height < PintorDoWidget.Medir(LayoutDoWidget.Aneis, 2, 1f, true).Height,
+                "aneis sem nome ficam mais baixos");
+
             foreach (LayoutDoWidget layout in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
             {
-                Size um = PintorDoWidget.Medir(layout, 1, 1f), tres = PintorDoWidget.Medir(layout, 3, 1f);
+                Size um = PintorDoWidget.Medir(layout, 1, 1f, false), tres = PintorDoWidget.Medir(layout, 3, 1f, false);
                 Verdade(tres.Width * tres.Height > um.Width * um.Height, layout + ": mais aparelhos, placa maior");
-                Size dobro = PintorDoWidget.Medir(layout, 3, 2f);
+                Size dobro = PintorDoWidget.Medir(layout, 3, 2f, false);
                 Verdade(Math.Abs(dobro.Width - 2 * tres.Width) <= 1, layout + ": escala de 200% dobra a largura");
-                RectangleF[] zonas = PintorDoWidget.Zonas(layout, 3, 1.5f);
-                Size caixa = PintorDoWidget.Medir(layout, 3, 1.5f);
+                RectangleF[] zonas = PintorDoWidget.Zonas(layout, 3, 1.5f, false);
+                Size caixa = PintorDoWidget.Medir(layout, 3, 1.5f, false);
                 for (int i = 0; i < zonas.Length; i++)
                 {
                     Verdade(zonas[i].Left >= 0 && zonas[i].Top >= 0 && zonas[i].Right <= caixa.Width && zonas[i].Bottom <= caixa.Height,
@@ -207,7 +214,7 @@ namespace MhiagosControl
                     q.Escala = 1.5f;
                     q.Fase = 0.5f;
                     q.Carga = new float[] { 0f, 0f, 0.5f };   // o ultimo no meio da entrada no cabo
-                    Size t = PintorDoWidget.Medir(layout, vis.Length, q.Escala);
+                    Size t = PintorDoWidget.Medir(layout, vis.Length, q.Escala, PintorDoWidget.ComNome(vis));
                     using (Bitmap bmp = new Bitmap(t.Width, t.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
                     {
                         using (Graphics g = Graphics.FromImage(bmp)) { g.Clear(Color.Transparent); PintorDoWidget.Pintar(g, t, q); }
