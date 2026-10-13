@@ -936,7 +936,7 @@ namespace MhiagosControl
         {
             MetricCard c = new MetricCard();
             c.Editavel = false;
-            c.Janela = MetricHistory.JanelaValida(_cfg.MetricRange);
+            c.Janela = MetricHistory.JanelaVisaoGeral;
             _pgVisao.Controls.Add(c);
             return c;
         }
@@ -1043,7 +1043,7 @@ namespace MhiagosControl
                 c.Sub = SystemInfo.Limpar(s.Hardware);
                 c.Unidade = s.EffectiveUnit;
                 c.SensorId = s.Id;
-                c.Janela = MetricHistory.JanelaValida(_cfg.MetricRange);
+                c.Janela = MetricHistory.JanelaVisaoGeral;
                 float? at, pe;
                 MetricPicker.Faixas(s.EffectiveUnit, s.Id, out at, out pe);
                 c.Atencao = at; c.Perigo = pe;
@@ -3775,11 +3775,8 @@ namespace MhiagosControl
             _cfg.MetricRange = MetricHistory.Janelas[i];
             GravarMetricas();
             foreach (MetricCard c in _cards) { c.Janela = _cfg.MetricRange; c.Invalidate(); }
-            // Os destaques da tela de bordo desenham a mesma serie e tem de
-            // mostrar a mesma janela: dois graficos do mesmo sensor em escalas de
-            // tempo diferentes, na mesma janela, e um convite a comparar o que
-            // nao se compara.
-            foreach (MetricCard c in _vgTiles) { c.Janela = _cfg.MetricRange; c.Invalidate(); }
+            // A Visao geral fica de fora de proposito: tem janela propria,
+            // curta, para os picos aparecerem nos blocos estreitos.
         }
 
         private void AdicionarMetrica()

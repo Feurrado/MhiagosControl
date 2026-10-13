@@ -40,6 +40,15 @@ namespace MhiagosControl
 
         public const int JanelaPadrao = 600;
 
+        /// <summary>
+        /// Janela fixa da Visao geral: cinco minutos.
+        ///
+        /// Ela seguia a janela da aba Metricas, e com uma hora escolhida la os
+        /// blocos de 170 px recebiam 720 pontos - os picos viravam borrao. Aqui
+        /// sao 60 pontos, cerca de 3 px cada, e um pico de 10 s aparece.
+        /// </summary>
+        public const int JanelaVisaoGeral = 300;
+
         private const string Magica = "MHIST1";
 
         private class Serie
@@ -60,6 +69,10 @@ namespace MhiagosControl
 
         /// <summary>Indice do balde corrente. Um so para todas as series.</summary>
         private static long _balde = 0;
+
+        /// <summary>Leituras feitas no balde corrente; ver HoraDeAmostrar.</summary>
+        private static int _tentativas = 0;
+        private const int TentativasPorBalde = 3;
 
         private static bool _sujo = false;
         private static bool _gravando = false;
@@ -168,7 +181,20 @@ namespace MhiagosControl
             {
                 if (_seguidos.Count == 0) return false;
                 if (_balde == 0) return true;
-                return BaldeAgora() != _balde;
+                if (BaldeAgora() != _balde) return true;
+
+                // Um sensor que nao respondeu no ciclo da amostra deixava o
+                // balde inteiro vazio, e a linha quebrava ali. Mais duas
+                // tentativas dentro do mesmo balde resolvem a falha passageira;
+                // o limite existe porque o FPS sem jogo aberto nunca responde,
+                // e insistir todo segundo seria pagar a leitura cheia a toa.
+                if (_tentativas >= TentativasPorBalde) return false;
+                foreach (string id in _seguidos)
+                {
+                    Serie s;
+                    if (!_series.TryGetValue(id, out s) || s.Cont == 0) return true;
+                }
+                return false;
             }
         }
 
@@ -204,9 +230,13 @@ namespace MhiagosControl
                     Alterado();
                 }
                 Fechar(agora);
+                _tentativas++;
 
                 foreach (string id in _seguidos)
                 {
+                    Serie ja;
+                    if (_series.TryGetValue(id, out ja) && ja.Cont > 0) continue;   // uma leitura por balde
+
                     float? v;
                     try { v = ler(id); }
                     catch { v = null; }
@@ -245,6 +275,7 @@ namespace MhiagosControl
             }
 
             _balde = agora;
+            _tentativas = 0;
             Alterado();
         }
 
@@ -269,7 +300,7 @@ namespace MhiagosControl
                 if (!_sujo) return;
                 DateTime agora = DateTime.UtcNow;
                 if (agora < _proximaTentativa) return;
-                if ((agora - _ultimaGravacao).TotalMinutes < 5) return;
+                if ((agora - _ultimaGravacao).TotalMinutes < 1) return;
             }
             Salvar();
         }
