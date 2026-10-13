@@ -54,6 +54,8 @@ namespace MhiagosControl
             for (int i = 0; igual && i < itens.Length; i++)
                 igual = itens[i].Equals(_itens[i]) && previsoes[i] == _previsoes[i];
             if (igual) return;
+            foreach (Periferico p in itens)
+                TransicaoDeCarga.Informar(HistoricoDeBateria.Chave(p), p.Carregando && p.Bateria.HasValue);
             _itens = itens;
             _previsoes = previsoes;
             Invalidate();
@@ -489,6 +491,11 @@ namespace MhiagosControl
     /// anda, continua pedindo quadros. A primeira vez que um aparelho aparece
     /// ja entra no estado certo, sem animar: abrir o app com o mouse no cabo
     /// nao e uma transicao.
+    ///
+    /// O alvo so muda por Informar, chamado quando chega leitura nova. O
+    /// desenho nao muda o alvo: o widget le a cada 2 s e a Visao geral a cada
+    /// 1 s, e se cada um puxasse o alvo para o que viu por ultimo, os dois
+    /// discordariam por ate 2 s e a animacao recomecaria a cada quadro.
     /// </summary>
     internal static class TransicaoDeCarga
     {
@@ -499,12 +506,37 @@ namespace MhiagosControl
         private static readonly Dictionary<string, Estado> _estados = new Dictionary<string, Estado>();
         private static readonly object _trava = new object();
 
+        /// <summary>Leitura nova do aparelho: se o cabo mudou, comeca a transicao.</summary>
+        public static void Informar(string chave, bool carregando)
+        {
+            Informar(chave, carregando, Environment.TickCount);
+        }
+
+        internal static void Informar(string chave, bool carregando, int agora)
+        {
+            if (chave == null) return;
+            float alvo = carregando ? 1f : 0f;
+            lock (_trava)
+            {
+                Estado e = Obter(chave, alvo, agora);
+                if (e.Alvo == alvo) return;
+                // virou no meio do caminho: parte de onde estava, sem salto
+                e.De = Em(e, agora);
+                e.Alvo = alvo;
+                e.Inicio = agora;
+            }
+        }
+
         public static float Valor(string chave, bool carregando)
         {
             bool animando;
             return Valor(chave, carregando, out animando, Environment.TickCount);
         }
 
+        /// <summary>
+        /// O valor agora. <paramref name="carregando"/> so vale para um
+        /// aparelho que ninguem informou ainda; o alvo vem de Informar.
+        /// </summary>
         public static float Valor(string chave, bool carregando, out bool animando)
         {
             return Valor(chave, carregando, out animando, Environment.TickCount);
@@ -518,26 +550,25 @@ namespace MhiagosControl
             if (chave == null) return alvo;
             lock (_trava)
             {
-                Estado e;
-                if (!_estados.TryGetValue(chave, out e))
-                {
-                    e = new Estado();
-                    e.De = e.Alvo = alvo;
-                    e.Inicio = agora - DuracaoMs;
-                    _estados[chave] = e;
-                    return alvo;
-                }
+                Estado e = Obter(chave, alvo, agora);
                 float atual = Em(e, agora);
-                if (e.Alvo != alvo)
-                {
-                    // virou no meio do caminho: parte de onde estava, sem salto
-                    e.De = atual;
-                    e.Alvo = alvo;
-                    e.Inicio = agora;
-                }
-                animando = atual != alvo;
+                animando = atual != e.Alvo;
                 return atual;
             }
+        }
+
+        /// <summary>O estado do aparelho; o primeiro ja nasce parado no alvo.</summary>
+        private static Estado Obter(string chave, float alvo, int agora)
+        {
+            Estado e;
+            if (!_estados.TryGetValue(chave, out e))
+            {
+                e = new Estado();
+                e.De = e.Alvo = alvo;
+                e.Inicio = agora - DuracaoMs;
+                _estados[chave] = e;
+            }
+            return e;
         }
 
         private static float Em(Estado e, int agora)

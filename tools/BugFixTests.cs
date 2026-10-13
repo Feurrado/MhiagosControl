@@ -70,12 +70,16 @@ namespace MhiagosControl
             int t0 = 1000000, dur = TransicaoDeCarga.DuracaoMs;
             Igual(1f, TransicaoDeCarga.Valor("teste|X11", true, out anima, t0), "aparelho visto pela primeira vez no cabo ja entra cheio");
             Verdade(!anima, "primeira vista nao anima");
+            TransicaoDeCarga.Informar("teste|X11", false, t0 + 10);
             Igual(1f, TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10), "no instante em que sai do cabo ainda esta em 1");
             Verdade(anima, "sair do cabo comeca uma transicao");
             float noMeio = TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10 + dur / 2);
             Verdade(noMeio > 0.4f && noMeio < 0.6f && anima, "no meio da transicao a carga esta no meio");
+            float atrasado = TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 10 + dur / 2);
+            Verdade(Math.Abs(atrasado - noMeio) < 0.001f, "quem desenha com leitura velha nao puxa o alvo de volta");
             float perto = TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10 + dur / 10);
             Verdade(perto > 0.95f, "a saida comeca devagar, sem tranco");
+            TransicaoDeCarga.Informar("teste|X11", true, t0 + 10 + dur / 2);
             float virou = TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 10 + dur / 2);
             Verdade(Math.Abs(virou - noMeio) < 0.001f && anima, "virar no meio do caminho parte de onde estava, sem salto");
             Igual(1f, TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 20 + dur * 2), "no fim chega exatamente ao alvo");

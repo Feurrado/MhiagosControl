@@ -90,6 +90,7 @@ namespace MhiagosControl
             string ass = Assinatura(a, autonomia);
             if (ass == _assinatura) return;
             _a = a; _autonomia = autonomia; _assinatura = ass;
+            if (a != null) TransicaoDeCarga.Informar(a.Chave, a.Carregando && a.PctAtual.HasValue);
             Invalidate();
         }
 

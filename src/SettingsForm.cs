@@ -1429,6 +1429,15 @@ namespace MhiagosControl
             nota.ForeColor = Ui.Muted;
             c.Controls.Add(nota);
 
+            // janela estreita: o que fica a direita encolhe em vez de passar da borda
+            c.Resize += delegate
+            {
+                int livre = c.Width - 16;
+                _sgWidgetVidro.Width = Math.Max(180, Math.Min(300, livre - 260));
+                _tgWidgetTrava.Width = Math.Max(140, Math.Min(240, livre - 330));
+                nota.Width = Math.Max(120, Math.Min(480, livre - 250));
+            };
+
             // preenche antes de ligar os eventos: cada controle avisa toda mudanca
             SincronizarWidget();
 
@@ -1524,6 +1533,9 @@ namespace MhiagosControl
             }
 
             if (mudouLista) ArranjarBaterias();
+            // o menu do widget e o da bandeja mudam a configuracao sem passar
+            // por aqui: o cartao confere a cada leitura
+            SincronizarWidget();
         }
 
         private void ArranjarBaterias()

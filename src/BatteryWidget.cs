@@ -68,6 +68,7 @@ namespace MhiagosControl
             {
                 string arquivo = Caminho;
                 string temp = arquivo + ".tmp";
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(arquivo)));
                 File.WriteAllText(temp, ParaTexto(), Encoding.UTF8);
                 if (File.Exists(arquivo)) File.Replace(temp, arquivo, null);
                 else File.Move(temp, arquivo);
@@ -794,6 +795,8 @@ namespace MhiagosControl
                 igual = itens[i].Equals(_itens[i]) && notas[i] == _notas[i];
             if (igual) return;
 
+            foreach (Periferico p in itens)
+                TransicaoDeCarga.Informar(HistoricoDeBateria.Chave(p), p.Carregando && p.Bateria.HasValue);
             int antes = _itens.Length;
             _itens = itens;
             _notas = notas;
@@ -1087,6 +1090,25 @@ namespace MhiagosControl
             }
 
             AtualizarDica(e.Location);
+        }
+
+        /// <summary>
+        /// Outra janela tomou o mouse no meio do arrasto (tecla Windows, UAC,
+        /// Alt+Tab): o MouseUp nao vem mais, e sem isso o widget seguiria o
+        /// cursor so de passar por cima.
+        /// </summary>
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            base.OnMouseCaptureChanged(e);
+            // botao ja solto: e a soltura normal, o MouseUp vem logo depois
+            if (Capture || !_pressionado || (Control.MouseButtons & MouseButtons.Left) == 0) return;
+            _pressionado = false;
+            if (_arrastando)
+            {
+                _arrastando = false;
+                ManterNaTela();
+                GuardarPosicao();
+            }
         }
 
         protected override void OnMouseUp(MouseEventArgs e)

@@ -1176,6 +1176,10 @@ namespace MhiagosControl
             {
                 Log.Error("abertura do widget de bateria", ex);
                 FecharWidget();
+                // sem isso o item ficaria marcado e a falha voltaria a cada inicio
+                _cfgWidget.Ativo = false;
+                _cfgWidget.Salvar();
+                if (_miWidget != null) _miWidget.Checked = false;
             }
         }
 

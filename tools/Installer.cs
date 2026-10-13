@@ -440,7 +440,7 @@ namespace MhiagosSetup
         {
             [FieldOffset(0)] public ushort Vt;
             [FieldOffset(8)] public IntPtr Ptr;
-            [FieldOffset(16)] private long _resto;   // o PROPVARIANT tem 16 bytes no x86 e 24 no x64
+            [FieldOffset(16)] private long _resto;   // 24 bytes: o tamanho do x64; no x86 (16) a sobra e ignorada
         }
 
         [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
@@ -453,12 +453,6 @@ namespace MhiagosSetup
             void Commit();
         }
 
-        /// <summary>
-        /// Grava System.AppUserModel.ID no atalho. Sem isso o Windows nao liga
-        /// as notificacoes do app (que usa essa AUMID) a nome nenhum e mostra
-        /// "Feurrado.MhiagosControl" no cabecalho; com o atalho do Menu Iniciar
-        /// carimbado, o aviso usa o nome e o icone do atalho.
-        /// </summary>
         /// <summary>A AUMID gravada no atalho, ou nulo; para os testes e o diagnostico.</summary>
         internal static string LerAppId(string lnk)
         {
@@ -483,6 +477,12 @@ namespace MhiagosSetup
         /// <summary>Cria o atalho como na instalacao; para os testes.</summary>
         internal static void CriarAtalho(string lnk, string alvo, string dirTrabalho) { Atalho(lnk, alvo, dirTrabalho); }
 
+        /// <summary>
+        /// Grava System.AppUserModel.ID no atalho. Sem isso o Windows nao liga
+        /// as notificacoes do app (que usa essa AUMID) a nome nenhum e mostra
+        /// "Feurrado.MhiagosControl" no cabecalho; com o atalho do Menu Iniciar
+        /// carimbado, o aviso usa o nome e o icone do atalho.
+        /// </summary>
         internal static bool CarimbarAppId(string lnk)
         {
             if (!File.Exists(lnk)) return false;

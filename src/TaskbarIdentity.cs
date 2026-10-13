@@ -49,13 +49,22 @@ namespace MhiagosControl
         /// DisplayName e IconUri, e o jeito documentado de nomear um app sem
         /// pacote; fica no HKCU, sem pedir administrador.
         /// </summary>
+        /// <summary>O arquivo ja tem exatamente esses bytes? (um icone novo pode ter o mesmo tamanho)</summary>
+        private static bool Igual(string arquivo, byte[] bytes)
+        {
+            if (!File.Exists(arquivo) || new FileInfo(arquivo).Length != bytes.Length) return false;
+            byte[] lidos = File.ReadAllBytes(arquivo);
+            for (int i = 0; i < bytes.Length; i++) if (lidos[i] != bytes[i]) return false;
+            return true;
+        }
+
         internal static void RegistrarNome()
         {
             try
             {
                 string ico = Path.Combine(Paths.DataDir, "notificacao.ico");
                 byte[] bytes = Assets.AppIconBytes();
-                if (bytes != null && (!File.Exists(ico) || new FileInfo(ico).Length != bytes.Length))
+                if (bytes != null && !Igual(ico, bytes))
                 {
                     Directory.CreateDirectory(Paths.DataDir);
                     File.WriteAllBytes(ico, bytes);
