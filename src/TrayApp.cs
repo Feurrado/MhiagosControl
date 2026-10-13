@@ -17,7 +17,7 @@ namespace MhiagosControl
     /// (MSR, SMART, NVMe) leva dezenas a centenas de milissegundos, e fazer
     /// isso na thread de UI travaria a bomba de mensagens a cada ciclo.
     /// </summary>
-    public class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData
+    public class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData, IControleDoWidget
     {
         // Hardware continua em 1 Hz. FPS e frametime usam um caminho proprio
         // a 4 Hz: fluido no LCD sem fazer o numero oscilar depressa demais.
@@ -1175,6 +1175,27 @@ namespace MhiagosControl
                 Log.Error("abertura do widget de bateria", ex);
                 FecharWidget();
             }
+        }
+
+        ConfigDoWidget IControleDoWidget.ConfigDoWidget { get { return _cfgWidget; } }
+
+        void IControleDoWidget.LigarWidget(bool ligar)
+        {
+            if (_cfgWidget.Ativo != ligar) LigarWidget(ligar);
+        }
+
+        void IControleDoWidget.WidgetMudou()
+        {
+            _cfgWidget.Salvar();
+            if (_widget != null && !_widget.IsDisposed) _widget.AplicarConfig();
+        }
+
+        void IControleDoWidget.WidgetAoCanto()
+        {
+            _cfgWidget.X = ConfigDoWidget.SemPosicao;
+            _cfgWidget.Y = ConfigDoWidget.SemPosicao;
+            _cfgWidget.Salvar();
+            if (_widget != null && !_widget.IsDisposed) _widget.VoltarAoCanto();
         }
 
         private void FecharWidget()

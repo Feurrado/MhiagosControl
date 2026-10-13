@@ -898,6 +898,13 @@ namespace MhiagosControl
         public static string WidgetLock { get { return P("Travar posição", "Lock position"); } }
         public static string WidgetHide { get { return P("Ocultar widget", "Hide widget"); } }
         public static string WidgetNoDevices { get { return P("Nenhum periférico com bateria", "No battery devices"); } }
+        public static string WidgetCard { get { return P("Widget na área de trabalho", "Desktop widget"); } }
+        public static string WidgetShow { get { return P("Mostrar o widget na área de trabalho", "Show the widget on the desktop"); } }
+        public static string WidgetSharpShort { get { return P("Nítido", "Sharp"); } }
+        public static string WidgetTint { get { return P("Cor", "Color"); } }
+        public static string WidgetTintAutoShort { get { return P("Tema do Windows", "Windows theme"); } }
+        public static string WidgetBackToCorner { get { return P("Voltar ao canto da tela", "Move back to the corner"); } }
+        public static string WidgetCardNote { get { return P("Arraste o widget para mudar de lugar e clique nele para abrir esta página. O botão direito tem as mesmas opções.", "Drag the widget to move it and click it to open this page. Right-click has the same options."); } }
         public static string OpenBatteriesPage { get { return P("Ver detalhes na página Baterias", "See details on the Batteries page"); } }
         public static string BatPerCharge { get { return P("Duração de uma carga cheia", "Full charge lasts"); } }
         public static string BatLastCharge { get { return P("Última carga", "Last charge"); } }

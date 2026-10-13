@@ -1355,7 +1355,136 @@ namespace MhiagosControl
             _lbBateriasVazio.AutoSize = false;
             _lbBateriasVazio.Visible = false;
             _pgBaterias.Controls.Add(_lbBateriasVazio);
+
+            _widget = _data as IControleDoWidget;
+            if (_widget != null) _pgBaterias.Controls.Add(MontarCartaoDoWidget());
             return _pgBaterias;
+        }
+
+        // ---------------- widget de bateria ----------------
+
+        private IControleDoWidget _widget;
+        private Card _cardWidget;
+        private Toggle _tgWidget, _tgWidgetFrente, _tgWidgetTrava;
+        private Segmented _sgWidgetLayout, _sgWidgetVidro, _sgWidgetCor;
+        /// <summary>Preenchendo os controles com a configuracao: as mudancas nao sao do usuario.</summary>
+        private bool _sincronizandoWidget;
+        private const int AlturaDoCartaoDoWidget = 330;
+
+        /// <summary>
+        /// As mesmas opcoes do botao direito do widget, num lugar que se acha
+        /// sem saber que o menu existe. Cada mudanca vale na hora.
+        /// </summary>
+        private Card MontarCartaoDoWidget()
+        {
+            Card c = new Card();
+            c.Title = T.WidgetCard;
+            _cardWidget = c;
+
+            _tgWidget = new Toggle();
+            _tgWidget.Label = T.WidgetShow;
+            _tgWidget.SetBounds(16, 50, 480, 26);
+            c.Controls.Add(_tgWidget);
+
+            c.Controls.Add(MakeLabel(T.WidgetLayout, 16, 96, Ui.FontMed));
+            _sgWidgetLayout = new Segmented();
+            _sgWidgetLayout.SetItems(T.WidgetRings, T.WidgetList);
+            _sgWidgetLayout.SetBounds(16, 120, 220, 30);
+            c.Controls.Add(_sgWidgetLayout);
+
+            c.Controls.Add(MakeLabel(T.WidgetGlass, 260, 96, Ui.FontMed));
+            _sgWidgetVidro = new Segmented();
+            _sgWidgetVidro.SetItems(T.WidgetSharpShort, T.WidgetClear, T.WidgetFrosted);
+            _sgWidgetVidro.SetBounds(260, 120, 300, 30);
+            c.Controls.Add(_sgWidgetVidro);
+
+            c.Controls.Add(MakeLabel(T.WidgetTint, 16, 166, Ui.FontMed));
+            _sgWidgetCor = new Segmented();
+            _sgWidgetCor.SetItems(T.WidgetTintAutoShort, T.WidgetTintDark, T.WidgetTintLight);
+            _sgWidgetCor.SetBounds(16, 190, 380, 30);
+            c.Controls.Add(_sgWidgetCor);
+
+            _tgWidgetFrente = new Toggle();
+            _tgWidgetFrente.Label = T.WidgetOnTop;
+            _tgWidgetFrente.SetBounds(16, 238, 300, 26);
+            c.Controls.Add(_tgWidgetFrente);
+
+            _tgWidgetTrava = new Toggle();
+            _tgWidgetTrava.Label = T.WidgetLock;
+            _tgWidgetTrava.SetBounds(330, 238, 240, 26);
+            c.Controls.Add(_tgWidgetTrava);
+
+            FlatBtn canto = new FlatBtn();
+            canto.Text = T.WidgetBackToCorner;
+            canto.SetBounds(16, 280, 220, 32);
+            canto.Click += delegate { _widget.WidgetAoCanto(); };
+            c.Controls.Add(canto);
+
+            Label nota = MakeLabel(T.WidgetCardNote, 250, 280, Ui.FontSmall);
+            nota.AutoSize = false;
+            nota.Size = new Size(480, 34);
+            nota.TextAlign = ContentAlignment.MiddleLeft;
+            nota.ForeColor = Ui.Muted;
+            c.Controls.Add(nota);
+
+            // preenche antes de ligar os eventos: cada controle avisa toda mudanca
+            SincronizarWidget();
+
+            _tgWidget.CheckedChanged += delegate { if (!_sincronizandoWidget) _widget.LigarWidget(_tgWidget.Checked); };
+            _sgWidgetLayout.SelectedIndexChanged += delegate
+            {
+                MudarWidget(delegate(ConfigDoWidget w)
+                {
+                    w.Layout = _sgWidgetLayout.SelectedIndex == 1 ? LayoutDoWidget.Lista : LayoutDoWidget.Aneis;
+                });
+            };
+            _sgWidgetVidro.SelectedIndexChanged += delegate
+            {
+                MudarWidget(delegate(ConfigDoWidget w)
+                {
+                    w.Nitido = _sgWidgetVidro.SelectedIndex == 0;
+                    w.Fosco = _sgWidgetVidro.SelectedIndex == 2;
+                });
+            };
+            _sgWidgetCor.SelectedIndexChanged += delegate
+            {
+                MudarWidget(delegate(ConfigDoWidget w)
+                {
+                    int i = _sgWidgetCor.SelectedIndex;
+                    w.Cor = i == 1 ? CorDoVidro.Escura : i == 2 ? CorDoVidro.Clara : CorDoVidro.Automatica;
+                });
+            };
+            _tgWidgetFrente.CheckedChanged += delegate { MudarWidget(delegate(ConfigDoWidget w) { w.NaFrente = _tgWidgetFrente.Checked; }); };
+            _tgWidgetTrava.CheckedChanged += delegate { MudarWidget(delegate(ConfigDoWidget w) { w.Travado = _tgWidgetTrava.Checked; }); };
+            return c;
+        }
+
+        private void MudarWidget(Action<ConfigDoWidget> mudanca)
+        {
+            if (_sincronizandoWidget || _widget == null) return;
+            mudanca(_widget.ConfigDoWidget);
+            _widget.WidgetMudou();
+        }
+
+        /// <summary>
+        /// Traz para os controles o que esta valendo: o menu do proprio widget
+        /// e o da bandeja tambem mudam a configuracao.
+        /// </summary>
+        private void SincronizarWidget()
+        {
+            if (_widget == null || _cardWidget == null) return;
+            ConfigDoWidget w = _widget.ConfigDoWidget;
+            _sincronizandoWidget = true;
+            try
+            {
+                _tgWidget.Checked = w.Ativo;
+                _sgWidgetLayout.SelectedIndex = w.Layout == LayoutDoWidget.Lista ? 1 : 0;
+                _sgWidgetVidro.SelectedIndex = w.Nitido ? 0 : w.Fosco ? 2 : 1;
+                _sgWidgetCor.SelectedIndex = w.Cor == CorDoVidro.Escura ? 1 : w.Cor == CorDoVidro.Clara ? 2 : 0;
+                _tgWidgetFrente.Checked = w.NaFrente;
+                _tgWidgetTrava.Checked = w.Travado;
+            }
+            finally { _sincronizandoWidget = false; }
         }
 
         private void AtualizarBaterias()
@@ -1405,10 +1534,17 @@ namespace MhiagosControl
             if (larg < 460) larg = 460;
             int x = 2 + Math.Max(0, (disp - larg) / 2);
 
-            _lbBateriasVazio.Visible = _cartoesDeBateria.Count == 0;
-            _lbBateriasVazio.SetBounds(x, 4, larg, 40);
-
             int y = 2;
+            if (_cardWidget != null)
+            {
+                SincronizarWidget();
+                _cardWidget.SetBounds(x, y, larg, AlturaDoCartaoDoWidget);
+                y += AlturaDoCartaoDoWidget + Esp;
+            }
+
+            _lbBateriasVazio.Visible = _cartoesDeBateria.Count == 0;
+            _lbBateriasVazio.SetBounds(x, y + 2, larg, 40);
+
             foreach (CartaoDeBateria c in _cartoesDeBateria)
             {
                 c.SetBounds(x, y, larg, CartaoDeBateria.Altura);

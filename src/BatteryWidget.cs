@@ -218,7 +218,7 @@ namespace MhiagosControl
             public bool Nitido = false;
             public bool Sobre = false;
             public float Escala = 1f;
-            /// <summary>De 0 a 1: onde esta o brilho que corre nos aparelhos carregando.</summary>
+            /// <summary>De 0 a 1: em que ponto do ciclo esta a respiracao dos aparelhos carregando.</summary>
             public float Fase = 0f;
         }
 
@@ -324,17 +324,13 @@ namespace MhiagosControl
                 float arco = 360f * Math.Min(100, p.Bateria.Value) / 100f;
                 // brilho suave da mesma cor por baixo do arco, no lugar do fio
                 // branco, que parecia uma costura
-                using (Pen luz = Redonda(Color.FromArgb(55, cor), st * 2f)) g.DrawArc(luz, anel, -90f, arco);
+                // carregando, esse brilho respira: sobe e desce em seno. Um
+                // brilho correndo pelo arco andava varios graus por quadro e
+                // parecia travado; aqui cada quadro muda quase nada.
+                float pulso = p.Carregando ? Pulso(q.Fase) : 0f;
+                using (Pen luz = Redonda(Color.FromArgb(55 + (int)(120 * pulso), cor), st * (2f + 0.7f * pulso)))
+                    g.DrawArc(luz, anel, -90f, arco);
                 using (Pen pen = Redonda(cor, st)) g.DrawArc(pen, anel, -90f, arco);
-
-                if (p.Carregando && arco > 30f)
-                {
-                    // o brilho que corre pelo arco enquanto carrega
-                    float trecho = Math.Min(42f, arco * 0.5f);
-                    float ini = -90f + (arco - trecho) * q.Fase;
-                    using (Pen brilho = Redonda(Color.FromArgb(170, 255, 255, 255), st * 0.55f))
-                        g.DrawArc(brilho, anel, ini, trecho);
-                }
             }
 
             // a bolha de vidro no miolo, com o aparelho dentro
@@ -448,23 +444,19 @@ namespace MhiagosControl
 
                 if (p.Carregando)
                 {
-                    float faixa = Math.Max(10f, cheio.Width * 0.35f);
-                    float x = cheio.X - faixa + (cheio.Width + faixa) * fase;
-                    RectangleF area = new RectangleF(x, cheio.Y, faixa, cheio.Height);
-                    using (LinearGradientBrush b = new LinearGradientBrush(RectangleF.Inflate(area, 1f, 0), Color.Transparent, Color.Transparent, 0f))
-                    {
-                        ColorBlend cb = new ColorBlend(3);
-                        cb.Colors = new Color[] { Color.FromArgb(0, 255, 255, 255), Color.FromArgb(150, 255, 255, 255), Color.FromArgb(0, 255, 255, 255) };
-                        cb.Positions = new float[] { 0f, 0.5f, 1f };
-                        b.InterpolationColors = cb;
-                        Region antes = g.Clip;
-                        g.SetClip(nivel, CombineMode.Intersect);
-                        g.FillRectangle(b, area);
-                        g.Clip = antes;
-                        antes.Dispose();
-                    }
+                    // a barra inteira clareia e volta, no mesmo ritmo dos aneis
+                    int a = (int)(90 * Pulso(fase));
+                    if (a > 0)
+                        using (SolidBrush b = new SolidBrush(Color.FromArgb(a, 255, 255, 255)))
+                            g.FillPath(b, nivel);
                 }
             }
+        }
+
+        /// <summary>De 0 a 1 e de volta, suave nas pontas, ao longo de um ciclo.</summary>
+        internal static float Pulso(float fase)
+        {
+            return (float)((1 - Math.Cos(2 * Math.PI * fase)) / 2);
         }
 
         // ---------------- pecas ----------------
@@ -614,6 +606,19 @@ namespace MhiagosControl
     }
 
     /// <summary>
+    /// O que a pagina Baterias da configuracao usa para mexer no widget sem
+    /// conhecer a bandeja. A configuracao e o mesmo objeto que o widget aberto
+    /// le: quem muda um campo chama WidgetMudou para salvar e redesenhar.
+    /// </summary>
+    internal interface IControleDoWidget
+    {
+        ConfigDoWidget ConfigDoWidget { get; }
+        void LigarWidget(bool ligar);
+        void WidgetMudou();
+        void WidgetAoCanto();
+    }
+
+    /// <summary>
     /// O widget de bateria: uma placa de vidro na area de trabalho com a carga
     /// dos perifericos.
     ///
@@ -631,8 +636,8 @@ namespace MhiagosControl
     public sealed class WidgetDeBateria : Form
     {
         private const int IntervaloDeLeitura = 2000;
-        private const int IntervaloDeAnimacao = 66;
-        private const int CicloMs = 1600;
+        private const int IntervaloDeAnimacao = 40;
+        private const int CicloMs = 2400;
         private const int Arrasto = 4;
 
         private readonly ConfigDoWidget _cfg;
@@ -1174,6 +1179,33 @@ namespace MhiagosControl
         {
             _cfg.NaFrente = frente;
             _cfg.Salvar();
+            AplicarFrente();
+        }
+
+        /// <summary>
+        /// Reaplica a configuracao inteira, ja salva por quem mudou: a pagina
+        /// Baterias mexe nos campos e chama isto.
+        /// </summary>
+        internal void AplicarConfig()
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            _zonaDaDica = -1;
+            AplicarDesfoque();
+            AplicarFrente();
+            Renderizar();
+            ManterNaTela();
+        }
+
+        /// <summary>Volta para o canto de cima a direita da tela principal.</summary>
+        internal void VoltarAoCanto()
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            Posicionar();
+        }
+
+        private void AplicarFrente()
+        {
+            bool frente = _cfg.NaFrente;
             _sobreDesktop = false;
             if (frente) SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             else

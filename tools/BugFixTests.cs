@@ -57,6 +57,11 @@ namespace MhiagosControl
             ConfigDoWidget padrao = ConfigDoWidget.DeTexto(null);
             Verdade(!padrao.Ativo && !padrao.TemPosicao, "sem arquivo o widget comeca desligado e sem posicao");
             Igual(LayoutDoWidget.Aneis, padrao.Layout, "formato padrao sao os aneis");
+            Verdade(padrao.Nitido && !padrao.Fosco, "vidro padrao e o nitido, sem desfoque");
+            Verdade(PintorDoWidget.Pulso(0f) < 0.001f && PintorDoWidget.Pulso(0.5f) > 0.999f && PintorDoWidget.Pulso(1f) < 0.001f,
+                    "a respiracao da carga sai de 0, chega a 1 no meio do ciclo e volta");
+            Verdade(typeof(IControleDoWidget).IsAssignableFrom(typeof(TrayContext)),
+                    "a bandeja entrega o controle do widget para a pagina Baterias");
 
             ConfigDoWidget c = new ConfigDoWidget();
             c.Ativo = true; c.X = -1500; c.Y = 40; c.Layout = LayoutDoWidget.Lista; c.Fosco = true;
