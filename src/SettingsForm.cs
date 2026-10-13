@@ -310,11 +310,13 @@ namespace MhiagosControl
             NavItem sobre = new NavItem();
             sobre.Text = T.NavAbout; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
 
-            // E83F e a bateria cheia da Segoe MDL2. ESCAPADO, como todos.
+            // Icone desenhado (Ui.IconeDeBateria): o E83F da Segoe MDL2 saia
+            // como um bloco cheio e nao parecia bateria. O glifo fica so como
+            // reserva para quem nao desenha o Icone.
             // Entra antes de Sobre, e nao junto de Metricas: os atalhos Alt+1
             // a Alt+6 e os testes de navegacao contam as paginas pela posicao.
             NavItem baterias = new NavItem();
-            baterias.Text = T.NavBatteries; baterias.Glyph = "\uE83F"; baterias.Page = BuildPageBaterias();
+            baterias.Text = T.NavBatteries; baterias.Glyph = "\uE83F"; baterias.Icone = Ui.IconeDeBateria; baterias.Page = BuildPageBaterias();
 
             visao.Key = "visao"; paineis.Key = "paineis"; metricas.Key = "metricas"; specs.Key = "specs";
             perfis.Key = "perfis"; config.Key = "config"; baterias.Key = "baterias"; sobre.Key = "sobre";

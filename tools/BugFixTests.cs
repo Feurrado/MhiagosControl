@@ -90,6 +90,21 @@ namespace MhiagosControl
             Verdade(metade.ToArgb() != PeripheralStrip.Verde.ToArgb() && metade.ToArgb() != PeripheralStrip.CorFora(x11).ToArgb(),
                     "no meio da transicao a cor fica entre as duas");
 
+            // icone da aba Baterias, desenhado: contorno, polo e nivel
+            using (Bitmap ic = new Bitmap(24, 24, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(ic)) { g.Clear(Color.Transparent); Ui.IconeDeBateria(g, new RectangleF(2, 2, 20, 20), Color.White); }
+                Verdade(ic.GetPixel(12, 2).A == 0 && ic.GetPixel(12, 21).A == 0, "icone de bateria e deitado: sobra em cima e embaixo");
+                Verdade(ic.GetPixel(9, 12).A > 200, "icone de bateria tem o nivel preenchido");
+                Verdade(ic.GetPixel(21, 12).A > 100, "icone de bateria tem o polo a direita");
+                string pastaIc = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                if (!string.IsNullOrEmpty(pastaIc))
+                {
+                    Directory.CreateDirectory(pastaIc);
+                    using (Bitmap big = new Bitmap(ic, 96, 96)) big.Save(Path.Combine(pastaIc, "icone-baterias.png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+            }
+
             ConfigDoWidget c = new ConfigDoWidget();
             c.Ativo = true; c.X = -1500; c.Y = 40; c.Layout = LayoutDoWidget.Lista; c.Fosco = true;
             c.Cor = CorDoVidro.Clara; c.NaFrente = true; c.Travado = true;
