@@ -113,6 +113,18 @@ namespace MhiagosControl
                     MhiagosSetup.Setup.CriarAtalho(lnk, alvo, pastaLnk);
                     Verdade(File.Exists(lnk), "instalador cria o atalho");
                     Igual(TaskbarIdentity.AppId, MhiagosSetup.Setup.LerAppId(lnk), "atalho do Menu Iniciar sai carimbado com a AUMID do app");
+
+                    // Atualizacao: o exe muda de tamanho e o atalho e recriado no
+                    // mesmo lugar. O .lnk guarda o tamanho do alvo no cabecalho;
+                    // se ficar o da versao antiga, o Windows mostra o icone em branco.
+                    string exe = Path.Combine(pastaLnk, "app.exe");
+                    File.WriteAllBytes(exe, new byte[1000]);
+                    MhiagosSetup.Setup.CriarAtalho(lnk, exe, pastaLnk);
+                    File.WriteAllBytes(exe, new byte[5000]);
+                    MhiagosSetup.Setup.CriarAtalho(lnk, exe, pastaLnk);
+                    Igual(5000L, (long)BitConverter.ToUInt32(File.ReadAllBytes(lnk), 0x34),
+                        "atalho recriado na atualizacao descreve o exe novo, nao o antigo");
+                    Igual(TaskbarIdentity.AppId, MhiagosSetup.Setup.LerAppId(lnk), "atalho recriado continua com a AUMID");
                 }
                 finally { try { Directory.Delete(pastaLnk, true); } catch { } }
             }
