@@ -49,6 +49,7 @@ namespace MhiagosControl
             RegressionNavOrder(root);
             RegressionBatteryWidget(root);
             RegressionWidgetCard(root);
+            RegressionBatteryCard(root);
         }
 
         private static void RegressionBatteryWidget(string root)
@@ -840,6 +841,118 @@ namespace MhiagosControl
                 Igual(2, ((Segmented)Field(form, "_sgWidgetCor")).SelectedIndex, "mudanca feita pelo menu do widget aparece no cartao");
                 Igual(2, dados.Mudancas, "sincronizar nao devolve a mudanca para a bandeja");
                 form.Close();
+            }
+        }
+
+        private static AnaliseDeBateria AnaliseDeExemplo(bool headset)
+        {
+            DateTime agora = DateTime.Now;
+            AnaliseDeBateria a = new AnaliseDeBateria();
+            a.Chave = headset ? "teste-g325" : "teste-x11";
+            a.Nome = headset ? "G325" : "X11";
+            a.Tipo = headset ? TipoPeriferico.Headset : TipoPeriferico.Mouse;
+            a.Fonte = headset ? FontePeriferico.GHub : FontePeriferico.AttackShark;
+            a.PctAtual = headset ? 99 : 73;
+            a.Carregando = headset;
+            a.CarregandoDesde = headset ? (DateTime?)agora.AddMinutes(-40) : null;
+            a.CarregandoDe = 10;
+            a.HorasAteEncher = headset ? (double?)0.08 : null;
+            a.HorasRestantes = headset ? null : (double?)40;
+            a.HorasPorCargaCheia = headset ? 21 : 56;
+            a.DescargasMedidas = 1;
+            a.UsoTotalHoras = headset ? 11.53 : 9.12;
+            a.SaudePorMes.Add(new KeyValuePair<DateTime, double>(new DateTime(agora.Year, agora.Month, 1), 19));
+            if (!headset)
+            {
+                a.SaudePorMes.Clear();
+                a.Atual = new Descarga { Inicio = agora.AddHours(-6), Fim = agora, PctInicio = 84, PctFim = 73, UsoSegundos = 4.95 * 3600 };
+            }
+            a.UltimaCarga = new Carga { Inicio = agora.AddHours(-25), Fim = agora.AddHours(-25), PctInicio = 70, PctFim = headset ? 80 : 84, Deduzida = false };
+            a.UltimaCompleta = new Descarga { Inicio = agora.AddHours(-20), Fim = agora.AddMinutes(-40), PctInicio = 70, PctFim = 10, UsoSegundos = 11.53 * 3600 };
+            a.HorasPorPontoNaFaixa = new double?[] { null, 0.2, null, null, null, 0.12, 0.3, 0.3, null, null };
+            List<AmostraDeBateria> am = new List<AmostraDeBateria>();
+            int pct = headset ? 82 : 89;
+            for (int m = 0; m < 24 * 60; m += 20)
+            {
+                DateTime q = agora.AddHours(-24).AddMinutes(m);
+                if (m > 9 * 60 && m < 18 * 60) continue;              // uma lacuna: app fechado
+                bool carregando = headset && m > 23 * 60;
+                if (carregando) pct = Math.Min(99, pct + 20);
+                else if (m % 60 == 0) pct = Math.Max(10, pct - (headset ? 5 : 1));
+                am.Add(new AmostraDeBateria { Quando = q, Pct = pct, Carregando = carregando });
+            }
+            a.Amostras = am.ToArray();
+            return a;
+        }
+
+        private static void RegressionBatteryCard(string root)
+        {
+            Secao("pagina Baterias: resumo primeiro e mais detalhes");
+            string languageBefore = T.Language;
+            string arquivo = Path.Combine(Path.GetTempPath(), "mhiagos-detalhes-" + Guid.NewGuid().ToString("N") + ".txt");
+            DetalhesDaBateria._caminho = arquivo;
+            DetalhesDaBateria.Recarregar();
+            try
+            {
+                T.Language = T.PtBr;
+                using (Form f = new Form())
+                {
+                    f.ShowInTaskbar = false; f.StartPosition = FormStartPosition.Manual; f.Location = new Point(-20000, -20000);
+                    f.ClientSize = new Size(940, 1100);
+                    CartaoDeBateria g325 = new CartaoDeBateria(), x11 = new CartaoDeBateria();
+                    f.Controls.Add(g325); f.Controls.Add(x11);
+                    f.Show();
+                    g325.Mostrar(AnaliseDeExemplo(true), null);
+                    x11.Mostrar(AnaliseDeExemplo(false), 38);
+
+                    string[][] b = x11.Blocos();
+                    Igual(4, b.Length, "quatro blocos de resumo");
+                    Igual("Restante", b[0][0], "primeiro bloco e o restante");
+                    Igual("~40 h", b[0][1], "restante em destaque, sem o rotulo comprido de antes");
+                    Igual("Carga cheia dura", b[1][0], "segundo bloco e a duracao da carga");
+                    Igual("média de 1 descarga", b[1][2], "a contagem de descargas vira linha de apoio");
+                    Igual("4 h 57 min", b[2][1], "desde a ultima carga com o uso em destaque");
+                    Igual("84% → 73%", b[2][2], "e a queda embaixo");
+                    Igual("medindo", b[3][1], "saude sem mes medido mostra medindo");
+
+                    string[][] h = g325.Blocos();
+                    Igual("G HUB: carregando", h[0][2], "a previsao do G HUB vira apoio do restante, sem item repetido");
+                    Igual("Carregando desde", h[2][0], "no cabo o terceiro bloco diz desde quando carrega");
+                    Igual("a partir de 10%", h[2][2], "e de quanto partiu");
+                    Verdade(h[3][1].StartsWith("~19 h"), "saude com um mes medido");
+                    Igual(4, g325.Detalhes().Length, "quatro itens em mais detalhes");
+
+                    int fechado = g325.AlturaDesejada(900);
+                    Verdade(!g325.DetalhesAbertos, "detalhes comecam fechados");
+                    int avisos = 0;
+                    g325.AlturaMudou += delegate { avisos++; };
+                    g325.AlternarDetalhes();
+                    Verdade(g325.DetalhesAbertos, "clicar abre os detalhes");
+                    Igual(1, avisos, "abrir avisa a pagina para rearranjar");
+                    Verdade(g325.AlturaDesejada(900) > fechado, "aberto o cartao cresce");
+                    Verdade(!x11.DetalhesAbertos, "abrir um aparelho nao abre o outro");
+                    DetalhesDaBateria.Recarregar();
+                    Verdade(DetalhesDaBateria.Aberto("teste-g325"), "a escolha sobrevive a reabrir o app");
+                    Verdade(CartaoDeBateria.AlturaPara(500, false) > CartaoDeBateria.AlturaPara(900, false),
+                        "estreito, os blocos vao para duas linhas");
+
+                    g325.SetBounds(12, 12, 900, g325.AlturaDesejada(900));
+                    x11.SetBounds(12, g325.Bottom + 12, 900, x11.AlturaDesejada(900));
+                    f.Refresh();
+                    CaptureEvolution(f, "baterias-resumo");
+                    g325.SetBounds(12, 12, 480, g325.AlturaDesejada(480));
+                    x11.SetBounds(12, g325.Bottom + 12, 480, x11.AlturaDesejada(480));
+                    f.Refresh();
+                    CaptureEvolution(f, "baterias-resumo-estreito");
+                    f.Close();
+                }
+            }
+            finally
+            {
+                T.Language = languageBefore;
+                DetalhesDaBateria._caminho = null;
+                DetalhesDaBateria.Recarregar();
+                try { File.Delete(arquivo); } catch { }
             }
         }
 

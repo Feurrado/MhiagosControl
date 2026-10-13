@@ -3,25 +3,30 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.IO;
 using System.Windows.Forms;
 
 namespace MhiagosControl
 {
     /// <summary>
-    /// Um cartao da pagina Baterias: o estado agora, o que a historia diz da
-    /// duracao da carga e a curva das ultimas 48 horas.
+    /// Um cartao da pagina Baterias, com o resumo primeiro: a carga agora num
+    /// numero grande e num selo, quatro blocos com o que se procura (quanto
+    /// falta, quanto dura uma carga, desde quando, saude), a curva das ultimas
+    /// 48 horas e, recolhido sob "Mais detalhes", o resto da historia.
     ///
     /// Pintado inteiro, como a tira da Visao geral: sao textos que mudam juntos
     /// a cada leitura, e rotulos filhos so trariam piscada e mais arranjo.
     /// </summary>
     public class CartaoDeBateria : Card
     {
-        public const int Altura = 352;
-
-        /// <summary>Altura de cada par rotulo e valor; cabe um valor em duas linhas.</summary>
-        private const int Linha = 48;
-        private const int Icone = 56;
-        private const int LarguraMinimaDoGrafico = 300;
+        private const int Margem = 18;
+        private const int Icone = 48;
+        private const int AlturaDoCabecalho = 88;
+        private const int AlturaDoBloco = 68;
+        private const int EspacoEntreBlocos = 10;
+        private const int AlturaDaCurva = 132;
+        private const int AlturaDaBarraDeDetalhes = 40;
+        private const int AlturaDaLinhaDeDetalhe = 54;
         private static readonly TimeSpan JanelaDoGrafico = TimeSpan.FromHours(48);
 
         private AnaliseDeBateria _a;
@@ -29,6 +34,9 @@ namespace MhiagosControl
         private string _assinatura;
 
         private readonly AnimadorDePilhas _animador;
+
+        /// <summary>Abrir ou fechar os detalhes muda a altura: a pagina rearranja.</summary>
+        public event EventHandler AlturaMudou;
 
         public CartaoDeBateria()
         {
@@ -42,12 +50,44 @@ namespace MhiagosControl
             base.Dispose(disposing);
         }
 
-        // ---------------- clique no icone ----------------
+        // ---------------- altura ----------------
+
+        /// <summary>Quatro blocos lado a lado quando cabem; senao, dois por linha.</summary>
+        private static int ColunasDeBlocos(int largura)
+        {
+            return largura - 2 * Margem >= 600 ? 4 : 2;
+        }
+
+        private static int AlturaDosBlocos(int largura)
+        {
+            int linhas = 4 / ColunasDeBlocos(largura);
+            return linhas * AlturaDoBloco + (linhas - 1) * EspacoEntreBlocos;
+        }
+
+        private static int ColunasDeDetalhe(int largura)
+        {
+            return largura - 2 * Margem >= 440 ? 2 : 1;
+        }
+
+        public static int AlturaPara(int largura, bool detalhes)
+        {
+            int h = AlturaDoCabecalho + AlturaDosBlocos(largura) + 14 + AlturaDaCurva + 8 + AlturaDaBarraDeDetalhes;
+            if (detalhes) h += (4 / ColunasDeDetalhe(largura)) * AlturaDaLinhaDeDetalhe + 8;
+            return h;
+        }
+
+        public bool DetalhesAbertos { get { return _a != null && DetalhesDaBateria.Aberto(_a.Chave); } }
+
+        public int AlturaDesejada(int largura) { return AlturaPara(largura, DetalhesAbertos); }
+
+        // ---------------- clique no icone e nos detalhes ----------------
 
         /// <summary>A imagem do aparelho, com folga: e ela que abre o app dele.</summary>
-        private static readonly Rectangle ZonaDoIcone = new Rectangle(10, 8, Icone + 16, Icone + 16);
+        private static readonly Rectangle ZonaDoIcone = new Rectangle(10, 10, Icone + 16, Icone + 16);
         private readonly ToolTip _dica = new ToolTip();
         private bool _sobreIcone = false;
+        private bool _sobreDetalhes = false;
+        private Rectangle _zonaDosDetalhes = Rectangle.Empty;
 
         private Periferico ComoPeriferico()
         {
@@ -57,12 +97,18 @@ namespace MhiagosControl
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            bool sobre = _a != null && ZonaDoIcone.Contains(e.Location);
-            if (sobre == _sobreIcone) return;
-            _sobreIcone = sobre;
-            Cursor = sobre ? Cursors.Hand : Cursors.Default;
+            bool icone = _a != null && ZonaDoIcone.Contains(e.Location);
+            bool detalhes = _a != null && _zonaDosDetalhes.Contains(e.Location);
+            if (detalhes != _sobreDetalhes)
+            {
+                _sobreDetalhes = detalhes;
+                Invalidate(Rectangle.Inflate(_zonaDosDetalhes, 4, 4));
+            }
+            Cursor = icone || detalhes ? Cursors.Hand : Cursors.Default;
+            if (icone == _sobreIcone) return;
+            _sobreIcone = icone;
             Periferico p = ComoPeriferico();
-            _dica.SetToolTip(this, !sobre || p == null ? null
+            _dica.SetToolTip(this, !icone || p == null ? null
                 : p.Fonte == FontePeriferico.Bluetooth ? T.OpenBluetooth
                 : T.OpenApp(Perifericos.NomeDoApp(p)));
         }
@@ -71,6 +117,7 @@ namespace MhiagosControl
         {
             base.OnMouseLeave(e);
             _sobreIcone = false;
+            if (_sobreDetalhes) { _sobreDetalhes = false; Invalidate(Rectangle.Inflate(_zonaDosDetalhes, 4, 4)); }
             Cursor = Cursors.Default;
             _dica.SetToolTip(this, null);
         }
@@ -78,8 +125,19 @@ namespace MhiagosControl
         protected override void OnMouseClick(MouseEventArgs e)
         {
             base.OnMouseClick(e);
-            if (e.Button == MouseButtons.Left && _a != null && ZonaDoIcone.Contains(e.Location))
-                Perifericos.Abrir(ComoPeriferico());
+            if (e.Button != MouseButtons.Left || _a == null) return;
+            if (ZonaDoIcone.Contains(e.Location)) Perifericos.Abrir(ComoPeriferico());
+            else if (_zonaDosDetalhes.Contains(e.Location)) AlternarDetalhes();
+        }
+
+        /// <summary>Abre ou fecha "Mais detalhes" e guarda a escolha por aparelho.</summary>
+        public void AlternarDetalhes()
+        {
+            if (_a == null) return;
+            DetalhesDaBateria.Alternar(_a.Chave);
+            Invalidate();
+            EventHandler h = AlturaMudou;
+            if (h != null) h(this, EventArgs.Empty);
         }
 
         public string Chave { get { return _a != null ? _a.Chave : null; } }
@@ -131,53 +189,184 @@ namespace MhiagosControl
                 ? Periferico.Lido(_a.Nome, _a.Tipo, _a.Fonte, _a.PctAtual.Value, _a.Carregando)
                 : Periferico.Sem(_a.Nome, _a.Tipo, _a.Fonte, EstadoPeriferico.Desligado);
 
-            // cabecalho: imagem, nome, carga agora
-            Image img = PeripheralStrip.Imagem(p);
-            if (img != null) g.DrawImage(img, new Rectangle(18, 16, Icone, Icone));
-
-            int tx = 18 + Icone + 14;
-            TextRenderer.DrawText(g, _a.Nome, Ui.FontSection, new Point(tx, 16), Ui.Text, TextFormatFlags.NoPadding);
-
-            int yVal = 44;
-            string valor = _a.PctAtual.HasValue ? _a.PctAtual.Value + "%" : "--";
             // a mesma passagem suave da Visao geral ao entrar e sair do cabo
             bool animando;
             float carga = TransicaoDeCarga.Valor(_a.Chave, _a.Carregando && _a.PctAtual.HasValue, out animando);
             if (animando) _animador.Transicao();
-            TextRenderer.DrawText(g, valor, PeripheralStrip.FontPct, new Point(tx, yVal), PeripheralStrip.Cor(p, carga), TextFormatFlags.NoPadding);
-            int fim = tx + TextRenderer.MeasureText(g, valor, PeripheralStrip.FontPct, Size.Empty, TextFormatFlags.NoPadding).Width;
-            if (_a.PctAtual.HasValue)
-            {
-                Rectangle pilha = new Rectangle(new Point(fim + 8, yVal + 4), PeripheralStrip.TamanhoDaPilha);
-                PeripheralStrip.DesenharPilha(g, pilha, _a.PctAtual.Value, PeripheralStrip.CorFora(p), carga);
-                if (_a.Carregando) _animador.Registrar(pilha);
-                fim += 8 + PeripheralStrip.TamanhoDaPilha.Width;
-            }
-            TextRenderer.DrawText(g, Situacao(), Ui.FontSmall, new Point(fim + 10, yVal + 4), Ui.Muted, TextFormatFlags.NoPadding);
+            Color cor = PeripheralStrip.Cor(p, carga);
 
-            using (Pen pen = new Pen(Ui.Border))
-                g.DrawLine(pen, 1, 88, Width - 2, 88);
+            DesenharCabecalho(g, p, cor, carga);
 
-            // numeros a esquerda, curva a direita quando houver largura
-            int larguraDados = Width >= 760 ? Width * 56 / 100 : Width - 16;
-            DesenharDados(g, new Rectangle(18, 100, larguraDados - 18, Height - 112));
-            if (Width - larguraDados - 24 >= LarguraMinimaDoGrafico)
-                DesenharCurva(g, new Rectangle(larguraDados + 8, 104, Width - larguraDados - 26, Height - 124));
+            int y = AlturaDoCabecalho;
+            DesenharBlocos(g, new Rectangle(Margem, y, Width - 2 * Margem, AlturaDosBlocos(Width)));
+            y += AlturaDosBlocos(Width) + 14;
+
+            DesenharCurva(g, new Rectangle(Margem, y, Width - 2 * Margem, AlturaDaCurva), cor);
+            y += AlturaDaCurva + 8;
+
+            DesenharBarraDeDetalhes(g, y);
+            y += AlturaDaBarraDeDetalhes;
+            if (DetalhesAbertos) DesenharDetalhes(g, new Rectangle(Margem, y, Width - 2 * Margem, Height - y - 8));
         }
 
-        /// <summary>O que vai ao lado da porcentagem: carregando, desligado ou nada.</summary>
-        private string Situacao()
+        // ---------------- cabecalho: imagem, nome, carga e selo ----------------
+
+        private void DesenharCabecalho(Graphics g, Periferico p, Color cor, float carga)
         {
-            if (!_a.PctAtual.HasValue) return T.PeripheralOff;
+            Image img = PeripheralStrip.Imagem(p);
+            if (img != null) g.DrawImage(img, new Rectangle(Margem, 18, Icone, Icone));
+
+            int tx = Margem + Icone + 14;
+            TextRenderer.DrawText(g, _a.Nome, Ui.FontSection, new Point(tx, 14), Ui.Text, TextFormatFlags.NoPadding);
+
+            const int yVal = 36;
+            string valor = _a.PctAtual.HasValue ? _a.PctAtual.Value + "%" : "--";
+            Size tam = TextRenderer.MeasureText(g, valor, Ui.FontBigPct, Size.Empty, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, valor, Ui.FontBigPct, new Point(tx, yVal), cor, TextFormatFlags.NoPadding);
+            int meio = yVal + tam.Height / 2;
+            int fim = tx + tam.Width;
+
+            if (_a.PctAtual.HasValue)
+            {
+                Size ps = PeripheralStrip.TamanhoDaPilha;
+                Rectangle pilha = new Rectangle(new Point(fim + 10, meio - ps.Height / 2), ps);
+                PeripheralStrip.DesenharPilha(g, pilha, _a.PctAtual.Value, PeripheralStrip.CorFora(p), carga);
+                if (_a.Carregando) _animador.Registrar(pilha);
+                fim += 10 + ps.Width;
+            }
+
+            DesenharSelo(g, Selo(), new Point(fim + 14, meio), cor, carga);
+        }
+
+        /// <summary>Uma frase com o estado: carregando, na bateria ou desligado.</summary>
+        private string Selo()
+        {
+            if (!_a.PctAtual.HasValue) return T.StatusOff;
             if (_a.Carregando)
             {
-                string s = _a.CarregandoDesde.HasValue
-                    ? T.ChargingSince(_a.CarregandoDesde.Value.ToString("HH:mm"), _a.CarregandoDe)
-                    : T.PeripheralCharging;
                 string cheio = AteEncher(_a.HorasAteEncher);
-                return cheio != null ? s + "  ·  " + cheio : s;
+                return cheio != null ? T.StatusCharging + "  ·  " + cheio : T.StatusCharging;
             }
-            return "";
+            return _a.HorasRestantes.HasValue
+                ? T.StatusOnBattery + "  ·  " + T.HoursLeft("~" + HistoricoDeBateria.DuracaoAproximada(_a.HorasRestantes.Value))
+                : T.StatusOnBattery;
+        }
+
+        /// <summary>
+        /// Pilula com bolinha e texto. No cabo ganha o verde, na mesma passagem
+        /// suave do numero; fora dele fica neutra, para nao gritar sem motivo.
+        /// </summary>
+        private void DesenharSelo(Graphics g, string texto, Point esquerdaMeio, Color cor, float carga)
+        {
+            Size t = TextRenderer.MeasureText(g, texto, Ui.FontSmall, Size.Empty, TextFormatFlags.NoPadding);
+            int maxLargura = Width - Margem - esquerdaMeio.X;
+            int larg = Math.Min(t.Width + 34, maxLargura);
+            if (larg < 60) return;
+            Rectangle r = new Rectangle(esquerdaMeio.X, esquerdaMeio.Y - 12, larg, 24);
+
+            bool ligado = _a.PctAtual.HasValue;
+            Color fundo = PeripheralStrip.Misturar(Ui.SurfaceAlt, Color.FromArgb(Ui.Dark ? 40 : 34, PeripheralStrip.Verde), carga);
+            Color letra = PeripheralStrip.Misturar(ligado ? Ui.Text : Ui.Muted, cor, carga);
+            Color bolinha = PeripheralStrip.Misturar(ligado ? Ui.Muted : Ui.Faint, cor, carga);
+
+            using (GraphicsPath gp = Ui.RoundRect(r, r.Height / 2))
+            {
+                using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(b, gp);
+                using (SolidBrush b = new SolidBrush(fundo)) g.FillPath(b, gp);
+            }
+            using (SolidBrush b = new SolidBrush(bolinha))
+                g.FillEllipse(b, r.X + 11, r.Y + r.Height / 2 - 3.5f, 7, 7);
+            TextRenderer.DrawText(g, texto, Ui.FontSmall, new Rectangle(r.X + 24, r.Y, r.Width - 32, r.Height), letra,
+                TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+        }
+
+        // ---------------- os quatro blocos ----------------
+
+        private void DesenharBlocos(Graphics g, Rectangle r)
+        {
+            string[][] blocos = Blocos();
+            int colunas = ColunasDeBlocos(Width);
+            int larg = (r.Width - (colunas - 1) * EspacoEntreBlocos) / colunas;
+            for (int i = 0; i < blocos.Length; i++)
+            {
+                int col = i % colunas, lin = i / colunas;
+                Rectangle b = new Rectangle(r.X + col * (larg + EspacoEntreBlocos), r.Y + lin * (AlturaDoBloco + EspacoEntreBlocos),
+                                            larg, AlturaDoBloco);
+                using (GraphicsPath gp = Ui.RoundRect(b, 6))
+                {
+                    using (SolidBrush br = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(br, gp);
+                    // no claro o fundo do bloco quase some no branco do cartao
+                    if (!Ui.Dark) using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, gp);
+                }
+                int x = b.X + 12, w = b.Width - 24;
+                const TextFormatFlags Uma = TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine;
+                TextRenderer.DrawText(g, blocos[i][0], Ui.FontSmall, new Rectangle(x, b.Y + 9, w, 16), Ui.Muted, Uma);
+                TextRenderer.DrawText(g, blocos[i][1], Ui.FontTileValue, new Rectangle(x, b.Y + 25, w, 22), Ui.Text, Uma);
+                if (!string.IsNullOrEmpty(blocos[i][2]))
+                    TextRenderer.DrawText(g, blocos[i][2], Ui.FontSmall, new Rectangle(x, b.Y + 47, w, 16), Ui.Muted, Uma);
+            }
+        }
+
+        /// <summary>Rotulo, valor e linha de apoio de cada bloco.</summary>
+        internal string[][] Blocos()
+        {
+            return new string[][] { BlocoRestante(), BlocoPorCarga(), BlocoDesde(), BlocoSaude() };
+        }
+
+        private string[] BlocoRestante()
+        {
+            string ghub = _a.Fonte == FontePeriferico.GHub
+                ? T.GHubSays(_a.Carregando ? T.PeripheralCharging : _autonomia.HasValue ? _autonomia.Value + " h" : "--")
+                : null;
+            if (!_a.PctAtual.HasValue) return new string[] { T.TileRemaining, "--", ghub ?? "" };
+            if (_a.Carregando)
+                return new string[] { T.TileRemaining, AteEncher(_a.HorasAteEncher) ?? T.PeripheralCharging, ghub ?? "" };
+            if (_a.HorasRestantes.HasValue)
+                return new string[] { T.TileRemaining, "~" + HistoricoDeBateria.DuracaoAproximada(_a.HorasRestantes.Value),
+                                      ghub ?? T.EstimatedFromUse };
+            // Sem ritmo medido ainda, o G HUB ja tem um palpite: melhor que nada.
+            return new string[] { T.TileRemaining, T.Measuring, ghub ?? T.Needs10Used };
+        }
+
+        private string[] BlocoPorCarga()
+        {
+            if (!_a.HorasPorCargaCheia.HasValue) return new string[] { T.TileFullCharge, T.Measuring, T.Needs10Used };
+            return new string[] { T.TileFullCharge,
+                T.UseHours("~" + HistoricoDeBateria.DuracaoAproximada(_a.HorasPorCargaCheia.Value)),
+                _a.DescargasMedidas > 0 ? T.AverageOfDischarges(_a.DescargasMedidas) : "" };
+        }
+
+        private string[] BlocoDesde()
+        {
+            if (_a.Carregando && _a.PctAtual.HasValue)
+            {
+                if (_a.CarregandoDesde.HasValue)
+                    return new string[] { T.TileChargingSince, Quando(_a.CarregandoDesde.Value), T.FromPct(_a.CarregandoDe) };
+                return new string[] { T.TileChargingSince, T.Now, "" };
+            }
+            Descarga d = _a.Atual;
+            if (d == null) return new string[] { T.BatSinceCharge, "--", T.BatNotSeenYet };
+            string sub = d.PctInicio + "% → " + d.PctFim + "%";
+            if (d.Parcial) sub += "  ·  " + T.SinceTracking(Quando(d.Inicio));
+            return new string[] { T.BatSinceCharge, HistoricoDeBateria.Duracao(d.UsoSegundos / 3600.0), sub };
+        }
+
+        /// <summary>
+        /// Saude da bateria: horas por carga cheia no mes mais recente com
+        /// dado, contra o primeiro mes medido. Um mes so ainda nao compara.
+        /// </summary>
+        private string[] BlocoSaude()
+        {
+            List<KeyValuePair<DateTime, double>> m = _a.SaudePorMes;
+            if (m == null || m.Count == 0) return new string[] { T.TileHealth, T.Measuring, T.NeedsWeeks };
+            KeyValuePair<DateTime, double> ultimo = m[m.Count - 1];
+            string valor = T.PerChargeShort("~" + HistoricoDeBateria.DuracaoAproximada(ultimo.Value));
+            if (m.Count == 1) return new string[] { T.TileHealth, valor, Mes(ultimo.Key) + "  ·  " + T.HealthFirstMonth };
+            KeyValuePair<DateTime, double> primeiro = m[0];
+            int variacao = (int)Math.Round((ultimo.Value / primeiro.Value - 1) * 100);
+            string sinal = variacao > 0 ? "+" : variacao < 0 ? "−" : "";
+            return new string[] { T.TileHealth, valor,
+                T.HealthVersus(HistoricoDeBateria.DuracaoAproximada(primeiro.Value), Mes(primeiro.Key), sinal + Math.Abs(variacao) + "%") };
         }
 
         /// <summary>"cheio em ~40 min", "carga completa" em 100%, nulo enquanto mede.</summary>
@@ -188,86 +377,71 @@ namespace MhiagosControl
             return T.FullIn(HistoricoDeBateria.DuracaoAproximada(horas.Value));
         }
 
-        /// <summary>
-        /// Saude da bateria: horas por carga cheia no mes mais recente com
-        /// dado, contra o primeiro mes medido. Um mes so ainda nao compara.
-        /// </summary>
-        private string Saude()
-        {
-            List<KeyValuePair<DateTime, double>> m = _a.SaudePorMes;
-            if (m == null || m.Count == 0) return T.HealthMeasuring;
-            KeyValuePair<DateTime, double> ultimo = m[m.Count - 1];
-            string agora = T.HealthPerCharge("~" + HistoricoDeBateria.DuracaoAproximada(ultimo.Value), Mes(ultimo.Key));
-            if (m.Count == 1) return agora + "  ·  " + T.HealthFirstMonth;
-            KeyValuePair<DateTime, double> primeiro = m[0];
-            int variacao = (int)Math.Round((ultimo.Value / primeiro.Value - 1) * 100);
-            string sinal = variacao > 0 ? "+" : variacao < 0 ? "−" : "";
-            return agora + "  ·  " + T.HealthVersus(HistoricoDeBateria.DuracaoAproximada(primeiro.Value), Mes(primeiro.Key),
-                                                    sinal + Math.Abs(variacao) + "%");
-        }
-
         private static string Mes(DateTime d)
         {
             return d.ToString("MMM/yy", T.Pt ? new CultureInfo("pt-BR") : CultureInfo.InvariantCulture).Replace(".", "");
         }
 
-        private void DesenharDados(Graphics g, Rectangle r)
-        {
-            List<string[]> itens = new List<string[]>();
-            itens.Add(new string[] { T.BatRemainingOurs, Restante() });
-            // No headset as duas previsoes lado a lado: a do G HUB vem do
-            // proprio aparelho, a nossa do uso medido aqui - quando divergem, e
-            // isso que a pessoa quer ver.
-            if (_a.Fonte == FontePeriferico.GHub) itens.Add(new string[] { T.BatRemainingGHub, RestanteDoGHub() });
-            itens.Add(new string[] { T.BatPerCharge, PorCarga() });
-            itens.Add(new string[] { T.BatPace, Ritmo() });
-            itens.Add(new string[] { T.BatLastCharge, UltimaCarga() });
-            itens.Add(new string[] { T.BatSinceCharge, DesdeACarga() });
-            itens.Add(new string[] { T.BatLastDischarge, UltimaDescarga() });
-            itens.Add(new string[] { T.BatTotalUse, HistoricoDeBateria.Duracao(_a.UsoTotalHoras) });
-            itens.Add(new string[] { T.BatHealth, Saude() });
+        // ---------------- mais detalhes ----------------
 
-            int colunas = r.Width >= 440 ? 2 : 1;
-            int larg = (r.Width - (colunas - 1) * 18) / colunas;
-            for (int i = 0; i < itens.Count; i++)
+        private void DesenharBarraDeDetalhes(Graphics g, int y)
+        {
+            using (Pen pen = new Pen(Ui.Border))
+                g.DrawLine(pen, 1, y, Width - 2, y);
+
+            bool aberto = DetalhesAbertos;
+            string texto = aberto ? T.LessDetails : T.MoreDetails;
+            Color cor = _sobreDetalhes ? Ui.AccentHover : Ui.Accent;
+            Size t = TextRenderer.MeasureText(g, texto, Ui.FontMed, Size.Empty, TextFormatFlags.NoPadding);
+            int meio = y + AlturaDaBarraDeDetalhes / 2;
+
+            // seta desenhada: aponta para a direita fechado, para baixo aberto
+            using (Pen seta = new Pen(cor, 1.6f))
+            {
+                seta.StartCap = LineCap.Round; seta.EndCap = LineCap.Round; seta.LineJoin = LineJoin.Round;
+                float cx = Margem + 4, cy = meio;
+                PointF[] pts = aberto
+                    ? new PointF[] { new PointF(cx - 4, cy - 2), new PointF(cx, cy + 2), new PointF(cx + 4, cy - 2) }
+                    : new PointF[] { new PointF(cx - 2, cy - 4), new PointF(cx + 2, cy), new PointF(cx - 2, cy + 4) };
+                g.DrawLines(seta, pts);
+            }
+            int tx = Margem + 14;
+            TextRenderer.DrawText(g, texto, Ui.FontMed, new Point(tx, meio - t.Height / 2), cor, TextFormatFlags.NoPadding);
+            _zonaDosDetalhes = new Rectangle(Margem - 6, y + 4, tx + t.Width + 8 - (Margem - 6), AlturaDaBarraDeDetalhes - 8);
+        }
+
+        /// <summary>O que nao cabe nos blocos, em pares rotulo e valor.</summary>
+        internal string[][] Detalhes()
+        {
+            string[] descarga;
+            Descarga d = _a.UltimaCompleta;
+            if (d == null) descarga = new string[] { T.BatLastDischarge, T.BatNotSeenYet, "" };
+            else descarga = new string[] { T.BatLastDischarge,
+                T.UseHours(HistoricoDeBateria.Duracao(d.UsoSegundos / 3600.0)) + ", " + d.PctInicio + "% → " + d.PctFim + "%",
+                T.EndedAt(Quando(d.Fim)) };
+            return new string[][] {
+                new string[] { T.BatPace, Ritmo(), "" },
+                new string[] { T.BatLastCharge, UltimaCarga(), "" },
+                descarga,
+                new string[] { T.BatTotalUse, HistoricoDeBateria.Duracao(_a.UsoTotalHoras), "" } };
+        }
+
+        private void DesenharDetalhes(Graphics g, Rectangle r)
+        {
+            string[][] itens = Detalhes();
+            int colunas = ColunasDeDetalhe(Width);
+            const int Vao = 28;
+            int larg = (r.Width - (colunas - 1) * Vao) / colunas;
+            const TextFormatFlags Uma = TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine;
+            for (int i = 0; i < itens.Length; i++)
             {
                 int col = i % colunas, lin = i / colunas;
-                int x = r.X + col * (larg + 18), y = r.Y + lin * Linha;
-                if (y + 36 > r.Bottom + 6) break;
-                TextRenderer.DrawText(g, itens[i][0], Ui.FontSmall, new Rectangle(x, y, larg, 16), Ui.Faint,
-                    TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-
-                // Valor que nao cabe numa linha quebra em duas, em letra menor,
-                // em vez de sumir atras de reticencias: e justamente o texto
-                // longo ("medindo, leva algumas semanas") que explica o que falta.
-                string valor = itens[i][1];
-                if (TextRenderer.MeasureText(g, valor, Ui.FontSemi, Size.Empty, TextFormatFlags.NoPadding).Width <= larg)
-                    TextRenderer.DrawText(g, valor, Ui.FontSemi, new Rectangle(x, y + 17, larg, 19), Ui.Text,
-                        TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-                else
-                    TextRenderer.DrawText(g, valor, Ui.FontSmall, new Rectangle(x, y + 17, larg, Linha - 19), Ui.Text,
-                        TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
+                int x = r.X + col * (larg + Vao), y = r.Y + lin * AlturaDaLinhaDeDetalhe;
+                TextRenderer.DrawText(g, itens[i][0], Ui.FontSmall, new Rectangle(x, y, larg, 16), Ui.Muted, Uma);
+                TextRenderer.DrawText(g, itens[i][1], Ui.FontSemi, new Rectangle(x, y + 17, larg, 18), Ui.Text, Uma);
+                if (!string.IsNullOrEmpty(itens[i][2]))
+                    TextRenderer.DrawText(g, itens[i][2], Ui.FontSmall, new Rectangle(x, y + 35, larg, 16), Ui.Muted, Uma);
             }
-        }
-
-        private string Restante()
-        {
-            if (_a.Carregando) return AteEncher(_a.HorasAteEncher) ?? T.PeripheralCharging;
-            if (!_a.PctAtual.HasValue) return "--";
-            return _a.HorasRestantes.HasValue ? "~" + HistoricoDeBateria.DuracaoAproximada(_a.HorasRestantes.Value) : T.BatMeasuring;
-        }
-
-        private string RestanteDoGHub()
-        {
-            if (_a.Carregando) return T.PeripheralCharging;
-            return _autonomia.HasValue ? _autonomia.Value + " h" : "--";
-        }
-
-        private string PorCarga()
-        {
-            if (!_a.HorasPorCargaCheia.HasValue) return T.BatMeasuring;
-            string s = T.UseHours("~" + HistoricoDeBateria.DuracaoAproximada(_a.HorasPorCargaCheia.Value));
-            return _a.DescargasMedidas > 0 ? s + "  ·  " + T.Discharges(_a.DescargasMedidas) : s;
         }
 
         /// <summary>
@@ -302,23 +476,6 @@ namespace MhiagosControl
             return s;
         }
 
-        private string DesdeACarga()
-        {
-            Descarga d = _a.Atual;
-            if (d == null) return _a.Carregando ? T.PeripheralCharging : "--";
-            string s = T.UseHours(HistoricoDeBateria.Duracao(d.UsoSegundos / 3600.0)) + ", " + d.PctInicio + "% → " + d.PctFim + "%";
-            if (d.Parcial) s += "  ·  " + T.SinceTracking(Quando(d.Inicio));
-            return s;
-        }
-
-        private string UltimaDescarga()
-        {
-            Descarga d = _a.UltimaCompleta;
-            if (d == null) return T.BatNotSeenYet;
-            return T.UseHours(HistoricoDeBateria.Duracao(d.UsoSegundos / 3600.0)) + ", " + d.PctInicio + "% → " + d.PctFim + "%"
-                 + "  ·  " + T.EndedAt(Quando(d.Fim));
-        }
-
         /// <summary>"hoje 13:42", "ontem 22:10" ou "10/10 08:15".</summary>
         private static string Quando(DateTime d)
         {
@@ -328,28 +485,38 @@ namespace MhiagosControl
             return d.ToString("dd/MM HH:mm");
         }
 
-        /// <summary>A carga nas ultimas 48 h; as horas no carregador ficam sombreadas.</summary>
-        private void DesenharCurva(Graphics g, Rectangle r)
+        // ---------------- curva ----------------
+
+        /// <summary>
+        /// A carga nas ultimas 48 h, na cor do aparelho, com area esmaecida
+        /// por baixo; as horas no carregador ficam numa faixa verde e a ponta
+        /// de agora ganha um ponto.
+        /// </summary>
+        private void DesenharCurva(Graphics g, Rectangle r, Color cor)
         {
             DateTime agora = DateTime.Now, inicio = agora - JanelaDoGrafico;
-            Rectangle area = new Rectangle(r.X + 30, r.Y, r.Width - 30, r.Height - 18);
+            Rectangle area = new Rectangle(r.X + 34, r.Y + 6, r.Width - 34 - 6, r.Height - 6 - 20);
 
-            using (Pen grade = new Pen(Ui.Border))
+            using (Pen solida = new Pen(Ui.Border))
+            using (Pen tracejada = new Pen(Ui.Border))
             {
-                grade.DashStyle = DashStyle.Dot;
+                tracejada.DashStyle = DashStyle.Dash;
+                tracejada.DashPattern = new float[] { 3, 4 };
                 foreach (int nivel in new int[] { 0, 50, 100 })
                 {
                     int y = area.Bottom - area.Height * nivel / 100;
-                    g.DrawLine(grade, area.X, y, area.Right, y);
+                    g.DrawLine(nivel == 50 ? tracejada : solida, area.X, y, area.Right, y);
                     TextRenderer.DrawText(g, nivel + "%", Ui.FontSmall, new Rectangle(r.X - 4, y - 8, 32, 16), Ui.Faint,
                         TextFormatFlags.Right | TextFormatFlags.NoPadding);
                 }
             }
-            TextRenderer.DrawText(g, T.HoursAgo(48), Ui.FontSmall, new Point(area.X, area.Bottom + 3), Ui.Faint, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, T.Now, Ui.FontSmall, new Rectangle(area.X, area.Bottom + 3, area.Width, 16), Ui.Faint,
+            int yEixo = area.Bottom + 5;
+            TextRenderer.DrawText(g, T.HoursAgo(48), Ui.FontSmall, new Point(area.X, yEixo), Ui.Faint, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, T.HoursAgo(24), Ui.FontSmall, new Rectangle(area.X, yEixo, area.Width, 16), Ui.Faint,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, T.Now, Ui.FontSmall, new Rectangle(area.X, yEixo, area.Width, 16), Ui.Faint,
                 TextFormatFlags.Right | TextFormatFlags.NoPadding);
 
-            List<PointF> pts = new List<PointF>();
             AmostraDeBateria[] am = _a.Amostras ?? new AmostraDeBateria[0];
             Func<DateTime, float> X = delegate(DateTime t)
             {
@@ -357,35 +524,47 @@ namespace MhiagosControl
             };
             Func<int, float> Y = delegate(int pct) { return area.Bottom - area.Height * pct / 100f; };
 
-            using (SolidBrush sombra = new SolidBrush(Color.FromArgb(70, Ui.Warn)))
+            using (SolidBrush sombra = new SolidBrush(Color.FromArgb(Ui.Dark ? 34 : 40, PeripheralStrip.Verde)))
                 for (int i = 0; i < am.Length; i++)
                 {
-                    if (!am[i].Carregando || am[i].Quando < inicio) continue;
+                    if (!am[i].Carregando) continue;
                     DateTime ate = i + 1 < am.Length ? am[i + 1].Quando : agora;
+                    if (ate < inicio) continue;
                     float x0 = Math.Max(area.X, X(am[i].Quando)), x1 = Math.Min(area.Right, X(ate));
                     if (x1 > x0) g.FillRectangle(sombra, x0, area.Y, x1 - x0, area.Height);
                 }
 
             // A curva quebra onde houve lacuna grande: app fechado ou aparelho
             // desligado nao e uma reta ligando dois pontos distantes.
-            using (Pen linha = new Pen(Ui.Accent, 2f))
+            List<List<PointF>> trechos = new List<List<PointF>>();
+            List<PointF> pts = new List<PointF>();
+            DateTime? anterior = null;
+            foreach (AmostraDeBateria s in am)
+            {
+                if (s.Quando < inicio) continue;
+                if (anterior.HasValue && (s.Quando - anterior.Value).TotalMinutes > 30 && pts.Count > 0)
+                {
+                    trechos.Add(pts);
+                    pts = new List<PointF>();
+                }
+                pts.Add(new PointF(X(s.Quando), Y(s.Pct)));
+                anterior = s.Quando;
+            }
+            bool chegaAgora = _a.PctAtual.HasValue && anterior.HasValue && (agora - anterior.Value).TotalMinutes <= 30;
+            if (chegaAgora) pts.Add(new PointF(X(agora), Y(_a.PctAtual.Value)));
+            if (pts.Count > 0) trechos.Add(pts);
+
+            using (Pen linha = new Pen(cor, 2f))
             {
                 linha.LineJoin = LineJoin.Round;
-                DateTime? anterior = null;
-                foreach (AmostraDeBateria s in am)
-                {
-                    if (s.Quando < inicio) continue;
-                    if (anterior.HasValue && (s.Quando - anterior.Value).TotalMinutes > 30 && pts.Count > 0)
-                    {
-                        Tracar(g, linha, pts);
-                        pts.Clear();
-                    }
-                    pts.Add(new PointF(X(s.Quando), Y(s.Pct)));
-                    anterior = s.Quando;
-                }
-                if (_a.PctAtual.HasValue && anterior.HasValue && (agora - anterior.Value).TotalMinutes <= 30)
-                    pts.Add(new PointF(X(agora), Y(_a.PctAtual.Value)));
-                Tracar(g, linha, pts);
+                foreach (List<PointF> t in trechos) Tracar(g, linha, t, area);
+            }
+
+            if (chegaAgora)
+            {
+                PointF ponta = pts[pts.Count - 1];
+                using (SolidBrush aro = new SolidBrush(Ui.Surface)) g.FillEllipse(aro, ponta.X - 6, ponta.Y - 6, 12, 12);
+                using (SolidBrush b = new SolidBrush(cor)) g.FillEllipse(b, ponta.X - 4, ponta.Y - 4, 8, 8);
             }
 
             if (am.Length == 0)
@@ -393,12 +572,79 @@ namespace MhiagosControl
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
 
-        private static void Tracar(Graphics g, Pen pen, List<PointF> pts)
+        /// <summary>Um trecho da curva com a area esmaecendo ate o zero; um ponto so vira bolinha.</summary>
+        private static void Tracar(Graphics g, Pen pen, List<PointF> pts, Rectangle area)
         {
-            if (pts.Count >= 2) g.DrawLines(pen, pts.ToArray());
-            else if (pts.Count == 1)
+            if (pts.Count == 1)
+            {
                 using (SolidBrush b = new SolidBrush(pen.Color))
                     g.FillEllipse(b, pts[0].X - 2.5f, pts[0].Y - 2.5f, 5, 5);
+                return;
+            }
+            if (pts.Count < 2) return;
+
+            List<PointF> poligono = new List<PointF>(pts);
+            poligono.Add(new PointF(pts[pts.Count - 1].X, area.Bottom));
+            poligono.Add(new PointF(pts[0].X, area.Bottom));
+            Rectangle grad = new Rectangle(area.X, area.Y - 1, Math.Max(1, area.Width), area.Height + 2);
+            using (LinearGradientBrush b = new LinearGradientBrush(grad,
+                       Color.FromArgb(Ui.Dark ? 60 : 50, pen.Color), Color.FromArgb(0, pen.Color), LinearGradientMode.Vertical))
+                g.FillPolygon(b, poligono.ToArray());
+            g.DrawLines(pen, pts.ToArray());
         }
+    }
+
+    /// <summary>
+    /// Quais aparelhos ficam com "Mais detalhes" aberto, guardado fora do
+    /// config.ini: abrir uma secao nao e uma mudanca de configuracao para
+    /// pedir Salvar. Uma chave por linha em baterias-detalhes.txt.
+    /// </summary>
+    public static class DetalhesDaBateria
+    {
+        private static HashSet<string> _abertos;
+        internal static string _caminho;
+
+        public static string Caminho
+        {
+            get { return _caminho ?? Path.Combine(Paths.DataDir, "baterias-detalhes.txt"); }
+        }
+
+        private static HashSet<string> Abertos
+        {
+            get
+            {
+                if (_abertos != null) return _abertos;
+                _abertos = new HashSet<string>(StringComparer.Ordinal);
+                try
+                {
+                    if (File.Exists(Caminho))
+                        foreach (string l in File.ReadAllLines(Caminho))
+                            if (l.Trim().Length > 0) _abertos.Add(l.Trim());
+                }
+                catch (Exception ex) { Log.Write("detalhes da bateria: " + ex.Message); }
+                return _abertos;
+            }
+        }
+
+        public static bool Aberto(string chave)
+        {
+            return !string.IsNullOrEmpty(chave) && Abertos.Contains(chave);
+        }
+
+        public static void Alternar(string chave)
+        {
+            if (string.IsNullOrEmpty(chave)) return;
+            if (!Abertos.Remove(chave)) Abertos.Add(chave);
+            try
+            {
+                string pasta = Path.GetDirectoryName(Caminho);
+                if (!string.IsNullOrEmpty(pasta)) Directory.CreateDirectory(pasta);
+                File.WriteAllLines(Caminho, new List<string>(Abertos).ToArray());
+            }
+            catch (Exception ex) { Log.Write("detalhes da bateria: " + ex.Message); }
+        }
+
+        /// <summary>Esquece o que foi lido, para os testes trocarem o arquivo.</summary>
+        internal static void Recarregar() { _abertos = null; }
     }
 }
