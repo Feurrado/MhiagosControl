@@ -88,10 +88,10 @@ namespace MhiagosControl
         private static Image _headset, _mouse, _bluetooth;
         private static bool _perifTried = false;
 
-        /// <summary>Headset G325 branco, desenhado por tools\MakePeripherals.cs.</summary>
+        /// <summary>Headset G325 branco, decalcado de foto (assets\svg\g325.svg).</summary>
         public static Image Headset { get { CarregarPerifericos(); return _headset; } }
 
-        /// <summary>Mouse X11 branco, desenhado por tools\MakePeripherals.cs.</summary>
+        /// <summary>Mouse X11 branco, decalcado de foto (assets\svg\x11.svg).</summary>
         public static Image Mouse { get { CarregarPerifericos(); return _mouse; } }
 
         /// <summary>Simbolo do Bluetooth, para os aparelhos lidos pelo Windows.</summary>

@@ -45,6 +45,7 @@ namespace MhiagosControl
             RegressionVideoMemory();
             RegressionReviewFixes();
             RegressionPeripheralBattery();
+            RegressionPeripheralIcons();
             RegressionBatteryHistory();
             RegressionNavOrder(root);
             RegressionBatteryWidget(root);
@@ -551,6 +552,43 @@ namespace MhiagosControl
                 Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 12, true) }), "baixo mas no cabo nao marca");
             Verdade(!TrayContext.AlgumBaixo(new Periferico[] {
                 Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado) }), "desligado nao marca");
+        }
+
+        private static void RegressionPeripheralIcons()
+        {
+            Secao("icones dos perifericos: G325 e X11 decalcados de foto");
+
+            Image[] icones = { Assets.Headset, Assets.Mouse, Assets.Bluetooth };
+            string[] nomes = { "G325", "X11", "Bluetooth" };
+            for (int i = 0; i < icones.Length; i++)
+            {
+                Bitmap b = icones[i] as Bitmap;
+                Verdade(b != null && b.Width == 256 && b.Height == 256, nomes[i] + ": icone embutido em 256 px");
+                if (b == null) continue;
+                Verdade(b.GetPixel(0, 0).A == 0 && b.GetPixel(255, 255).A == 0, nomes[i] + ": fundo transparente");
+            }
+
+            // o G325 tem uma mola verde-agua de cada lado, entre a tiara e a concha
+            Bitmap fone = Assets.Headset as Bitmap;
+            if (fone != null)
+            {
+                int esq = 0, dir = 0;
+                for (int y = 96; y < 160; y++)
+                    for (int x = 0; x < 256; x++)
+                    {
+                        Color c = fone.GetPixel(x, y);
+                        if (c.A > 200 && c.G > 150 && c.R < 100 && c.B > 130) { if (x < 128) esq++; else dir++; }
+                    }
+                Verdade(esq > 20 && dir > 20, "G325: mola verde-agua dos dois lados");
+            }
+
+            // o X11 e branco, mesmo que a foto de referencia fosse de um preto
+            Bitmap mouse = Assets.Mouse as Bitmap;
+            if (mouse != null)
+            {
+                Color c = mouse.GetPixel(128, 170);
+                Verdade(c.A == 255 && c.R > 230 && c.G > 230 && c.B > 230, "X11: corpo branco");
+            }
         }
 
         private static void RegressionVideoMemory()
