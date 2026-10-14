@@ -146,11 +146,6 @@ namespace MhiagosControl
         public static string SpecDriverTag(string v) { return P("driver " + v, "driver " + v); }
         public static string SpecDisks(int n) { return n == 1 ? P("1 disco", "1 drive") : P(n + " discos", n + " drives"); }
         public static string SpecUptimeTag(string v) { return P("ligado há " + v, "up " + v); }
-        public static string SpecsChooseCategory
-        {
-            get { return P("Selecione uma categoria para ver a ficha completa.",
-                           "Select a category to see its complete details."); }
-        }
 
         public static string SpecsNote
         {
@@ -241,7 +236,6 @@ namespace MhiagosControl
         {
             return P(nome + ": " + n + " cartões", nome + ": " + n + " cards");
         }
-        public static string HistoryWindow { get { return P("Histórico", "History"); } }
 
         // Extremos e media da janela desenhada. Abreviados porque dividem uma
         // linha so, dentro de um cartao que pode ter 350 px.
@@ -266,12 +260,9 @@ namespace MhiagosControl
         }
         public static string NavAbout { get { return P("Sobre", "About"); } }
         public static string ActiveProfile { get { return P("PERFIL ATIVO", "ACTIVE PROFILE"); } }
-        public static string SystemCaption { get { return P("SISTEMA", "SYSTEM"); } }
 
         // ---------------- tela de bordo ----------------
 
-        public static string ThisMachine { get { return P("Esta máquina", "This machine"); } }
-        public static string RightNow { get { return P("Agora", "Right now"); } }
         public static string CoolerCard { get { return P("Cooler", "Cooler"); } }
 
         public static string SpecCpu { get { return P("Processador", "Processor"); } }
@@ -445,7 +436,6 @@ namespace MhiagosControl
         public static string RtssMissing { get { return P("RTSS não encontrado", "RTSS not found"); } }
         public static string RtssIdle { get { return P("nenhum jogo em execução", "no game running"); } }
 
-        public static string FramesCard { get { return P("Quadros por segundo", "Frames per second"); } }
 
         public static string RtssActive
         {
@@ -675,18 +665,6 @@ namespace MhiagosControl
 
         public static string StartWithWindows { get { return P("Iniciar junto com o Windows", "Start with Windows"); } }
         public static string ShowAllSensors { get { return P("Mostrar todos os sensores (inclui um por núcleo)", "Show every sensor (includes one per core)"); } }
-        public static string ShowAllNote
-        {
-            get
-            {
-                return P(
-                    "Desligado, dezenas de sensores por núcleo viram uma média por grupo — clock e temperatura gerais\n" +
-                    "deixam de ficar enterrados entre repetições.",
-                    "Turned off, dozens of per-core sensors collapse into one average per group — general clock and\n" +
-                    "temperature stop being buried among repetitions.");
-            }
-        }
-        public static string DataPathLabel { get { return P("Configuração e registro em:", "Settings and log in:"); } }
         public static string OpenFolder { get { return P("Abrir pasta", "Open folder"); } }
         public static string CreatedBy { get { return P("Criado por Feurrado", "Built by Feurrado"); } }
         public static string OpenOnGitHub { get { return P("Abrir no GitHub", "Open on GitHub"); } }
@@ -887,13 +865,7 @@ namespace MhiagosControl
             get { return P("Nenhum periférico com bateria lido ainda. Ligue o headset ou o mouse e a análise começa sozinha.",
                            "No battery reading yet. Turn the headset or mouse on and tracking starts by itself."); }
         }
-        public static string ChargingSince(string hora, int pct)
-        {
-            return P("carregando desde " + hora + " (a partir de " + pct + "%)", "charging since " + hora + " (from " + pct + "%)");
-        }
         public static string BatRemaining { get { return P("Restante estimado", "Estimated remaining"); } }
-        public static string BatRemainingOurs { get { return P("Restante estimado (Mhiagos Control)", "Estimated remaining (Mhiagos Control)"); } }
-        public static string BatRemainingGHub { get { return P("Restante estimado (G HUB)", "Estimated remaining (G HUB)"); } }
         public static string BatPace { get { return P("Ritmo por faixa", "Pace by range"); } }
         public static string PaceEven { get { return P("parecido em todas as faixas", "about the same in every range"); } }
         public static string PaceFastest(int de, int ate)
@@ -904,12 +876,6 @@ namespace MhiagosControl
         public static string OpenGHubToRead { get { return P("abra o G HUB para ler", "open G HUB to read"); } }
         public static string FullyCharged { get { return P("carga completa", "fully charged"); } }
         public static string FullIn(string duracao) { return P("cheio em ~" + duracao, "full in ~" + duracao); }
-        public static string BatHealth { get { return P("Saúde da bateria", "Battery health"); } }
-        public static string HealthMeasuring
-        {
-            get { return P("medindo (precisa de algumas semanas de uso)", "measuring (needs a few weeks of use)"); }
-        }
-        public static string HealthPerCharge(string duracao, string mes) { return P(duracao + " por carga (" + mes + ")", duracao + " per charge (" + mes + ")"); }
         public static string HealthFirstMonth { get { return P("1º mês medido", "1st month measured"); } }
         public static string HealthVersus(string duracao, string mes, string variacao)
         {
@@ -953,7 +919,6 @@ namespace MhiagosControl
         public static string WidgetBackToCorner { get { return P("Voltar ao canto da tela", "Move back to the corner"); } }
         public static string WidgetCardNote { get { return P("Arraste o widget para mudar de lugar e clique nele para abrir esta página. O botão direito tem as mesmas opções.", "Drag the widget to move it and click it to open this page. Right-click has the same options."); } }
         public static string OpenBatteriesPage { get { return P("Ver detalhes na página Baterias", "See details on the Batteries page"); } }
-        public static string BatPerCharge { get { return P("Duração de uma carga cheia", "Full charge lasts"); } }
         public static string BatLastCharge { get { return P("Última carga", "Last charge"); } }
         public static string BatSinceCharge { get { return P("Desde a última carga", "Since last charge"); } }
         public static string BatLastDischarge { get { return P("Última descarga completa", "Last full discharge"); } }
@@ -965,12 +930,7 @@ namespace MhiagosControl
             return P("sem leitura · " + d, "no reading · " + d);
         }
         public static string BatNoCurve { get { return P("a curva aparece com as primeiras leituras", "the curve shows up with the first readings"); } }
-        public static string ByGHub(int horas) { return P("G HUB: " + horas + " h", "G HUB: " + horas + " h"); }
         public static string UseHours(string duracao) { return P(duracao + " de uso", duracao + " of use"); }
-        public static string Discharges(int n)
-        {
-            return P(n == 1 ? "1 descarga" : n + " descargas", n == 1 ? "1 discharge" : n + " discharges");
-        }
         public static string UpTo(int pct) { return P("até " + pct + "%", "up to " + pct + "%"); }
         public static string TookTime(string duracao) { return P("levou " + duracao, "took " + duracao); }
         public static string SinceTracking(string quando) { return P("acompanhando desde " + quando, "tracking since " + quando); }
