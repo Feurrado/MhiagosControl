@@ -502,6 +502,53 @@ namespace MhiagosControl
             finally { T.Language = languageBefore; }
         }
 
+        /// <summary>Seis horas de leituras de mentira para "cpu" e "load", so para a captura ter forma.</summary>
+        private static void SemearHistorico()
+        {
+            ResetHistory("cpu", "load");
+            DateTime agora = DateTime.UtcNow;
+            for (int i = 0; i < 4320; i++)
+            {
+                int k = i;
+                MetricHistory.AmostrarEm(delegate(string id)
+                {
+                    if (id == "cpu") return (float)(42 + 8 * Math.Sin(k / 90.0) + (k % 700 < 40 ? 18 : 0));
+                    return (float)(15 + 55 * Math.Pow(Math.Sin(k / 400.0), 2));
+                }, agora.AddSeconds(-5 * (4320 - k)));
+            }
+        }
+
+        private static void CapturaDasMetricas(string root)
+        {
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR"))) return;
+            string languageBefore = T.Language;
+            try
+            {
+                T.Language = T.PtBr;
+                SemearHistorico();
+                Config config = AuditConfig(root, "captura-metricas");
+                config.MetricIds.Clear(); config.MetricSizes.Clear();
+                config.MetricIds.AddRange(new string[] { "cpu", "load" });
+                config.MetricSizes.AddRange(new int[] { 1, 1 });
+                config.Save();
+                using (SettingsForm form = BugForm(config, new FreshData()))
+                {
+                    form.Size = new Size(1100, 560);
+                    ((NavBar)Field(form, "_nav")).SelectedIndex = 2;
+                    List<MetricCard> cards = (List<MetricCard>)Field(form, "_cards");
+                    InvokePrivate(cards[1], "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, 40, 60, 0));
+                    InvokePrivate(cards[1], "OnMouseUp", new MouseEventArgs(MouseButtons.Left, 1, 40, 60, 0));
+                    CaptureEvolution(form, "depois-metricas");
+                    form.Close();
+                }
+            }
+            finally
+            {
+                T.Language = languageBefore;
+                MetricHistory.Seguir(null);
+            }
+        }
+
         private static void CaptureControl(Control control, string name)
         {
             string directory = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
