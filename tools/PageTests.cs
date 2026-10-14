@@ -402,6 +402,106 @@ namespace MhiagosControl
             Igual("rtss:fps", ida.Clone().MetricNavId, "a copia da configuracao leva a escolha");
         }
 
+        // ---------------- layouts escolhidos: 5B, 6A e 7B ----------------
+
+        private static void RegressionLayoutsEscolhidos(string root)
+        {
+            Secao("layouts 2.22: Configuracoes em linhas, Sobre com identidade, Perfis com barra");
+            Igual(MhiagosSetup.Setup.Versao, AppInfo.Versao, "a versao do Sobre e a do instalador andam juntas");
+            string languageBefore = T.Language;
+            try
+            {
+                foreach (string language in new string[] { T.PtBr, T.EnUs })
+                {
+                    T.Language = language;
+                    Config config = AuditConfig(root, "layouts-" + language);
+                    using (SettingsForm form = BugForm(config, new FreshData()))
+                    {
+                        NavBar nav = (NavBar)Field(form, "_nav");
+                        foreach (int largura in new int[] { 1100, 880 })
+                        {
+                            form.Size = new Size(largura, 760);
+                            string sufixo = language + "-" + largura;
+
+                            // ---- 5B
+                            nav.SelectedIndex = 5;
+                            InvokePrivate(form, "ArrangeSettings");
+                            Control config5 = (Control)Field(form, "_pgConfig");
+                            List<Control> itens = (List<Control>)Field(form, "_itensDaConfig");
+                            int linhas = 0, grupos = 0, anterior = -1;
+                            foreach (Control item in itens)
+                            {
+                                if (item is LinhaDeOpcao) linhas++;
+                                else if ((item.Tag as string) == "grupo") grupos++;
+                                Verdade(item.Top >= anterior, "itens das Configuracoes em ordem, sem sobrepor " + sufixo);
+                                anterior = item.Bottom;
+                            }
+                            Igual(8, linhas, "oito linhas: idioma, inicio, sensores, ocioso, RTSS, pasta, backup e diagnostico");
+                            Igual(4, grupos, "em quatro grupos: Geral, Painel, FPS e Dados");
+                            Verdade(Field(form, "_backupCard") is LinhaDeOpcao && Field(form, "_diagnosticCard") is LinhaDeOpcao,
+                                "backup e diagnostico viraram linhas do grupo Dados");
+                            LinhaDeOpcao idioma = (LinhaDeOpcao)itens[1];
+                            Verdade(idioma.Controls.Contains((Control)Field(form, "_lang")), "o seletor de idioma fica na linha do Idioma");
+                            if (largura == 1100) Verdade(idioma.EmUmaLinha, "em janela larga o controle fica a direita do texto");
+                            CaptureEvolution(form, "layout-config-" + sufixo);
+
+                            // ---- 6A
+                            nav.SelectedIndex = 7;
+                            CartaoDeIdentidade id = (CartaoDeIdentidade)Field(form, "_cartaoIdentidade");
+                            Verdade(id.Versao.Contains(AppInfo.Versao), "a versao aparece no cartao de identidade");
+                            Verdade(id.Icone != null && id.Icone.Width >= 96, "o icone grande vem da entrada de 128 px");
+                            BlocoDeStatus painel = (BlocoDeStatus)Field(form, "_blocoPainel");
+                            BlocoDeStatus fontes = (BlocoDeStatus)Field(form, "_blocoFontes");
+                            BlocoDeStatus libs = (BlocoDeStatus)Field(form, "_blocoBibliotecas");
+                            Verdade(painel.Top > id.Bottom && fontes.Top == painel.Top && libs.Top == painel.Top,
+                                "tres blocos de situacao lado a lado, abaixo da identidade " + sufixo);
+                            Verdade(painel.Height >= painel.AlturaPara(painel.Width) && libs.Height >= libs.AlturaPara(libs.Width),
+                                "nenhum bloco corta o proprio texto");
+                            Verdade(fontes.Valor.Contains("HWiNFO"), "o bloco de fontes conta o HWiNFO");
+                            Label isencao = (Label)Field(form, "_sobreIsencao");
+                            Verdade(isencao.Height >= isencao.GetPreferredSize(new Size(isencao.Width, 0)).Height,
+                                "a isencao aparece inteira, sem corte");
+                            CaptureEvolution(form, "layout-sobre-" + sufixo);
+
+                            // ---- 7B
+                            nav.SelectedIndex = 4;
+                            InvokePrivate(form, "ArrangeProfiles");
+                            Card lista = (Card)Field(form, "_profilesListCard"), previa = (Card)Field(form, "_profilesPreviewCard");
+                            Card barra = (Card)Field(form, "_barraDePerfis");
+                            Verdade(barra.Top == 0 && lista.Top > barra.Bottom, "a barra de acoes vem antes de tudo");
+                            if (largura == 1100) Verdade(lista.Top == previa.Top && lista.Height == previa.Height, "lista e previa com a mesma altura " + sufixo);
+                            Card jogo = (Card)Field(form, "_cardGame"), rodizio = (Card)Field(form, "_cardRotation");
+                            if (largura == 1100) Verdade(jogo.Top == rodizio.Top && jogo.Height == rodizio.Height && rodizio.Left > jogo.Right,
+                                "Perfil por jogo e Rodizio lado a lado " + sufixo);
+                            FlatBtn aplicar = (FlatBtn)Field(form, "_btnApply");
+                            Verdade(aplicar.Parent == barra && aplicar.Right <= barra.Width, "Aplicar mora na barra, dentro dela");
+                            List<FlatBtn> botoes = (List<FlatBtn>)Field(form, "_botoesDePerfil");
+                            Igual(6, botoes.Count, "os seis botoes de perfil estao na barra");
+                            if (largura == 1100) Igual(botoes[0].Top, aplicar.Top, "em janela larga a barra cabe numa linha so");
+                            Igual(T.AlreadyActive, aplicar.Text, "perfil ja ativo: o botao diz isso, curto");
+                            Toggle girar = (Toggle)Field(form, "_tgRotate");
+                            NumberBox segundos = (NumberBox)Field(form, "_rotSecs");
+                            Verdade(segundos.Top >= girar.Bottom, "o campo de segundos fica abaixo do interruptor, mesmo quando ele quebra");
+                            CaptureEvolution(form, "layout-perfis-" + sufixo);
+                        }
+
+                        Toggle ocioso = (Toggle)Field(form, "_tgIdle");
+                        Label nota = (Label)Field(form, "_idleNote");
+                        nav.SelectedIndex = 5;
+                        int fechado = nota.Width;
+                        ocioso.Checked = true;
+                        Igual(T.MinutesIdle, nota.Text, "ligar o apagamento mostra os minutos");
+                        Verdade(nota.Width > fechado, "e o rotulo cresce para o texto novo");
+                        ocioso.Checked = false;
+                        // so mexeu para testar: fechar sem a pergunta de salvar
+                        typeof(SettingsForm).GetProperty("_dirty", AuditFlags).SetValue(form, false, null);
+                        form.Close();
+                    }
+                }
+            }
+            finally { T.Language = languageBefore; }
+        }
+
         private static void CaptureControl(Control control, string name)
         {
             string directory = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");

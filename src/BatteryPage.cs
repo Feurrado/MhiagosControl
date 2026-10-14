@@ -633,7 +633,7 @@ namespace MhiagosControl
 
         // ESCAPADOS: E713 e a engrenagem, E70D e E70E as setas para baixo e
         // para cima da Segoe MDL2.
-        private const string Engrenagem = "", Abrir = "", Fechar = "";
+        private const string Engrenagem = "\uE713", Abrir = "\uE70D", Fechar = "\uE70E";
 
         public BotaoDoWidget()
         {

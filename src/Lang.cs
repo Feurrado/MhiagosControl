@@ -587,7 +587,7 @@ namespace MhiagosControl
                      "seconds on each profile  ·  " + n + " profiles in the rotation");
         }
         public static string ApplyProfile { get { return P("Aplicar perfil", "Apply profile"); } }
-        public static string AlreadyActive { get { return P("já é o perfil ativo", "already the active profile"); } }
+        public static string AlreadyActive { get { return P("Perfil ativo", "Active profile"); } }
 
         public static string ProfilesNote
         {
@@ -627,6 +627,42 @@ namespace MhiagosControl
             }
         }
 
+        // Configuracoes em linhas, no estilo do Windows 11: grupos e descricoes curtas.
+        public static string SettingsGeneral { get { return P("Geral", "General"); } }
+        public static string SettingsFps { get { return P("FPS", "FPS"); } }
+        public static string SettingsData { get { return P("Dados", "Data"); } }
+        public static string StateOn { get { return P("Ligado", "On"); } }
+        public static string StateOff { get { return P("Desligado", "Off"); } }
+        public static string StartWithWindowsNote
+        {
+            get { return P("O app abre sozinho quando você entra no Windows.", "The app opens on its own when you sign in to Windows."); }
+        }
+        public static string ShowAllShort
+        {
+            get { return P("Desligado, os sensores por núcleo viram uma média por grupo.", "When off, per-core sensors become one average per group."); }
+        }
+        public static string BlankWhenIdleShort
+        {
+            get { return P("Conta teclado e mouse da sessão inteira. O mostrador volta ao primeiro toque.",
+                           "Counts keyboard and mouse across the whole session. The display returns on the first input."); }
+        }
+        public static string DataFolderTitle { get { return P("Configuração e registro", "Settings and log"); } }
+        public static string BackupShort
+        {
+            get { return P("Perfis, jogos, métricas e preferências já salvos. Edições pendentes e histórico ficam fora.",
+                           "Saved profiles, games, metrics and preferences. Unsaved edits and history are left out."); }
+        }
+        public static string DiagnosticShort
+        {
+            get { return P("Revise antes de exportar. Sem nomes, caminhos, números de série ou logs pessoais.",
+                           "Review before exporting. No names, paths, serial numbers or personal logs."); }
+        }
+
+        // Sobre com cartao de identidade
+        public static string VersionLabel(string v) { return P("Versão " + v, "Version " + v); }
+        public static string Libraries { get { return P("Bibliotecas", "Libraries"); } }
+        public static string PanelNone { get { return P("nenhum encontrado", "none found"); } }
+        public static string PanelTested { get { return P("Temp 6 Pro Black, o modelo testado", "Temp 6 Pro Black, the tested model"); } }
         public static string Language_ { get { return P("Idioma", "Language"); } }
         public static string LanguageNote
         {
@@ -652,7 +688,6 @@ namespace MhiagosControl
         }
         public static string DataPathLabel { get { return P("Configuração e registro em:", "Settings and log in:"); } }
         public static string OpenFolder { get { return P("Abrir pasta", "Open folder"); } }
-        public static string ProjectAndCredits { get { return P("Projeto e créditos", "Project and credits"); } }
         public static string CreatedBy { get { return P("Criado por Feurrado", "Built by Feurrado"); } }
         public static string OpenOnGitHub { get { return P("Abrir no GitHub", "Open on GitHub"); } }
         public static string LibsNote
@@ -990,11 +1025,6 @@ namespace MhiagosControl
         public static string PanelNotFound
         {
             get { return P("Painel: nenhum encontrado", "Panel: none found"); }
-        }
-
-        public static string PanelFound(string id)
-        {
-            return P("Painel: " + id, "Panel: " + id);
         }
 
         public static string PanelUntested

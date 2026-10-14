@@ -603,6 +603,7 @@ namespace MhiagosControl
             else if (pagina == _pgPaineis) ArranjarPaineis();
             else if (pagina == _pgConfig) ArrangeSettings();
             else if (pagina == _pgPerfis) ArrangeProfiles();
+            else if (pagina == _pgSobre) ArranjarSobre();
             else ArrangeAboutBounds(pagina);
         }
 
@@ -2260,15 +2261,43 @@ namespace MhiagosControl
             ((Pagina)page).RolarNaVertical();
             // fundo opaco vem da propria Pagina
 
+            // Barra de acoes no alto: os seis botoes que moravam numa grade de
+            // dois por tres embaixo da lista, mais Definir como padrao e Aplicar,
+            // que ficavam embaixo da previa. Fora dos cartoes, lista e previa
+            // ficam mais baixas e a pagina quase nao rola.
+            _barraDePerfis = new Card();
+            _barraDePerfis.Title = null;
+            page.Controls.Add(_barraDePerfis);
+            _botoesDePerfil.Clear();
+            BotaoDaBarra(T.New, new EventHandler(OnNewProfile));
+            BotaoDaBarra(T.Rename, new EventHandler(OnRenameProfile));
+            BotaoDaBarra(T.Duplicate, new EventHandler(OnDuplicateProfile));
+            BotaoDaBarra(T.Delete, new EventHandler(OnDeleteProfile)).Danger = true;
+            _inicioDoSegundoGrupo = _botoesDePerfil.Count;
+            BotaoDaBarra(T.Export, new EventHandler(OnExportProfile));
+            BotaoDaBarra(T.Import, new EventHandler(OnImportProfile));
+
+            _btnDefault = new FlatBtn();
+            _btnDefault.Text = T.SetAsDefault;
+            _btnDefault.Size = new Size(LarguraDoMaior(T.SetAsDefault, T.AlreadyDefault) + 24, 32);
+            _btnDefault.Click += delegate { DefinirPerfilPadrao(); };
+            _barraDePerfis.Controls.Add(_btnDefault);
+
+            _btnApply = new FlatBtn();
+            _btnApply.Text = T.ApplyProfile;
+            _btnApply.Primary = true;
+            _btnApply.Size = new Size(LarguraDoMaior(T.ApplyProfile, T.AlreadyActive) + 40, 32);
+            _btnApply.Click += delegate { AplicarPerfil(); };
+            _barraDePerfis.Controls.Add(_btnApply);
+
             Card c = new Card();
             c.Title = T.SavedProfiles;
             _profilesListCard = c;
-            c.SetBounds(0, 0, 330, 500);
+            c.SetBounds(0, 64, 330, 400);
             page.Controls.Add(c);
 
             _profileList = new ProfileList();
             _profileList.SetBounds(12, 44, 306, 300);
-            _profileList.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _profileList.Resolve = NomeDoSensor;
             _profileList.ActiveName = _cfg.ActiveName;
             _profileList.DefaultName = _cfg.DefaultProfile.Name;
@@ -2276,55 +2305,25 @@ namespace MhiagosControl
             _profileList.ItemActivated += delegate { AplicarPerfil(); };
             c.Controls.Add(_profileList);
 
-            // Grade de dois por tres. A coluna da esquerda fica na esquerda e a
-            // da direita na direita, senao o cartao esticado abre um vao a
-            // direita dos seis botoes e a grade some para um canto.
-            c.Controls.Add(MakeSideButton(T.New, 12, 356, 145, new EventHandler(OnNewProfile)));
-            c.Controls.Add(ADireita(MakeSideButton(T.Rename, 173, 356, 145, new EventHandler(OnRenameProfile))));
-            c.Controls.Add(MakeSideButton(T.Duplicate, 12, 396, 145, new EventHandler(OnDuplicateProfile)));
-            FlatBtn del = ADireita(MakeSideButton(T.Delete, 173, 396, 145, new EventHandler(OnDeleteProfile)));
-            del.Danger = true;
-            c.Controls.Add(del);
-            c.Controls.Add(MakeSideButton(T.Export, 12, 436, 145, new EventHandler(OnExportProfile)));
-            c.Controls.Add(ADireita(MakeSideButton(T.Import, 173, 436, 145, new EventHandler(OnImportProfile))));
-
             Card cv = new Card();
             cv.Title = T.ProfilePreview;
             _profilesPreviewCard = cv;
-            cv.SetBounds(346, 0, 410, 500);
+            cv.SetBounds(346, 64, 410, 400);
             page.Controls.Add(cv);
 
             _profilePreview = new PanelPreview();
             _profilePreview.SetBounds(12, 44, 386, 250);
-            _profilePreview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             cv.Controls.Add(_profilePreview);
 
             _profileSensor1 = new FlatBtn();
-            _profileSensor1.SetBounds(12, 306, 386, 34);
-            _profileSensor1.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _profileSensor1.SetBounds(12, 306, 189, 34);
             _profileSensor1.Click += delegate { TrocarSensorDoPerfil(1); };
             cv.Controls.Add(_profileSensor1);
 
             _profileSensor2 = new FlatBtn();
-            _profileSensor2.SetBounds(12, 346, 386, 34);
-            _profileSensor2.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _profileSensor2.SetBounds(209, 306, 189, 34);
             _profileSensor2.Click += delegate { TrocarSensorDoPerfil(2); };
             cv.Controls.Add(_profileSensor2);
-
-            _btnDefault = new FlatBtn();
-            _btnDefault.Text = T.SetAsDefault;
-            _btnDefault.SetBounds(12, 416, 150, 40);
-            _btnDefault.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            _btnDefault.Click += delegate { DefinirPerfilPadrao(); };
-            cv.Controls.Add(_btnDefault);
-
-            _btnApply = new FlatBtn();
-            _btnApply.Text = T.ApplyProfile;
-            _btnApply.Primary = true;
-            _btnApply.SetBounds(168, 416, 230, 40);
-            _btnApply.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            _btnApply.Click += delegate { AplicarPerfil(); };
-            cv.Controls.Add(_btnApply);
 
             // A automacao por jogo vem antes do rodizio: ela e uma relacao entre
             // o perfil selecionado acima e um aplicativo real, e deixa-la no fim
@@ -2437,6 +2436,30 @@ namespace MhiagosControl
             AtualizarRodizio();
             AtualizarJogo();
             return page;
+        }
+
+        private Card _barraDePerfis;
+        private readonly List<FlatBtn> _botoesDePerfil = new List<FlatBtn>();
+        /// <summary>Onde comeca o segundo grupo da barra (Exportar e Importar), separado do primeiro por um vao.</summary>
+        private int _inicioDoSegundoGrupo;
+
+        private FlatBtn BotaoDaBarra(string texto, EventHandler h)
+        {
+            FlatBtn b = new FlatBtn();
+            b.Text = texto;
+            b.Size = new Size(TextRenderer.MeasureText(texto, Ui.FontBase).Width + 24, 32);
+            b.Click += h;
+            _barraDePerfis.Controls.Add(b);
+            _botoesDePerfil.Add(b);
+            return b;
+        }
+
+        /// <summary>Largura do maior dos textos, para o botao nao mudar de tamanho quando o texto troca.</summary>
+        private static int LarguraDoMaior(params string[] textos)
+        {
+            int w = 0;
+            foreach (string t in textos) w = Math.Max(w, TextRenderer.MeasureText(t, Ui.FontBase).Width);
+            return w;
         }
 
         /// <summary>Edita o sensor do perfil sem obrigar a ida ate Paineis.</summary>
@@ -2802,7 +2825,8 @@ namespace MhiagosControl
             _profileList.ActiveName = activeName;
             _profileList.Invalidate();
             bool ativo = string.Equals(p.Name, activeName, StringComparison.Ordinal);
-            _btnApply.Text = ativo ? T.ApplyProfile + "  (" + T.AlreadyActive + ")" : T.ApplyProfile;
+            // como o Padrao ao lado: ja ativo, o botao diz isso, curto, para caber na barra
+            _btnApply.Text = ativo ? T.AlreadyActive : T.ApplyProfile;
             _btnApply.Enabled = !ativo;
             _btnApply.Invalidate();
 
@@ -3070,139 +3094,127 @@ namespace MhiagosControl
             Panel page = new Pagina();
             ((Pagina)page).RolarNaVertical();
             // fundo opaco vem da propria Pagina
+            _itensDaConfig.Clear();
 
-            Card c = new Card();
-            c.Title = T.NavSettings;
-            c.SetBounds(0, 0, 756, 402);
-            page.Controls.Add(c);
-
-            c.Controls.Add(MakeLabel(T.Language_, 16, 50, Ui.FontMed));
+            // Linhas no estilo das Configuracoes do Windows 11, em quatro grupos.
+            // Nenhuma opcao saiu nem mudou de comportamento: cada uma ganhou uma
+            // faixa propria, com a descricao ao lado de onde se mexe.
+            GrupoDaConfig(page, T.SettingsGeneral);
 
             _lang = new Segmented();
             _lang.SetItems("Português (BR)", "English (US)");
-            _lang.SetBounds(16, 74, 300, 30);
+            _lang.Size = new Size(300, 30);
             _lang.SelectedIndex = T.Pt ? 0 : 1;
             // depois de fixar a posicao: o seletor avisa toda mudanca, e a
             // primeira seria a nossa - reabriria a janela ao abrir a janela
             _lang.SelectedIndexChanged += new EventHandler(OnLanguageChanged);
-            c.Controls.Add(_lang);
-
-            Label langNote = MakeLabel(T.LanguageNote, 328, 74, Ui.FontSmall);
-            langNote.Size = new Size(400, 30);
-            langNote.TextAlign = ContentAlignment.MiddleLeft;
-            langNote.ForeColor = Ui.Muted;
-            c.Controls.Add(langNote);
+            // E774 e o globo da Segoe MDL2. ESCAPADO, como todos.
+            LinhaDaConfig(page, new LinhaDeOpcao("\uE774", T.Language_, T.LanguageNote)).Direita(_lang);
 
             _tgAutostart = new Toggle();
-            _tgAutostart.Label = T.StartWithWindows;
-            _tgAutostart.SetBounds(16, 128, 400, 26);
             _tgAutostart.Checked = Autostart.IsEnabled();
             _tgAutostart.CheckedChanged += new EventHandler(OnToggleAutostart);
-            c.Controls.Add(_tgAutostart);
+            // E7E8: botao de ligar
+            LinhaDaConfig(page, new LinhaDeOpcao("\uE7E8", T.StartWithWindows, T.StartWithWindowsNote)).Interruptor(_tgAutostart, true);
+
+            GrupoDaConfig(page, T.PanelLabel);
 
             Toggle tgAll = new Toggle();
-            tgAll.Label = T.ShowAllSensors;
-            tgAll.SetBounds(16, 170, 480, 26);
             tgAll.Checked = _cfg.ShowAllSensors;
             tgAll.CheckedChanged += new EventHandler(OnToggleShowAll);
-            c.Controls.Add(tgAll);
-
-            Label allNote = MakeLabel(T.ShowAllNote, 16, 198, Ui.FontSmall);
-            allNote.Size = new Size(720, 30);
-            allNote.ForeColor = Ui.Muted;
-            c.Controls.Add(allNote);
+            // E8FD: lista com marcadores
+            LinhaDaConfig(page, new LinhaDeOpcao("\uE8FD", T.ShowAllSensors, T.ShowAllShort)).Interruptor(tgAll, true);
 
             _tgIdle = new Toggle();
-            _tgIdle.Label = T.BlankWhenIdle;
-            _tgIdle.SetBounds(16, 244, 480, 26);
             _tgIdle.Checked = _cfg.IdleBlankMinutes > 0;
             _tgIdle.CheckedChanged += new EventHandler(OnToggleIdle);
-            c.Controls.Add(_tgIdle);
 
             _idleMin = new NumberBox();
             _idleMin.Minimum = 1; _idleMin.Maximum = 999;
             _idleMin.Value = _cfg.IdleBlankMinutes > 0 ? _cfg.IdleBlankMinutes : 15;
-            _idleMin.SetBounds(16, 274, 110, 32);
+            _idleMin.Size = new Size(110, 32);
             _idleMin.Enabled = _tgIdle.Checked;
             _idleMin.ValueChanged += new EventHandler(OnIdleMinutes);
-            c.Controls.Add(_idleMin);
 
-            _idleNote = MakeLabel("", 134, 274, Ui.FontSmall);
-            _idleNote.Size = new Size(600, 32);
+            // "minutos parado ate apagar" ou "desligado": quem diz o estado da
+            // linha e este rotulo, entao o interruptor dela vai sem o seu.
+            _idleNote = MakeLabel("", 0, 0, Ui.FontSmall);
+            _idleNote.Size = new Size(Math.Max(TextRenderer.MeasureText(T.MinutesIdle, Ui.FontSmall).Width,
+                                               TextRenderer.MeasureText(T.Off, Ui.FontSmall).Width) + 6, 32);
             _idleNote.TextAlign = ContentAlignment.MiddleLeft;
             _idleNote.ForeColor = Ui.Muted;
-            c.Controls.Add(_idleNote);
 
-            Label idleHint = MakeLabel(T.BlankWhenIdleNote, 16, 312, Ui.FontSmall);
-            idleHint.Size = new Size(720, 34);
-            idleHint.ForeColor = Ui.Muted;
-            c.Controls.Add(idleHint);
+            // E708: lua, o "nao perturbe" da Segoe MDL2
+            LinhaDeOpcao ocioso = LinhaDaConfig(page, new LinhaDeOpcao("\uE708", T.BlankWhenIdle, T.BlankWhenIdleShort));
+            ocioso.Direita(_idleMin);
+            ocioso.Direita(_idleNote);
+            ocioso.Interruptor(_tgIdle, false);
+            _dicaDaConfig.SetToolTip(ocioso.Descricao, T.BlankWhenIdleNote);
 
-            Label onde = MakeLabel(T.DataPathLabel + "  " + Paths.DataDir, 16, 356, Ui.FontSmall);
-            onde.Size = new Size(560, 30);
-            onde.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            onde.TextAlign = ContentAlignment.MiddleLeft;
-            onde.ForeColor = Ui.Faint;
-            c.Controls.Add(onde);
-
-            FlatBtn abrir = new FlatBtn();
-            abrir.Text = T.OpenFolder;
-            abrir.SetBounds(600, 354, 140, 32);
-            abrir.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            abrir.Click += delegate
-            {
-                try { System.Diagnostics.Process.Start("explorer.exe", Paths.DataDir); }
-                catch (Exception ex) { Log.Error("abrir pasta de dados", ex); }
-            };
-            c.Controls.Add(abrir);
-
-            // Cartao proprio para a fonte de FPS: e a unica leitura do aplicativo
+            // A fonte de FPS tem grupo proprio: e a unica leitura do aplicativo
             // que depende de um programa de terceiro, e sem um lugar que diga o
             // estado, "escolhi FPS e nao aparece nada" nao tem onde ser
             // respondido.
-            Card fps = new Card();
-            fps.Title = T.FramesCard;
-            fps.SetBounds(0, 414, 756, 172);
-            page.Controls.Add(fps);
+            GrupoDaConfig(page, T.SettingsFps);
 
-            _rtssEstado = MakeLabel("", 16, 48, Ui.FontMed);
-            _rtssEstado.Size = new Size(720, 24);
-            fps.Controls.Add(_rtssEstado);
+            _rtssEstado = LinhaDeOpcao.Rotulo("", Ui.FontSmall, Ui.Muted);
+            // E7FC: controle de videogame
+            LinhaDeOpcao rtss = LinhaDaConfig(page, new LinhaDeOpcao("\uE7FC", "RivaTuner Statistics Server", _rtssEstado));
+            _dicaDaConfig.SetToolTip(rtss.Titulo, T.RtssNote);
 
-            Label rtssNota = MakeLabel(T.RtssNote, 16, 76, Ui.FontSmall);
-            rtssNota.Size = new Size(720, 48);
-            rtssNota.ForeColor = Ui.Muted;
-            fps.Controls.Add(rtssNota);
+            _btRtss = BotaoDaLinha(T.InstallRtss, delegate { InstalarRtss(); });
+            rtss.Direita(_btRtss);
+            rtss.Direita(BotaoDaLinha(T.RtssPage, delegate { AbrirNoNavegador(Rtss.Site); }));
+            rtss.Direita(BotaoDaLinha(T.Recheck, delegate { AtualizarRtss(); }));
 
-            _btRtss = new FlatBtn();
-            _btRtss.Text = T.InstallRtss;
-            _btRtss.Primary = true;
-            _btRtss.SetBounds(16, 128, 180, 32);
-            _btRtss.Click += delegate { InstalarRtss(); };
-            fps.Controls.Add(_btRtss);
+            GrupoDaConfig(page, T.SettingsData);
 
-            FlatBtn rtssPagina = new FlatBtn();
-            rtssPagina.Text = T.RtssPage;
-            rtssPagina.SetBounds(202, 128, 180, 32);
-            rtssPagina.Click += delegate { AbrirNoNavegador(Rtss.Site); };
-            fps.Controls.Add(rtssPagina);
+            Label onde = LinhaDeOpcao.Rotulo(Paths.DataDir, Ui.FontSmall, Ui.Muted);
+            onde.Name = "dataFolder";
+            onde.AutoEllipsis = true;
+            _dicaDaConfig.SetToolTip(onde, Paths.DataDir);
+            // ED25: pasta aberta
+            LinhaDaConfig(page, new LinhaDeOpcao("\uED25", T.DataFolderTitle, onde)).Direita(BotaoDaLinha(T.OpenFolder, delegate
+            {
+                try { System.Diagnostics.Process.Start("explorer.exe", Paths.DataDir); }
+                catch (Exception ex) { Log.Error("abrir pasta de dados", ex); }
+            }));
 
-            FlatBtn rtssConferir = new FlatBtn();
-            rtssConferir.Text = T.Recheck;
-            rtssConferir.SetBounds(388, 128, 160, 32);
-            rtssConferir.Click += delegate { AtualizarRtss(); };
-            fps.Controls.Add(rtssConferir);
+            AddDataTools(page);
 
             AtualizarRtss();
             AtualizarOcioso();
-            // A nota de idioma ganha sua propria linha, inclusive em janela estreita.
-            langNote.SetBounds(16, 110, 724, 38);
-            foreach (Control control in c.Controls)
-                if (control != langNote && control.Top >= 128) control.Top += 44;
-            c.Height += 44;
-            onde.Name = "dataFolder";
-            AddDataTools(page);
             return page;
+        }
+
+        /// <summary>Ordem de cima para baixo da pagina de Configuracoes: titulos de grupo, linhas e a nota final.</summary>
+        private readonly List<Control> _itensDaConfig = new List<Control>();
+        private readonly ToolTip _dicaDaConfig = new ToolTip();
+
+        private void GrupoDaConfig(Control page, string titulo)
+        {
+            Label l = MakeLabel(titulo, 0, 0, Ui.FontSection);
+            l.Tag = "grupo";
+            l.Height = 24;
+            page.Controls.Add(l);
+            _itensDaConfig.Add(l);
+        }
+
+        private LinhaDeOpcao LinhaDaConfig(Control page, LinhaDeOpcao linha)
+        {
+            page.Controls.Add(linha);
+            _itensDaConfig.Add(linha);
+            return linha;
+        }
+
+        /// <summary>Botao na largura do proprio texto, para caber na linha ao lado de outros.</summary>
+        private static FlatBtn BotaoDaLinha(string texto, EventHandler h)
+        {
+            FlatBtn b = new FlatBtn();
+            b.Text = texto;
+            b.Size = new Size(TextRenderer.MeasureText(texto, Ui.FontBase).Width + 32, 32);
+            b.Click += h;
+            return b;
         }
 
         private Label _rtssEstado;
@@ -4066,88 +4078,179 @@ namespace MhiagosControl
 
         private Control BuildPageSobre()
         {
-            Panel page = new Pagina();
-            // fundo opaco vem da propria Pagina
+            Pagina page = new Pagina();
+            // Continua rolando: identidade, situacao e isencao passam da altura
+            // de uma janela comum, e cortar a isencao para caber seria trocar o
+            // que importa pelo que cabe.
+            page.RolarNaVertical();
+            _pgSobre = page;
 
-            // Continua rolando: mesmo sem as preferencias, identidade, fontes,
-            // creditos e isencao passam dos 818 px, e cortar a isencao para
-            // caber seria trocar o que importa pelo que cabe.
-            ((Pagina)page).RolarNaVertical();
+            // Cartao de identidade: icone grande, nome, versao, a frase do que o
+            // programa faz e o caminho para o codigo. A versao nao aparecia em
+            // lugar nenhum da janela, e e a primeira coisa que se pergunta
+            // quando alguem relata um problema.
+            _cartaoIdentidade = new CartaoDeIdentidade();
+            _cartaoIdentidade.Icone = ImagemDoIcone();
+            page.Controls.Add(_cartaoIdentidade);
 
-            Card c = new Card();
-            c.Title = T.NavAbout;
-            c.SetBounds(0, 0, 736, 250);
-            page.Controls.Add(c);
+            _sobreFrase = MakeLabel(T.AboutTagline, 0, 0, Ui.FontBase);
+            _sobreFrase.ForeColor = Ui.Muted;
+            _cartaoIdentidade.Controls.Add(_sobreFrase);
 
-            Label t = MakeLabel(T.AppName, 16, 50, Ui.FontTitle);
-            t.Size = new Size(400, 30);
-            c.Controls.Add(t);
+            _sobreGitHub = new FlatBtn();
+            _sobreGitHub.Text = T.OpenOnGitHub;
+            _sobreGitHub.Primary = true;
+            _sobreGitHub.Size = new Size(TextRenderer.MeasureText(T.OpenOnGitHub, Ui.FontBase).Width + 36, 32);
+            _sobreGitHub.Click += delegate { Abrir(Repositorio); };
+            _cartaoIdentidade.Controls.Add(_sobreGitHub);
 
-            Label d = MakeLabel(T.AboutTagline, 16, 84, Ui.FontSmall);
-            d.Size = new Size(700, 34);
-            d.ForeColor = Ui.Muted;
-            c.Controls.Add(d);
+            _sobreAutor = MakeLabel(T.CreatedBy + "  ·  " + Repositorio.Replace("https://", ""), 0, 0, Ui.FontSmall);
+            _sobreAutor.ForeColor = Ui.Muted;
+            _sobreAutor.AutoEllipsis = true;
+            _sobreAutor.TextAlign = ContentAlignment.MiddleLeft;
+            _cartaoIdentidade.Controls.Add(_sobreAutor);
 
-            // Quais fontes responderam, contado da propria lista de sensores.
-            // Antes, perder o HWiNFO so aparecia no log: o aplicativo seguia
-            // sem temperatura nem potencia da CPU e nada em tela dizia por que.
-            c.Controls.Add(MakeLabel(T.SensorSources, 16, 134, Ui.FontMed));
+            // Tres blocos de situacao: qual painel respondeu, quais fontes de
+            // sensores responderam e de quem e o codigo que roda junto.
+            _blocoPainel = new BlocoDeStatus();
+            _blocoPainel.Rotulo = T.PanelLabel;
+            page.Controls.Add(_blocoPainel);
 
-            // Altura fixa para as tres linhas do pior caso: com o aviso, a
-            // contagem passa a dividir espaco com duas linhas de explicacao, e
-            // dimensionar so para o caso bom cortava justamente o texto que
-            // existe para ser lido.
-            Label fontes = MakeLabel(TextoDasFontes(), 16, 154, Ui.FontSmall);
-            fontes.Size = new Size(716, 52);
-            fontes.ForeColor = SemHwInfo() ? Ui.Warn : Ui.Muted;
-            c.Controls.Add(fontes);
+            _blocoFontes = new BlocoDeStatus();
+            _blocoFontes.Rotulo = T.SensorSources;
+            page.Controls.Add(_blocoFontes);
 
-            // Qual painel respondeu. So o Temp 6 Pro Black foi testado; nos
-            // outros modelos do fabricante o aplicativo comanda assim mesmo, e
-            // esta linha e o que a pessoa copia para relatar que funcionou.
-            Label painel = MakeLabel(TextoDoPainel(), 16, 212, Ui.FontSmall);
-            painel.Size = new Size(716, 20);
-            painel.ForeColor = Ui.Muted;
-            c.Controls.Add(painel);
+            _blocoBibliotecas = new BlocoDeStatus();
+            _blocoBibliotecas.Rotulo = T.Libraries;
+            _blocoBibliotecas.Valor = "MIT  ·  MPL 2.0";
+            _blocoBibliotecas.Apoio = T.LibsNote.Replace("\n", " ");
+            page.Controls.Add(_blocoBibliotecas);
 
-            Card cr = new Card();
-            cr.Title = T.ProjectAndCredits;
-            cr.SetBounds(0, 262, 736, 140);
-            page.Controls.Add(cr);
+            // Sem o motor do HWiNFO, o aviso inteiro fica a mostra embaixo dos
+            // blocos: antes perder o HWiNFO so aparecia no log, e o aplicativo
+            // seguia sem temperatura nem potencia da CPU sem dizer por que.
+            _sobreAvisoMotor = MakeLabel(T.EngineMissing, 0, 0, Ui.FontSmall);
+            _sobreAvisoMotor.ForeColor = Ui.Warn;
+            page.Controls.Add(_sobreAvisoMotor);
 
-            Label autor = MakeLabel(T.CreatedBy, 16, 48, Ui.FontMed);
-            autor.Size = new Size(400, 22);
-            cr.Controls.Add(autor);
-
-            Label repo = MakeLabel(Repositorio, 16, 70, Ui.FontSmall);
-            repo.Size = new Size(500, 20);
-            repo.ForeColor = Ui.Muted;
-            cr.Controls.Add(repo);
-
-            FlatBtn git = new FlatBtn();
-            git.Text = T.OpenOnGitHub;
-            git.SetBounds(16, 96, 150, 32);
-            git.Click += delegate { Abrir(Repositorio); };
-            cr.Controls.Add(git);
-
-            // duas linhas, e nao tres: uma terceira invade o rotulo do
-            // repositorio, que fica logo acima e atravessa esta coluna
-            Label libs = MakeLabel(T.LibsNote, 190, 92, Ui.FontSmall);
-            libs.Size = new Size(552, 40);
-            libs.ForeColor = Ui.Muted;
-            cr.Controls.Add(libs);
+            AtualizarSituacaoDoSobre();
 
             Card cd = new Card();
             cd.Title = T.DisclaimerTitle;
-            cd.SetBounds(0, 414, 736, 278);
+            _cartaoIsencao = cd;
             page.Controls.Add(cd);
 
-            Label disc = MakeLabel(T.Disclaimer, 16, 46, Ui.FontSmall);
-            disc.Size = new Size(724, 224);
-            disc.ForeColor = Ui.Muted;
-            cd.Controls.Add(disc);
+            // As quebras de linha do texto foram feitas para a largura antiga;
+            // os paragrafos ficam e o resto reflui na largura da janela.
+            string isencao = System.Text.RegularExpressions.Regex.Replace(T.Disclaimer, @"(?<!\n)\n(?!\n)", " ");
+            _sobreIsencao = MakeLabel(isencao, 16, 46, Ui.FontSmall);
+            _sobreIsencao.ForeColor = Ui.Muted;
+            cd.Controls.Add(_sobreIsencao);
 
             return page;
+        }
+
+        private Pagina _pgSobre;
+        private CartaoDeIdentidade _cartaoIdentidade;
+        private Label _sobreFrase, _sobreAutor, _sobreAvisoMotor, _sobreIsencao;
+        private FlatBtn _sobreGitHub;
+        private BlocoDeStatus _blocoPainel, _blocoFontes, _blocoBibliotecas;
+        private Card _cartaoIsencao;
+
+        /// <summary>O icone em 128 px, e nao o da barra de tarefas esticado: a 88 px o de 32 borra.</summary>
+        private static Image ImagemDoIcone()
+        {
+            Image grande = Assets.AppImage(128);
+            if (grande != null) return grande;
+            try { return Assets.AppIcon != null ? Assets.AppIcon.ToBitmap() : null; }
+            catch (Exception ex) { Log.Error("icone do Sobre", ex); return null; }
+        }
+
+        /// <summary>
+        /// Painel e fontes de sensores, contados de novo a cada arranjo da pagina.
+        ///
+        /// As fontes saem da propria lista de sensores em vez de perguntar ao
+        /// motor: e a mesma informacao, vinda de onde ela e verdade - se a fonte
+        /// nao publicou nada, ela nao esta ali, independentemente do que a camada
+        /// de baixo ache que abriu.
+        /// </summary>
+        private void AtualizarSituacaoDoSobre()
+        {
+            if (_blocoPainel == null) return;
+            string id = HidPanel.UltimoIdentificado;
+            bool achou = !string.IsNullOrEmpty(id);
+            _blocoPainel.Valor = achou ? id : T.PanelNone;
+            _blocoPainel.Ponto = achou ? (Color?)PeripheralStrip.Verde : Ui.Faint;
+            _blocoPainel.Apoio = !achou ? "" : id == "VID 1A2C / PID 4984" ? T.PanelTested : T.PanelUntested;
+
+            int hw = 0, lhm = 0;
+            foreach (SensorEntry s in _sensors)
+                if (s.Source == "HWiNFO") hw++; else lhm++;
+            _blocoFontes.Valor = T.SensorsFrom("HWiNFO", hw);
+            _blocoFontes.CorDoValor = hw == 0 ? (Color?)Ui.Warn : null;
+            _blocoFontes.Ponto = hw == 0 ? Ui.Warn : PeripheralStrip.Verde;
+            _blocoFontes.Apoio = T.SensorsFrom("LibreHardwareMonitor", lhm);
+            _sobreAvisoMotor.Visible = hw == 0;
+
+            _blocoPainel.Invalidate();
+            _blocoFontes.Invalidate();
+        }
+
+        /// <summary>
+        /// Identidade em cima, os tres blocos lado a lado (empilhados em janela
+        /// estreita), o aviso do motor quando falta e a isencao inteira no fim.
+        /// </summary>
+        private void ArranjarSobre()
+        {
+            if (_pgSobre == null || !_pgSobre.Visible) return;
+            AtualizarSituacaoDoSobre();
+            int disp = _pgSobre.Width - Pagina.LarguraDaBarra - 4;
+            int width = Math.Max(300, Math.Min(LarguraMaxDaPagina, disp));
+            int x = Math.Max(0, (disp - width) / 2);
+
+            // identidade
+            int col = CartaoDeIdentidade.ColunaDoTexto;
+            int texto = Math.Max(120, width - col - CartaoDeIdentidade.Pad);
+            int y = CartaoDeIdentidade.Pad + 38;
+            int hFrase = _sobreFrase.GetPreferredSize(new Size(texto, 0)).Height;
+            _sobreFrase.SetBounds(col, y, texto, hFrase);
+            y = _sobreFrase.Bottom + 14;
+            _sobreGitHub.Location = new Point(col, y);
+            _sobreAutor.SetBounds(_sobreGitHub.Right + 14, y, Math.Max(40, width - _sobreGitHub.Right - 14 - CartaoDeIdentidade.Pad), 32);
+            int alturaId = Math.Max(CartaoDeIdentidade.Pad * 2 + CartaoDeIdentidade.LadoDoIcone, _sobreGitHub.Bottom + CartaoDeIdentidade.Pad);
+            _cartaoIdentidade.SetBounds(x, 0, width, alturaId);
+            y = _cartaoIdentidade.Bottom + 12;
+
+            // blocos
+            BlocoDeStatus[] blocos = { _blocoPainel, _blocoFontes, _blocoBibliotecas };
+            if (width >= 600)
+            {
+                int larg = (width - 2 * 12) / 3;
+                int alto = 0;
+                foreach (BlocoDeStatus b in blocos) alto = Math.Max(alto, b.AlturaPara(larg));
+                for (int i = 0; i < 3; i++)
+                    blocos[i].SetBounds(x + i * (larg + 12), y, i == 2 ? width - 2 * (larg + 12) : larg, alto);
+                y += alto + 12;
+            }
+            else
+                foreach (BlocoDeStatus b in blocos)
+                {
+                    b.SetBounds(x, y, width, b.AlturaPara(width));
+                    y = b.Bottom + 12;
+                }
+
+            if (_sobreAvisoMotor.Visible)
+            {
+                _sobreAvisoMotor.SetBounds(x + 2, y - 4, width - 4, _sobreAvisoMotor.GetPreferredSize(new Size(width - 4, 0)).Height);
+                y = _sobreAvisoMotor.Bottom + 12;
+            }
+
+            // isencao
+            int w = width - 32;
+            _sobreIsencao.SetBounds(16, 46, w, _sobreIsencao.GetPreferredSize(new Size(w, 0)).Height);
+            _cartaoIsencao.SetBounds(x, y, width, _sobreIsencao.Bottom + 16);
+
+            _pgSobre.Sincronizar();
         }
 
         /// <summary>
@@ -4190,31 +4293,6 @@ namespace MhiagosControl
         private const string Repositorio = "https://github.com/Feurrado/MhiagosControl";
 
         /// <summary>
-        /// Resumo de quem respondeu, contado pela procedencia das entradas.
-        ///
-        /// Sai da propria lista de sensores em vez de perguntar ao motor: e a
-        /// mesma informacao, vinda de onde ela e verdade - se a fonte nao
-        /// publicou nada, ela nao esta ali, independentemente do que a camada
-        /// de baixo ache que abriu.
-        /// </summary>
-        private string TextoDasFontes()
-        {
-            int hw = 0, lhm = 0;
-            foreach (SensorEntry s in _sensors)
-                if (s.Source == "HWiNFO") hw++; else lhm++;
-
-            string linha = T.SensorsFrom("HWiNFO", hw) + "   ·   " + T.SensorsFrom("LibreHardwareMonitor", lhm);
-            return hw == 0 ? linha + "\n" + T.EngineMissing : linha;
-        }
-
-        private static string TextoDoPainel()
-        {
-            string id = HidPanel.UltimoIdentificado;
-            if (string.IsNullOrEmpty(id)) return T.PanelNotFound;
-            return T.PanelFound(id) + (id == "VID 1A2C / PID 4984" ? "" : "   ·   " + T.PanelUntested);
-        }
-
-        /// <summary>
         /// So o identificador, sem o prefixo "Painel:".
         ///
         /// Na tela de bordo o rotulo da linha ja diz "Painel", e o texto vinha
@@ -4225,12 +4303,6 @@ namespace MhiagosControl
         {
             string id = HidPanel.UltimoIdentificado;
             return string.IsNullOrEmpty(id) ? T.PanelNotFound : id;
-        }
-
-        private bool SemHwInfo()
-        {
-            foreach (SensorEntry s in _sensors) if (s.Source == "HWiNFO") return false;
-            return true;
         }
 
         private static void Abrir(string url)
@@ -4299,6 +4371,9 @@ namespace MhiagosControl
         {
             if (_idleNote == null) return;
             _idleNote.Text = _tgIdle.Checked ? T.MinutesIdle : T.Off;
+            // na largura do texto de agora, para o interruptor ficar colado nele
+            _idleNote.Width = TextRenderer.MeasureText(_idleNote.Text, _idleNote.Font).Width + 8;
+            ArrangeSettings();
         }
 
         private void OnToggleAutostart(object sender, EventArgs e)
@@ -4594,6 +4669,7 @@ namespace MhiagosControl
             if (_tick != null) { _tick.Stop(); _tick.Dispose(); }
             if (_noteTimer != null) { _noteTimer.Stop(); _noteTimer.Dispose(); }
             _dicaDoWidget.Dispose();
+            _dicaDaConfig.Dispose();
 
             // Filtro de mensagens e do Application, e nao da janela: esquecer de
             // tirar deixaria um filtro morto examinando toda mensagem do processo

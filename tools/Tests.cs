@@ -1708,6 +1708,9 @@ namespace MhiagosControl
                 // "Widget" e o nome do recurso nos dois idiomas, como no menu da
                 // bandeja e no proprio cartao.
                 "WidgetButton",
+
+                // Sigla igual nos dois idiomas, titulo de grupo das Configuracoes.
+                "SettingsFps",
             });
 
             string antes = T.Language;
