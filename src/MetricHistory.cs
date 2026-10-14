@@ -35,8 +35,9 @@ namespace MhiagosControl
         /// <summary>Baldes guardados por leitura: seis horas.</summary>
         public const int Baldes = 4320;
 
-        /// <summary>Janelas oferecidas na interface, em segundos.</summary>
-        public static readonly int[] Janelas = { 600, 3600, 21600 };
+        /// <summary>Menor e maior janela que o navegador da aba Metricas aceita.</summary>
+        public const int JanelaMinima = 60;
+        public const int JanelaMaxima = Baldes * PassoSeg;
 
         public const int JanelaPadrao = 600;
 
@@ -315,6 +316,19 @@ namespace MhiagosControl
         /// </summary>
         public static int Janela(string id, int segundos, ref float[] destino)
         {
+            return Janela(id, segundos, 0, ref destino);
+        }
+
+        /// <summary>
+        /// A janela que termina no balde fimBalde, ou agora quando ele e zero.
+        ///
+        /// O navegador da aba Metricas fixa o fim pelo indice absoluto do balde,
+        /// e nao por "tantos minutos atras": assim o trecho escolhido fica parado
+        /// enquanto o tempo anda, em vez de escorregar cinco segundos a cada
+        /// balde fechado. O que ja saiu das seis horas guardadas volta como falha.
+        /// </summary>
+        public static int Janela(string id, int segundos, long fimBalde, ref float[] destino)
+        {
             int n = segundos / PassoSeg;
             if (n < 2) n = 2;
             if (n > Baldes) n = Baldes;
@@ -323,14 +337,34 @@ namespace MhiagosControl
             lock (_trava)
             {
                 Serie s;
-                if (string.IsNullOrEmpty(id) || !_series.TryGetValue(id, out s))
+                long atras = fimBalde > 0 ? (_balde - 1) - fimBalde : 0;
+                if (atras < 0) atras = 0;
+                if (string.IsNullOrEmpty(id) || !_series.TryGetValue(id, out s) || atras >= Baldes)
                 {
                     for (int i = 0; i < n; i++) destino[i] = float.NaN;
                     return n;
                 }
-                Array.Copy(s.V, Baldes - n, destino, 0, n);
+                // indice em V do ultimo ponto pedido, e do primeiro
+                int ultimo = Baldes - 1 - (int)atras;
+                int primeiro = ultimo - n + 1;
+                int falta = primeiro < 0 ? -primeiro : 0;
+                for (int i = 0; i < falta; i++) destino[i] = float.NaN;
+                Array.Copy(s.V, primeiro + falta, destino, falta, n - falta);
             }
             return n;
+        }
+
+        /// <summary>Indice absoluto do ultimo balde fechado, o "agora" das curvas.</summary>
+        public static long UltimoBalde
+        {
+            get { lock (_trava) return _balde > 0 ? _balde - 1 : BaldeAgora() - 1; }
+        }
+
+        /// <summary>Instante local do fim de um balde absoluto.</summary>
+        public static DateTime HoraDoBalde(long balde)
+        {
+            return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                   .AddSeconds((double)balde * PassoSeg).ToLocalTime();
         }
 
         /// <summary>
@@ -351,22 +385,31 @@ namespace MhiagosControl
                    .AddSeconds((double)b * PassoSeg).ToLocalTime();
         }
 
-        /// <summary>Nome da janela para a interface: "10 min", "1 h", "6 h".</summary>
+        /// <summary>Nome da janela para a interface: "10 min", "1 h 30 min", "6 h".</summary>
         public static string NomeDaJanela(int segundos)
         {
             if (segundos >= 3600)
             {
                 int h = segundos / 3600;
-                return h + " h";
+                int m = (segundos % 3600) / 60;
+                return m == 0 ? h + " h" : h + " h " + m + " min";
             }
+            if (segundos < 60) return segundos + " s";
             return (segundos / 60) + " min";
         }
 
-        /// <summary>A janela valida mais proxima da pedida, para configuracao antiga ou adulterada.</summary>
+        /// <summary>
+        /// A janela pedida, se estiver entre um minuto e seis horas, alinhada ao
+        /// passo; o padrao para configuracao antiga ou adulterada.
+        ///
+        /// Antes so passavam 10 min, 1 h e 6 h, os tres botoes. O navegador
+        /// escolhe qualquer tamanho, e uma configuracao de 25 minutos e
+        /// legitima.
+        /// </summary>
         public static int JanelaValida(int segundos)
         {
-            foreach (int j in Janelas) if (j == segundos) return j;
-            return JanelaPadrao;
+            if (segundos < JanelaMinima || segundos > JanelaMaxima) return JanelaPadrao;
+            return segundos - segundos % PassoSeg;
         }
 
         // ---------------- disco ----------------

@@ -912,6 +912,11 @@ namespace MhiagosControl
         public static string BatLastDischarge { get { return P("Última descarga completa", "Last full discharge"); } }
         public static string BatMeasuring { get { return P("medindo (precisa de 10% gastos)", "measuring (needs 10% used)"); } }
         public static string BatNotSeenYet { get { return P("ainda não registrada", "not recorded yet"); } }
+        public static string NoReadingFor(TimeSpan t)
+        {
+            string d = t.TotalSeconds < 60 ? (int)t.TotalSeconds + " s" : Duracao(t);
+            return P("sem leitura · " + d, "no reading · " + d);
+        }
         public static string BatNoCurve { get { return P("a curva aparece com as primeiras leituras", "the curve shows up with the first readings"); } }
         public static string ByGHub(int horas) { return P("G HUB: " + horas + " h", "G HUB: " + horas + " h"); }
         public static string UseHours(string duracao) { return P(duracao + " de uso", duracao + " of use"); }
@@ -926,6 +931,9 @@ namespace MhiagosControl
         public static string Today { get { return P("hoje", "today"); } }
         public static string Yesterday { get { return P("ontem", "yesterday"); } }
         public static string Now { get { return P("agora", "now"); } }
+        public static string NavNow { get { return P("agora", "now"); } }
+        public static string NavLive { get { return P("ao vivo", "live"); } }
+        public static string NavBackToLive { get { return P("Voltar ao vivo", "Back to live"); } }
         public static string HoursAgo(int h) { return P(h + " h atrás", h + " h ago"); }
         // Resumo do cartao de bateria
         public static string StatusCharging { get { return P("Carregando", "Charging"); } }

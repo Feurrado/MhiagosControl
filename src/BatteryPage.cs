@@ -538,8 +538,9 @@ namespace MhiagosControl
                     if (x1 > x0) g.FillRectangle(sombra, x0, area.Y, x1 - x0, area.Height);
                 }
 
-            // A curva quebra onde houve lacuna grande: app fechado ou aparelho
-            // desligado nao e uma reta ligando dois pontos distantes.
+            // A curva cheia quebra onde houve lacuna grande - app fechado ou
+            // aparelho desligado - e a lacuna ganha uma ponte tracejada logo
+            // abaixo, para nao passar por medida.
             List<List<PointF>> trechos = new List<List<PointF>>();
             List<PointF> pts = new List<PointF>();
             DateTime? anterior = null;
@@ -562,6 +563,21 @@ namespace MhiagosControl
             {
                 linha.LineJoin = LineJoin.Round;
                 foreach (List<PointF> t in trechos) Tracar(g, linha, t, area);
+            }
+
+            // Entre dois trechos, uma ponte tracejada e apagada. Quase sempre e
+            // o aparelho dormindo: o receptor do X11 nao informa bateria com o
+            // mouse parado, e a carga antes e depois e a mesma. Deixar o buraco
+            // fazia parecer que o grafico tinha perdido dados.
+            using (Pen ponte = new Pen(Color.FromArgb(120, cor), 1.6f))
+            {
+                ponte.DashPattern = new float[] { 3f, 3f };
+                for (int k = 0; k + 1 < trechos.Count; k++)
+                {
+                    List<PointF> a = trechos[k], b = trechos[k + 1];
+                    if (a.Count == 0 || b.Count == 0) continue;
+                    g.DrawLine(ponte, a[a.Count - 1], b[0]);
+                }
             }
 
             if (chegaAgora)

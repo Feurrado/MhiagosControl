@@ -3173,7 +3173,10 @@ namespace MhiagosControl
         private readonly List<int> _cardTamanhos = new List<int>();
 
         private FlatBtn _btAddMetrica, _btPadraoMetrica, _btPerfisMetrica;
-        private Segmented _segJanela;
+        private NavegadorDeJanela _navJanela;
+
+        /// <summary>Fim do trecho escolhido no navegador; sobrevive a remontagem da grade.</summary>
+        private long _navFim = 0;
         private Label _lbDicaMetricas, _lbSemMetricas;
         private bool _arranjando = false;
 
@@ -3590,14 +3593,13 @@ namespace MhiagosControl
             // dois cartoes em escalas de tempo diferentes nao diz nada, e e
             // exatamente o que uma escolha por cartao permitiria fazer sem
             // perceber.
-            _segJanela = new Segmented();
-            string[] nomes = new string[MetricHistory.Janelas.Length];
-            for (int i = 0; i < nomes.Length; i++)
-                nomes[i] = MetricHistory.NomeDaJanela(MetricHistory.Janelas[i]);
-            _segJanela.SetItems(nomes);
-            _segJanela.SelectedIndex = IndiceDaJanela();
-            _segJanela.SelectedIndexChanged += delegate { TrocarJanela(); };
-            _pgMetricas.Controls.Add(_segJanela);
+            _navJanela = new NavegadorDeJanela();
+            _navJanela.Janela = MetricHistory.JanelaValida(_cfg.MetricRange);
+            _navJanela.FimBalde = _navFim;
+            _navJanela.SensorId = _cfg.MetricIds.Count > 0 ? _cfg.MetricIds[0] : "";
+            _navJanela.Mudou += delegate { TrocarJanela(); };
+            _navJanela.Confirmado += delegate { GravarJanela(); };
+            _pgMetricas.Controls.Add(_navJanela);
 
             _lbDicaMetricas = MakeLabel(T.MetricsHint, 0, 0, Ui.FontSmall);
             _lbDicaMetricas.ForeColor = Ui.Faint;
@@ -3623,6 +3625,7 @@ namespace MhiagosControl
                 c.Sub = s == null ? id : MetricPicker.Rodape(s);
                 c.Unidade = s == null ? "" : s.EffectiveUnit;
                 c.Janela = janela;
+                c.FimBalde = _navFim;
                 float? at, pe;
                 MetricPicker.Faixas(c.Unidade, c.SensorId, out at, out pe);
                 c.Atencao = at; c.Perigo = pe;
@@ -3697,10 +3700,10 @@ namespace MhiagosControl
                 porLinha = Math.Min(porLinha, Math.Max(1, (disp - 4 + Esp) / (140 + Esp)));
                 int larg = (disp - 4 - (porLinha - 1) * Esp) / porLinha;
                 int x = 2, y = 0;
-                foreach (Control button in new Control[] { _btAddMetrica, _btPadraoMetrica, _btPerfisMetrica, _segJanela })
+                foreach (Control button in new Control[] { _btAddMetrica, _btPadraoMetrica, _btPerfisMetrica })
                 {
                     if (button == null) continue;
-                    int width = button == _segJanela ? 186 : 150;
+                    int width = 150;
                     if (x + width > disp) { x = 2; y += 40; }
                     button.SetBounds(x, y, width, 32);
                     x += width + 6;
@@ -3712,6 +3715,12 @@ namespace MhiagosControl
                     _lbDicaMetricas.SetBounds(w >= 150 ? x + 6 : 2, y + 4, w >= 150 ? w : 1, w >= 150 ? 30 : 1);
                 }
                 y += 44;
+
+                if (_navJanela != null)
+                {
+                    _navJanela.SetBounds(2, y, disp - 4, 72);
+                    y += 72 + Esp;
+                }
 
                 if (_lbSemMetricas != null) _lbSemMetricas.SetBounds(4, y + 8, disp - 8, 40);
 
@@ -3751,14 +3760,6 @@ namespace MhiagosControl
             _pgMetricas.Sincronizar();
         }
 
-        private int IndiceDaJanela()
-        {
-            int j = MetricHistory.JanelaValida(_cfg.MetricRange);
-            for (int i = 0; i < MetricHistory.Janelas.Length; i++)
-                if (MetricHistory.Janelas[i] == j) return i;
-            return 0;
-        }
-
         /// <summary>
         /// Troca a janela de tempo sem remontar a grade.
         ///
@@ -3768,15 +3769,27 @@ namespace MhiagosControl
         /// </summary>
         private void TrocarJanela()
         {
-            if (_segJanela == null) return;
-            int i = _segJanela.SelectedIndex;
-            if (i < 0 || i >= MetricHistory.Janelas.Length) return;
-
-            _cfg.MetricRange = MetricHistory.Janelas[i];
-            GravarMetricas();
-            foreach (MetricCard c in _cards) { c.Janela = _cfg.MetricRange; c.Invalidate(); }
+            if (_navJanela == null) return;
+            _navFim = _navJanela.FimBalde;
+            foreach (MetricCard c in _cards)
+            {
+                c.Janela = _navJanela.Janela;
+                c.FimBalde = _navJanela.FimBalde;
+                c.Invalidate();
+            }
             // A Visao geral fica de fora de proposito: tem janela propria,
             // curta, para os picos aparecerem nos blocos estreitos.
+        }
+
+        /// <summary>
+        /// Grava o tamanho escolhido ao soltar o arraste, e nao a cada pixel.
+        /// A posicao no tempo nao e gravada: reabrir a janela volta ao vivo.
+        /// </summary>
+        private void GravarJanela()
+        {
+            if (_navJanela == null || _cfg.MetricRange == _navJanela.Janela) return;
+            _cfg.MetricRange = _navJanela.Janela;
+            GravarMetricas();
         }
 
         private void AdicionarMetrica()
@@ -3866,6 +3879,7 @@ namespace MhiagosControl
                 float value;
                 card.Push(snap.TryGetValue(id, out value) ? (float?)value : null);
             }
+            if (_navJanela != null && _navJanela.Visible) _navJanela.Invalidate();
         }
 
         private static string ReadingStateText(ReadingState state)
