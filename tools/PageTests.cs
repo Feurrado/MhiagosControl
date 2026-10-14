@@ -477,7 +477,15 @@ namespace MhiagosControl
                             Verdade(aplicar.Parent == barra && aplicar.Right <= barra.Width, "Aplicar mora na barra, dentro dela");
                             List<FlatBtn> botoes = (List<FlatBtn>)Field(form, "_botoesDePerfil");
                             Igual(6, botoes.Count, "os seis botoes de perfil estao na barra");
-                            if (largura == 1300) Igual(botoes[0].Top, aplicar.Top, "em janela larga a barra cabe numa linha so");
+                            // A janela nao passa do tamanho da tela (a do GitHub Actions e
+                            // pequena), entao o "larga" e medido pela barra, e nao pelo pedido.
+                            if (barra.Width >= 900) Igual(botoes[0].Top, aplicar.Top, "em janela larga a barra cabe numa linha so");
+                            foreach (Control b in barra.Controls)
+                            {
+                                Verdade(b.Left >= 0 && b.Right <= barra.Width && b.Bottom <= barra.Height, "botao dentro da barra " + sufixo);
+                                foreach (Control o in barra.Controls)
+                                    if (o != b) Verdade(!b.Bounds.IntersectsWith(o.Bounds), "botoes da barra sem sobrepor " + sufixo);
+                            }
                             Igual(T.AlreadyActive, aplicar.Text, "perfil ja ativo: o botao diz isso, curto");
                             Toggle girar = (Toggle)Field(form, "_tgRotate");
                             NumberBox segundos = (NumberBox)Field(form, "_rotSecs");
