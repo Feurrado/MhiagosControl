@@ -242,7 +242,7 @@ namespace MhiagosControl
             y = _profilesPreviewCard.Bottom + Esp;
 
             // ---- perfil por jogo e rodizio
-            bool juntos = width >= 820;
+            bool juntos = width >= 760;
             int gw = juntos ? (width - Esp) * 3 / 5 : width;
             int rw = juntos ? width - gw - Esp : width;
 

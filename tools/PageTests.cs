@@ -418,7 +418,7 @@ namespace MhiagosControl
                     using (SettingsForm form = BugForm(config, new FreshData()))
                     {
                         NavBar nav = (NavBar)Field(form, "_nav");
-                        foreach (int largura in new int[] { 1100, 880 })
+                        foreach (int largura in new int[] { 1300, 880 })
                         {
                             form.Size = new Size(largura, 760);
                             string sufixo = language + "-" + largura;
@@ -442,7 +442,7 @@ namespace MhiagosControl
                                 "backup e diagnostico viraram linhas do grupo Dados");
                             LinhaDeOpcao idioma = (LinhaDeOpcao)itens[1];
                             Verdade(idioma.Controls.Contains((Control)Field(form, "_lang")), "o seletor de idioma fica na linha do Idioma");
-                            if (largura == 1100) Verdade(idioma.EmUmaLinha, "em janela larga o controle fica a direita do texto");
+                            if (largura == 1300) Verdade(idioma.EmUmaLinha, "em janela larga o controle fica a direita do texto");
                             CaptureEvolution(form, "layout-config-" + sufixo);
 
                             // ---- 6A
@@ -469,15 +469,15 @@ namespace MhiagosControl
                             Card lista = (Card)Field(form, "_profilesListCard"), previa = (Card)Field(form, "_profilesPreviewCard");
                             Card barra = (Card)Field(form, "_barraDePerfis");
                             Verdade(barra.Top == 0 && lista.Top > barra.Bottom, "a barra de acoes vem antes de tudo");
-                            if (largura == 1100) Verdade(lista.Top == previa.Top && lista.Height == previa.Height, "lista e previa com a mesma altura " + sufixo);
+                            if (largura == 1300) Verdade(lista.Top == previa.Top && lista.Height == previa.Height, "lista e previa com a mesma altura " + sufixo);
                             Card jogo = (Card)Field(form, "_cardGame"), rodizio = (Card)Field(form, "_cardRotation");
-                            if (largura == 1100) Verdade(jogo.Top == rodizio.Top && jogo.Height == rodizio.Height && rodizio.Left > jogo.Right,
+                            if (largura == 1300) Verdade(jogo.Top == rodizio.Top && jogo.Height == rodizio.Height && rodizio.Left > jogo.Right,
                                 "Perfil por jogo e Rodizio lado a lado " + sufixo);
                             FlatBtn aplicar = (FlatBtn)Field(form, "_btnApply");
                             Verdade(aplicar.Parent == barra && aplicar.Right <= barra.Width, "Aplicar mora na barra, dentro dela");
                             List<FlatBtn> botoes = (List<FlatBtn>)Field(form, "_botoesDePerfil");
                             Igual(6, botoes.Count, "os seis botoes de perfil estao na barra");
-                            if (largura == 1100) Igual(botoes[0].Top, aplicar.Top, "em janela larga a barra cabe numa linha so");
+                            if (largura == 1300) Igual(botoes[0].Top, aplicar.Top, "em janela larga a barra cabe numa linha so");
                             Igual(T.AlreadyActive, aplicar.Text, "perfil ja ativo: o botao diz isso, curto");
                             Toggle girar = (Toggle)Field(form, "_tgRotate");
                             NumberBox segundos = (NumberBox)Field(form, "_rotSecs");
