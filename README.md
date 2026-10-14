@@ -1,13 +1,17 @@
 ﻿# Mhiagos Control
 
 Driver alternativo para o painel dos **air coolers Rise Mode Temp 6, Temp 6 Pro
-e Temp 8**, substituindo o software original *CPU TEMP Monitor*
-(SHENZHEN SHINETEK / marca Ocypus).
+e Temp 8**, no lugar do software original *CPU TEMP Monitor*
+(SHENZHEN SHINETEK, marca Ocypus).
 
-Permite exibir **qualquer sensor** do sistema nos dois painéis de 3 dígitos,
-em vez das duas métricas fixas que o software de fábrica oferece — com perfis
-salvos, rodízio entre eles, perfil automático por jogo e apagamento quando
-ninguém está usando o computador.
+Mostra **qualquer sensor** do sistema nos dois mostradores de 3 dígitos, em vez
+das duas métricas fixas do software de fábrica. Tem perfis salvos, rodízio entre
+eles, perfil automático por jogo e apagamento quando ninguém está usando o
+computador. Além do cooler, acompanha a bateria do headset e do mouse sem fio,
+guarda seis horas de histórico das leituras e monta o retrato completo da
+máquina.
+
+![Visão geral](docs/visaogeral.png)
 
 > A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
 > Windows na primeira execução e trocável em *Configurações*.
@@ -23,13 +27,48 @@ Baixe o `MhiagosControlSetup.exe` na
 **[página de releases](https://github.com/Feurrado/MhiagosControl/releases/latest)**
 e execute **como administrador**.
 
-Um executável só, sem dependências: instala, cria o atalho e registra a entrada
-em *Aplicativos Instalados*. O mesmo arquivo desinstala depois, conservando os
-perfis. Rodar de novo por cima de uma instalação existente atualiza no lugar.
+É um executável só, sem dependências: instala, cria o atalho e registra a
+entrada em *Aplicativos Instalados*. O mesmo arquivo desinstala depois,
+conservando os perfis. Rodar de novo por cima de uma instalação existente
+atualiza no lugar.
 
-> O executável não é assinado — o SmartScreen vai mostrar *"Editor
-> desconhecido"*, e é preciso clicar em **Mais informações → Executar assim
-> mesmo**.
+> O executável não é assinado. O SmartScreen vai mostrar *"Editor
+> desconhecido"*, e é preciso clicar em **Mais informações** e depois em
+> **Executar assim mesmo**.
+
+---
+
+## Novidades
+
+**2.22**
+- **Baterias** abre direto nos aparelhos, com o nome completo de cada um
+  (*Logitech G325 Lightspeed* e *Attack Shark X11*). As opções do widget
+  ficam num painel recolhido, atrás do botão **Widget** no alto da página.
+- **Especificações** mostra a marca de quem montou a placa de vídeo
+  (*Sapphire Radeon RX 580 8 GB*) e acende cada slot de memória no lugar
+  físico certo, com o nome (A1, A2, B1, B2) e o pente daquele slot ao passar o
+  mouse.
+- Em **Métricas**, a faixa do navegador de período segue o cartão clicado.
+- **Configurações** em linhas no estilo do Windows 11, **Sobre** com cartão de
+  identidade e **Perfis** em duas colunas.
+
+**2.21**
+- **Visão geral** com janela de 5 minutos, para os picos aparecerem.
+- Gráficos sem buracos: falhas curtas somem e períodos sem medida viram uma
+  ponte tracejada.
+- **Métricas** troca os três botões de período por um navegador arrastável
+  sobre as seis horas gravadas.
+- **Especificações** em mosaico: peças em destaque, slots de memória e discos
+  em barras.
+
+**2.18 a 2.20**
+- Bateria do headset e do mouse na Visão geral, na bandeja e na página
+  **Baterias**, com histórico, previsão e saúde da bateria.
+- Widget de bateria com efeito de vidro na área de trabalho.
+- Ícones do G325 e do X11 desenhados a partir das fotos dos aparelhos.
+
+O histórico completo de versões está nas
+[releases](https://github.com/Feurrado/MhiagosControl/releases).
 
 ---
 
@@ -43,48 +82,65 @@ O painel é identificado pelo fabricante (**VID `1A2C`**, Shenzhen Shinetek)
 somado à coleção HID *vendor-defined* `FF01`, que nenhum dispositivo comum
 expõe. A mesma placa controladora sai em vários modelos da linha, com o mesmo
 software de fábrica, então o casamento não depende do identificador exato de um
-modelo.
+modelo. O modelo testado é o **Temp 6 Pro Black** (`VID 1A2C / PID 4984`).
 
-A aba *Sobre* mostra a versão e o `VID / PID` do painel encontrado — é a linha para incluir
-numa [issue](https://github.com/Feurrado/MhiagosControl/issues) se algo sair
-diferente do esperado no seu aparelho.
+A página *Sobre* mostra a versão e o `VID / PID` do painel encontrado. É a linha
+para incluir numa [issue](https://github.com/Feurrado/MhiagosControl/issues) se
+algo sair diferente do esperado no seu aparelho.
 
 ---
 
 ## Telas
 
-A janela tem oito páginas na barra lateral e abre na primeira delas, a
-**Visão geral** de fábrica. A ordem é sua: arraste um item para cima ou para
-baixo (ou use Ctrl+↑ e Ctrl+↓), e ela fica gravada.
+A janela tem oito páginas na barra lateral e abre na **Visão geral**. A ordem é
+sua: arraste um item para cima ou para baixo (ou use Ctrl+↑ e Ctrl+↓), e ela
+fica gravada.
 
 | Página | Responde |
 |---|---|
 | **Visão geral** | como a máquina está agora e o que o cooler está mostrando |
+| **Baterias** | quanto dura a carga do headset, do mouse e dos aparelhos Bluetooth |
 | **Painéis** | qual sensor vai para cada mostrador, com escala, unidade e prévia |
+| **Perfis** | conjuntos salvos, rodízio, exportação e perfil por jogo |
 | **Métricas** | cartões com histórico, conjuntos prontos e perfis de grade salvos |
 | **Especificações** | o retrato completo da máquina, no espírito do CPU-Z |
-| **Perfis** | conjuntos salvos, rodízio, exportação e perfil por jogo |
-| **Configurações** | idioma, início automático, ociosidade e a fonte de FPS |
-| **Baterias** | quanto dura a carga do headset, do mouse e dos aparelhos Bluetooth |
+| **Configurações** | idioma, início automático, ociosidade, FPS, backup e diagnóstico |
+| **Sobre** | versão, painel encontrado, fontes de sensores e aviso legal |
 
-*Salvar* e *Fechar* moram no pé da barra lateral, que já é a coluna de comandos;
-recolhida, os dois viram ícone. *Salvar* fica esmaecido quando não há o que
-gravar, em vez de sumir — sumindo, ele levava junto a informação de que existe.
-A janela **redimensiona e lembra o tamanho** entre sessões, conferido contra o
+*Salvar* e *Fechar* moram no pé da barra lateral; recolhida, os dois viram
+ícone. *Salvar* fica esmaecido quando não há o que gravar, em vez de sumir. A
+janela **redimensiona e lembra o tamanho** entre sessões, conferido contra o
 monitor atual.
 
 | | |
 |:--:|:--:|
-| ![Visão geral](docs/visaogeral.png) | ![Painéis](docs/paineis.png) |
-| **Visão geral** — as leituras em destaque com histórico, o mostrador do cooler ao vivo e a curva do que vai para cada painel | **Painéis** — escolha o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça |
-| ![Métricas](docs/metricas.png) | ![Especificações](docs/especificacoes.png) |
-| **Métricas** — a grade de cartões arrastáveis, cada um com número grande, série recente e mínimo, média e máximo da janela | **Especificações** — o retrato da máquina, do stepping do processador à VBIOS da placa e ao tipo de cada disco |
+| ![Baterias](docs/baterias.png) | ![Métricas](docs/metricas.png) |
+| **Baterias**: carga, tempo restante, duração de uma carga cheia e saúde de cada aparelho, com a curva das últimas 48 horas | **Métricas**: a grade de cartões arrastáveis, com o navegador de período no alto seguindo o cartão escolhido |
+| ![Especificações](docs/especificacoes.png) | ![Painéis](docs/paineis.png) |
+| **Especificações**: as peças em destaque, com a marca da placa de vídeo, os slots de memória no lugar e os discos em barras | **Painéis**: o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça |
+| ![Perfis](docs/perfis.png) | ![Configurações](docs/configuracoes.png) |
+| **Perfis**: a lista com rodízio de um lado, a prévia e o perfil por jogo do outro | **Configurações**: uma linha por opção, com a descrição curta e o controle à direita |
 
-Preferências valem para o programa todo; perfis valem para o mostrador. Por
-isso moram em páginas diferentes — as preferências ficavam dentro do *Sobre*,
-entre a identidade do programa e a isenção de responsabilidade, e isso as
-escondia duas vezes: quem procura uma preferência não clica em "Sobre", e quem
-clica em "Sobre" quer créditos, não um formulário.
+> As capturas saem do aplicativo, com as leituras que ele gravou na máquina do
+> autor (um Ryzen 5 5600X com uma Radeon RX 580). O caminho da pasta de dados
+> aparece como `%LOCALAPPDATA%` para não expor o nome de usuário.
+
+### Visão geral
+
+A tela que abre. Em cima, cinco leituras em destaque: temperatura e uso do
+processador e da placa de vídeo, e uso da memória. Cada uma traz os últimos 5
+minutos desenhados atrás e mínimo, média e máximo da janela. Um número sozinho
+não diz se é alto: 72 °C é rotina sob carga e alarme em repouso, e é a curva
+que separa os dois casos.
+
+No centro, o mostrador do cooler ao vivo, com o perfil ativo e o painel
+encontrado; ao lado, as duas leituras que vão para a peça, cada uma com o seu
+histórico. Embaixo, a carga dos periféricos sem fio e uma tira com o retrato da
+máquina: processador com núcleos e threads, placa de vídeo com a memória dela,
+memória instalada, placa-mãe e a versão do Windows.
+
+Nada aqui é editável: cada bloco tem a sua página, a um clique. Clicar num
+aparelho abre a página **Baterias**.
 
 A prévia reproduz a vista superior do cooler e o mostrador de sete segmentos
 como ele é no aparelho: os dois painéis empilhados, `°C`/`°F` sobre `%`/`W`,
@@ -95,98 +151,80 @@ dígitos brancos sem moldura.
 <img src="docs/seletor.png" width="480" alt="Janela de escolha de sensor">
 
 O sensor de cada mostrador é escolhido numa janela dedicada, aberta pelo botão
-*Trocar*. Ali a lista não divide altura com escala, unidade e prévia, então
-cabem duas vezes mais linhas — e as pílulas de categoria reduzem a busca ao
-hardware procurado. A busca por texto casa nome, categoria e tipo, todos os
-termos ao mesmo tempo. Duplo clique ou <kbd>Enter</kbd> confirmam.
+*Trocar* em **Painéis**. Ali a lista não divide altura com escala, unidade e
+prévia, e as pílulas de categoria reduzem a busca ao hardware procurado. A busca
+por texto casa nome, categoria e tipo, todos os termos ao mesmo tempo. Duplo
+clique ou <kbd>Enter</kbd> confirmam.
 
 ### Perfis
 
-Um perfil é um par de sensores salvo junto com unidades e escala.
-A lista mostra o que cada um manda para o mostrador, e selecionar um já exibe a
-prévia sobre a peça antes de *Aplicar perfil* torná-lo o que está valendo —
-aplicar grava na hora, então um perfil "ativo" sempre sobrevive a fechar a
-janela. Todos aparecem também no menu da bandeja, para trocar sem abrir a
-configuração.
+Um perfil é um par de sensores salvo junto com unidades e escala. A lista mostra
+o que cada um manda para o mostrador, e selecionar um já exibe a prévia sobre a
+peça antes de *Aplicar perfil* torná-lo o que está valendo. Aplicar grava na
+hora, então um perfil ativo sempre sobrevive a fechar a janela. Todos aparecem
+também no menu da bandeja, para trocar sem abrir a configuração.
 
 *Exportar* grava o perfil selecionado num `.ini` avulso e *Importar* traz um de
 volta, com nome livre se já houver outro igual. O identificador do sensor
 carrega o modelo do hardware, então um perfil vindo de outra máquina entra com o
-mostrador em branco — e o aplicativo diz isso na hora, em vez de deixar procurar
-defeito onde não há.
+mostrador em branco, e o aplicativo avisa na hora.
 
-### Rodízio
+#### Rodízio
 
 Marcados dois ou mais perfis, o mostrador **gira entre eles** no intervalo
 escolhido. Gira perfis inteiros, e não sensores dentro de um mostrador, porque o
 indicador de unidade é do quadro: `°C`/`°F` em cima e `%`/`W` embaixo valem para
 os dois painéis de uma vez. Girar só o sensor poria watts sob o indicador de
-porcentagem, e o mostrador mentiria sem jeito de perceber.
+porcentagem.
 
 O rodízio altera apenas o que aparece no mostrador; a configuração ativa
 continua intacta e volta a comandar a peça quando a rotação é desligada.
 
-### Perfil por jogo
+#### Perfil por jogo
 
-Na aba Perfis, **Definir como padrão** escolhe o perfil de repouso do mostrador.
-Ligado, o perfil por jogo **troca sozinho** quando um jogo abre e sempre devolve
-esse padrão quando ele fecha. Vem desligado: isto mexe no que aparece na peça sem
-ninguém pedir, e um recurso que age sozinho tem de ser escolhido, não descoberto.
+**Definir como padrão** escolhe o perfil de repouso do mostrador. Ligado, o
+perfil por jogo **troca sozinho** quando um jogo abre e devolve esse padrão
+quando ele fecha. Vem desligado: um recurso que mexe na peça sem ninguém pedir
+tem de ser escolhido, não descoberto.
 
-O casamento é pelo **executável**, não pelo título da janela — título muda com
-patch, idioma e placar, e quebraria justamente quando ninguém está olhando. Toda
-troca automática vai para o log com o motivo, porque quem for procurar por que o
-mostrador mudou tem de achar a resposta escrita. Uma troca manual durante o jogo
-não altera o destino de retorno: ao terminar, o padrão escolhido volta.
+O casamento é pelo **executável**, não pelo título da janela, que muda com
+patch, idioma e placar. Toda troca automática vai para o log com o motivo. Uma
+troca manual durante o jogo não altera o destino de retorno: ao terminar, o
+padrão volta.
 
-Depende do RivaTuner Statistics Server, que é quem identifica o jogo em primeiro
-plano — sem ele o cartão diz isso e desabilita o interruptor, em vez de deixar
-ligada uma opção que nunca age.
-
-### Visão geral
-
-A tela que abre. Em cima, cinco leituras em destaque — temperatura e uso do
-processador e da placa de vídeo, e uso da memória — cada uma com a série recente
-desenhada atrás e a linha de máximo e média embaixo. Um número sozinho não diz se
-é alto: 72 °C é rotina sob carga e alarme em repouso, e é a curva que separa os
-dois casos.
-
-No centro, o mostrador do cooler ao vivo, do lado do perfil ativo e do painel
-encontrado; ao lado dele, as duas leituras que vão para a peça, com o histórico
-de cada uma. Embaixo, uma tira com o retrato da máquina: processador com núcleos
-e threads, placa de vídeo com a memória dela, memória instalada e a versão do
-Windows.
-
-Nada aqui é editável — cada bloco tem a sua aba, a um clique. As especificações
-saem do que a lista de sensores já publicou mais o que o próprio sistema
-responde: nenhuma consulta WMI, que custaria centenas de milissegundos na
-abertura. A linha da placa-mãe só aparece quando a fonte publica um nome que
-identifique alguma placa.
+Depende do RivaTuner Statistics Server, que identifica o jogo em primeiro
+plano. Sem ele o cartão avisa e desabilita o interruptor.
 
 ### Bateria dos periféricos
 
-Acima das especificações, a **Visão geral** mostra a carga dos periféricos sem
-fio: imagem, porcentagem, uma pilha que fica verde com um raio quando o aparelho
-está no cabo e, embaixo, quanto ainda resta de uso (ou em quanto tempo enche).
-Passar o mouse no ícone da bandeja mostra as mesmas porcentagens, e o ícone
-ganha uma pilhinha vermelha quando algum aparelho fora do cabo chega a 30%.
+A **Visão geral** mostra a carga dos periféricos sem fio: imagem, porcentagem,
+uma pilha que fica verde com um raio quando o aparelho está no cabo e, embaixo,
+quanto ainda resta de uso (ou em quanto tempo enche). Passar o mouse no ícone da
+bandeja mostra as mesmas porcentagens, e o ícone ganha uma pilha vermelha quando
+algum aparelho fora do cabo chega a 30%.
 
 | Aparelho | De onde vem a carga |
 |---|---|
-| **Logitech G325** (e o que mais o G HUB mostrar) | serviço local do G HUB; **o G HUB precisa estar aberto** |
+| **Logitech G325 Lightspeed** (e o que mais o G HUB mostrar) | serviço local do G HUB; **o G HUB precisa estar aberto** |
 | **Attack Shark X11** | mensagem que o receptor 2.4 GHz manda sozinho a cada 2 s |
 | **Bluetooth** | a mesma informação que o Windows mostra em Configurações |
 
-Nada disso pede administrador nem escreve nos aparelhos. Clicar num aparelho
-abre a página **Baterias**; lá, clicar na imagem abre o app dele (G HUB, Attack
-Shark ou o painel de Bluetooth do Windows).
+Nada disso pede administrador nem escreve nos aparelhos. Na página **Baterias**,
+clicar na imagem abre o app do aparelho (G HUB, Attack Shark ou o painel de
+Bluetooth do Windows).
 
 A página **Baterias** mede o **uso**, e não o calendário: só conta o tempo com o
 aparelho ligado. A previsão soma o ritmo de cada faixa de 10%, porque a bateria
 não descarrega em linha reta, e no headset aparece ao lado da estimativa do
-próprio G HUB. Há também a última carga, a última descarga completa, o uso
-total, a curva das últimas 48 horas e a **saúde da bateria**, que compara quanto
-dura uma carga cheia mês a mês.
+próprio G HUB. Cada aparelho mostra o tempo restante, quanto dura uma carga
+cheia, o tempo desde a última carga, a **saúde da bateria** (quanto dura uma
+carga cheia mês a mês) e a curva das últimas 48 horas. *Mais detalhes* abre o
+ritmo por faixa, a última carga, a última descarga completa e o uso total.
+
+O Windows avisa em **30%**, em **10%**, quando restarem **cerca de 2 h de uso**
+e quando o aparelho **chega a 100% no cabo**. A carga também vira sensor
+(categoria *Periféricos*): pode ir para o mostrador do cooler, para os cartões
+de *Métricas* e para os perfis.
 
 #### Widget na área de trabalho
 
@@ -194,77 +232,77 @@ dura uma carga cheia mês a mês.
 de vidro sobre a área de trabalho, com um anel (ou barra) por aparelho, que fica
 verde e respira devagar enquanto carrega. Fica logo acima dos ícones, atrás das
 janelas, como os antigos gadgets; com **Win+D** ele continua à vista. Arrastar
-muda o lugar (gruda nas bordas da tela) e clicar abre a página **Baterias**, que
-guarda todas as opções atrás do botão **Widget**, com a engrenagem, no alto da
-página (fechado por padrão, para os aparelhos virem primeiro; se ficar aberto, a
-página lembra): ligar e desligar, **anéis** ou **lista**,
-vidro **nítido** (padrão, sem desfoque), **desfocado** ou **fosco**, a cor do
-vidro (do tema do Windows, escura ou clara), **sempre na frente das janelas**,
-**travar posição** e voltar ao canto da tela. O botão direito no widget tem as
-mesmas opções.
+muda o lugar (gruda nas bordas da tela) e clicar abre a página **Baterias**.
 
-O Windows avisa em **30%**, em **10%**, quando restarem **~2 h de uso** e quando
-o aparelho **chega a 100% no cabo**. A carga também vira sensor (categoria
-*Periféricos*): pode ir para o mostrador de baixo do cooler, para os cartões de
-*Métricas* e para os perfis.
+As opções ficam atrás do botão **Widget**, com a engrenagem, no alto da página
+**Baterias** (fechado por padrão; se ficar aberto, a página lembra): ligar e
+desligar, **anéis** ou **lista**, vidro **nítido** (padrão), **desfocado** ou
+**fosco**, a cor do vidro (do tema do Windows, escura ou clara), **sempre na
+frente das janelas**, **travar posição** e voltar ao canto da tela. O botão
+direito no widget tem as mesmas opções.
 
 ### Especificações
 
-O retrato completo da máquina, no espírito do CPU-Z: processador com família,
-modelo, stepping, soquete, cache L1/L2/L3 e virtualização; placa-mãe e BIOS com
-versão e data; memória com tipo, velocidade, canais e um pente por linha, com
-fabricante e número de peça, e os slots desenhados no lugar de cada um, com o
-nome da placa (A1, A2, B1, B2) e o pente daquele slot ao passar o mouse, lidos
-da tabela SMBIOS da BIOS; placa de vídeo com a marca de quem a montou
-(Sapphire, ASUS, MSI e outras, pelo ID de subsistema), VRAM, VBIOS, device ID e
-driver; discos com SSD ou HDD e NVMe ou SATA; rede, monitores e o
-sistema. Um botão copia tudo em texto, para colar num relatório.
+O retrato completo da máquina, no espírito do CPU-Z, num mosaico com as peças em
+destaque e o detalhe de cada uma em abas:
+
+- **Processador**: família, modelo, stepping, soquete, cache L1/L2/L3 e
+  virtualização.
+- **Placa-mãe e BIOS**: versão e data.
+- **Memória**: tipo, velocidade, canais e um pente por linha, com fabricante e
+  número de peça. Os slots são desenhados no lugar de cada um, com o nome da
+  placa (A1, A2, B1, B2) e o pente daquele slot ao passar o mouse, lidos da
+  tabela SMBIOS da BIOS.
+- **Vídeo**: a marca de quem montou a placa (Sapphire, ASUS, MSI e outras, pelo
+  ID de subsistema), VRAM, VBIOS, device ID e driver.
+- **Armazenamento**: SSD ou HDD, NVMe ou SATA, e o tamanho em barras.
+- **Rede, monitores e sistema**.
+
+Um botão copia tudo em texto, para colar num relatório.
 
 Esta é a única parte do programa que usa WMI, e a coleta acontece **uma vez por
-sessão, numa thread própria, quando a aba estreia** — `Win32_Processor` sozinho
-custa cerca de 1,4 s, e quem nunca abrir a aba não paga nada. Nome de máquina e
-de usuário ficam de fora de propósito: esta tela existe para ser colada em
-relatório público.
+sessão, numa thread própria, quando a página abre pela primeira vez**:
+`Win32_Processor` sozinho custa cerca de 1,4 s, e quem nunca abrir a página não
+paga nada. Nome de máquina e de usuário ficam de fora de propósito, porque esta
+tela existe para ser colada em relatório público.
 
-Duas leituras vêm de onde talvez não se espere, e o motivo é o mesmo nos dois
-casos — a fonte óbvia mente. A memória de vídeo sai do registro do driver, e não
-de `AdapterRAM`: aquele campo é de 32 bits e devolve 4 GiB em qualquer placa
-maior que isso. O tipo de disco sai do `MSFT_PhysicalDisk`, e não do
-`Win32_DiskDrive`, que chama todo disco de "Fixed hard disk media" e classifica
-um NVMe como SCSI.
+Duas leituras vêm de onde talvez não se espere, porque a fonte óbvia erra. A
+memória de vídeo sai do registro do driver, e não de `AdapterRAM`: aquele campo
+é de 32 bits e devolve 4 GiB em qualquer placa maior que isso. O tipo de disco
+sai do `MSFT_PhysicalDisk`, e não do `Win32_DiskDrive`, que chama todo disco de
+"Fixed hard disk media" e classifica um NVMe como SCSI.
 
 ### Métricas
 
 Uma grade de cartões com as leituras da máquina, cada um com o número grande e o
-histórico desenhado atrás. Os cartões se **arrastam** para reordenar: a grade se
-reorganiza ao vivo em volta do que está na mão, porque a pergunta que se faz
-arrastando não é "onde ele entra" e sim "como a grade fica".
+histórico desenhado atrás. Os cartões se **arrastam** para reordenar, e a grade
+se reorganiza ao vivo em volta do que está na mão. Qualquer sensor pode virar
+cartão, em três tamanhos que se acomodam sozinhos na largura disponível.
 
-O botão *Conjuntos* oferece quatro pontos de partida, cada um respondendo a uma
-pergunta diferente — **Automático** pega uma leitura de cada grandeza por peça;
-**Jogos** pergunta se está fluido e o que segura; **Térmico**, o que esquenta e
-quanta energia entra para tanto; **Silencioso**, por que a ventoinha acelerou.
-Um conjunto que não encontra nada nesta máquina avisa e não mexe na grade: trocar
-o que a pessoa montou por uma tela vazia seria destruir trabalho sem entregar
-nada. Qualquer sensor pode virar cartão, em três tamanhos que se reorganizam
-sozinhos na largura
-disponível.
+O botão *Conjuntos* oferece quatro pontos de partida: **Automático** pega uma
+leitura de cada grandeza por peça; **Jogos** pergunta se está fluido e o que
+segura; **Térmico**, o que esquenta e quanta energia entra para tanto;
+**Silencioso**, por que a ventoinha acelerou. Um conjunto que não encontra nada
+nesta máquina avisa e não mexe na grade.
 
 O botão *Perfis de métricas* salva a grade atual com nome, ordem, tamanho dos
-cartões e janela de histórico. Cada perfil salvo pode ser aplicado, atualizado
-com a grade atual, renomeado ou excluído pelo mesmo menu.
+cartões e janela de histórico. Cada perfil salvo pode ser aplicado, atualizado,
+renomeado ou excluído pelo mesmo menu.
 
 O histórico **não vive na janela**: é gravado em disco e alimentado pelo mesmo
 ciclo que atualiza o mostrador, então continua correndo com a configuração
 fechada e sobrevive a fechar o programa. São seis horas em baldes de cinco
-segundos, e a janela desenhada é escolhida entre **10 min**, **1 h** e **6 h**.
-A faixa do navegador, no alto da aba, desenha as seis horas da métrica escolhida:
-clicar num cartão troca a faixa para ele, na cor dele, sem mexer no trecho
-selecionado, e a escolha fica gravada.
+segundos. O **navegador de período**, no alto da página, desenha as seis horas
+da métrica escolhida; arrastar as bordas da seleção muda o tamanho da janela (de
+1 minuto a 6 horas), arrastar o meio volta no tempo e o duplo clique retorna ao
+ao vivo. Clicar num cartão troca a faixa para ele, na cor dele, sem mexer no
+trecho selecionado, e a escolha fica gravada.
 
-Período sem leitura fica **vazio no gráfico**, e não ligado por uma reta: o
-computador desligado das 3h às 8h é um buraco, não uma temperatura constante por
-cinco horas.
+Uma falha curta (até 30 s) é só uma leitura que não chegou, e a linha segue
+cheia por cima dela. Um período longo sem leitura, com o app fechado ou o PC
+desligado, vira uma **ponte tracejada e apagada** entre o último valor lido e o
+próximo: diz que ali não houve medida sem deixar o gráfico em pedaços, e a
+curva cheia fica só onde houve leitura.
 
 O custo disso é medido: a leitura restrita ao mostrador visita só os grupos de
 que ele depende, e uma vez a cada balde ela se abre para os grupos dos cartões,
@@ -274,19 +312,17 @@ tira a amostra e volta a fechar. Sem cartão nenhum na grade, nada disso roda.
 
 Uma categoria **Jogos** com seis leituras: taxa de quadros, tempo de quadro, e
 mínimo, médio e pior caso de cada um numa janela de 60 segundos. Servem tanto
-para os cartões da aba *Métricas* quanto para o mostrador do cooler.
+para os cartões de *Métricas* quanto para o mostrador do cooler.
 
-Isso não sai do hardware — quantos quadros um jogo desenhou não está em sensor
-nenhum, está no processo que apresenta. Quem mede é o
+Quem mede é o
 **[RivaTuner Statistics Server](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/)**,
 que publica o resultado num mapeamento de memória. É o mesmo caminho que o
 HWiNFO e o Afterburner usam, e ler dele não exige privilégio nenhum. **Sem o
-RTSS instalado não há FPS** — as leituras continuam na lista, sem valor, e o
-rodapé de cada uma diz o que falta em vez de deixar procurar defeito aqui.
+RTSS instalado não há FPS**: as leituras continuam na lista, sem valor, e o
+rodapé de cada uma diz o que falta.
 
 Vale para o jogo em primeiro plano; sem nenhum em primeiro plano, vale o último
-que desenhou. Trocar de jogo reinicia a janela de 60 segundos, porque o mínimo
-de dois programas diferentes seria um número que nunca aconteceu.
+que desenhou. Trocar de jogo reinicia a janela de 60 segundos.
 
 **Instalar o RTSS pelo aplicativo.** Em *Configurações* há uma linha que mostra
 se ele está publicando e um botão que entrega a instalação ao `winget`, numa
@@ -295,53 +331,61 @@ o mesmo numa caixa **desmarcada**, que só aparece quando o RTSS ainda não est�
 lá e o `winget` existe.
 
 Nos dois casos o passo final liga, no `Profiles\Config` do RTSS,
-`StartWithWindows=1` e `StartMinimized=1` — ele passa a subir com o Windows
-direto para a bandeja, e o FPS existe desde o primeiro jogo do dia sem ninguém
-abrir nada. O arquivo é preservado linha a linha: ele guarda também o
-`FnOffsetCache`, e reescrevê-lo custaria ao RTSS redescobrir tudo.
+`StartWithWindows=1` e `StartMinimized=1`: ele passa a subir com o Windows
+direto para a bandeja. O arquivo é preservado linha a linha, porque guarda
+também o `FnOffsetCache`.
 
 > O ajuste **encerra e reabre o RTSS**, porque ele reescreve esse arquivo ao
-> sair — editar com ele no ar seria escrever para ser desfeito. Por isso só
-> acontece a pedido, nunca sozinho: derrubar o RTSS desengancha o jogo aberto.
+> sair. Por isso só acontece a pedido, nunca sozinho: derrubar o RTSS
+> desengancha o jogo aberto.
 
 O comando instala junto o **runtime do Visual C++**
-(`Microsoft.VCRedist.2015+.x64`), que o RTSS exige e o pacote dele não declara —
-sem ele o `RTSSHooksLoader64` para em *"VCRUNTIME140_1.dll não foi encontrado"* e
-o RTSS instalado nunca publica nada. Em máquina que já tem, o `winget` apenas diz
-que já tem.
+(`Microsoft.VCRedist.2015+.x64`), que o RTSS exige e o pacote dele não declara.
+Sem ele o `RTSSHooksLoader64` para em *"VCRUNTIME140_1.dll não foi encontrado"*.
+Em máquina que já tem, o `winget` apenas diz que já tem.
 
-> Se o runtime estiver **registrado mas com os arquivos ausentes** — acontece
-> depois de um "limpador" ou de uma atualização que falhou —, o `winget` vê a
-> versão instalada e não repõe nada. Aí é preciso forçar uma vez, num terminal de
-> administrador: `winget install --id Microsoft.VCRedist.2015+.x64 -e --force`
+> Se o runtime estiver **registrado mas com os arquivos ausentes** (acontece
+> depois de um "limpador" ou de uma atualização que falhou), o `winget` vê a
+> versão instalada e não repõe nada. Aí é preciso forçar uma vez, num terminal
+> de administrador: `winget install --id Microsoft.VCRedist.2015+.x64 -e --force`
 
-O instalador do RTSS **não vem embutido** aqui: é freeware de outra pessoa e a
-licença não dá direito de redistribuir. Baixá-lo de um espelho durante a
-instalação seria pior — sem URL estável nem soma de verificação publicada, seria
-executar o que viesse. Pelo `winget` a origem é o repositório da Microsoft e o
-pacote é o oficial (`Guru3D.RTSS`).
+O instalador do RTSS **não vem embutido**: é freeware de outra pessoa e a
+licença não dá direito de redistribuir. Pelo `winget` a origem é o repositório
+da Microsoft e o pacote é o oficial (`Guru3D.RTSS`).
 
-> FPS e frametime atuais acompanham o tempo do último quadro publicado pelo
-> RTSS. As três estatísticas derivadas saem das **nossas** amostras, uma por segundo,
-> e a janela está escrita no próprio rótulo. **Não são "1% low"**: aquilo exige o
-> tempo de cada quadro, e nesta altura os quadros individuais já não existem.
+> As três estatísticas derivadas saem das **nossas** amostras, uma por segundo,
+> e a janela está escrita no próprio rótulo. **Não são "1% low"**: aquilo exige
+> o tempo de cada quadro, e nesta altura os quadros individuais já não existem.
 
 > No mostrador do cooler, o número aparece certo mas o símbolo ao lado não: o
 > quadro só acende `°C`/`°F` em cima e `%`/`W` embaixo, e
 > [não há como apagá-los](docs/PROTOCOLO.md). 60 FPS embaixo aparece como
 > `060` com o `%` ou o `W` aceso.
 
+### Configurações
+
+Uma linha por opção, com a descrição curta e o controle à direita, em quatro
+grupos:
+
+- **Geral**: idioma e iniciar junto com o Windows.
+- **Painel**: mostrar todos os sensores (um por núcleo, em vez da média) e
+  apagar o mostrador quando ninguém usar o computador.
+- **FPS**: situação do RTSS, com os botões para instalar e conferir.
+- **Dados**: a pasta de configuração, o **backup completo** (perfis, jogos,
+  métricas e preferências já salvos; o histórico fica de fora) e o
+  **diagnóstico para suporte**, revisado antes de exportar e sem nomes,
+  caminhos, números de série ou logs pessoais.
+
+O apagamento por ociosidade conta a sessão inteira do Windows, não este
+programa. Assistir a um vídeo ou esperar uma renderização longa também conta
+como ocioso, porque ninguém digita. O mostrador volta ao primeiro toque.
+
 ### Tela de carregamento
 
 <img src="docs/carregando.png" width="380" alt="Tela de carregamento">
 
 Não aparece sozinha: só surge se o ícone da bandeja for clicado enquanto as
-fontes de sensores ainda estão abrindo — quem estranhou a demora é quem quer
-explicação. Fechá-la não interrompe nada.
-
-> As leituras que aparecem nas capturas são **ilustrativas** — a interface foi
-> renderizada com uma lista de sensores representativa, não medida de uma
-> máquina específica.
+fontes de sensores ainda estão abrindo. Fechá-la não interrompe nada.
 
 ---
 
@@ -349,36 +393,91 @@ explicação. Fechá-la não interrompe nada.
 
 - Windows 10/11 x64
 - .NET Framework 4.7.2+ (presente por padrão)
+- **Privilégio administrativo**: ler temperatura da CPU exige acesso em modo
+  kernel, e isso não existe sem elevação
 - [PawnIO](https://pawnio.eu), opcional. Só importa sem o HWiNFO: sem ele a
   LibreHardwareMonitor não lê a temperatura da CPU
-- **Privilégio administrativo** — ler temperatura da CPU exige acesso em modo
-  kernel, e isso não existe sem elevação
+
+### Fontes de sensores
+
+A fonte principal é a **biblioteca cliente do HWiNFO** que acompanha o software
+de fábrica do cooler. Ela é comercial (© REALiX s.r.o.), licenciada ao fabricante
+e não a este projeto, por isso **não está no repositório nem no instalador
+publicado**. Se o *CPU TEMP Monitor* original estiver instalado, o aplicativo
+oferece copiar a biblioteca de lá no primeiro arranque.
+
+Sem ela, o aplicativo usa a
+[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)
+como fonte de reserva, e a página *Sobre* diz qual fonte está ativa.
+
+---
+
+## Usar
+
+1. Execute o Mhiagos Control (pede elevação).
+2. Na primeira execução abre a janela de configuração. Escolha o sensor de
+   cada painel e as unidades.
+3. O ícone fica na bandeja. Duplo clique reabre a configuração.
+
+*Salvar* grava no disco e **deixa a janela aberta**, porque ajuste de mostrador
+raramente vem sozinho. *Fechar* pergunta antes de descartar o que não foi salvo.
+
+O software original não precisa estar instalado.
+
+### Dados do aplicativo
+
+Ficam em `%LOCALAPPDATA%\MhiagosControl\`, acessível pelo menu da bandeja em
+*Abrir pasta de dados*:
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `config.ini` | perfis do painel e de métricas, sensores, unidades, rodízio e idioma |
+| `history.dat` | as seis horas de histórico das métricas |
+| `baterias.dat` | histórico de bateria dos periféricos: cargas, descargas e as amostras dos últimos 7 dias |
+| `baterias-detalhes.txt` | quais aparelhos estão com *Mais detalhes* aberto |
+| `widget.ini` | lugar e aparência do widget de bateria |
+| `log.txt` | diagnóstico, com rotação em 512 KB (`log.txt.1`) |
+
+Configurações de versões antigas (inclusive da época em que o projeto se
+chamava *RiseModePanel*) são migradas no primeiro arranque.
+
+## O que este projeto evita do software original
+
+- **Telemetria** para `upgrade-1318931438.cos.ap-beijing.myqcloud.com`
+  (atualização automática de firmware e software a partir de um bucket na China)
+- Métricas fixas: aqui qualquer sensor pode ir para qualquer painel
+- A janela sempre aberta: aqui o programa vive na bandeja
 
 ---
 
 ## Compilar do código
 
-Só para quem quer modificar o projeto — para instalar, use o release acima.
+Só para quem quer modificar o projeto. Para instalar, use o release acima.
 
 Não exige SDK do .NET nem NuGet: compila com o `csc.exe` que já acompanha o
-Windows. É a característica que mantém o projeto simples de construir, e a razão
-de o instalador também ser compilado por ele em vez de por Inno Setup ou WiX.
-
-### Compilar
+Windows. É o que mantém o projeto simples de construir, e a razão de o
+instalador também ser compilado por ele em vez de por Inno Setup ou WiX.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-Saída em `bin\MhiagosControl.exe`.
+Saída em `bin\MhiagosControl.exe`. O `-ExecutionPolicy Bypass` vale **apenas
+para esse processo** e não altera a configuração da máquina.
 
-> O `-ExecutionPolicy Bypass` é necessário porque o Windows barra scripts `.ps1`
-> por padrão. O parâmetro vale **apenas para esse processo** e não altera a
-> configuração da máquina — não é preciso rodar `Set-ExecutionPolicy`.
+> A pasta `bin\engine\` faz parte do conjunto. Copiar só o `.exe` faz o
+> aplicativo perder temperatura, potência e clock da CPU: ele cai na fonte de
+> reserva e avisa na página *Sobre*.
 
-> **Atenção:** a pasta `bin\engine\` faz parte do conjunto. Copiar só o `.exe`
-> faz o aplicativo perder temperatura, potência e clock da CPU — ele cai na
-> fonte de reserva, e diz isso na aba *Sobre*.
+### Testes
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build-tests.ps1
+```
+
+Compila os testes contra os fontes do aplicativo e roda a suíte. É o mesmo passo
+que o GitHub Actions executa a cada push e pull request, antes de montar o
+instalador.
 
 ### Gerar o instalador
 
@@ -391,69 +490,36 @@ bibliotecas embutidos como recursos.
 
 Ele grava em `Arquivos de Programas`, cria atalho no menu Iniciar, registra a
 entrada em *Aplicativos Instalados* e, se pedido, cria a tarefa de início
-automático — a mesma que o aplicativo cria pelo próprio menu, o que também
-conserta o caso de ela ter ficado apontando para um caminho antigo. **O mesmo
-executável desinstala:** durante a instalação ele se copia para a pasta de
-destino como `uninstall.exe`, e é esse caminho que vai para o registro.
-
-A desinstalação **conserva os perfis por padrão** — apagar `%LOCALAPPDATA%\MhiagosControl`
-é uma caixa desmarcada, porque reconstruir um perfil custa reescolher dois
-sensores e o usuário raramente quer isso ao reinstalar.
+automático. **O mesmo executável desinstala**: durante a instalação ele se copia
+para a pasta de destino como `uninstall.exe`, e é esse caminho que vai para o
+registro. A desinstalação **conserva os perfis por padrão**; apagar
+`%LOCALAPPDATA%\MhiagosControl` é uma caixa desmarcada.
 
 Se `lib\api-ms-win-core-sysinfo-825-64.dll` existir, ela entra **dentro** do
-executável gerado. A opção `-SemMotor` produz um instalador sem ela, e nesse
-caso o aplicativo sobe na fonte de reserva e informa isso na aba *Sobre*.
+executável gerado, e esse instalador é só para uso próprio. A opção `-SemMotor`
+produz um instalador sem ela, que é o publicado nas releases.
 
-`dist\` fica fora do repositório pelo `.gitignore` — são artefatos de
+`dist\` fica fora do repositório pelo `.gitignore`: são artefatos de
 compilação, e o release é o lugar deles.
 
-## Usar
+### Ferramentas de desenvolvimento
 
-1. Execute `bin\MhiagosControl.exe` (pede elevação).
-2. Na primeira execução abre a janela de configuração. Escolha o sensor de
-   cada painel e as unidades.
-3. O ícone fica na bandeja. Duplo clique reabre a configuração.
+Em `tools\`, cada uma com o seu `build-*.ps1`:
 
-*Salvar* grava no disco e **deixa a janela aberta** — ajuste de mostrador
-raramente vem sozinho, e fechar a cada gravação só significava reabrir.
-*Fechar* pergunta antes de descartar o que não foi salvo.
-
-O software original não precisa estar instalado.
-
-### Apagar quando ocioso
-
-Em *Configurações*, o mostrador pode apagar depois de N minutos sem teclado nem
-mouse, e volta ao primeiro toque. Conta a sessão inteira do Windows, não este
-programa — o que também quer dizer que assistir a um vídeo ou esperar uma
-renderização longa conta como ocioso, porque ninguém digita.
-
-### Dados do aplicativo
-
-Ficam em `%LOCALAPPDATA%\MhiagosControl\` — acessível pelo menu da bandeja em
-*Abrir pasta de dados*:
-
-| Arquivo | Conteúdo |
-|---------|----------|
-| `config.ini` | perfis do painel e de métricas, sensores, unidades, rodízio e idioma |
-| `baterias.dat` | histórico de bateria dos periféricos: cargas, descargas e a curva dos últimos 7 dias |
-| `widget.ini` | lugar e aparência do widget de bateria |
-| `log.txt` | diagnóstico, com rotação em 512 KB (`log.txt.1`) |
-
-Configurações de versões antigas (inclusive da época em que o projeto se
-chamava *RiseModePanel*) são migradas no primeiro arranque.
-
-## O que este projeto evita do software original
-
-- **Telemetria** para `upgrade-1318931438.cos.ap-beijing.myqcloud.com` (atualização
-  automática de firmware e software a partir de um bucket na China)
-- Métricas fixas: aqui qualquer sensor pode ir para qualquer painel
-- A janela sempre aberta: aqui o programa vive na bandeja
+| Ferramenta | Para que serve |
+|---|---|
+| `Probe` | manda quadros crus ao painel, para mapear o protocolo |
+| `RtssProbe` | separa as causas de "o FPS não aparece" na ponte com o RTSS |
+| `Bench` | mede quanto o ciclo de atualização aloca, perto do que a biblioteca de sensores aloca |
+| `WidgetPreview` | abre o widget de bateria sozinho, sem elevação |
+| `MakeAssets` | gera os ícones e a imagem do cooler a partir das artes em `assets\` (`build.ps1 -Assets`) |
+| `MakePeripherals` | desenha o ícone do Bluetooth; o G325 e o X11 saem de `assets\svg\` |
 
 ---
 
 ## Licença
 
-**MIT** — veja [`LICENSE`](LICENSE). Use, modifique e redistribua à vontade,
+**MIT**, veja [`LICENSE`](LICENSE). Use, modifique e redistribua à vontade,
 mantendo o aviso de copyright.
 
 A licença cobre **o código deste repositório**. As dependências têm licença
@@ -466,16 +532,16 @@ própria e não são cobertas por ela:
 | `lib/DiskInfoToolkit.dll`, `RAMSPDToolkit-NDD.dll`, `BlackSharp.Core.dll` | MPL 2.0 |
 | `lib/HidSharp.dll` | Apache 2.0 |
 | `lib/System.Memory.dll`, `System.Buffers.dll`, `System.Numerics.Vectors.dll`, `System.Runtime.CompilerServices.Unsafe.dll` | MIT (.NET Foundation) |
-| `engine\api-ms-win-core-sysinfo-825-64.dll` | © REALiX s.r.o. |
+| `engine\api-ms-win-core-sysinfo-825-64.dll` (fora do repositório) | © REALiX s.r.o. |
 
 ---
 
 ## Créditos
 
-- [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) —
+- [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor),
   fonte de reserva (MPL 2.0). Licença em `lib/LibreHardwareMonitor-LICENSE.txt`;
   as dependências dela estão listadas em `lib/THIRD-PARTY-NOTICES.txt`.
-- **HWiNFO32 Client Library** — © REALiX s.r.o.
+- **HWiNFO32 Client Library**, © REALiX s.r.o.
 - Protocolo do painel: engenharia reversa para interoperabilidade com hardware
   próprio.
 - Feito por [Feurrado](https://github.com/Feurrado).
@@ -487,12 +553,12 @@ própria e não são cobertas por ela:
 Este é um projeto **pessoal, independente e sem fins lucrativos**, feito para
 interoperar com hardware que o autor possui. Não tem qualquer vínculo,
 patrocínio, afiliação ou aprovação da Rise Mode, da Ocypus, da SHENZHEN
-SHINETEK, da REALiX s.r.o. ou de qualquer outro fabricante. Todas as marcas
-citadas pertencem aos seus respectivos donos e aparecem apenas para identificar
-o equipamento com que o programa se comunica.
+SHINETEK, da REALiX s.r.o. ou de qualquer outro
+fabricante. Todas as marcas citadas pertencem aos seus respectivos donos e
+aparecem apenas para identificar o equipamento com que o programa se comunica.
 
 O protocolo do painel foi levantado por **engenharia reversa do próprio
-equipamento**, com a finalidade exclusiva de interoperabilidade — o programa
+equipamento**, com a finalidade exclusiva de interoperabilidade: o programa
 não contém, não copia e não redistribui código do software original.
 
 > O PROGRAMA É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU
@@ -505,4 +571,4 @@ não contém, não copia e não redistribui código do software original.
 Usar este programa pode implicar a **perda da garantia do equipamento**.
 Verifique antes.
 
-O mesmo texto aparece dentro do aplicativo, na aba *Sobre*.
+O mesmo texto aparece dentro do aplicativo, na página *Sobre*.
