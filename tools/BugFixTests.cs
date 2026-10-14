@@ -51,6 +51,11 @@ namespace MhiagosControl
             RegressionBatteryWidget(root);
             RegressionWidgetCard(root);
             RegressionBatteryCard(root);
+            RegressionWidgetRecolhido(root);
+            RegressionNomesCompletos();
+            RegressionMarcaDaPlaca();
+            RegressionSlotsDeMemoria();
+            RegressionNavegadorSegueCartao(root);
         }
 
         private static void RegressionBatteryWidget(string root)

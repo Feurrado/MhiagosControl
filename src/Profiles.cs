@@ -153,6 +153,9 @@ namespace MhiagosControl
         /// <summary>Janela de tempo dos graficos, em segundos.</summary>
         public int MetricRange = MetricHistory.JanelaPadrao;
 
+        /// <summary>Leitura desenhada na faixa do navegador de Metricas; vazio usa o primeiro cartao.</summary>
+        public string MetricNavId = "";
+
         /// <summary>Grades de métricas salvas pelo usuário.</summary>
         public List<MetricProfile> MetricProfiles = new List<MetricProfile>();
 
@@ -215,6 +218,7 @@ namespace MhiagosControl
             NavOrder = other.NavOrder;
             MetricsChosen = other.MetricsChosen;
             MetricRange = other.MetricRange;
+            MetricNavId = other.MetricNavId;
             WindowW = other.WindowW;
             WindowH = other.WindowH;
             GameProfiles = other.GameProfiles;
@@ -555,6 +559,7 @@ namespace MhiagosControl
                         else if (k == "navorder") c.NavOrder = v;
                         else if (k == "metricschosen") c.MetricsChosen = (v == "1");
                         else if (k == "metricrange") c.MetricRange = MetricHistory.JanelaValida(ParseInt(v));
+                        else if (k == "metricnav") c.MetricNavId = v;
                         else if (k == "windoww") c.WindowW = ParseInt(v);
                         else if (k == "windowh") c.WindowH = ParseInt(v);
                         else if (k == "gameprofiles") c.GameProfiles = (v == "1");
@@ -763,6 +768,7 @@ namespace MhiagosControl
                 if (!string.IsNullOrEmpty(NavOrder)) sb.AppendLine("navorder=" + NavOrder);
                 sb.AppendLine("metricschosen=" + (MetricsChosen ? "1" : "0"));
                 sb.AppendLine("metricrange=" + MetricRange.ToString(CultureInfo.InvariantCulture));
+                if (!string.IsNullOrEmpty(MetricNavId)) sb.AppendLine("metricnav=" + MetricNavId);
                 sb.AppendLine("windoww=" + WindowW.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("windowh=" + WindowH.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("gameprofiles=" + (GameProfiles ? "1" : "0"));

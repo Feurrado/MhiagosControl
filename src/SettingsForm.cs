@@ -1358,9 +1358,43 @@ namespace MhiagosControl
             _lbBateriasVazio.Visible = false;
             _pgBaterias.Controls.Add(_lbBateriasVazio);
 
+            // Os aparelhos vem primeiro. As opcoes do widget ficam atras de um
+            // botao discreto no alto, fechado por padrao; se a pessoa deixar
+            // aberto, ele volta aberto. Ligar e desligar segue tambem na bandeja.
             _widget = _data as IControleDoWidget;
-            if (_widget != null) _pgBaterias.Controls.Add(MontarCartaoDoWidget());
+            if (_widget != null)
+            {
+                _btWidget = new BotaoDoWidget();
+                _btWidget.Text = T.WidgetButton;
+                _btWidget.Aberto = DetalhesDaBateria.Aberto(ChaveDoPainelDoWidget);
+                _btWidget.Click += delegate { AlternarPainelDoWidget(); };
+                _dicaDoWidget.SetToolTip(_btWidget, T.WidgetButtonTip);
+                _pgBaterias.Controls.Add(_btWidget);
+
+                Card c = MontarCartaoDoWidget();
+                c.Visible = _btWidget.Aberto;
+                _pgBaterias.Controls.Add(c);
+            }
             return _pgBaterias;
+        }
+
+        private BotaoDoWidget _btWidget;
+        private readonly ToolTip _dicaDoWidget = new ToolTip();
+
+        /// <summary>
+        /// Painel aberto ou fechado, no mesmo arquivo do "Mais detalhes" de cada
+        /// aparelho: abrir uma secao nao e mudanca de configuracao para pedir
+        /// Salvar. As chaves dos aparelhos tem barra ("GHub|G325"), entao esta
+        /// nao colide com nenhuma.
+        /// </summary>
+        internal const string ChaveDoPainelDoWidget = "painel-do-widget";
+
+        private void AlternarPainelDoWidget()
+        {
+            if (_btWidget == null) return;
+            DetalhesDaBateria.Alternar(ChaveDoPainelDoWidget);
+            _btWidget.Aberto = DetalhesDaBateria.Aberto(ChaveDoPainelDoWidget);
+            ArranjarBaterias();
         }
 
         // ---------------- widget de bateria ----------------
@@ -1372,6 +1406,7 @@ namespace MhiagosControl
         /// <summary>Preenchendo os controles com a configuracao: as mudancas nao sao do usuario.</summary>
         private bool _sincronizandoWidget;
         private const int AlturaDoCartaoDoWidget = 330;
+        private const int AlturaDoBotaoDoWidget = 30;
 
         /// <summary>
         /// As mesmas opcoes do botao direito do widget, num lugar que se acha
@@ -1550,11 +1585,22 @@ namespace MhiagosControl
             int x = 2 + Math.Max(0, (disp - larg) / 2);
 
             int y = 2;
+            if (_btWidget != null)
+            {
+                int lb = _btWidget.LarguraDesejada();
+                _btWidget.SetBounds(x + larg - lb, y, lb, AlturaDoBotaoDoWidget);
+                y += AlturaDoBotaoDoWidget + 8;
+            }
             if (_cardWidget != null)
             {
-                SincronizarWidget();
-                _cardWidget.SetBounds(x, y, larg, AlturaDoCartaoDoWidget);
-                y += AlturaDoCartaoDoWidget + Esp;
+                bool aberto = _btWidget == null || _btWidget.Aberto;
+                _cardWidget.Visible = aberto;
+                if (aberto)
+                {
+                    SincronizarWidget();
+                    _cardWidget.SetBounds(x, y, larg, AlturaDoCartaoDoWidget);
+                    y += AlturaDoCartaoDoWidget + Esp;
+                }
             }
 
             _lbBateriasVazio.Visible = _cartoesDeBateria.Count == 0;
@@ -3478,6 +3524,7 @@ namespace MhiagosControl
                     target.MetricSizes.Clear(); target.MetricSizes.AddRange(draft.MetricSizes);
                     target.MetricsChosen = draft.MetricsChosen;
                     target.MetricRange = draft.MetricRange;
+                    target.MetricNavId = draft.MetricNavId;
                     target.MetricProfiles.Clear();
                     foreach (MetricProfile profile in draft.MetricProfiles)
                         target.MetricProfiles.Add(profile.Clone());
@@ -3665,7 +3712,7 @@ namespace MhiagosControl
             _navJanela = new NavegadorDeJanela();
             _navJanela.Janela = MetricHistory.JanelaValida(_cfg.MetricRange);
             _navJanela.FimBalde = _navFim;
-            _navJanela.SensorId = _cfg.MetricIds.Count > 0 ? _cfg.MetricIds[0] : "";
+            _navJanela.SensorId = LeituraDoNavegador();
             _navJanela.Mudou += delegate { TrocarJanela(); };
             _navJanela.Confirmado += delegate { GravarJanela(); };
             _pgMetricas.Controls.Add(_navJanela);
@@ -3709,6 +3756,8 @@ namespace MhiagosControl
                 // valor dela no instante em que foi escrito.
                 MetricCard esteCartao = c;
                 c.Arrastar += delegate { ComecarArrasteDeCartao(esteCartao); };
+                c.Escolhido += delegate { EscolherLeituraDoNavegador(alvo); };
+                c.Selecionado = id == _navJanela.SensorId;
 
                 _pgMetricas.Controls.Add(c);
                 _cards.Add(c);
@@ -3851,6 +3900,53 @@ namespace MhiagosControl
         }
 
         /// <summary>
+        /// A leitura que a faixa do navegador desenha: a ultima escolhida, se o
+        /// cartao dela ainda existe, ou o primeiro da grade.
+        ///
+        /// Antes era sempre o primeiro, e clicar no grafico da GPU deixava a
+        /// faixa mostrando a CPU: a forma das seis horas ali em cima nao era a
+        /// do grafico que se estava olhando.
+        /// </summary>
+        private string LeituraDoNavegador()
+        {
+            if (_cfg.MetricIds.Count == 0) return "";
+            if (!string.IsNullOrEmpty(_cfg.MetricNavId) && _cfg.MetricIds.Contains(_cfg.MetricNavId))
+                return _cfg.MetricNavId;
+            // o cartao escolhido foi removido: esquece, para nao voltar marcado
+            // se um dia a mesma leitura for adicionada de novo
+            _cfg.MetricNavId = "";
+            return _cfg.MetricIds[0];
+        }
+
+        /// <summary>
+        /// Clique num cartao: a faixa passa a desenhar a leitura dele, na cor
+        /// dele, e o cartao fica marcado. O trecho escolhido nao muda.
+        /// </summary>
+        private void EscolherLeituraDoNavegador(string id)
+        {
+            if (_navJanela == null || string.IsNullOrEmpty(id)) return;
+            foreach (MetricCard c in _cards) c.Selecionado = c.SensorId == id;
+            if (_navJanela.SensorId != id)
+            {
+                _navJanela.SensorId = id;
+                AtualizarCorDoNavegador();
+                _navJanela.Invalidate();
+            }
+            if (_cfg.MetricNavId == id) return;
+            _cfg.MetricNavId = id;
+            GravarMetricas();
+        }
+
+        private void AtualizarCorDoNavegador()
+        {
+            if (_navJanela == null) return;
+            Color? cor = null;
+            foreach (MetricCard c in _cards)
+                if (c.SensorId == _navJanela.SensorId) { cor = c.CorAtual; break; }
+            _navJanela.CorDaLinha = cor;
+        }
+
+        /// <summary>
         /// Grava o tamanho escolhido ao soltar o arraste, e nao a cada pixel.
         /// A posicao no tempo nao e gravada: reabrir a janela volta ao vivo.
         /// </summary>
@@ -3948,7 +4044,12 @@ namespace MhiagosControl
                 float value;
                 card.Push(snap.TryGetValue(id, out value) ? (float?)value : null);
             }
-            if (_navJanela != null && _navJanela.Visible) _navJanela.Invalidate();
+            if (_navJanela != null && _navJanela.Visible)
+            {
+                // a cor do cartao muda com o valor (atencao, perigo); a faixa acompanha
+                AtualizarCorDoNavegador();
+                _navJanela.Invalidate();
+            }
         }
 
         private static string ReadingStateText(ReadingState state)
@@ -4492,6 +4593,7 @@ namespace MhiagosControl
         {
             if (_tick != null) { _tick.Stop(); _tick.Dispose(); }
             if (_noteTimer != null) { _noteTimer.Stop(); _noteTimer.Dispose(); }
+            _dicaDoWidget.Dispose();
 
             // Filtro de mensagens e do Application, e nao da janela: esquecer de
             // tirar deixaria um filtro morto examinando toda mensagem do processo

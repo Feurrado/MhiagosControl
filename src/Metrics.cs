@@ -140,9 +140,28 @@ namespace MhiagosControl
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
+            // Armado e solto sem andar: foi clique, e nao arraste. Os botoes do
+            // canto nao armam, entao clicar neles nao escolhe o cartao.
+            bool clique = _armado && e.Button == MouseButtons.Left;
             _armado = false;
             base.OnMouseUp(e);
+            if (clique) Disparar(Escolhido);
         }
+
+        /// <summary>Clique no cartao, fora dos botoes: a faixa do navegador passa a desenhar esta leitura.</summary>
+        public event EventHandler Escolhido;
+
+        private bool _selecionado;
+
+        /// <summary>E esta a leitura desenhada na faixa do navegador; a borda fica na cor de enfase.</summary>
+        public bool Selecionado
+        {
+            get { return _selecionado; }
+            set { if (_selecionado == value) return; _selecionado = value; Invalidate(); }
+        }
+
+        /// <summary>A cor com que o valor esta pintado agora, para a faixa usar a mesma.</summary>
+        public Color CorAtual { get { return Cor; } }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
@@ -297,7 +316,7 @@ namespace MhiagosControl
                 DesenharSerie(g, cor, topo, detalhado);
                 g.Clip = antigo;
 
-                using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, p);
+                using (Pen pen = _selecionado ? new Pen(Ui.Accent, 1.6f) : new Pen(Ui.Border)) g.DrawPath(pen, p);
             }
 
             // O rotulo cede espaco quando os botoes estao a mostra, em vez de

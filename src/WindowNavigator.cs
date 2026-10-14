@@ -21,6 +21,9 @@ namespace MhiagosControl
         /// <summary>Leitura desenhada na faixa, so como referencia de forma.</summary>
         public string SensorId = "";
 
+        /// <summary>Cor do cartao escolhido, para a faixa e o cartao dizerem que sao o mesmo; nulo usa a de enfase.</summary>
+        public Color? CorDaLinha;
+
         /// <summary>Tamanho da selecao, em segundos.</summary>
         public int Janela = MetricHistory.JanelaPadrao;
 
@@ -173,7 +176,7 @@ namespace MhiagosControl
             float faixa = Math.Max(0.001f, max - min);
             float alto = f.Y + 4, alt = f.Height - 8;
 
-            using (Pen p = new Pen(Color.FromArgb(150, Ui.Accent)))
+            using (Pen p = new Pen(Color.FromArgb(150, CorDaLinha ?? Ui.Accent)))
             {
                 int colunas = Math.Max(1, f.Width - 2);
                 for (int c = 0; c < colunas; c++)

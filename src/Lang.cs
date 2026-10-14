@@ -92,6 +92,8 @@ namespace MhiagosControl
         public static string SpecVram { get { return P("Memória de vídeo", "Video memory"); } }
         public static string SpecDeviceId { get { return P("ID do dispositivo", "Device ID"); } }
         public static string SpecVendorId { get { return P("ID do fabricante", "Vendor ID"); } }
+        public static string SpecBoardMaker { get { return P("Fabricante da placa", "Board maker"); } }
+        public static string SpecSlotEmpty(string nome) { return P(nome + ": vazio", nome + ": empty"); }
         public static string SpecDriver { get { return P("Driver", "Driver"); } }
         public static string SpecDriverDate { get { return P("Data do driver", "Driver date"); } }
         public static string SpecResolution { get { return P("Resolução", "Resolution"); } }
@@ -907,6 +909,8 @@ namespace MhiagosControl
         public static string WidgetHide { get { return P("Ocultar widget", "Hide widget"); } }
         public static string WidgetNoDevices { get { return P("Nenhum periférico com bateria", "No battery devices"); } }
         public static string WidgetCard { get { return P("Widget na área de trabalho", "Desktop widget"); } }
+        public static string WidgetButton { get { return P("Widget", "Widget"); } }
+        public static string WidgetButtonTip { get { return P("Opções do widget na área de trabalho", "Desktop widget options"); } }
         public static string WidgetShow { get { return P("Mostrar o widget na área de trabalho", "Show the widget on the desktop"); } }
         public static string WidgetSharpShort { get { return P("Nítido", "Sharp"); } }
         public static string WidgetTint { get { return P("Cor", "Color"); } }

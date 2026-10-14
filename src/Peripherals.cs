@@ -118,6 +118,26 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>
+        /// Nome de vitrine, so para a pagina Baterias: "Logitech G325
+        /// Lightspeed" e "Attack Shark X11".
+        ///
+        /// So o nome EXIBIDO muda. O historico guarda cada aparelho pela chave
+        /// fonte mais nome lido ("GHub|G325"), e trocar o nome lido zeraria as
+        /// cargas ja medidas. O widget, a faixa da Visao geral e a dica da
+        /// bandeja seguem com o nome curto, que e o que cabe neles.
+        /// </summary>
+        public static string NomeCompleto(string nome, FontePeriferico fonte)
+        {
+            if (string.IsNullOrEmpty(nome)) return nome;
+            string n = nome.Trim();
+            if (fonte == FontePeriferico.GHub && string.Equals(n, "G325", StringComparison.OrdinalIgnoreCase))
+                return "Logitech G325 Lightspeed";
+            if (fonte == FontePeriferico.AttackShark && string.Equals(n, "X11", StringComparison.OrdinalIgnoreCase))
+                return "Attack Shark X11";
+            return nome;
+        }
+
         /// <summary>"G325 70%  X11 90%", ou nulo quando nao ha nada para dizer.</summary>
         public static string Resumo()
         {

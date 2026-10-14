@@ -1704,6 +1704,10 @@ namespace MhiagosControl
                 // qualquer outra ferramenta.
                 "SpecStepping", "SpecThreads", "SpecBiosVendor", "SpecTotal", "SpecDriver",
                 "SpecVbios", "SpecSlots", "SpecTpm",
+
+                // "Widget" e o nome do recurso nos dois idiomas, como no menu da
+                // bandeja e no proprio cartao.
+                "WidgetButton",
             });
 
             string antes = T.Language;

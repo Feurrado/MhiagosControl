@@ -25,6 +25,10 @@ namespace MhiagosControl
         private string _destaque, _sub;
         private readonly List<string> _etiquetas = new List<string>();
         private int _slotsUsados, _slotsTotal;
+        private List<SlotDeMemoria> _slots;
+        private readonly List<Rectangle> _areasDosSlots = new List<Rectangle>();
+        private readonly ToolTip _dica = new ToolTip();
+        private int _slotSobMouse = -1;
         private readonly List<string[]> _discos = new List<string[]>();   // tamanho, nome
         private readonly List<double> _discosGb = new List<double>();
         private bool _sobre;
@@ -95,6 +99,15 @@ namespace MhiagosControl
                     _slotsTotal = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
                     if (_slotsTotal > 8 || _slotsUsados > _slotsTotal) _slotsTotal = 0;
                 }
+                // Com a tabela da BIOS, cada quadrado e um slot de verdade, no
+                // lugar e com o nome dele.
+                if (_g.Slots != null && _g.Slots.Count > 0 && _g.Slots.Count <= 8)
+                {
+                    _slots = _g.Slots;
+                    _slotsTotal = _slots.Count;
+                    _slotsUsados = 0;
+                    foreach (SlotDeMemoria s in _slots) if (s.Ocupado) _slotsUsados++;
+                }
                 // a linha de cada pente: "8 GB · Kingston · KHX2666C16/8G"
                 foreach (string[] l in _g.Linhas)
                     if (l[1].IndexOf("GB", StringComparison.Ordinal) > 0 && l[1].IndexOf('·') > 0)
@@ -102,9 +115,11 @@ namespace MhiagosControl
             }
             else if (t == T.SpecGpu)
             {
-                _destaque = SystemInfo.Limpar(V(T.SpecModel)) ?? V(T.SpecModel);
+                // Com a marca da placa conhecida, o destaque e o nome de loja,
+                // memoria inclusa, e a etiqueta da memoria sairia repetida.
+                _destaque = _g.Destaque ?? SystemInfo.Limpar(V(T.SpecModel)) ?? V(T.SpecModel);
                 _sub = V(T.SpecMonitor);
-                Etiqueta(V(T.SpecVram));
+                if (_g.Destaque == null) Etiqueta(V(T.SpecVram));
                 Etiqueta(V(T.SpecResolution) == null ? null : V(T.SpecResolution).Replace("  ·  ", " · "));
                 if (V(T.SpecDriver) != null) Etiqueta(T.SpecDriverTag(V(T.SpecDriver)));
             }
@@ -175,7 +190,7 @@ namespace MhiagosControl
             h += 26;                                      // destaque
             if (!string.IsNullOrEmpty(_sub)) h += 18;
             if (_etiquetas.Count > 0) h += 8 + LinhasDeEtiquetas(largura) * 26;
-            if (_slotsTotal > 0) h += 10 + 34;
+            if (_slotsTotal > 0) h += 10 + 34 + (_slots != null ? AlturaDoNomeDoSlot : 0);
             if (_discos.Count > 0) h += 6 + _discos.Count * 34;
             return h + Pad - 4;
         }
@@ -192,8 +207,48 @@ namespace MhiagosControl
             return linhas;
         }
 
+        private const int AlturaDoNomeDoSlot = 16;
+
         protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _sobre = true; Invalidate(); }
-        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _sobre = false; Invalidate(); }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _sobre = false;
+            if (_slotSobMouse >= 0) { _slotSobMouse = -1; _dica.Hide(this); }
+            Invalidate();
+        }
+
+        /// <summary>Sobre um slot, o pente dele: tamanho, marca e numero de peca.</summary>
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            if (_slots == null) return;
+            int i = -1;
+            for (int k = 0; k < _areasDosSlots.Count; k++)
+                if (_areasDosSlots[k].Contains(e.Location)) { i = k; break; }
+            if (i == _slotSobMouse) return;
+            _slotSobMouse = i;
+            Invalidate();
+            if (i < 0 || i >= _slots.Count) { _dica.Hide(this); return; }
+            Rectangle a = _areasDosSlots[i];
+            _dica.Show(TextoDoSlot(_slots[i]), this, a.Right + 4, a.Y, 6000);
+        }
+
+        internal static string TextoDoSlot(SlotDeMemoria s)
+        {
+            if (!s.Ocupado) return T.SpecSlotEmpty(s.Nome);
+            string t = s.Nome + ": " + SpecSheet.EmGigabytes(s.Bytes);
+            if (!string.IsNullOrEmpty(s.Fabricante)) t += "  ·  " + s.Fabricante;
+            if (!string.IsNullOrEmpty(s.Peca)) t += "  ·  " + s.Peca;
+            return t;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _dica.Dispose();
+            base.Dispose(disposing);
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -247,19 +302,30 @@ namespace MhiagosControl
             if (_slotsTotal > 0)
             {
                 y += 10;
+                // Com os slots da BIOS, um pouco mais de passo: o nome embaixo
+                // ("A1") e mais largo que o quadrado.
+                bool nomeados = _slots != null;
+                int passo = nomeados ? 28 : 22, larg = nomeados ? 16 : 14;
+                _areasDosSlots.Clear();
                 for (int i = 0; i < _slotsTotal; i++)
                 {
-                    Rectangle s = new Rectangle(Pad + i * 22, y, 14, 30);
-                    bool cheio = i < _slotsUsados;
+                    Rectangle s = new Rectangle(Pad + i * passo, y, larg, 30);
+                    bool cheio = nomeados ? _slots[i].Ocupado : i < _slotsUsados;
+                    bool sob = nomeados && i == _slotSobMouse;
                     using (GraphicsPath p = Ui.RoundRect(s, 2))
                     {
                         using (SolidBrush b = new SolidBrush(cheio ? Ui.Accent : Ui.SurfaceAlt)) g.FillPath(b, p);
-                        using (Pen pen = new Pen(cheio ? Ui.Accent : Ui.Border)) g.DrawPath(pen, p);
+                        using (Pen pen = new Pen(sob ? Ui.Text : (cheio ? Ui.Accent : Ui.Border))) g.DrawPath(pen, p);
                     }
+                    if (!nomeados) continue;
+                    Rectangle nome = new Rectangle(s.X - 6, y + 32, larg + 12, AlturaDoNomeDoSlot - 2);
+                    TextRenderer.DrawText(g, _slots[i].Nome, Ui.FontSmall, nome, cheio ? Ui.Text : Ui.Faint,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
+                    _areasDosSlots.Add(new Rectangle(s.X - 5, y - 2, larg + 10, 30 + AlturaDoNomeDoSlot + 2));
                 }
                 TextRenderer.DrawText(g, T.SpecSlotsUsed(_slotsUsados, _slotsTotal), Ui.FontSmall,
-                    new Point(Pad + _slotsTotal * 22 + 8, y + 8), Ui.Muted, TextFormatFlags.NoPadding);
-                y += 34;
+                    new Point(Pad + (_slotsTotal - 1) * passo + larg + 8, y + 8), Ui.Muted, TextFormatFlags.NoPadding);
+                y += 34 + (nomeados ? AlturaDoNomeDoSlot : 0);
             }
 
             if (_discos.Count > 0)
