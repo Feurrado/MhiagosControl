@@ -1703,6 +1703,12 @@ namespace MhiagosControl
                     c.Height = y + 10;
                     c.Tag = vals;
                     _specFullHeights[c] = c.Height;
+
+                    BlocoDeSpec bloco = new BlocoDeSpec(g);
+                    int categoria = _specBlocos.Count + 1;
+                    bloco.Click += delegate { SelecionarCategoriaDeSpec(categoria); };
+                    _pgSpecs.Controls.Add(bloco);
+                    _specBlocos.Add(bloco);
                 }
 
                 MontarCategoriasDeSpecs(folha);
@@ -1713,6 +1719,9 @@ namespace MhiagosControl
         }
 
         private readonly List<Card> _specCards = new List<Card>();
+
+        /// <summary>Os blocos do resumo, na mesma ordem de _specCards.</summary>
+        private readonly List<BlocoDeSpec> _specBlocos = new List<BlocoDeSpec>();
 
         private void MontarCategoriasDeSpecs(List<SpecGrupo> folha)
         {
@@ -1732,17 +1741,23 @@ namespace MhiagosControl
                 {
                     FlatBtn clicked = sender as FlatBtn;
                     if (clicked == null) return;
-                    _specCategory = (int)clicked.Tag;
-                    foreach (FlatBtn item in _specCategoryButtons)
-                    {
-                        item.Primary = ReferenceEquals(item, clicked);
-                        item.Invalidate();
-                    }
-                    ArranjarSpecsPagina();
+                    SelecionarCategoriaDeSpec((int)clicked.Tag);
                 };
                 _pgSpecs.Controls.Add(b);
                 _specCategoryButtons.Add(b);
             }
+        }
+
+        private void SelecionarCategoriaDeSpec(int categoria)
+        {
+            _specCategory = categoria;
+            foreach (FlatBtn item in _specCategoryButtons)
+            {
+                item.Primary = (int)item.Tag == categoria;
+                item.Invalidate();
+            }
+            ArranjarSpecsPagina();
+            _pgSpecs.RolarPor(-100000);   // a ficha abre do topo
         }
 
         /// <summary>
@@ -1780,6 +1795,7 @@ namespace MhiagosControl
 
             if (_specCategory > 0)
             {
+                foreach (BlocoDeSpec bl in _specBlocos) bl.Visible = false;
                 int escolhido = _specCategory - 1;
                 for (int i = 0; i < _specCards.Count; i++)
                 {
@@ -1796,8 +1812,18 @@ namespace MhiagosControl
                 return;
             }
 
-            // Resumo: todos os grupos viram cartoes compactos com as primeiras
-            // informacoes. A categoria abre a ficha inteira sem repetir dados.
+            // Resumo: um mosaico de blocos, cada peca com o que se procura nela.
+            // A tabela completa de cada uma fica na categoria, a um clique.
+            if (_specBlocos.Count == _specCards.Count && _specBlocos.Count > 0)
+            {
+                foreach (Card c in _specCards) c.Visible = false;
+                ArranjarMosaicoDeSpecs(topo, disp, Esp);
+                if (_lbSpecsNota != null)
+                    _lbSpecsNota.Width = Math.Max(160, disp - _lbSpecsNota.Left);
+                _pgSpecs.Sincronizar();
+                return;
+            }
+
             foreach (Card c in _specCards)
             {
                 c.Visible = true;
@@ -1849,6 +1875,49 @@ namespace MhiagosControl
                 _lbSpecsNota.Width = Math.Max(160, disp - _lbSpecsNota.Left);
 
             _pgSpecs.Sincronizar();
+        }
+
+        /// <summary>
+        /// O mosaico: processador e discos na largura inteira, o resto aos pares.
+        ///
+        /// A ordem segue o que se procura primeiro - processador, video e
+        /// memoria - e nao a ordem da coleta. Os dois blocos de um par ficam com
+        /// a altura do maior, para as bordas de baixo alinharem; um bloco que
+        /// sobraria sozinho numa linha toma a largura inteira.
+        /// </summary>
+        private void ArranjarMosaicoDeSpecs(int topo, int disp, int esp)
+        {
+            string[] ordem = { T.SpecCpu, T.SpecGpu, T.SpecRam, T.SpecStorage, T.SpecBoard, T.SpecOs, T.SpecNetwork };
+            List<BlocoDeSpec> fila = new List<BlocoDeSpec>();
+            foreach (string t in ordem)
+                foreach (BlocoDeSpec b in _specBlocos)
+                    if (b.Grupo.Titulo == t && !fila.Contains(b)) fila.Add(b);
+            foreach (BlocoDeSpec b in _specBlocos) if (!fila.Contains(b)) fila.Add(b);
+
+            bool duas = disp >= 620;
+            int meia = (disp - esp) / 2;
+            int y = topo;
+            int i = 0;
+            while (i < fila.Count)
+            {
+                BlocoDeSpec a = fila[i];
+                a.Visible = true;
+                BlocoDeSpec b = (duas && !a.Largo && i + 1 < fila.Count && !fila[i + 1].Largo) ? fila[i + 1] : null;
+                if (b == null)
+                {
+                    int h = a.AlturaPara(disp);
+                    a.SetBounds(2, y, disp, h);
+                    y += h + esp;
+                    i++;
+                    continue;
+                }
+                b.Visible = true;
+                int alt = Math.Max(a.AlturaPara(meia), b.AlturaPara(meia));
+                a.SetBounds(2, y, meia, alt);
+                b.SetBounds(2 + meia + esp, y, disp - meia - esp, alt);
+                y += alt + esp;
+                i += 2;
+            }
         }
 
         private void ArranjarParDeSpecs(int left, int right, int y, int width, int gap)

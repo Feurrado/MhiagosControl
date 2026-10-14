@@ -136,6 +136,14 @@ namespace MhiagosControl
         public static string SpecsCopy { get { return P("Copiar tudo", "Copy all"); } }
         public static string SpecsCopied { get { return P("Especificações copiadas", "Specs copied"); } }
         public static string SpecsOverview { get { return P("Resumo", "Overview"); } }
+        public static string SpecSeeAll { get { return P("Ver tudo ›", "See all ›"); } }
+        public static string SpecCoresTag(string n) { return P(n + " núcleos", n + " cores"); }
+        public static string SpecThreadsTag(string n) { return P(n + " threads", n + " threads"); }
+        public static string SpecChannelsTag(string n) { return n == "1" ? P("1 canal", "1 channel") : P(n + " canais", n + " channels"); }
+        public static string SpecUpTo(string v) { return P("até " + v, "up to " + v); }
+        public static string SpecDriverTag(string v) { return P("driver " + v, "driver " + v); }
+        public static string SpecDisks(int n) { return n == 1 ? P("1 disco", "1 drive") : P(n + " discos", n + " drives"); }
+        public static string SpecUptimeTag(string v) { return P("ligado há " + v, "up " + v); }
         public static string SpecsChooseCategory
         {
             get { return P("Selecione uma categoria para ver a ficha completa.",
