@@ -402,11 +402,11 @@ namespace MhiagosControl
             Igual("rtss:fps", ida.Clone().MetricNavId, "a copia da configuracao leva a escolha");
         }
 
-        // ---------------- layouts escolhidos: 5B, 6A e 7B ----------------
+        // ---------------- layouts escolhidos: 5B, 6A e 7C ----------------
 
         private static void RegressionLayoutsEscolhidos(string root)
         {
-            Secao("layouts 2.22: Configuracoes em linhas, Sobre com identidade, Perfis com barra");
+            Secao("layouts 2.22: Configuracoes em linhas, Sobre com identidade, Perfis em duas colunas");
             Igual(MhiagosSetup.Setup.Versao, AppInfo.Versao, "a versao do Sobre e a do instalador andam juntas");
             string languageBefore = T.Language;
             try
@@ -463,29 +463,34 @@ namespace MhiagosControl
                                 "a isencao aparece inteira, sem corte");
                             CaptureEvolution(form, "layout-sobre-" + sufixo);
 
-                            // ---- 7B
+                            // ---- 7C
                             nav.SelectedIndex = 4;
                             InvokePrivate(form, "ArrangeProfiles");
                             Card lista = (Card)Field(form, "_profilesListCard"), previa = (Card)Field(form, "_profilesPreviewCard");
-                            Card barra = (Card)Field(form, "_barraDePerfis");
-                            Verdade(barra.Top == 0 && lista.Top > barra.Bottom, "a barra de acoes vem antes de tudo");
-                            if (largura == 1300) Verdade(lista.Top == previa.Top && lista.Height == previa.Height, "lista e previa com a mesma altura " + sufixo);
                             Card jogo = (Card)Field(form, "_cardGame"), rodizio = (Card)Field(form, "_cardRotation");
-                            if (largura == 1300) Verdade(jogo.Top == rodizio.Top && jogo.Height == rodizio.Height && rodizio.Left > jogo.Right,
-                                "Perfil por jogo e Rodizio lado a lado " + sufixo);
-                            FlatBtn aplicar = (FlatBtn)Field(form, "_btnApply");
-                            Verdade(aplicar.Parent == barra && aplicar.Right <= barra.Width, "Aplicar mora na barra, dentro dela");
-                            List<FlatBtn> botoes = (List<FlatBtn>)Field(form, "_botoesDePerfil");
-                            Igual(6, botoes.Count, "os seis botoes de perfil estao na barra");
-                            // A janela nao passa do tamanho da tela (a do GitHub Actions e
-                            // pequena), entao o "larga" e medido pela barra, e nao pelo pedido.
-                            if (barra.Width >= 900) Igual(botoes[0].Top, aplicar.Top, "em janela larga a barra cabe numa linha so");
-                            foreach (Control b in barra.Controls)
+                            Control perfis = (Control)Field(form, "_pgPerfis");
+                            bool duasColunas = perfis.Width - Pagina.LarguraDaBarra - 4 >= 700;
+                            if (duasColunas)
                             {
-                                Verdade(b.Left >= 0 && b.Right <= barra.Width && b.Bottom <= barra.Height, "botao dentro da barra " + sufixo);
-                                foreach (Control o in barra.Controls)
-                                    if (o != b) Verdade(!b.Bounds.IntersectsWith(o.Bounds), "botoes da barra sem sobrepor " + sufixo);
+                                Verdade(lista.Top == previa.Top && previa.Left > lista.Right, "lista e previa lado a lado no alto " + sufixo);
+                                Verdade(rodizio.Left == lista.Left && rodizio.Top > lista.Bottom, "o Rodizio fica embaixo da lista " + sufixo);
+                                Verdade(jogo.Left == previa.Left && jogo.Top > previa.Bottom, "o Perfil por jogo fica embaixo da previa " + sufixo);
+                                Igual(rodizio.Bottom, jogo.Bottom, "as duas colunas terminam juntas " + sufixo);
                             }
+                            FlatBtn aplicar = (FlatBtn)Field(form, "_btnApply");
+                            Verdade(aplicar.Parent == previa, "Aplicar fica no cartao da previa");
+                            List<FlatBtn> botoes = (List<FlatBtn>)Field(form, "_botoesDePerfil");
+                            Igual(6, botoes.Count, "os seis botoes de perfil ficam embaixo da lista");
+                            foreach (Card cartao in new Card[] { lista, previa, jogo, rodizio })
+                                foreach (Control b in cartao.Controls)
+                                    if (b is FlatBtn)
+                                    {
+                                        Verdade(b.Left >= 0 && b.Right <= cartao.Width && b.Bottom <= cartao.Height, "botao dentro do cartao " + sufixo);
+                                        foreach (Control o in cartao.Controls)
+                                            if (o != b && o is FlatBtn) Verdade(!b.Bounds.IntersectsWith(o.Bounds), "botoes sem sobrepor " + sufixo);
+                                    }
+                            ProfileList listaDePerfis = (ProfileList)Field(form, "_profileList");
+                            Verdade(listaDePerfis.Bottom <= botoes[0].Top, "a lista termina antes dos botoes " + sufixo);
                             Igual(T.AlreadyActive, aplicar.Text, "perfil ja ativo: o botao diz isso, curto");
                             Toggle girar = (Toggle)Field(form, "_tgRotate");
                             NumberBox segundos = (NumberBox)Field(form, "_rotSecs");

@@ -178,125 +178,122 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Barra de acoes no alto, lista e previa lado a lado com a mesma
-        /// altura, e Perfil por jogo ao lado do Rodizio em janela larga. Em
-        /// janela estreita tudo empilha, na mesma ordem.
+        /// Duas colunas: a lista com o Rodizio embaixo, e a previa com o Perfil
+        /// por jogo embaixo, as duas terminando juntas. Em janela estreita tudo
+        /// empilha: lista, previa, jogo e rodizio.
         /// </summary>
         private void ArrangeProfiles()
         {
             if (_pgPerfis == null || !_pgPerfis.Visible || _profilesPreviewCard == null) return;
             const int Esp = 12;
             int width = Math.Max(320, Math.Min(LarguraMaxDaPagina, _pgPerfis.Width - Pagina.LarguraDaBarra - 4));
-
-            // ---- barra de acoes: primeiro grupo, vao, segundo grupo; Padrao e
-            // Aplicar encostados a direita, ou numa segunda linha se nao couberem
-            int x = 12, yBotao = 10, linhas = 1;
-            for (int i = 0; i < _botoesDePerfil.Count; i++)
-            {
-                FlatBtn b = _botoesDePerfil[i];
-                if (i == _inicioDoSegundoGrupo && i > 0) x += 12;
-                if (x > 12 && x + b.Width > width - 12) { x = 12; yBotao += 40; linhas++; }
-                b.Location = new Point(x, yBotao);
-                x += b.Width + 8;
-            }
-            int direita = _btnDefault.Width + 8 + _btnApply.Width;
-            if (x + 16 + direita > width - 12) { yBotao += 40; linhas++; }
-            int xd = Math.Max(12, width - 12 - direita);
-            _btnDefault.Location = new Point(xd, yBotao);
-            _btnApply.Location = new Point(Math.Min(_btnDefault.Right + 8, width - 12 - _btnApply.Width), yBotao);
-            _barraDePerfis.SetBounds(0, 0, width, yBotao + 32 + 10);
-            int y = _barraDePerfis.Bottom + Esp;
-
-            // ---- lista e previa
             bool lado = width >= 700;
-            int colW = lado ? (width - Esp) / 2 : width;
-            int pw = colW - 24;
-            int ph = Math.Max(160, Math.Min(280, pw * 250 / 386));
-            _profilePreview.SetBounds(12, 44, pw, ph);
-            int yBotoes = _profilePreview.Bottom + 12;
-            if (pw >= 420)
-            {
-                int bw = (pw - 8) / 2;
-                _profileSensor1.SetBounds(12, yBotoes, bw, 34);
-                _profileSensor2.SetBounds(12 + bw + 8, yBotoes, pw - bw - 8, 34);
-            }
-            else
-            {
-                _profileSensor1.SetBounds(12, yBotoes, pw, 34);
-                _profileSensor2.SetBounds(12, yBotoes + 42, pw, 34);
-            }
-            int alturaPrevia = _profileSensor2.Bottom + 14;
-
-            if (lado)
-            {
-                _profilesListCard.SetBounds(0, y, colW, alturaPrevia);
-                _profilesPreviewCard.SetBounds(colW + Esp, y, width - colW - Esp, alturaPrevia);
-            }
-            else
-            {
-                int alturaLista = 44 + Math.Min(320, Math.Max(150, _cfg.Profiles.Count * 54 + 8)) + 12;
-                _profilesListCard.SetBounds(0, y, width, alturaLista);
-                _profilesPreviewCard.SetBounds(0, _profilesListCard.Bottom + Esp, width, alturaPrevia);
-            }
-            _profileList.SetBounds(12, 44, _profilesListCard.Width - 24, _profilesListCard.Height - 44 - 12);
-            y = _profilesPreviewCard.Bottom + Esp;
-
-            // ---- perfil por jogo e rodizio
-            bool juntos = width >= 760;
-            int gw = juntos ? (width - Esp) * 3 / 5 : width;
-            int rw = juntos ? width - gw - Esp : width;
+            int lw = lado ? (width - Esp) * 40 / 100 : width;
+            int rw = lado ? width - lw - Esp : width;
 
             // a largura antes dos filhos: os ancorados a direita andam com ela
-            _cardGame.Width = gw;
-            _cardRotation.Width = rw;
+            _profilesListCard.Width = lw;
+            _profilesPreviewCard.Width = rw;
+            _cardGame.Width = rw;
+            _cardRotation.Width = lw;
 
-            bool compactGame = gw < 620;
-            _tgJogo.Width = gw - 32;
+            // ---- previa: imagem a esquerda e os quatro botoes ao lado; se a
+            // coluna for estreita, os botoes descem para baixo da imagem
+            bool botoesAoLado = rw >= 520;
+            int colBotoes = botoesAoLado ? Math.Max(170, Math.Min(240, (rw - 24) * 42 / 100)) : 0;
+            int pw = botoesAoLado ? rw - 24 - colBotoes - 12 : rw - 24;
+            int ph = Math.Max(150, Math.Min(260, pw * 250 / 386));
+            _profilePreview.SetBounds(12, 44, pw, ph);
+            FlatBtn[] daPrevia = { _profileSensor1, _profileSensor2, _btnDefault, _btnApply };
+            int alturaPrevia;
+            if (botoesAoLado)
+            {
+                int bx = _profilePreview.Right + 12;
+                int total = 4 * 34 + 3 * 8;
+                int by = 44 + Math.Max(0, (ph - total) / 2);
+                foreach (FlatBtn b in daPrevia) { b.SetBounds(bx, by, colBotoes, 34); by += 42; }
+                alturaPrevia = Math.Max(_profilePreview.Bottom, by - 8) + 14;
+            }
+            else
+            {
+                int bw = (pw - 8) / 2, by = _profilePreview.Bottom + 12;
+                for (int i = 0; i < 4; i++)
+                    daPrevia[i].SetBounds(12 + (i % 2) * (bw + 8), by + (i / 2) * 42, i % 2 == 0 ? bw : pw - bw - 8, 34);
+                alturaPrevia = by + 42 + 34 + 14;
+            }
+
+            // ---- perfil por jogo, na largura da coluna da direita
+            bool compactGame = rw < 620;
+            _tgJogo.Width = rw - 32;
             _lbJogoNome.AutoEllipsis = true;
-            _lbJogoNome.SetBounds(82, 106, gw - 98 - (compactGame ? 0 : 250), 26);
+            _lbJogoNome.SetBounds(82, 106, rw - 98 - (compactGame ? 0 : 250), 26);
             _lbJogoAtual.Width = _lbJogoNome.Width;
             if (compactGame)
             {
-                int buttonWidth = (gw - 40) / 2;
+                int buttonWidth = (rw - 40) / 2;
                 _btVincular.SetBounds(16, 174, buttonWidth, 34);
                 _btDesvincular.SetBounds(24 + buttonWidth, 174, buttonWidth, 34);
             }
             else
             {
-                _btVincular.SetBounds(gw - 246, 106, 230, 34);
-                _btDesvincular.SetBounds(gw - 246, 146, 230, 30);
+                _btVincular.SetBounds(rw - 246, 106, 230, 34);
+                _btDesvincular.SetBounds(rw - 246, 146, 230, 30);
             }
-            _lbJogoNota.SetBounds(16, compactGame ? 218 : 177, gw - 32, 38);
+            _lbJogoNota.SetBounds(16, compactGame ? 218 : 177, rw - 32, 38);
             _gameFileButton.Top = compactGame ? 262 : 220;
-            _gameFileNote.SetBounds(16, compactGame ? 302 : 260, gw - 32, 50);
+            _gameFileNote.SetBounds(16, compactGame ? 302 : 260, rw - 32, 50);
             _gameBindingsHeading.Top = compactGame ? 361 : 319;
-            _gameBindings.SetBounds(16, compactGame ? 388 : 346, gw - 32, _gameBindings.Height);
+            _gameBindings.SetBounds(16, compactGame ? 388 : 346, rw - 32, _gameBindings.Height);
             int alturaJogo = _gameBindings.Bottom + 16;
 
-            // No rodizio estreito o rotulo do interruptor quebra em duas linhas
-            // e a nota desce para baixo do campo de segundos.
-            bool rotuloCabe = 48 + TextRenderer.MeasureText(T.IncludeInRotation, Ui.FontBase).Width <= rw - 32;
-            _tgRotate.SetBounds(16, 48, rw - 32, rotuloCabe ? 26 : 42);
+            // ---- rodizio, na largura da coluna da esquerda: estreito, o rotulo
+            // do interruptor quebra em duas linhas e a nota desce
+            bool rotuloCabe = 48 + TextRenderer.MeasureText(T.IncludeInRotation, Ui.FontBase).Width <= lw - 32;
+            _tgRotate.SetBounds(16, 48, lw - 32, rotuloCabe ? 26 : 42);
             _rotSecs.Top = _tgRotate.Bottom + 10;
-            bool notaAoLado = rw >= 480;
+            bool notaAoLado = lw >= 480;
             _rotNote.AutoSize = false;
-            if (notaAoLado) _rotNote.SetBounds(134, _rotSecs.Top, rw - 150, 32);
-            else _rotNote.SetBounds(16, _rotSecs.Bottom + 8, rw - 32, Math.Max(32, _rotNote.GetPreferredSize(new Size(rw - 32, 0)).Height));
+            if (notaAoLado) _rotNote.SetBounds(134, _rotSecs.Top, lw - 150, 32);
+            else _rotNote.SetBounds(16, _rotSecs.Bottom + 8, lw - 32, Math.Max(32, _rotNote.GetPreferredSize(new Size(lw - 32, 0)).Height));
             int alturaRodizio = Math.Max(150, _rotNote.Bottom + 16);
 
-            if (juntos)
+            // ---- lista: grade de tres por dois embaixo, ou dois por tres se estreita
+            int colunas = lw >= 330 ? 3 : 2;
+            int linhasDeBotoes = (_botoesDePerfil.Count + colunas - 1) / colunas;
+            int alturaDosBotoes = linhasDeBotoes * 32 + (linhasDeBotoes - 1) * 8;
+            int y;
+            if (lado)
             {
-                int alto = Math.Max(alturaJogo, alturaRodizio);
-                _cardGame.SetBounds(0, y, gw, alto);
-                _cardRotation.SetBounds(gw + Esp, y, rw, alto);
-                y += alto + Esp;
+                int direita = alturaPrevia + Esp + alturaJogo;
+                int alturaLista = Math.Max(44 + 150 + 12 + alturaDosBotoes + 14, direita - Esp - alturaRodizio);
+                _profilesListCard.SetBounds(0, 0, lw, alturaLista);
+                _cardRotation.SetBounds(0, _profilesListCard.Bottom + Esp, lw, alturaRodizio);
+                _profilesPreviewCard.SetBounds(lw + Esp, 0, rw, alturaPrevia);
+                // a coluna da direita estica o jogo para as duas terminarem juntas
+                _cardGame.SetBounds(lw + Esp, _profilesPreviewCard.Bottom + Esp, rw,
+                    Math.Max(alturaJogo, _cardRotation.Bottom - _profilesPreviewCard.Bottom - Esp));
+                y = Math.Max(_cardRotation.Bottom, _cardGame.Bottom) + Esp;
             }
             else
             {
-                _cardGame.SetBounds(0, y, width, alturaJogo);
+                int alturaLista = 44 + Math.Min(320, Math.Max(150, _cfg.Profiles.Count * 54 + 8)) + 12 + alturaDosBotoes + 14;
+                _profilesListCard.SetBounds(0, 0, width, alturaLista);
+                _profilesPreviewCard.SetBounds(0, _profilesListCard.Bottom + Esp, width, alturaPrevia);
+                _cardGame.SetBounds(0, _profilesPreviewCard.Bottom + Esp, width, alturaJogo);
                 _cardRotation.SetBounds(0, _cardGame.Bottom + Esp, width, alturaRodizio);
                 y = _cardRotation.Bottom + Esp;
             }
+
+            int larguraLista = _profilesListCard.Width - 24;
+            int bwl = (larguraLista - (colunas - 1) * 8) / colunas;
+            int topoBotoes = _profilesListCard.Height - 14 - alturaDosBotoes;
+            for (int i = 0; i < _botoesDePerfil.Count; i++)
+            {
+                int col = i % colunas, lin = i / colunas;
+                int w = col == colunas - 1 ? larguraLista - (colunas - 1) * (bwl + 8) : bwl;
+                _botoesDePerfil[i].SetBounds(12 + col * (bwl + 8), topoBotoes + lin * 40, w, 32);
+            }
+            _profileList.SetBounds(12, 44, larguraLista, topoBotoes - 12 - 44);
 
             _profilesNote.SetBounds(2, y, width - 4, 48);
             ((Pagina)_pgPerfis).Sincronizar();

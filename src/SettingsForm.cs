@@ -2237,13 +2237,6 @@ namespace MhiagosControl
             return copy;
         }
 
-        /// <summary>Gruda o controle na borda direita do que o hospeda.</summary>
-        private static FlatBtn ADireita(FlatBtn b)
-        {
-            b.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            return b;
-        }
-
         // ---------------- pagina: Perfis ----------------
 
         /// <summary>
@@ -2261,39 +2254,14 @@ namespace MhiagosControl
             ((Pagina)page).RolarNaVertical();
             // fundo opaco vem da propria Pagina
 
-            // Barra de acoes no alto: os seis botoes que moravam numa grade de
-            // dois por tres embaixo da lista, mais Definir como padrao e Aplicar,
-            // que ficavam embaixo da previa. Fora dos cartoes, lista e previa
-            // ficam mais baixas e a pagina quase nao rola.
-            _barraDePerfis = new Card();
-            _barraDePerfis.Title = null;
-            page.Controls.Add(_barraDePerfis);
-            _botoesDePerfil.Clear();
-            BotaoDaBarra(T.New, new EventHandler(OnNewProfile));
-            BotaoDaBarra(T.Rename, new EventHandler(OnRenameProfile));
-            BotaoDaBarra(T.Duplicate, new EventHandler(OnDuplicateProfile));
-            BotaoDaBarra(T.Delete, new EventHandler(OnDeleteProfile)).Danger = true;
-            _inicioDoSegundoGrupo = _botoesDePerfil.Count;
-            BotaoDaBarra(T.Export, new EventHandler(OnExportProfile));
-            BotaoDaBarra(T.Import, new EventHandler(OnImportProfile));
-
-            _btnDefault = new FlatBtn();
-            _btnDefault.Text = T.SetAsDefault;
-            _btnDefault.Size = new Size(LarguraDoMaior(T.SetAsDefault, T.AlreadyDefault) + 24, 32);
-            _btnDefault.Click += delegate { DefinirPerfilPadrao(); };
-            _barraDePerfis.Controls.Add(_btnDefault);
-
-            _btnApply = new FlatBtn();
-            _btnApply.Text = T.ApplyProfile;
-            _btnApply.Primary = true;
-            _btnApply.Size = new Size(LarguraDoMaior(T.ApplyProfile, T.AlreadyActive) + 40, 32);
-            _btnApply.Click += delegate { AplicarPerfil(); };
-            _barraDePerfis.Controls.Add(_btnApply);
-
+            // Duas colunas: a lista, com os seis botoes de perfil embaixo e o
+            // Rodizio logo abaixo dela, ja que ele vale para o perfil
+            // selecionado; do outro lado a previa, com sensores, Padrao e
+            // Aplicar ao lado da imagem, e o Perfil por jogo embaixo.
             Card c = new Card();
             c.Title = T.SavedProfiles;
             _profilesListCard = c;
-            c.SetBounds(0, 64, 330, 400);
+            c.SetBounds(0, 0, 330, 400);
             page.Controls.Add(c);
 
             _profileList = new ProfileList();
@@ -2305,10 +2273,18 @@ namespace MhiagosControl
             _profileList.ItemActivated += delegate { AplicarPerfil(); };
             c.Controls.Add(_profileList);
 
+            _botoesDePerfil.Clear();
+            BotaoDePerfil(T.New, new EventHandler(OnNewProfile));
+            BotaoDePerfil(T.Rename, new EventHandler(OnRenameProfile));
+            BotaoDePerfil(T.Duplicate, new EventHandler(OnDuplicateProfile));
+            BotaoDePerfil(T.Export, new EventHandler(OnExportProfile));
+            BotaoDePerfil(T.Import, new EventHandler(OnImportProfile));
+            BotaoDePerfil(T.Delete, new EventHandler(OnDeleteProfile)).Danger = true;
+
             Card cv = new Card();
             cv.Title = T.ProfilePreview;
             _profilesPreviewCard = cv;
-            cv.SetBounds(346, 64, 410, 400);
+            cv.SetBounds(346, 0, 410, 400);
             page.Controls.Add(cv);
 
             _profilePreview = new PanelPreview();
@@ -2324,6 +2300,20 @@ namespace MhiagosControl
             _profileSensor2.SetBounds(209, 306, 189, 34);
             _profileSensor2.Click += delegate { TrocarSensorDoPerfil(2); };
             cv.Controls.Add(_profileSensor2);
+
+            _btnDefault = new FlatBtn();
+            _btnDefault.Text = T.SetAsDefault;
+            _btnDefault.Size = new Size(160, 34);
+            _btnDefault.Click += delegate { DefinirPerfilPadrao(); };
+            cv.Controls.Add(_btnDefault);
+
+            _btnApply = new FlatBtn();
+            _btnApply.Text = T.ApplyProfile;
+            _btnApply.Primary = true;
+            _btnApply.Size = new Size(160, 34);
+            _btnApply.Click += delegate { AplicarPerfil(); };
+            cv.Controls.Add(_btnApply);
+
 
             // A automacao por jogo vem antes do rodizio: ela e uma relacao entre
             // o perfil selecionado acima e um aplicativo real, e deixa-la no fim
@@ -2438,28 +2428,18 @@ namespace MhiagosControl
             return page;
         }
 
-        private Card _barraDePerfis;
+        /// <summary>Os seis botoes de perfil, em grade de tres por dois embaixo da lista.</summary>
         private readonly List<FlatBtn> _botoesDePerfil = new List<FlatBtn>();
-        /// <summary>Onde comeca o segundo grupo da barra (Exportar e Importar), separado do primeiro por um vao.</summary>
-        private int _inicioDoSegundoGrupo;
 
-        private FlatBtn BotaoDaBarra(string texto, EventHandler h)
+        private FlatBtn BotaoDePerfil(string texto, EventHandler h)
         {
             FlatBtn b = new FlatBtn();
             b.Text = texto;
-            b.Size = new Size(TextRenderer.MeasureText(texto, Ui.FontBase).Width + 24, 32);
+            b.Size = new Size(100, 32);
             b.Click += h;
-            _barraDePerfis.Controls.Add(b);
+            _profilesListCard.Controls.Add(b);
             _botoesDePerfil.Add(b);
             return b;
-        }
-
-        /// <summary>Largura do maior dos textos, para o botao nao mudar de tamanho quando o texto troca.</summary>
-        private static int LarguraDoMaior(params string[] textos)
-        {
-            int w = 0;
-            foreach (string t in textos) w = Math.Max(w, TextRenderer.MeasureText(t, Ui.FontBase).Width);
-            return w;
         }
 
         /// <summary>Edita o sensor do perfil sem obrigar a ida ate Paineis.</summary>
