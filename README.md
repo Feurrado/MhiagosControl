@@ -45,7 +45,7 @@ expõe. A mesma placa controladora sai em vários modelos da linha, com o mesmo
 software de fábrica, então o casamento não depende do identificador exato de um
 modelo.
 
-A aba *Sobre* mostra o `VID / PID` do painel encontrado — é a linha para incluir
+A aba *Sobre* mostra a versão e o `VID / PID` do painel encontrado — é a linha para incluir
 numa [issue](https://github.com/Feurrado/MhiagosControl/issues) se algo sair
 diferente do esperado no seu aparelho.
 
@@ -195,7 +195,9 @@ de vidro sobre a área de trabalho, com um anel (ou barra) por aparelho, que fic
 verde e respira devagar enquanto carrega. Fica logo acima dos ícones, atrás das
 janelas, como os antigos gadgets; com **Win+D** ele continua à vista. Arrastar
 muda o lugar (gruda nas bordas da tela) e clicar abre a página **Baterias**, que
-tem um cartão com todas as opções: ligar e desligar, **anéis** ou **lista**,
+guarda todas as opções atrás do botão **Widget**, com a engrenagem, no alto da
+página (fechado por padrão, para os aparelhos virem primeiro; se ficar aberto, a
+página lembra): ligar e desligar, **anéis** ou **lista**,
 vidro **nítido** (padrão, sem desfoque), **desfocado** ou **fosco**, a cor do
 vidro (do tema do Windows, escura ou clara), **sempre na frente das janelas**,
 **travar posição** e voltar ao canto da tela. O botão direito no widget tem as
@@ -210,9 +212,12 @@ o aparelho **chega a 100% no cabo**. A carga também vira sensor (categoria
 
 O retrato completo da máquina, no espírito do CPU-Z: processador com família,
 modelo, stepping, soquete, cache L1/L2/L3 e virtualização; placa-mãe e BIOS com
-versão e data; memória com tipo, velocidade, canais, slots ocupados e um pente
-por linha, com fabricante e número de peça; placa de vídeo com VRAM, VBIOS,
-device ID e driver; discos com SSD ou HDD e NVMe ou SATA; rede, monitores e o
+versão e data; memória com tipo, velocidade, canais e um pente por linha, com
+fabricante e número de peça, e os slots desenhados no lugar de cada um, com o
+nome da placa (A1, A2, B1, B2) e o pente daquele slot ao passar o mouse, lidos
+da tabela SMBIOS da BIOS; placa de vídeo com a marca de quem a montou
+(Sapphire, ASUS, MSI e outras, pelo ID de subsistema), VRAM, VBIOS, device ID e
+driver; discos com SSD ou HDD e NVMe ou SATA; rede, monitores e o
 sistema. Um botão copia tudo em texto, para colar num relatório.
 
 Esta é a única parte do programa que usa WMI, e a coleta acontece **uma vez por
@@ -253,6 +258,9 @@ O histórico **não vive na janela**: é gravado em disco e alimentado pelo mesm
 ciclo que atualiza o mostrador, então continua correndo com a configuração
 fechada e sobrevive a fechar o programa. São seis horas em baldes de cinco
 segundos, e a janela desenhada é escolhida entre **10 min**, **1 h** e **6 h**.
+A faixa do navegador, no alto da aba, desenha as seis horas da métrica escolhida:
+clicar num cartão troca a faixa para ele, na cor dele, sem mexer no trecho
+selecionado, e a escolha fica gravada.
 
 Período sem leitura fica **vazio no gráfico**, e não ligado por uma reta: o
 computador desligado das 3h às 8h é um buraco, não uma temperatura constante por
@@ -280,7 +288,7 @@ Vale para o jogo em primeiro plano; sem nenhum em primeiro plano, vale o último
 que desenhou. Trocar de jogo reinicia a janela de 60 segundos, porque o mínimo
 de dois programas diferentes seria um número que nunca aconteceu.
 
-**Instalar o RTSS pelo aplicativo.** Em *Configurações* há um cartão que mostra
+**Instalar o RTSS pelo aplicativo.** Em *Configurações* há uma linha que mostra
 se ele está publicando e um botão que entrega a instalação ao `winget`, numa
 janela visível, com o comando à mostra. O instalador do Mhiagos Control oferece
 o mesmo numa caixa **desmarcada**, que só aparece quando o RTSS ainda não está

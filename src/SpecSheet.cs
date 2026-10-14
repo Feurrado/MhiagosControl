@@ -12,6 +12,16 @@ namespace MhiagosControl
         public readonly string Titulo;
         public readonly List<string[]> Linhas = new List<string[]>();
 
+        /// <summary>
+        /// Nome em destaque no mosaico, quando quem coletou sabe um melhor que a
+        /// primeira linha: "Sapphire Radeon RX 580 8 GB". Nulo deixa o mosaico
+        /// montar o dele.
+        /// </summary>
+        public string Destaque;
+
+        /// <summary>Slots de memoria com nome e lugar, ou nulo quando a BIOS nao disse.</summary>
+        public List<SlotDeMemoria> Slots;
+
         public SpecGrupo(string titulo) { Titulo = titulo; }
 
         /// <summary>Acrescenta a linha. Valor vazio nao entra.</summary>
@@ -209,6 +219,17 @@ namespace MhiagosControl
                 if (teto > 0) g.Por(T.SpecMaxRam, EmGigabytes(teto * 1024UL));
             }
 
+            // Onde cada pente esta, slot a slot. So vale se a BIOS contar os
+            // mesmos pentes que o Windows: discordando, uma das duas esta
+            // errada e o desenho nao tem como saber qual.
+            List<SlotDeMemoria> lugares = SlotsDeMemoria.Ler();
+            if (lugares != null)
+            {
+                int ocupados = 0;
+                foreach (SlotDeMemoria s in lugares) if (s.Ocupado) ocupados++;
+                if (ocupados == mods.Count) g.Slots = lugares;
+            }
+
             // Um pente por linha, como a aba SPD do CPU-Z. O numero de peca e o
             // que se procura para comprar o pente igual.
             int i = 1;
@@ -239,7 +260,17 @@ namespace MhiagosControl
             ManagementObject o = Primeiro("Win32_VideoController");
             if (o == null) return g;
 
-            g.Por(T.SpecModel, Texto(o, "Name"));
+            // "PCI\VEN_1002&DEV_67DF&SUBSYS_E3531DA2&REV_E7" - os mesmos campos
+            // que o GPU-Z mostra, so que crus. Os quatro ultimos digitos do
+            // SUBSYS sao de quem montou a placa: 1DA2 e Sapphire.
+            string pnp = Texto(o, "PNPDeviceID");
+            string idPlaca;
+            string marca = MarcaDaPlaca(pnp, out idPlaca);
+            string modelo = Texto(o, "Name");
+
+            g.Por(T.SpecModel, ComMarca(marca, modelo));
+            if (marca != null) g.Por(T.SpecBoardMaker, marca);
+            else if (idPlaca != null && !PlacaDeReferencia(idPlaca)) g.Por(T.SpecBoardMaker, idPlaca);
 
             using (Microsoft.Win32.RegistryKey k = SystemInfo.ChaveDaGpu())
             {
@@ -258,16 +289,15 @@ namespace MhiagosControl
                 // da Visao geral. Duas leituras da mesma chave, cada classe com a
                 // sua copia do caminho, e o comeco de duas verdades sobre a mesma
                 // peca - e uma delas fica desatualizada primeiro.
-                g.Por(T.SpecVram, SystemInfo.From(sensores).GpuMemoria);
+                string vram = SystemInfo.From(sensores).GpuMemoria;
+                g.Por(T.SpecVram, vram);
+                if (marca != null) g.Destaque = NomeComercial(marca, modelo, vram);
 
                 // "113-4E3531U-O4V" - o numero da VBIOS, que e o que se compara
                 // com a pagina do fabricante para saber se ha atualizacao.
                 g.Por(T.SpecVbios, TextoBinario(k, "HardwareInformation.BiosString"));
             }
 
-            // "PCI\VEN_1002&DEV_67DF&SUBSYS_E3531DA2&REV_E7" - os mesmos campos
-            // que o GPU-Z mostra, so que crus.
-            string pnp = Texto(o, "PNPDeviceID");
             g.Por(T.SpecDeviceId, IdDePci(pnp, "DEV"));
             g.Por(T.SpecVendorId, IdDePci(pnp, "VEN"));
             g.Por(T.SpecRevision, IdDePci(pnp, "REV"));
@@ -730,6 +760,68 @@ namespace MhiagosControl
             int k = j;
             while (k < pnp.Length && Uri.IsHexDigit(pnp[k])) k++;
             return k > j ? pnp.Substring(j, k - j).ToUpperInvariant() : null;
+        }
+
+        /// <summary>
+        /// Quem montou a placa de video, pelo ID de fabricante do subsistema.
+        ///
+        /// So os parceiros conhecidos. O nome da linha (Pulse, Nitro+, TUF)
+        /// fica de fora: o subsistema identifica a placa por um numero sem
+        /// tabela publica, e inventar a linha a partir dele seria chute.
+        /// </summary>
+        private static readonly Dictionary<string, string> Parceiros = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "1DA2", "Sapphire" }, { "1043", "ASUS" }, { "1462", "MSI" }, { "1458", "Gigabyte" },
+            { "1682", "XFX" }, { "148C", "PowerColor" }, { "1849", "ASRock" }, { "3842", "EVGA" },
+            { "19DA", "Zotac" }, { "1569", "Palit" }, { "196E", "PNY" }, { "1B4C", "Galax/KFA2" },
+            { "1787", "HIS" },
+        };
+
+        /// <summary>
+        /// "Sapphire" para SUBSYS_E3531DA2. Nulo quando nao ha SUBSYS, quando a
+        /// placa e de referencia ou quando o ID nao esta na tabela; nos dois
+        /// ultimos casos <paramref name="idCru"/> traz os quatro digitos.
+        /// </summary>
+        internal static string MarcaDaPlaca(string pnp, out string idCru)
+        {
+            idCru = null;
+            string sub = IdDePci(pnp, "SUBSYS");
+            if (sub == null || sub.Length != 8) return null;
+            idCru = sub.Substring(4);
+            string nome;
+            return Parceiros.TryGetValue(idCru, out nome) ? nome : null;
+        }
+
+        /// <summary>A propria fabricante do chip no subsistema: AMD, NVIDIA ou Intel.</summary>
+        internal static bool PlacaDeReferencia(string id)
+        {
+            return id == "1002" || id == "10DE" || id == "8086";
+        }
+
+        private static readonly string[] Chips = { "Advanced Micro Devices ", "AMD ", "NVIDIA ", "Intel(R) ", "Intel " };
+
+        /// <summary>
+        /// "Sapphire Radeon RX 580 Series". O prefixo do chip sai, senao ficaria
+        /// "Sapphire AMD Radeon", duas marcas para uma placa.
+        /// </summary>
+        internal static string ComMarca(string marca, string modelo)
+        {
+            if (string.IsNullOrEmpty(marca) || string.IsNullOrEmpty(modelo)) return modelo;
+            string m = modelo.Trim();
+            if (m.IndexOf(marca, StringComparison.OrdinalIgnoreCase) >= 0) return m;
+            foreach (string c in Chips)
+                if (m.StartsWith(c, StringComparison.OrdinalIgnoreCase)) { m = m.Substring(c.Length).Trim(); break; }
+            return marca + " " + m;
+        }
+
+        /// <summary>"Sapphire Radeon RX 580 8 GB": marca, modelo sem "Series" e memoria.</summary>
+        internal static string NomeComercial(string marca, string modelo, string vram)
+        {
+            string m = SystemInfo.Limpar(ComMarca(marca, modelo));
+            if (string.IsNullOrEmpty(m)) return null;
+            m = System.Text.RegularExpressions.Regex.Replace(m, @"\s+Series$", "",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return string.IsNullOrEmpty(vram) ? m : m + " " + vram;
         }
 
         /// <summary>"20251028000000.000000+000" -> "28/10/2025".</summary>

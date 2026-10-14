@@ -68,6 +68,26 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>
+        /// O icone do aplicativo em tamanho grande, para o alto do Sobre.
+        ///
+        /// Lido da entrada de 128 px do proprio .ico, e nao do AppIcon: aquele
+        /// vem no tamanho de icone de janela (32 px), e esticado a 88 px borra.
+        /// Nulo se o recurso faltar; quem chama tem o AppIcon como reserva.
+        /// </summary>
+        public static Image AppImage(int lado)
+        {
+            try
+            {
+                using (Stream s = Open("app.ico"))
+                    if (s != null)
+                        using (Icon i = new Icon(s, lado, lado))
+                            return i.ToBitmap();
+            }
+            catch (Exception ex) { Log.Error("icone grande do aplicativo", ex); }
+            return null;
+        }
+
         /// <summary>Vista superior do cooler, usada como fundo da previa.</summary>
         public static Image Cooler
         {

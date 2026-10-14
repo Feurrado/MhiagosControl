@@ -92,6 +92,8 @@ namespace MhiagosControl
         public static string SpecVram { get { return P("Memória de vídeo", "Video memory"); } }
         public static string SpecDeviceId { get { return P("ID do dispositivo", "Device ID"); } }
         public static string SpecVendorId { get { return P("ID do fabricante", "Vendor ID"); } }
+        public static string SpecBoardMaker { get { return P("Fabricante da placa", "Board maker"); } }
+        public static string SpecSlotEmpty(string nome) { return P(nome + ": vazio", nome + ": empty"); }
         public static string SpecDriver { get { return P("Driver", "Driver"); } }
         public static string SpecDriverDate { get { return P("Data do driver", "Driver date"); } }
         public static string SpecResolution { get { return P("Resolução", "Resolution"); } }
@@ -136,6 +138,14 @@ namespace MhiagosControl
         public static string SpecsCopy { get { return P("Copiar tudo", "Copy all"); } }
         public static string SpecsCopied { get { return P("Especificações copiadas", "Specs copied"); } }
         public static string SpecsOverview { get { return P("Resumo", "Overview"); } }
+        public static string SpecSeeAll { get { return P("Ver tudo ›", "See all ›"); } }
+        public static string SpecCoresTag(string n) { return P(n + " núcleos", n + " cores"); }
+        public static string SpecThreadsTag(string n) { return P(n + " threads", n + " threads"); }
+        public static string SpecChannelsTag(string n) { return n == "1" ? P("1 canal", "1 channel") : P(n + " canais", n + " channels"); }
+        public static string SpecUpTo(string v) { return P("até " + v, "up to " + v); }
+        public static string SpecDriverTag(string v) { return P("driver " + v, "driver " + v); }
+        public static string SpecDisks(int n) { return n == 1 ? P("1 disco", "1 drive") : P(n + " discos", n + " drives"); }
+        public static string SpecUptimeTag(string v) { return P("ligado há " + v, "up " + v); }
         public static string SpecsChooseCategory
         {
             get { return P("Selecione uma categoria para ver a ficha completa.",
@@ -577,7 +587,7 @@ namespace MhiagosControl
                      "seconds on each profile  ·  " + n + " profiles in the rotation");
         }
         public static string ApplyProfile { get { return P("Aplicar perfil", "Apply profile"); } }
-        public static string AlreadyActive { get { return P("já é o perfil ativo", "already the active profile"); } }
+        public static string AlreadyActive { get { return P("Perfil ativo", "Active profile"); } }
 
         public static string ProfilesNote
         {
@@ -617,6 +627,42 @@ namespace MhiagosControl
             }
         }
 
+        // Configuracoes em linhas, no estilo do Windows 11: grupos e descricoes curtas.
+        public static string SettingsGeneral { get { return P("Geral", "General"); } }
+        public static string SettingsFps { get { return P("FPS", "FPS"); } }
+        public static string SettingsData { get { return P("Dados", "Data"); } }
+        public static string StateOn { get { return P("Ligado", "On"); } }
+        public static string StateOff { get { return P("Desligado", "Off"); } }
+        public static string StartWithWindowsNote
+        {
+            get { return P("O app abre sozinho quando você entra no Windows.", "The app opens on its own when you sign in to Windows."); }
+        }
+        public static string ShowAllShort
+        {
+            get { return P("Desligado, os sensores por núcleo viram uma média por grupo.", "When off, per-core sensors become one average per group."); }
+        }
+        public static string BlankWhenIdleShort
+        {
+            get { return P("Conta teclado e mouse da sessão inteira. O mostrador volta ao primeiro toque.",
+                           "Counts keyboard and mouse across the whole session. The display returns on the first input."); }
+        }
+        public static string DataFolderTitle { get { return P("Configuração e registro", "Settings and log"); } }
+        public static string BackupShort
+        {
+            get { return P("Perfis, jogos, métricas e preferências já salvos. Edições pendentes e histórico ficam fora.",
+                           "Saved profiles, games, metrics and preferences. Unsaved edits and history are left out."); }
+        }
+        public static string DiagnosticShort
+        {
+            get { return P("Revise antes de exportar. Sem nomes, caminhos, números de série ou logs pessoais.",
+                           "Review before exporting. No names, paths, serial numbers or personal logs."); }
+        }
+
+        // Sobre com cartao de identidade
+        public static string VersionLabel(string v) { return P("Versão " + v, "Version " + v); }
+        public static string Libraries { get { return P("Bibliotecas", "Libraries"); } }
+        public static string PanelNone { get { return P("nenhum encontrado", "none found"); } }
+        public static string PanelTested { get { return P("Temp 6 Pro Black, o modelo testado", "Temp 6 Pro Black, the tested model"); } }
         public static string Language_ { get { return P("Idioma", "Language"); } }
         public static string LanguageNote
         {
@@ -642,7 +688,6 @@ namespace MhiagosControl
         }
         public static string DataPathLabel { get { return P("Configuração e registro em:", "Settings and log in:"); } }
         public static string OpenFolder { get { return P("Abrir pasta", "Open folder"); } }
-        public static string ProjectAndCredits { get { return P("Projeto e créditos", "Project and credits"); } }
         public static string CreatedBy { get { return P("Criado por Feurrado", "Built by Feurrado"); } }
         public static string OpenOnGitHub { get { return P("Abrir no GitHub", "Open on GitHub"); } }
         public static string LibsNote
@@ -899,6 +944,8 @@ namespace MhiagosControl
         public static string WidgetHide { get { return P("Ocultar widget", "Hide widget"); } }
         public static string WidgetNoDevices { get { return P("Nenhum periférico com bateria", "No battery devices"); } }
         public static string WidgetCard { get { return P("Widget na área de trabalho", "Desktop widget"); } }
+        public static string WidgetButton { get { return P("Widget", "Widget"); } }
+        public static string WidgetButtonTip { get { return P("Opções do widget na área de trabalho", "Desktop widget options"); } }
         public static string WidgetShow { get { return P("Mostrar o widget na área de trabalho", "Show the widget on the desktop"); } }
         public static string WidgetSharpShort { get { return P("Nítido", "Sharp"); } }
         public static string WidgetTint { get { return P("Cor", "Color"); } }
@@ -912,6 +959,11 @@ namespace MhiagosControl
         public static string BatLastDischarge { get { return P("Última descarga completa", "Last full discharge"); } }
         public static string BatMeasuring { get { return P("medindo (precisa de 10% gastos)", "measuring (needs 10% used)"); } }
         public static string BatNotSeenYet { get { return P("ainda não registrada", "not recorded yet"); } }
+        public static string NoReadingFor(TimeSpan t)
+        {
+            string d = t.TotalSeconds < 60 ? (int)t.TotalSeconds + " s" : Duracao(t);
+            return P("sem leitura · " + d, "no reading · " + d);
+        }
         public static string BatNoCurve { get { return P("a curva aparece com as primeiras leituras", "the curve shows up with the first readings"); } }
         public static string ByGHub(int horas) { return P("G HUB: " + horas + " h", "G HUB: " + horas + " h"); }
         public static string UseHours(string duracao) { return P(duracao + " de uso", duracao + " of use"); }
@@ -926,6 +978,9 @@ namespace MhiagosControl
         public static string Today { get { return P("hoje", "today"); } }
         public static string Yesterday { get { return P("ontem", "yesterday"); } }
         public static string Now { get { return P("agora", "now"); } }
+        public static string NavNow { get { return P("agora", "now"); } }
+        public static string NavLive { get { return P("ao vivo", "live"); } }
+        public static string NavBackToLive { get { return P("Voltar ao vivo", "Back to live"); } }
         public static string HoursAgo(int h) { return P(h + " h atrás", h + " h ago"); }
         // Resumo do cartao de bateria
         public static string StatusCharging { get { return P("Carregando", "Charging"); } }
@@ -970,11 +1025,6 @@ namespace MhiagosControl
         public static string PanelNotFound
         {
             get { return P("Painel: nenhum encontrado", "Panel: none found"); }
-        }
-
-        public static string PanelFound(string id)
-        {
-            return P("Painel: " + id, "Panel: " + id);
         }
 
         public static string PanelUntested

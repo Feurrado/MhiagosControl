@@ -183,15 +183,35 @@ namespace MhiagosControl
 
             _activationWatcher = new Thread(new ThreadStart(delegate
             {
-                WaitHandle[] sinais = { _activationSignal, _stop };
-                while (!IsStopping)
+                // O instalador acende o segundo evento para fechar o app do
+                // jeito normal. Antes ele matava o processo, e o historico de
+                // metricas ainda nao gravado - ate cinco minutos - sumia a cada
+                // atualizacao, deixando um buraco na curva.
+                EventWaitHandle saida = null;
+                try { saida = new EventWaitHandle(false, EventResetMode.AutoReset, Program.ExitName); }
+                catch (Exception ex) { Log.Error("evento de encerramento", ex); }
+                WaitHandle[] sinais = saida != null
+                    ? new WaitHandle[] { _activationSignal, _stop, saida }
+                    : new WaitHandle[] { _activationSignal, _stop };
+                try
                 {
-                    int qual;
-                    try { qual = WaitHandle.WaitAny(sinais); }
-                    catch (ObjectDisposedException) { return; }
-                    if (qual != 0 || IsStopping) return;
-                    Marshal(delegate { PedirConfiguracao(); });
+                    while (!IsStopping)
+                    {
+                        int qual;
+                        try { qual = WaitHandle.WaitAny(sinais); }
+                        catch (ObjectDisposedException) { return; }
+                        if (IsStopping) return;
+                        if (qual == 2)
+                        {
+                            Log.Write("encerramento pedido pelo instalador");
+                            Marshal(delegate { OnExit(this, EventArgs.Empty); });
+                            return;
+                        }
+                        if (qual != 0) return;
+                        Marshal(delegate { PedirConfiguracao(); });
+                    }
                 }
+                finally { if (saida != null) saida.Dispose(); }
             }));
             _activationWatcher.IsBackground = true;
             _activationWatcher.Name = "InstanceActivation";
@@ -1488,6 +1508,9 @@ namespace MhiagosControl
     {
         private const string MutexName = "Local\\MhiagosControl_SingleInstance";
         private const string ActivationName = "Local\\MhiagosControl_Activate";
+
+        /// <summary>Evento que o instalador acende para fechar o app sem matar o processo.</summary>
+        public const string ExitName = "Local\\MhiagosControl_Exit";
 
         private static bool TemArgumento(string alvo)
         {

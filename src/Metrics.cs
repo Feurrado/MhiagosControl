@@ -32,6 +32,9 @@ namespace MhiagosControl
         /// <summary>Janela de tempo desenhada, em segundos.</summary>
         public int Janela = MetricHistory.JanelaPadrao;
 
+        /// <summary>Balde absoluto onde a janela termina; zero acompanha o agora.</summary>
+        public long FimBalde = 0;
+
         /// <summary>Acoes de edicao, disparadas pelos botoes do canto.</summary>
         public event EventHandler Remover, MoverEsquerda, MoverDireita, TrocarTamanho;
 
@@ -137,9 +140,28 @@ namespace MhiagosControl
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
+            // Armado e solto sem andar: foi clique, e nao arraste. Os botoes do
+            // canto nao armam, entao clicar neles nao escolhe o cartao.
+            bool clique = _armado && e.Button == MouseButtons.Left;
             _armado = false;
             base.OnMouseUp(e);
+            if (clique) Disparar(Escolhido);
         }
+
+        /// <summary>Clique no cartao, fora dos botoes: a faixa do navegador passa a desenhar esta leitura.</summary>
+        public event EventHandler Escolhido;
+
+        private bool _selecionado;
+
+        /// <summary>E esta a leitura desenhada na faixa do navegador; a borda fica na cor de enfase.</summary>
+        public bool Selecionado
+        {
+            get { return _selecionado; }
+            set { if (_selecionado == value) return; _selecionado = value; Invalidate(); }
+        }
+
+        /// <summary>A cor com que o valor esta pintado agora, para a faixa usar a mesma.</summary>
+        public Color CorAtual { get { return Cor; } }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
@@ -294,7 +316,7 @@ namespace MhiagosControl
                 DesenharSerie(g, cor, topo, detalhado);
                 g.Clip = antigo;
 
-                using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, p);
+                using (Pen pen = _selecionado ? new Pen(Ui.Accent, 1.6f) : new Pen(Ui.Border)) g.DrawPath(pen, p);
             }
 
             // O rotulo cede espaco quando os botoes estao a mostra, em vez de
@@ -333,7 +355,7 @@ namespace MhiagosControl
         /// </summary>
         private void DesenharSerie(Graphics g, Color cor, int topo, bool detalhado)
         {
-            int n = MetricHistory.Janela(SensorId, Janela, ref _buf);
+            int n = MetricHistory.Janela(SensorId, Janela, FimBalde, ref _buf);
 
             float min = float.MaxValue, max = float.MinValue;
             double soma = 0;
@@ -361,19 +383,42 @@ namespace MhiagosControl
 
             if (detalhado) DesenharGrade(g, topo, alt);
 
-            // Segmentos separados nas falhas: com o aplicativo desligado nao ha
-            // leitura, e ligar os dois lados do buraco desenharia uma variacao
-            // que ninguem mediu.
+            // Falha curta (ate 30 s) e uma leitura que nao chegou: a linha
+            // segue cheia por cima dela. Falha longa - app fechado, PC
+            // desligado - vira uma ponte tracejada e apagada entre o ultimo
+            // valor lido e o proximo. A ponte diz "aqui nao houve medida" sem
+            // deixar o grafico em pedacos; a curva cheia e a area ficam so
+            // onde houve leitura.
             List<PointF> seg = new List<PointF>(n);
+            List<PointF> pontes = new List<PointF>();
+            int ultimo = -1;
+            PointF anterior = PointF.Empty;
             for (int i = 0; i < n; i++)
             {
                 float v = _buf[i];
-                if (float.IsNaN(v)) { Traco(g, seg, cor); seg.Clear(); continue; }
+                if (float.IsNaN(v)) continue;
                 float x = (float)i / (n - 1) * Width;
                 float yv = topo + alt - (v - baixo) / faixa * alt;
-                seg.Add(new PointF(x, yv));
+                PointF p = new PointF(x, yv);
+                if (ultimo >= 0 && i - ultimo - 1 > LacunaCurta)
+                {
+                    Traco(g, seg, cor);
+                    seg.Clear();
+                    pontes.Add(anterior);
+                    pontes.Add(p);
+                }
+                seg.Add(p);
+                ultimo = i;
+                anterior = p;
             }
             Traco(g, seg, cor);
+            if (pontes.Count > 0)
+                using (Pen tracejada = new Pen(Color.FromArgb(110, cor), 1.3f))
+                {
+                    tracejada.DashPattern = new float[] { 3f, 3f };
+                    for (int k = 0; k + 1 < pontes.Count; k += 2)
+                        g.DrawLine(tracejada, pontes[k], pontes[k + 1]);
+                }
 
             if (detalhado) DesenharEixo(g, topo, alt, min, media, max);
             if (detalhado && _hoverX >= 0)
@@ -388,9 +433,9 @@ namespace MhiagosControl
         /// aqui ela nao tinha resposta: dava para ver que houve um pico, nao a
         /// que horas nem de quanto.
         ///
-        /// Balde sem leitura nao mostra nada. A falha ja aparece como quebra na
-        /// linha, e inventar um numero para ela seria desmentir o proprio
-        /// desenho.
+        /// Sob uma ponte tracejada o balao nao inventa numero: diz quanto tempo
+        /// ficou sem leitura. Numa falha curta, desenhada como linha cheia, o
+        /// ponto segue a linha entre as duas leituras vizinhas.
         /// </summary>
         private void DesenharDetalhe(Graphics g, Color cor, int topo, int alt,
                                      int n, float baixo, float faixa)
@@ -402,7 +447,21 @@ namespace MhiagosControl
             if (i > n - 1) i = n - 1;
 
             float v = _buf[i];
-            if (float.IsNaN(v)) return;
+            string semLeitura = null;
+            if (float.IsNaN(v))
+            {
+                // Sob a ponte tracejada o balao diz quanto tempo ficou sem
+                // medida; fora de qualquer ponte (antes da primeira leitura)
+                // nao ha o que dizer.
+                int a = i, b = i;
+                while (a >= 0 && float.IsNaN(_buf[a])) a--;
+                while (b < n && float.IsNaN(_buf[b])) b++;
+                if (a < 0 || b >= n) return;
+                if (b - a - 1 > LacunaCurta)
+                    semLeitura = T.NoReadingFor(TimeSpan.FromSeconds((double)(b - a - 1) * MetricHistory.PassoSeg));
+                float f = (float)(i - a) / (b - a);
+                v = _buf[a] + (_buf[b] - _buf[a]) * f;
+            }
 
             float x = (float)i / (n - 1) * Width;
             float y = topo + alt - (v - baixo) / faixa * alt;
@@ -418,8 +477,8 @@ namespace MhiagosControl
             // Segundos so na janela curta: em seis horas cada balde e um ponto de
             // menos de um pixel, e anunciar o segundo exato prometeria uma
             // precisao que a largura da tela nao tem.
-            DateTime t = MetricHistory.FimDaJanela().AddSeconds(-(double)(n - 1 - i) * MetricHistory.PassoSeg);
-            string txt = Formatar(v) + (string.IsNullOrEmpty(Unidade) ? "" : " " + Unidade) +
+            DateTime t = (FimBalde > 0 ? MetricHistory.HoraDoBalde(FimBalde) : MetricHistory.FimDaJanela()).AddSeconds(-(double)(n - 1 - i) * MetricHistory.PassoSeg);
+            string txt = (semLeitura ?? Formatar(v) + (string.IsNullOrEmpty(Unidade) ? "" : " " + Unidade)) +
                          "   " + t.ToString(Janela <= 600 ? "HH:mm:ss" : "HH:mm");
 
             Size ts = TextRenderer.MeasureText(g, txt, Ui.FontSmall);
@@ -446,8 +505,18 @@ namespace MhiagosControl
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
 
+        /// <summary>Baldes vazios seguidos que ainda contam como linha cheia: 30 s.</summary>
+        private const int LacunaCurta = 6;
+
         private void Traco(Graphics g, List<PointF> seg, Color cor)
         {
+            if (seg.Count == 1)
+            {
+                // leitura isolada entre duas pontes: antes sumia do desenho
+                using (SolidBrush b = new SolidBrush(Color.FromArgb(150, cor)))
+                    g.FillEllipse(b, seg[0].X - 1.5f, seg[0].Y - 1.5f, 3f, 3f);
+                return;
+            }
             if (seg.Count < 2) return;
             PointF[] pts = seg.ToArray();
 

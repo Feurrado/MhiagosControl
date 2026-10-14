@@ -77,6 +77,9 @@ namespace MhiagosControl
         public static readonly Font FontSemi = Semi(9f);
         /// <summary>Valor dos blocos de resumo da pagina Baterias.</summary>
         public static readonly Font FontTileValue = Semi(11f);
+
+        /// <summary>O nome do aplicativo no alto do Sobre.</summary>
+        public static readonly Font FontAppName = Semi(18f);
         /// <summary>A porcentagem grande do cartao de bateria.</summary>
         public static readonly Font FontBigPct = new Font("Segoe UI", 20f, FontStyle.Bold);
 
@@ -693,8 +696,17 @@ namespace MhiagosControl
             if (!string.IsNullOrEmpty(Label))
             {
                 Rectangle tr = new Rectangle(w + 10, 0, Width - w - 10, Height);
-                TextRenderer.DrawText(g, Label, Font, tr, Ui.Text,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                if (Height >= 36)
+                {
+                    // Alto o bastante para duas linhas: quebra em vez de cortar
+                    // com reticencias, que num cartao estreito comia o fim da frase.
+                    Size t = TextRenderer.MeasureText(g, Label, Font, new Size(tr.Width, 0), TextFormatFlags.WordBreak);
+                    tr = new Rectangle(tr.X, Math.Max(0, (Height - t.Height) / 2), tr.Width, Math.Min(Height, t.Height));
+                    TextRenderer.DrawText(g, Label, Font, tr, Ui.Text, TextFormatFlags.Left | TextFormatFlags.WordBreak);
+                }
+                else
+                    TextRenderer.DrawText(g, Label, Font, tr, Ui.Text,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             }
         }
     }

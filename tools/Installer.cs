@@ -33,7 +33,7 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.20.2";
+        public const string Versao = "2.22.0";
         public const string TaskName = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
@@ -342,6 +342,24 @@ namespace MhiagosSetup
 
         private static void Encerrar()
         {
+            // Primeiro pede para o app fechar sozinho: assim ele grava o
+            // historico das metricas e das baterias. Matar direto perdia ate
+            // cinco minutos de curva a cada atualizacao. Versoes antigas nao
+            // tem o evento, e ai so resta o Kill.
+            try
+            {
+                using (System.Threading.EventWaitHandle saida =
+                    System.Threading.EventWaitHandle.OpenExisting("Local\\MhiagosControl_Exit"))
+                    saida.Set();
+                foreach (Process p in Process.GetProcessesByName(ProcName))
+                {
+                    try { p.WaitForExit(10000); }
+                    catch { }
+                    finally { p.Dispose(); }
+                }
+            }
+            catch { }
+
             try
             {
                 foreach (Process p in Process.GetProcessesByName(ProcName))

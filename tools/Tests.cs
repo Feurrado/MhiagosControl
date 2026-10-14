@@ -935,9 +935,16 @@ namespace MhiagosControl
             Igual("1 h", MetricHistory.NomeDaJanela(3600), "janela de uma hora");
             Igual("6 h", MetricHistory.NomeDaJanela(21600), "janela longa");
 
+            Igual("1 h 30 min", MetricHistory.NomeDaJanela(5400), "hora quebrada");
+            Igual("25 min", MetricHistory.NomeDaJanela(1500), "minutos livres do navegador");
+
             Igual(3600, MetricHistory.JanelaValida(3600), "valor da lista passa");
-            Igual(MetricHistory.JanelaPadrao, MetricHistory.JanelaValida(12345),
-                  "valor fora da lista cai no padrao");
+            Igual(1500, MetricHistory.JanelaValida(1500), "o navegador aceita qualquer tamanho");
+            Igual(1500, MetricHistory.JanelaValida(1503), "alinhado ao passo");
+            Igual(MetricHistory.JanelaPadrao, MetricHistory.JanelaValida(30),
+                  "menos de um minuto cai no padrao");
+            Igual(MetricHistory.JanelaPadrao, MetricHistory.JanelaValida(99999),
+                  "mais que o historico guardado cai no padrao");
             Igual(MetricHistory.JanelaPadrao, MetricHistory.JanelaValida(0),
                   "configuracao antiga sem a chave cai no padrao");
 
@@ -1697,6 +1704,13 @@ namespace MhiagosControl
                 // qualquer outra ferramenta.
                 "SpecStepping", "SpecThreads", "SpecBiosVendor", "SpecTotal", "SpecDriver",
                 "SpecVbios", "SpecSlots", "SpecTpm",
+
+                // "Widget" e o nome do recurso nos dois idiomas, como no menu da
+                // bandeja e no proprio cartao.
+                "WidgetButton",
+
+                // Sigla igual nos dois idiomas, titulo de grupo das Configuracoes.
+                "SettingsFps",
             });
 
             string antes = T.Language;

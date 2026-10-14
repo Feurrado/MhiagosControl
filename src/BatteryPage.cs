@@ -216,8 +216,12 @@ namespace MhiagosControl
             Image img = PeripheralStrip.Imagem(p);
             if (img != null) g.DrawImage(img, new Rectangle(Margem, 18, Icone, Icone));
 
+            // O nome completo tem linha propria, acima da porcentagem: em janela
+            // estreita ele ganha reticencias e nunca empurra o numero.
             int tx = Margem + Icone + 14;
-            TextRenderer.DrawText(g, _a.Nome, Ui.FontSection, new Point(tx, 14), Ui.Text, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, Perifericos.NomeCompleto(_a.Nome, _a.Fonte), Ui.FontSection,
+                new Rectangle(tx, 14, Math.Max(0, Width - Margem - tx), 20), Ui.Text,
+                TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
 
             const int yVal = 36;
             string valor = _a.PctAtual.HasValue ? _a.PctAtual.Value + "%" : "--";
@@ -538,8 +542,9 @@ namespace MhiagosControl
                     if (x1 > x0) g.FillRectangle(sombra, x0, area.Y, x1 - x0, area.Height);
                 }
 
-            // A curva quebra onde houve lacuna grande: app fechado ou aparelho
-            // desligado nao e uma reta ligando dois pontos distantes.
+            // A curva cheia quebra onde houve lacuna grande - app fechado ou
+            // aparelho desligado - e a lacuna ganha uma ponte tracejada logo
+            // abaixo, para nao passar por medida.
             List<List<PointF>> trechos = new List<List<PointF>>();
             List<PointF> pts = new List<PointF>();
             DateTime? anterior = null;
@@ -562,6 +567,21 @@ namespace MhiagosControl
             {
                 linha.LineJoin = LineJoin.Round;
                 foreach (List<PointF> t in trechos) Tracar(g, linha, t, area);
+            }
+
+            // Entre dois trechos, uma ponte tracejada e apagada. Quase sempre e
+            // o aparelho dormindo: o receptor do X11 nao informa bateria com o
+            // mouse parado, e a carga antes e depois e a mesma. Deixar o buraco
+            // fazia parecer que o grafico tinha perdido dados.
+            using (Pen ponte = new Pen(Color.FromArgb(120, cor), 1.6f))
+            {
+                ponte.DashPattern = new float[] { 3f, 3f };
+                for (int k = 0; k + 1 < trechos.Count; k++)
+                {
+                    List<PointF> a = trechos[k], b = trechos[k + 1];
+                    if (a.Count == 0 || b.Count == 0) continue;
+                    g.DrawLine(ponte, a[a.Count - 1], b[0]);
+                }
             }
 
             if (chegaAgora)
@@ -595,6 +615,95 @@ namespace MhiagosControl
                        Color.FromArgb(Ui.Dark ? 60 : 50, pen.Color), Color.FromArgb(0, pen.Color), LinearGradientMode.Vertical))
                 g.FillPolygon(b, poligono.ToArray());
             g.DrawLines(pen, pts.ToArray());
+        }
+    }
+
+    /// <summary>
+    /// "Widget" com engrenagem, no alto da pagina Baterias: abre e fecha o
+    /// painel com as opcoes do widget.
+    ///
+    /// Discreto de proposito, sem borda nem fundo ate o mouse passar: a pagina
+    /// e dos aparelhos, e o widget se ajusta uma vez e se esquece. O cartao de
+    /// opcoes ocupava 330 px acima do G325 e do X11, e quem abria a aba para
+    /// ver a bateria rolava por ele todas as vezes.
+    /// </summary>
+    public class BotaoDoWidget : Control
+    {
+        private bool _hover, _aberto;
+
+        // ESCAPADOS: E713 e a engrenagem, E70D e E70E as setas para baixo e
+        // para cima da Segoe MDL2.
+        private const string Engrenagem = "\uE713", Abrir = "\uE70D", Fechar = "\uE70E";
+
+        public BotaoDoWidget()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
+                     ControlStyles.SupportsTransparentBackColor | ControlStyles.Selectable, true);
+            BackColor = Color.Transparent;
+            Font = Ui.FontBase;
+            Cursor = Cursors.Hand;
+            TabStop = true;
+            AccessibleRole = AccessibleRole.PushButton;
+        }
+
+        /// <summary>O painel esta aberto: a seta aponta para cima e o texto fica na cor de enfase.</summary>
+        public bool Aberto
+        {
+            get { return _aberto; }
+            set
+            {
+                if (_aberto == value) return;
+                _aberto = value;
+                AccessibleDescription = value ? "aberto" : "fechado";
+                Invalidate();
+            }
+        }
+
+        /// <summary>Engrenagem, texto e seta, com folga dos dois lados.</summary>
+        public int LarguraDesejada()
+        {
+            return 10 + 16 + 6 + TextRenderer.MeasureText(Text ?? "", Font, Size.Empty, TextFormatFlags.NoPadding).Width + 8 + 12 + 10;
+        }
+
+        protected override void OnTextChanged(EventArgs e) { AccessibleName = Text; Invalidate(); base.OnTextChanged(e); }
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space)
+            {
+                OnClick(EventArgs.Empty);
+                e.Handled = true; e.SuppressKeyPress = true;
+            }
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Ui.Smooth(g);
+            Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
+            if (_hover || _aberto)
+                using (GraphicsPath p = Ui.RoundRect(r, 6))
+                using (SolidBrush b = new SolidBrush(_aberto && !_hover ? Ui.AccentSoft : Ui.Hover))
+                    g.FillPath(b, p);
+
+            Color cor = _aberto ? Ui.Accent : (_hover ? Ui.Text : Ui.Muted);
+            const TextFormatFlags Meio = TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
+            int x = 10;
+            TextRenderer.DrawText(g, Engrenagem, Ui.FontGlyph10, new Rectangle(x, 0, 16, Height), cor, Meio | TextFormatFlags.HorizontalCenter);
+            x += 16 + 6;
+            int lt = TextRenderer.MeasureText(g, Text ?? "", Font, Size.Empty, TextFormatFlags.NoPadding).Width;
+            TextRenderer.DrawText(g, Text ?? "", Font, new Rectangle(x, 0, lt + 2, Height), cor, Meio);
+            x += lt + 8;
+            TextRenderer.DrawText(g, _aberto ? Fechar : Abrir, Ui.FontGlyph8, new Rectangle(x, 1, 12, Height), cor, Meio | TextFormatFlags.HorizontalCenter);
+
+            if (Focused && ShowFocusCues)
+                ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(r, -3, -3), cor, Color.Transparent);
         }
     }
 
