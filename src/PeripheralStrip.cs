@@ -231,15 +231,19 @@ namespace MhiagosControl
                 return;
             }
 
-            // Cada aparelho ocupa so a fatia que ja entrou (presenca de 0 a 1):
-            // os vizinhos deslizam e o conjunto continua centralizado.
+            // Em duas fases, para o texto nunca ser cortado nem se sobrepor: a
+            // presenca de 0 a 0,5 abre (ou fecha) a vaga e os vizinhos deslizam;
+            // de 0,5 a 1 o aparelho esmaece dentro da vaga ja aberta. Saindo e
+            // o inverso: esmaece primeiro, depois a vaga fecha.
             int[] larg = new int[_itens.Length];
+            float[] abertura = new float[_itens.Length];
             float total = 0f, soma = 0f;
             for (int i = 0; i < _itens.Length; i++)
             {
                 larg[i] = Icone + Ui.S(10) + LarguraDoTexto(g, _itens[i], _previsoes[i]);
-                total += _presenca[i] * (larg[i] + Vao);
-                soma += _presenca[i];
+                abertura[i] = Math.Min(1f, _presenca[i] / 0.5f);
+                total += abertura[i] * (larg[i] + Vao);
+                soma += abertura[i];
             }
             total -= Vao * Math.Min(1f, soma);
 
@@ -247,15 +251,15 @@ namespace MhiagosControl
             if (x < Ui.S(16)) x = Ui.S(16);
             for (int i = 0; i < _itens.Length; i++)
             {
-                float v = _presenca[i];
-                int vaga = (int)Math.Ceiling(v * (larg[i] + Vao));
-                if (v >= 0.999f)
+                float alfa = Math.Max(0f, Math.Min(1f, (_presenca[i] - 0.5f) / 0.5f));
+                int vaga = (int)Math.Ceiling(abertura[i] * (larg[i] + Vao));
+                if (alfa >= 0.999f)
                     Desenhar(g, _itens[i], x, _previsoes[i]);
-                else if (v > 0.001f)
-                    Esmaecido(g, x, vaga, v, delegate { Desenhar(g, _itens[i], x, _previsoes[i]); });
-                if (v > 0.5f)
+                else if (alfa > 0.001f)
+                    Esmaecido(g, x, vaga, alfa, delegate { Desenhar(g, _itens[i], x, _previsoes[i]); });
+                if (alfa > 0.5f)
                     _zonas.Add(new KeyValuePair<Rectangle, Periferico>(
-                        new Rectangle(x - Ui.S(6), Ui.S(4), Math.Min(larg[i], vaga) + Ui.S(12), Height - Ui.S(8)), _itens[i]));
+                        new Rectangle(x - Ui.S(6), Ui.S(4), larg[i] + Ui.S(12), Height - Ui.S(8)), _itens[i]));
                 x += vaga;
             }
         }
