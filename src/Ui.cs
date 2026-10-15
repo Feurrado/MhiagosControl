@@ -18,16 +18,58 @@ namespace MhiagosControl
     {
         public static bool Dark { get { return Theme.IsDark; } }
 
+        /// <summary>
+        /// As cores que mudam com o tema, uma linha por papel: escuro, claro.
+        ///
+        /// Numa tabela, e nao em cada propriedade, para a troca de tema poder
+        /// perguntar "esta cor era qual papel no tema anterior?" e trazer o
+        /// mesmo papel no novo. Rotulos montados com a cor fixa na construcao
+        /// ficavam no tema velho - texto quase branco sobre fundo claro.
+        /// </summary>
+        private enum Papel { Window, Sidebar, Surface, SurfaceAlt, Border, Text, Muted, Faint, Thumb, AccentSoft, Hover }
+
+        private static readonly int[][] Tons =
+        {
+            new int[] { 0x1C1C1F, 0xF4F5F7 },   // Window
+            new int[] { 0x17171A, 0xEAECF0 },   // Sidebar
+            new int[] { 0x26262A, 0xFFFFFF },   // Surface
+            new int[] { 0x2E2E33, 0xF7F8FA },   // SurfaceAlt
+            new int[] { 0x38383E, 0xDADDE3 },   // Border
+            new int[] { 0xF0F0F3, 0x1B1D21 },   // Text
+            new int[] { 0x9699A3, 0x6B707B },   // Muted
+            new int[] { 0x8A8E99, 0x7C828D },   // Faint
+            new int[] { 0x555862, 0xB4BAC4 },   // Thumb
+            new int[] { 0x1E3352, 0xDEEAFF },   // AccentSoft
+            new int[] { 0x323238, 0xECEFF4 },   // Hover
+        };
+
+        private static Color De(Papel p, bool escuro)
+        {
+            return Color.FromArgb(unchecked((int)0xFF000000) | Tons[(int)p][escuro ? 0 : 1]);
+        }
+
+        /// <summary>
+        /// A mesma cor no outro tema, quando ela e um papel da paleta; se nao
+        /// for, volta igual. Para recolorir o que foi montado no tema anterior.
+        /// </summary>
+        internal static Color NoOutroTema(Color cor, bool eraEscuro)
+        {
+            int argb = cor.ToArgb();
+            for (int i = 0; i < Tons.Length; i++)
+                if (De((Papel)i, eraEscuro).ToArgb() == argb) return De((Papel)i, !eraEscuro);
+            return cor;
+        }
+
         // superficies
-        public static Color Window { get { return Dark ? C(0x1C, 0x1C, 0x1F) : C(0xF4, 0xF5, 0xF7); } }
-        public static Color Sidebar { get { return Dark ? C(0x17, 0x17, 0x1A) : C(0xEA, 0xEC, 0xF0); } }
-        public static Color Surface { get { return Dark ? C(0x26, 0x26, 0x2A) : C(0xFF, 0xFF, 0xFF); } }
-        public static Color SurfaceAlt { get { return Dark ? C(0x2E, 0x2E, 0x33) : C(0xF7, 0xF8, 0xFA); } }
-        public static Color Border { get { return Dark ? C(0x38, 0x38, 0x3E) : C(0xDA, 0xDD, 0xE3); } }
+        public static Color Window { get { return De(Papel.Window, Dark); } }
+        public static Color Sidebar { get { return De(Papel.Sidebar, Dark); } }
+        public static Color Surface { get { return De(Papel.Surface, Dark); } }
+        public static Color SurfaceAlt { get { return De(Papel.SurfaceAlt, Dark); } }
+        public static Color Border { get { return De(Papel.Border, Dark); } }
 
         // texto
-        public static Color Text { get { return Dark ? C(0xF0, 0xF0, 0xF3) : C(0x1B, 0x1D, 0x21); } }
-        public static Color Muted { get { return Dark ? C(0x96, 0x99, 0xA3) : C(0x6B, 0x70, 0x7B); } }
+        public static Color Text { get { return De(Papel.Text, Dark); } }
+        public static Color Muted { get { return De(Papel.Muted, Dark); } }
 
         /// <summary>
         /// Um degrau abaixo de Muted, para nota de rodape sem sumir.
@@ -37,21 +79,21 @@ namespace MhiagosControl
         /// apagado. Hierarquia se faz com contraste suficiente para SER LIDO,
         /// e nao com texto no limite de desaparecer.
         /// </summary>
-        public static Color Faint { get { return Dark ? C(0x8A, 0x8E, 0x99) : C(0x7C, 0x82, 0x8D); } }
+        public static Color Faint { get { return De(Papel.Faint, Dark); } }
 
         /// <summary>Polegar da barra de rolagem. Precisa se destacar do trilho
         /// sem competir com o texto: Border era escuro demais e sumia nele.</summary>
-        public static Color Thumb { get { return Dark ? C(0x55, 0x58, 0x62) : C(0xB4, 0xBA, 0xC4); } }
+        public static Color Thumb { get { return De(Papel.Thumb, Dark); } }
 
         // enfase - azul do icone do aplicativo
         public static Color Accent { get { return C(0x2D, 0x7D, 0xF6); } }
         public static Color AccentHover { get { return C(0x4A, 0x91, 0xFF); } }
-        public static Color AccentSoft { get { return Dark ? C(0x1E, 0x33, 0x52) : C(0xDE, 0xEA, 0xFF); } }
+        public static Color AccentSoft { get { return De(Papel.AccentSoft, Dark); } }
 
         // estados
         public static Color Warn { get { return C(0xF0, 0xAF, 0x3C); } }
         public static Color Danger { get { return C(0xEB, 0x5A, 0x4B); } }
-        public static Color Hover { get { return Dark ? C(0x32, 0x32, 0x38) : C(0xEC, 0xEF, 0xF4); } }
+        public static Color Hover { get { return De(Papel.Hover, Dark); } }
 
         public static readonly Font FontBase = new Font("Segoe UI", 9f);
         public static readonly Font FontMed = new Font("Segoe UI", 9f, FontStyle.Bold);

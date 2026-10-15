@@ -206,6 +206,7 @@ namespace MhiagosControl
             lock (_trava)
             {
                 CarregarSePreciso();
+                if (!_carregado) return;   // arquivo ainda ilegivel: veja CarregarSePreciso
                 foreach (Periferico p in atual)
                     if (p != null && p.Bateria.HasValue) Registrar(p, agora);
                 gravar = _sujo && agora - _ultimaGravacao >= IntervaloDeGravacao;
@@ -585,26 +586,49 @@ namespace MhiagosControl
 
         // ---------------- disco ----------------
 
+        /// <summary>
+        /// Le o arquivo uma vez. So conta como lido quando a leitura deu certo.
+        ///
+        /// Marcava lido ANTES de ler. Com o arquivo preso no logon - antivirus,
+        /// sincronizador -, a leitura falhava, a memoria ficava vazia e a
+        /// primeira gravacao trocava meses de historico pelo que tinha sido
+        /// visto naquela sessao. Agora a falha deixa tudo como estava: nada e
+        /// registrado nem gravado ate o arquivo abrir, o que o proximo ciclo
+        /// tenta de novo.
+        /// </summary>
         private static void CarregarSePreciso()
         {
             if (_carregado) return;
-            _carregado = true;
             try
             {
-                if (!File.Exists(Caminho)) return;
-                foreach (string linha in File.ReadAllLines(Caminho, Encoding.UTF8))
-                    try { Ler(linha); } catch { /* uma linha estragada nao derruba o resto */ }
+                if (File.Exists(Caminho))
+                {
+                    string[] linhas = File.ReadAllLines(Caminho, Encoding.UTF8);
+                    _aparelhos.Clear();
+                    foreach (string linha in linhas)
+                        try { Ler(linha); } catch { /* uma linha estragada nao derruba o resto */ }
 
-                // arquivo de antes do uso total: soma o que as descargas guardaram
-                foreach (Aparelho a in _aparelhos.Values)
-                    if (a.UsoTotalSeg <= 0)
-                    {
-                        foreach (Descarga d in a.Descargas) a.UsoTotalSeg += d.UsoSegundos;
-                        if (a.Atual != null) a.UsoTotalSeg += a.Atual.UsoSegundos;
-                    }
+                    // arquivo de antes do uso total: soma o que as descargas guardaram
+                    foreach (Aparelho a in _aparelhos.Values)
+                        if (a.UsoTotalSeg <= 0)
+                        {
+                            foreach (Descarga d in a.Descargas) a.UsoTotalSeg += d.UsoSegundos;
+                            if (a.Atual != null) a.UsoTotalSeg += a.Atual.UsoSegundos;
+                        }
+                }
+                _carregado = true;
+                _falhaAvisada = false;
             }
-            catch (Exception ex) { Log.Error("leitura do historico de bateria", ex); }
+            catch (Exception ex)
+            {
+                _aparelhos.Clear();
+                // um aviso por falha, e nao um por segundo enquanto durar
+                if (!_falhaAvisada) Log.Error("leitura do historico de bateria; nada sera gravado ate ler", ex);
+                _falhaAvisada = true;
+            }
         }
+
+        private static bool _falhaAvisada = false;
 
         private static DateTime D(string s) { return new DateTime(long.Parse(s, CultureInfo.InvariantCulture), DateTimeKind.Local); }
         private static int I(string s) { return int.Parse(s, CultureInfo.InvariantCulture); }
@@ -697,7 +721,8 @@ namespace MhiagosControl
             string texto;
             lock (_trava)
             {
-                if (!_sujo) return;
+                // sem a leitura do arquivo, gravar seria apagar o que ele guarda
+                if (!_sujo || !_carregado) return;
                 StringBuilder sb = new StringBuilder();
                 sb.Append("# historico de bateria do Mhiagos Control, v1\n");
                 foreach (Aparelho a in _aparelhos.Values)

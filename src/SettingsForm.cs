@@ -4592,10 +4592,11 @@ namespace MhiagosControl
         /// </summary>
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (_dirty && DialogResult != DialogResult.Retry)
+            if (_dirty && DialogResult != DialogResult.Retry && !_semPerguntar && !_fechamentoDecidido)
             {
-                DialogResult r = MessageBox.Show(T.UnsavedQuestion, T.UnsavedTitle,
-                    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                DialogResult r = PerguntaAoFechar != null ? PerguntaAoFechar()
+                    : MessageBox.Show(T.UnsavedQuestion, T.UnsavedTitle,
+                        MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
 
                 if (r == DialogResult.Cancel) { e.Cancel = true; base.OnFormClosing(e); return; }
                 if (r == DialogResult.Yes)
@@ -4613,6 +4614,30 @@ namespace MhiagosControl
                 DialogResult = _saved ? DialogResult.OK : DialogResult.Cancel;
 
             base.OnFormClosing(e);
+
+            // A escolha vale para o resto deste fechamento. O Application.Exit
+            // que vem depois de Sair dispara o FormClosing de novo, e perguntar
+            // duas vezes a mesma coisa - ou pior, aceitar um Cancelar na
+            // segunda - deixaria a saida pela metade.
+            if (!e.Cancel) _fechamentoDecidido = true;
+        }
+
+        /// <summary>Quem fecha decidiu sem perguntar: instalador ou fim da sessao.</summary>
+        private bool _semPerguntar;
+        private bool _fechamentoDecidido;
+
+        /// <summary>Substitui a pergunta de edicao pendente; os testes respondem por aqui.</summary>
+        internal Func<DialogResult> PerguntaAoFechar;
+
+        /// <summary>
+        /// Fecha descartando a edicao pendente, sem dialogo. Para quando o
+        /// aplicativo sai por motivo que ninguem pode cancelar - o instalador
+        /// pedindo o arquivo ou a sessao do Windows terminando.
+        /// </summary>
+        internal void FecharSemPerguntar()
+        {
+            _semPerguntar = true;
+            Close();
         }
 
         /// <summary>

@@ -92,6 +92,7 @@ namespace MhiagosControl
         {
             bool novo = ReadDark();
             if (_darkRead && novo == _dark) return;   // o aviso veio, mas o tema e o mesmo
+            bool? eraEscuro = _darkRead ? (bool?)_dark : null;
             _dark = novo;
             _darkRead = true;
 
@@ -116,7 +117,11 @@ namespace MhiagosControl
                     if (!alvo.IsHandleCreated || alvo.IsDisposed) continue;
                     alvo.BeginInvoke(new MethodInvoker(delegate
                     {
-                        try { Repintar(alvo); }
+                        try
+                        {
+                            if (eraEscuro.HasValue) Recolorir(alvo, eraEscuro.Value);
+                            Repintar(alvo);
+                        }
                         catch (Exception ex) { Log.Error("repintura no novo tema", ex); }
                     }));
                 }
@@ -193,26 +198,54 @@ namespace MhiagosControl
         /// </summary>
         public static void ApplyScrollbars(Control parent)
         {
-            if (!IsDark) return;
+            // No claro, so ha o que fazer se o escuro ja foi aplicado nesta
+            // execucao: o tema escuro das barras nao saia sozinho, e voltar ao
+            // claro com a janela aberta deixava barras pretas numa tela branca.
+            // Quem nunca esteve no escuro fica com o visual padrao intocado.
+            if (!IsDark && !_barrasEscuras) return;
+            if (IsDark) _barrasEscuras = true;
+            string tema = IsDark ? "DarkMode_Explorer" : null;
             try
             {
                 // O proprio controle recebido tambem entra: quando a chamada vem
                 // de uma pagina que acabou de aparecer, e ELA quem rola, e a
                 // varredura so dos filhos deixava a barra dela branca.
                 if (!(parent is Form) && parent.IsHandleCreated)
-                    try { SetWindowTheme(parent.Handle, "DarkMode_Explorer", null); } catch { }
+                    try { SetWindowTheme(parent.Handle, tema, null); } catch { }
 
                 foreach (Control c in parent.Controls)
                 {
                     if (c is ListBox || c is ListView || c is TreeView || c is TextBox || c is Panel)
                     {
-                        try { if (c.IsHandleCreated) SetWindowTheme(c.Handle, "DarkMode_Explorer", null); }
+                        try { if (c.IsHandleCreated) SetWindowTheme(c.Handle, tema, null); }
                         catch { }
                     }
                     if (c.Controls.Count > 0) ApplyScrollbars(c);
                 }
             }
             catch (Exception ex) { Log.Error("tema das barras de rolagem", ex); }
+        }
+
+        private static bool _barrasEscuras = false;
+
+        /// <summary>
+        /// Leva as cores fixadas na construcao para o tema novo.
+        ///
+        /// A janela le Ui.* no OnPaint dos controles desenhados, mas rotulos e
+        /// caixas guardam a cor que receberam ao nascer. Trocar o tema do
+        /// Windows com a configuracao aberta deixava o texto no tom do tema
+        /// anterior - do escuro para o claro, quase branco sobre fundo claro.
+        /// Cada cor que for um papel da paleta antiga vira o mesmo papel na
+        /// nova; as demais (transparente, verde da bateria) ficam como estao.
+        /// </summary>
+        internal static void Recolorir(Control raiz, bool eraEscuro)
+        {
+            if (raiz == null) return;
+            Color fore = raiz.ForeColor, back = raiz.BackColor;
+            Color novaFore = Ui.NoOutroTema(fore, eraEscuro), novaBack = Ui.NoOutroTema(back, eraEscuro);
+            if (novaFore != fore) raiz.ForeColor = novaFore;
+            if (novaBack != back) raiz.BackColor = novaBack;
+            foreach (Control c in raiz.Controls) Recolorir(c, eraEscuro);
         }
     }
 }

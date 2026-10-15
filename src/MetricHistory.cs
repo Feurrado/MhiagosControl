@@ -87,10 +87,20 @@ namespace MhiagosControl
             get { lock (_trava) return _geracao; }
         }
 
-        private static string Arquivo
+        private static string _caminho;
+
+        /// <summary>Arquivo do historico; os testes apontam para uma pasta temporaria.</summary>
+        internal static string Arquivo
         {
-            get { return Path.Combine(Paths.DataDir, "history.dat"); }
+            get { return _caminho ?? Path.Combine(Paths.DataDir, "history.dat"); }
+            set { _caminho = value; }
         }
+
+        /// <summary>
+        /// O arquivo existe e nao foi lido nem posto de lado: gravar por cima
+        /// apagaria o historico que ele guarda. Vale ate o proximo Carregar.
+        /// </summary>
+        private static bool _semGravacao = false;
 
         private static long BaldeAgora()
         {
@@ -420,6 +430,7 @@ namespace MhiagosControl
             {
                 _series.Clear();
                 _balde = BaldeAgora();
+                _semGravacao = false;
 
                 string caminho = Arquivo;
                 if (!File.Exists(caminho)) return;
@@ -432,13 +443,13 @@ namespace MhiagosControl
                         // Formato e passo conferidos antes de qualquer leitura: um
                         // arquivo de outra versao lido como se fosse deste daria
                         // uma curva plausivel e errada, que e pior que nenhuma.
-                        if (r.ReadString() != Magica) return;
+                        if (r.ReadString() != Magica) throw new InvalidDataException("assinatura desconhecida");
                         if (r.ReadInt32() != PassoSeg) return;
                         if (r.ReadInt32() != Baldes) return;
 
                         long balde = r.ReadInt64();
                         int n = r.ReadInt32();
-                        if (n < 0 || n > 4096) return;
+                        if (n < 0 || n > 4096) throw new InvalidDataException("quantidade de series invalida: " + n);
 
                         for (int i = 0; i < n; i++)
                         {
@@ -463,7 +474,31 @@ namespace MhiagosControl
                     Log.Error("leitura do historico de metricas", ex);
                     _series.Clear();
                     _balde = BaldeAgora();
+                    PorDeLado(caminho);
                 }
+            }
+        }
+
+        /// <summary>
+        /// O arquivo nao pode ser lido. Antes, a sessao comecava do zero e a
+        /// primeira gravacao o substituia: um arquivo apenas preso por outro
+        /// programa no logon perdia as seis horas. Agora ele e renomeado e fica
+        /// guardado; se nem renomear for possivel - preso, justamente -, esta
+        /// sessao nao grava, e o arquivo continua intacto para o proximo arranque.
+        /// </summary>
+        private static void PorDeLado(string caminho)
+        {
+            try
+            {
+                string destino = caminho + ".ilegivel-" +
+                    DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+                File.Move(caminho, destino);
+                Log.Write("historico de metricas ilegivel guardado em " + destino);
+            }
+            catch (Exception ex)
+            {
+                _semGravacao = true;
+                Log.Error("historico de metricas fica sem gravacao nesta sessao", ex);
             }
         }
 
@@ -476,7 +511,7 @@ namespace MhiagosControl
             lock (_trava)
             {
                 if (!_sujo && _ultimaGravacao != DateTime.MinValue) return;
-                if (_gravando) return;
+                if (_gravando || _semGravacao) return;
                 _gravando = true;
 
                 geracao = _geracao;

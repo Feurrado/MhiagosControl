@@ -43,10 +43,27 @@ namespace MhiagosControl
         private static Thread _thread;
         private static string _status = null;   // T.Starting so quando ja houver idioma
 
+        /// <summary>
+        /// Fechar foi pedido para a janela desta thread.
+        ///
+        /// A janela nasce dentro da thread dela, e um Close que chegasse antes
+        /// do handle - ou antes ate de _form existir - nao tinha em quem
+        /// mandar o recado: a tela de carregamento ficava aberta ate alguem
+        /// clicar no x. O pedido fica guardado aqui e a janela confere ao
+        /// aparecer.
+        /// </summary>
+        private static bool _fecharPedido;
+
+        internal static bool FecharPedido { get { lock (_lock) return _fecharPedido; } }
+
+        /// <summary>A thread da tela de carregamento; os testes esperam por ela.</summary>
+        internal static Thread ThreadAtual { get { lock (_lock) return _thread; } }
+
         public static void Show(string status)
         {
             lock (_lock)
             {
+                _fecharPedido = false;
                 _status = status ?? T.Starting;
                 if (_thread != null && _thread.IsAlive) { Focar(); return; }
 
@@ -82,9 +99,11 @@ namespace MhiagosControl
         {
             lock (_lock)
             {
+                _fecharPedido = true;
                 SplashForm f = _form;
-                if (f == null || f.IsDisposed) return;
-                try { f.BeginInvoke(new MethodInvoker(delegate { f.Close(); })); }
+                // Sem handle ainda, quem fecha e o OnShown da propria janela.
+                if (f == null || f.IsDisposed || !f.IsHandleCreated) return;
+                try { f.BeginInvoke(new MethodInvoker(delegate { if (!f.IsDisposed) f.Close(); })); }
                 catch (Exception ex) { Log.Error("fechar tela de carregamento", ex); }
             }
         }
@@ -141,6 +160,13 @@ namespace MhiagosControl
         {
             if (disposing && _anim != null) { _anim.Stop(); _anim.Dispose(); }
             base.Dispose(disposing);
+        }
+
+        /// <summary>O fechamento pode ter sido pedido antes de esta janela ter handle.</summary>
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            if (Splash.FecharPedido) BeginInvoke(new MethodInvoker(delegate { if (!IsDisposed) Close(); }));
         }
 
         // ShowWithoutActivation era true aqui. Numa janela que precisa aceitar

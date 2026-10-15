@@ -58,6 +58,7 @@ namespace MhiagosControl
             RegressionNavegadorSegueCartao(root);
             RegressionLayoutsEscolhidos(root);
             CapturaDasMetricas(root);
+            RegressionRevisao(root);
         }
 
         private static void RegressionBatteryWidget(string root)
