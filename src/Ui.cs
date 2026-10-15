@@ -1492,7 +1492,39 @@ namespace MhiagosControl
         private Rectangle _botao = Rectangle.Empty;
         private bool _sobreBotao = false;
 
-        private int TopoDosItens { get { return Estreita ? Ui.S(104) : HeaderH; } }
+        /// <summary>
+        /// Quanto a barra esta aberta, de 0 (faixa de icones) a 1 (aberta), pela
+        /// largura de agora.
+        ///
+        /// O desenho saltava entre dois arranjos quando a largura cruzava 150 px:
+        /// os icones pulavam do centro da faixa para a esquerda e 12 px para
+        /// baixo, o logotipo trocava de tamanho e o botao de lugar. Agora cada
+        /// posicao vai de um arranjo ao outro na proporcao da largura, e o
+        /// texto aparece e some aos poucos.
+        /// </summary>
+        internal float Abertura
+        {
+            get
+            {
+                int faixa = _larguraAberta - LarguraRecolhida;
+                if (faixa <= 0) return Width > LarguraRecolhida ? 1f : 0f;
+                return Math.Max(0f, Math.Min(1f, (Width - LarguraRecolhida) / (float)faixa));
+            }
+        }
+
+        private static float Entre(float a, float b, float t) { return a + (b - a) * t; }
+        private static int Entre(int a, int b, float t) { return (int)Math.Round(a + (b - a) * t); }
+
+        /// <summary>A cor do texto a caminho do fundo: some sem pular.</summary>
+        private static Color Esmaecer(Color cor, float t)
+        {
+            // o texto so comeca a aparecer depois da metade, quando ja ha espaco
+            float a = Math.Max(0f, Math.Min(1f, (t - 0.45f) / 0.55f));
+            Color f = Ui.Sidebar;
+            return Color.FromArgb((int)(f.R + (cor.R - f.R) * a), (int)(f.G + (cor.G - f.G) * a), (int)(f.B + (cor.B - f.B) * a));
+        }
+
+        private int TopoDosItens { get { return Entre(Ui.S(104), HeaderH, Abertura); } }
 
         // ---------------- arrastar para reordenar ----------------
 
@@ -1600,11 +1632,13 @@ namespace MhiagosControl
 
             DesenharCabecalho(g);
 
+            float t = Abertura;
+            int margem = Entre(Ui.S(6), Ui.S(8), t);
             int y = TopoDosItens;
             for (int i = 0; i < _items.Count; i++)
             {
                 NavItem it = _items[i];
-                it.Bounds = new Rectangle(Ui.S(Estreita ? 6 : 8), y, Width - Ui.S(Estreita ? 12 : 16), RowH);
+                it.Bounds = new Rectangle(margem, y, Width - 2 * margem, RowH);
 
                 bool sel = (i == _selected);
                 if (sel || i == _hover)
@@ -1621,11 +1655,14 @@ namespace MhiagosControl
                 }
 
                 Color fore = sel ? Ui.Text : Ui.Muted;
+                // Recolhida, o glifo fica no centro da faixa; aberta, encostado
+                // a esquerda do texto. No caminho, entre os dois.
+                float faixa = LarguraRecolhida - 2 * Ui.S(6);
                 if (it.Icone != null)
                 {
                     // o mesmo quadrado que um glifo de 11 pt ocuparia ali
                     float em = Ui.FontGlyph11.SizeInPoints * g.DpiY / 72f;
-                    float gx = Estreita ? it.Bounds.X + (it.Bounds.Width - em) / 2f : it.Bounds.X + Ui.S(14) + em / 6f;
+                    float gx = Entre(Ui.S(6) + (faixa - em) / 2f, Ui.S(8) + Ui.S(14) + em / 6f, t);
                     RectangleF cel = new RectangleF(gx, it.Bounds.Y + (RowH - em) / 2f, em, em);
                     it.Icone(g, cel, sel ? Ui.Accent : fore);
                 }
@@ -1633,21 +1670,22 @@ namespace MhiagosControl
                 {
                     using (SolidBrush b = new SolidBrush(sel ? Ui.Accent : fore))
                     {
-                        // Recolhida, o glifo e a unica coisa que resta do item:
-                        // centraliza, senao fica encostado na esquerda da faixa.
-                        if (Estreita)
-                        {
-                            SizeF t = g.MeasureString(it.Glyph, Ui.FontGlyph11);
-                            g.DrawString(it.Glyph, Ui.FontGlyph11, b,
-                                it.Bounds.X + (it.Bounds.Width - t.Width) / 2f, it.Bounds.Y + Ui.S(11));
-                        }
-                        else g.DrawString(it.Glyph, Ui.FontGlyph11, b, it.Bounds.X + Ui.S(14), it.Bounds.Y + Ui.S(11));
+                        SizeF tg = g.MeasureString(it.Glyph, Ui.FontGlyph11);
+                        float gx = Entre(Ui.S(6) + (faixa - tg.Width) / 2f, Ui.S(8) + Ui.S(14), t);
+                        g.DrawString(it.Glyph, Ui.FontGlyph11, b, gx, it.Bounds.Y + Ui.S(11));
                     }
                 }
-                if (!Estreita)
+                if (t > 0.45f)
+                {
+                    // No meio do deslize o texto e cortado pela borda, e nao
+                    // trocado por reticencias que mudam a cada quadro.
+                    bool deslizando = t < 1f;
+                    int largura = deslizando ? _larguraAberta - 2 * Ui.S(8) - Ui.S(46) : it.Bounds.Width - Ui.S(46);
                     TextRenderer.DrawText(g, it.Text, sel ? Ui.FontMed : Ui.FontBase,
-                        new Rectangle(it.Bounds.X + Ui.S(42), it.Bounds.Y, it.Bounds.Width - Ui.S(46), RowH), fore,
-                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                        new Rectangle(it.Bounds.X + Ui.S(42), it.Bounds.Y, largura, RowH), Esmaecer(fore, t),
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
+                        (deslizando ? TextFormatFlags.SingleLine : TextFormatFlags.EndEllipsis));
+                }
 
                 y += RowH + Ui.S(2);
             }
@@ -1676,34 +1714,40 @@ namespace MhiagosControl
         /// </summary>
         private void DesenharCabecalho(Graphics g)
         {
-            if (Estreita)
-            {
-                if (Logo != null) g.DrawImage(Logo, (Width - Ui.S(30)) / 2, Ui.S(18), Ui.S(30), Ui.S(30));
-                _botao = new Rectangle((Width - Ui.S(30)) / 2, Ui.S(60), Ui.S(30), Ui.S(30));
-            }
-            else
-            {
-                if (Logo != null) g.DrawImage(Logo, Ui.S(18), Ui.S(18), Ui.S(34), Ui.S(34));
+            // Logotipo e botao andam entre os dois arranjos na proporcao da
+            // largura; nome e perfil aparecem aos poucos, depois da metade.
+            float t = Abertura;
+            int lado = Entre(Ui.S(30), Ui.S(34), t);
+            int lx = Entre((LarguraRecolhida - Ui.S(30)) / 2, Ui.S(18), t);
+            if (Logo != null) g.DrawImage(Logo, lx, Ui.S(18), lado, lado);
 
-                using (SolidBrush b = new SolidBrush(Ui.Text))
-                    g.DrawString(AppName, Ui.FontMed, b, Ui.S(60), Ui.S(26));
+            if (t > 0.45f)
+            {
+                bool deslizando = t < 1f;
+                TextFormatFlags corte = deslizando ? TextFormatFlags.SingleLine : TextFormatFlags.EndEllipsis;
+                // Cortado antes do botao, que no meio do caminho passa por aqui.
+                int xBotao = Entre((LarguraRecolhida - Ui.S(30)) / 2, Width - Ui.S(42), t);
+                TextRenderer.DrawText(g, AppName ?? "", Ui.FontMed,
+                    new Rectangle(Ui.S(60), Ui.S(26), Math.Max(0, xBotao - Ui.S(64)), Ui.S(20)), Esmaecer(Ui.Text, t),
+                    TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
 
                 // O perfil ocupa a largura toda, abaixo do titulo. TextRenderer
                 // com retangulo delimitado, e nao DrawString: DrawString corta
                 // onde o controle acaba, sem reticencias.
-                int w = Width - Ui.S(34);
+                int w = (deslizando ? _larguraAberta : Width) - Ui.S(34);
                 if (!string.IsNullOrEmpty(SubtitleCaption))
                     TextRenderer.DrawText(g, SubtitleCaption, Ui.FontSmall,
-                        new Rectangle(Ui.S(18), Ui.S(62), w, Ui.S(14)), Ui.Faint,
-                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                        new Rectangle(Ui.S(18), Ui.S(62), w, Ui.S(14)), Esmaecer(Ui.Faint, t),
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | corte);
 
                 if (!string.IsNullOrEmpty(Subtitle))
                     TextRenderer.DrawText(g, Subtitle, Ui.FontBase,
-                        new Rectangle(Ui.S(18), Ui.S(78), w, Ui.S(18)), Ui.Text,
-                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-
-                _botao = new Rectangle(Width - Ui.S(42), Ui.S(20), Ui.S(30), Ui.S(30));
+                        new Rectangle(Ui.S(18), Ui.S(78), w, Ui.S(18)), Esmaecer(Ui.Text, t),
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | corte);
             }
+
+            _botao = new Rectangle(Entre((LarguraRecolhida - Ui.S(30)) / 2, Width - Ui.S(42), t),
+                                   Entre(Ui.S(60), Ui.S(20), t), Ui.S(30), Ui.S(30));
 
             if (_sobreBotao)
             {
@@ -1717,10 +1761,10 @@ namespace MhiagosControl
             // ferramenta que passa pelo arquivo.
             using (SolidBrush b = new SolidBrush(_sobreBotao ? Ui.Text : Ui.Muted))
             {
-                SizeF t = g.MeasureString("", Ui.FontGlyph11);
+                SizeF tm = g.MeasureString("", Ui.FontGlyph11);
                 g.DrawString("", Ui.FontGlyph11, b,
-                    _botao.X + (_botao.Width - t.Width) / 2f,
-                    _botao.Y + (_botao.Height - t.Height) / 2f);
+                    _botao.X + (_botao.Width - tm.Width) / 2f,
+                    _botao.Y + (_botao.Height - tm.Height) / 2f);
             }
         }
 

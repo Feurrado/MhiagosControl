@@ -450,12 +450,15 @@ namespace MhiagosControl
             int Esp = Ui.S(8);
 
             bool estreita = _nav.Width < Ui.S(120);
-            int margem = Ui.S(estreita ? 8 : 18);
+            // A margem acompanha a abertura da barra, em vez de saltar de 8 para
+            // 18 px no meio do deslize.
+            int margem = Ui.S(8) + (int)Math.Round((Ui.S(18) - Ui.S(8)) * _nav.Abertura);
             int larg = _nav.Width - margem * 2;
 
             // Uma nota de duas linhas exige largura; recolhida, a barra nao tem.
             bool cabeNota = !estreita;
-            int alturaNota = cabeNota ? Ui.S(32) : 0;
+            // O espaco da nota cresce com a barra: os botoes sobem aos poucos.
+            int alturaNota = (int)Math.Round(Ui.S(32) * _nav.Abertura);
 
             int baixo = _nav.Height - Ui.S(18);
             int y = baixo - alturaNota - Alt - Esp - Alt;

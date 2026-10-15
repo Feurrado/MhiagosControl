@@ -45,7 +45,7 @@ namespace MhiagosControl
 
         private static void QuadrosDaAnimacao(Form form, AnimacaoDeRecolher motor, string pasta, string nome)
         {
-            foreach (int pct in new int[] { 0, 25, 50, 75, 100 })
+            foreach (int pct in new int[] { 0, 20, 40, 60, 80, 100 })
             {
                 // Sem DoEvents: o Timer de verdade avancaria pelo relogio e
                 // desfaria o quadro pedido.
@@ -197,6 +197,11 @@ namespace MhiagosControl
                     cartoes[0].AlternarDetalhes();
                     QuadrosDaAnimacao(form, MotorDe(cartoes[0], "_detalhes"), pasta, (int)(zoom * 100) + "-anim-detalhes");
                 }
+                // A barra lateral recolhendo e abrindo de novo.
+                nav.Collapsed = true;
+                QuadrosDaAnimacao(form, (AnimacaoDeRecolher)typeof(NavBar).GetField("_anim", AuditFlags).GetValue(nav), pasta, (int)(zoom * 100) + "-anim-lateral-fechando");
+                nav.Collapsed = false;
+                QuadrosDaAnimacao(form, (AnimacaoDeRecolher)typeof(NavBar).GetField("_anim", AuditFlags).GetValue(nav), pasta, (int)(zoom * 100) + "-anim-lateral-abrindo");
                 form.Close();
             }
             Console.WriteLine("capturas em " + pasta);
