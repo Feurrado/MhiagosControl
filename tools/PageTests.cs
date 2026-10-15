@@ -49,8 +49,9 @@ namespace MhiagosControl
 
                     InvokePrivate(botao, "OnClick", EventArgs.Empty);
                     Verdade(botao.Aberto && cartao.Visible, "clicar abre o painel");
-                    Verdade(cartao.Top >= botao.Bottom, "o painel abre logo abaixo do botao");
-                    Verdade(vazio.Top > cartao.Bottom, "e empurra os aparelhos para baixo so enquanto aberto");
+                    Control painel = cartao.Parent;   // o cartao mora no CollapsiblePanel da pagina
+                    Verdade(painel is CollapsiblePanel && painel.Top >= botao.Bottom, "o painel abre logo abaixo do botao");
+                    Verdade(vazio.Top > painel.Bottom, "e empurra os aparelhos para baixo so enquanto aberto");
                     Igual(0, dados.Mudancas, "abrir o painel nao mexe na configuracao do widget");
                     DetalhesDaBateria.Recarregar();
                     Verdade(DetalhesDaBateria.Aberto(SettingsForm.ChaveDoPainelDoWidget), "aberto fica gravado");

@@ -23,6 +23,7 @@ namespace MhiagosControl
             RevisaoSplashFechadoCedo();
             RevisaoTrocaDeTema();
             RevisaoEscalaEEstados(root);
+            RegressionAnimacoes(root);
         }
 
         private static void RevisaoEscalaEEstados(string root)

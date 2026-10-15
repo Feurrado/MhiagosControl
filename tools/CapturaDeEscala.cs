@@ -43,6 +43,21 @@ namespace MhiagosControl
             public void WidgetAoCanto() { }
         }
 
+        private static void QuadrosDaAnimacao(Form form, AnimacaoDeRecolher motor, string pasta, string nome)
+        {
+            foreach (int pct in new int[] { 0, 25, 50, 75, 100 })
+            {
+                // Sem DoEvents: o Timer de verdade avancaria pelo relogio e
+                // desfaria o quadro pedido.
+                motor.Avancar(AnimacaoDeRecolher.DuracaoMs * pct / 100);
+                using (Bitmap bmp = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bmp, new Rectangle(Point.Empty, bmp.Size));
+                    bmp.Save(Path.Combine(pasta, nome + "-" + pct.ToString("000") + ".png"), ImageFormat.Png);
+                }
+            }
+        }
+
         private static int CapturaDeEscala(string[] args)
         {
             float zoom = float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
@@ -105,6 +120,29 @@ namespace MhiagosControl
                             bmp.Save(Path.Combine(pasta, nome + ".png"), ImageFormat.Png);
                         }
                     }
+                }
+                // Quadros das animacoes, conduzidos a mao: o painel Widget e o
+                // "Mais detalhes" a 0, 25, 50, 75 e 100% do tempo.
+                form.Size = tamanhos[0];
+                for (int i = 0; i < nav.Items.Count; i++)
+                    if (nav.Items[i].Key == "baterias") nav.SelectedIndex = i;
+                Ui.AnimacoesForcadas = true;
+                BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
+                CollapsiblePanel painel = (CollapsiblePanel)Field(form, "_painelDoWidget");
+                List<CartaoDeBateria> cartoes = (List<CartaoDeBateria>)Field(form, "_cartoesDeBateria");
+                if (painel.Expandido) InvokePrivate(botao, "OnClick", EventArgs.Empty);
+                MotorDe(painel, "_animacao").Avancar(AnimacaoDeRecolher.DuracaoMs);
+                InvokePrivate(botao, "OnClick", EventArgs.Empty);
+                QuadrosDaAnimacao(form, MotorDe(painel, "_animacao"), pasta, (int)(zoom * 100) + "-anim-widget-abrindo");
+                if (cartoes.Count > 0)
+                {
+                    if (cartoes[0].DetalhesAbertos)
+                    {
+                        cartoes[0].AlternarDetalhes();
+                        MotorDe(cartoes[0], "_detalhes").Avancar(AnimacaoDeRecolher.DuracaoMs);
+                    }
+                    cartoes[0].AlternarDetalhes();
+                    QuadrosDaAnimacao(form, MotorDe(cartoes[0], "_detalhes"), pasta, (int)(zoom * 100) + "-anim-detalhes");
                 }
                 form.Close();
             }

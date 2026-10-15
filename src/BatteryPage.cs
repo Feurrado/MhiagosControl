@@ -38,15 +38,22 @@ namespace MhiagosControl
         /// <summary>Abrir ou fechar os detalhes muda a altura: a pagina rearranja.</summary>
         public event EventHandler AlturaMudou;
 
+        /// <summary>Abre e fecha "Mais detalhes"; nasce no primeiro Mostrar, quando ha aparelho.</summary>
+        private AnimacaoDeRecolher _detalhes;
+
         public CartaoDeBateria()
         {
             Title = null;
             _animador = new AnimadorDePilhas(this);
+            // Recebe foco: Enter e Espaco abrem e fecham "Mais detalhes", que
+            // antes so respondia ao mouse.
+            SetStyle(ControlStyles.Selectable, true);
+            TabStop = true;
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _animador.Dispose(); _dica.Dispose(); }
+            if (disposing) { _animador.Dispose(); _dica.Dispose(); if (_detalhes != null) _detalhes.Dispose(); }
             base.Dispose(disposing);
         }
 
@@ -78,7 +85,32 @@ namespace MhiagosControl
 
         public bool DetalhesAbertos { get { return _a != null && DetalhesDaBateria.Aberto(_a.Chave); } }
 
-        public int AlturaDesejada(int largura) { return AlturaPara(largura, DetalhesAbertos); }
+        /// <summary>
+        /// A altura deste quadro. Durante a animacao fica entre a fechada e a
+        /// aberta, na mesma curva da casca do painel do widget, e a pagina
+        /// rearranja os cartoes de baixo junto.
+        /// </summary>
+        public int AlturaDesejada(int largura)
+        {
+            if (_detalhes == null) return AlturaPara(largura, DetalhesAbertos);
+            int fechado = AlturaPara(largura, false), aberto = AlturaPara(largura, true);
+            return fechado + (int)Math.Round((aberto - fechado) * _detalhes.Valor);
+        }
+
+        /// <summary>
+        /// Os detalhes so aparecem com o cartao todo aberto, e somem assim que
+        /// ele comeca a fechar: o texto nao e cortado quadro a quadro.
+        /// </summary>
+        private bool MostraDetalhes
+        {
+            get { return _detalhes != null ? _detalhes.Aberto && !_detalhes.Animando : DetalhesAbertos; }
+        }
+
+        /// <summary>De 0 (fechado) a 1 (aberto) no quadro corrente; gira a seta.</summary>
+        internal float ProgressoDosDetalhes
+        {
+            get { return _detalhes != null ? _detalhes.Valor : (DetalhesAbertos ? 1f : 0f); }
+        }
 
         // ---------------- clique no icone e nos detalhes ----------------
 
@@ -135,9 +167,77 @@ namespace MhiagosControl
         {
             if (_a == null) return;
             DetalhesDaBateria.Alternar(_a.Chave);
+            AccessibilityNotifyClients(AccessibleEvents.StateChange, -1);
             Invalidate();
+            // O motor avisa a pagina a cada quadro, o primeiro inclusive.
+            if (_detalhes != null) _detalhes.Ir(DetalhesAbertos, PodeAnimar());
+            else AvisarAltura();
+        }
+
+        private void AvisarAltura()
+        {
             EventHandler h = AlturaMudou;
             if (h != null) h(this, EventArgs.Empty);
+        }
+
+        /// <summary>So com a janela na tela; antes disso o estado final e o que conta.</summary>
+        private bool PodeAnimar()
+        {
+            if (!IsHandleCreated || !Visible) return false;
+            Form f = FindForm();
+            return f != null && f.Visible && f.WindowState != FormWindowState.Minimized;
+        }
+
+        // ---------------- teclado e foco ----------------
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            return keyData == Keys.Enter || keyData == Keys.Space || base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if ((e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space) && _a != null)
+            {
+                AlternarDetalhes();
+                e.Handled = true; e.SuppressKeyPress = true;
+            }
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        protected override AccessibleObject CreateAccessibilityInstance() { return new Acessivel(this); }
+
+        /// <summary>
+        /// Para o leitor de tela o cartao e o botao de "Mais detalhes" do
+        /// aparelho: diz o nome, se esta expandido e abre com a acao padrao.
+        /// </summary>
+        private sealed class Acessivel : ControlAccessibleObject
+        {
+            private readonly CartaoDeBateria _dono;
+            public Acessivel(CartaoDeBateria dono) : base(dono) { _dono = dono; }
+            public override string Name
+            {
+                get
+                {
+                    if (_dono._a == null) return base.Name;
+                    return Perifericos.NomeCompleto(_dono._a.Nome, _dono._a.Fonte) + " · " +
+                           (_dono.DetalhesAbertos ? T.LessDetails : T.MoreDetails);
+                }
+            }
+            public override AccessibleRole Role { get { return AccessibleRole.PushButton; } }
+            public override AccessibleStates State
+            {
+                get
+                {
+                    AccessibleStates s = base.State & ~(AccessibleStates.Expanded | AccessibleStates.Collapsed);
+                    return s | (_dono.DetalhesAbertos ? AccessibleStates.Expanded : AccessibleStates.Collapsed);
+                }
+            }
+            public override string DefaultAction { get { return _dono.DetalhesAbertos ? T.LessDetails : T.MoreDetails; } }
+            public override void DoDefaultAction() { _dono.AlternarDetalhes(); }
         }
 
         public string Chave { get { return _a != null ? _a.Chave : null; } }
@@ -147,7 +247,15 @@ namespace MhiagosControl
         {
             string ass = Assinatura(a, autonomia);
             if (ass == _assinatura) return;
+            bool outro = _a == null || a == null || _a.Chave != a.Chave;
             _a = a; _autonomia = autonomia; _assinatura = ass;
+            if (a != null && _detalhes == null)
+            {
+                _detalhes = new AnimacaoDeRecolher(DetalhesAbertos);
+                _detalhes.Quadro += delegate { Invalidate(); AvisarAltura(); };
+            }
+            // Outro aparelho no mesmo cartao: o estado dele, sem animar.
+            else if (outro && _detalhes != null) _detalhes.Ir(DetalhesAbertos, false);
             if (a != null) TransicaoDeCarga.Informar(a.Chave, a.Carregando && a.PctAtual.HasValue);
             Invalidate();
         }
@@ -206,7 +314,7 @@ namespace MhiagosControl
 
             DesenharBarraDeDetalhes(g, y);
             y += AlturaDaBarraDeDetalhes;
-            if (DetalhesAbertos) DesenharDetalhes(g, new Rectangle(Margem, y, Width - 2 * Margem, Height - y - Ui.S(8)));
+            if (MostraDetalhes) DesenharDetalhes(g, new Rectangle(Margem, y, Width - 2 * Margem, Height - y - Ui.S(8)));
         }
 
         // ---------------- cabecalho: imagem, nome, carga e selo ----------------
@@ -404,14 +512,24 @@ namespace MhiagosControl
             {
                 seta.StartCap = LineCap.Round; seta.EndCap = LineCap.Round; seta.LineJoin = LineJoin.Round;
                 float cx = Margem + Ui.S(4), cy = meio, u = Ui.Escala;
-                PointF[] pts = aberto
-                    ? new PointF[] { new PointF(cx - 4 * u, cy - 2 * u), new PointF(cx, cy + 2 * u), new PointF(cx + 4 * u, cy - 2 * u) }
-                    : new PointF[] { new PointF(cx - 2 * u, cy - 4 * u), new PointF(cx + 2 * u, cy), new PointF(cx - 2 * u, cy + 4 * u) };
+                // Gira de "para a direita" a "para baixo" junto com a altura do
+                // cartao, em vez de trocar de desenho no clique.
+                PointF[] pts = { new PointF(cx - 2 * u, cy - 4 * u), new PointF(cx + 2 * u, cy), new PointF(cx - 2 * u, cy + 4 * u) };
+                using (Matrix giro = new Matrix())
+                {
+                    giro.RotateAt(90f * ProgressoDosDetalhes, new PointF(cx, cy));
+                    giro.TransformPoints(pts);
+                }
                 g.DrawLines(seta, pts);
             }
             int tx = Margem + Ui.S(14);
             TextRenderer.DrawText(g, texto, Ui.FontMed, new Point(tx, meio - t.Height / 2), cor, TextFormatFlags.NoPadding);
             _zonaDosDetalhes = new Rectangle(Margem - Ui.S(6), y + Ui.S(4), tx + t.Width + Ui.S(8) - (Margem - Ui.S(6)), AlturaDaBarraDeDetalhes - Ui.S(8));
+
+            // Foco pelo teclado: o contorno vai no "Mais detalhes", que e o
+            // que Enter e Espaco acionam.
+            if (Focused && ShowFocusCues)
+                ControlPaint.DrawFocusRectangle(g, _zonaDosDetalhes, cor, Color.Transparent);
         }
 
         /// <summary>O que nao cabe nos blocos, em pares rotulo e valor.</summary>
@@ -631,9 +749,9 @@ namespace MhiagosControl
     {
         private bool _hover, _aberto;
 
-        // ESCAPADOS: E713 e a engrenagem, E70D e E70E as setas para baixo e
-        // para cima da Segoe MDL2.
-        private const string Engrenagem = "\uE713", Abrir = "\uE70D", Fechar = "\uE70E";
+        // ESCAPADO: E713 e a engrenagem da Segoe MDL2. A seta e desenhada,
+        // para poder girar junto com o painel (veja DesenharSeta).
+        private const string Engrenagem = "\uE713";
 
         public BotaoDoWidget()
         {
@@ -647,6 +765,25 @@ namespace MhiagosControl
             AccessibleRole = AccessibleRole.PushButton;
         }
 
+        private float _giro;
+
+        /// <summary>
+        /// A seta, de 0 (para baixo, fechado) a 1 (para cima, aberto). Quem
+        /// anima o painel move isto junto, quadro a quadro; sozinho, o botao
+        /// fica no estado final.
+        /// </summary>
+        public float Giro
+        {
+            get { return _giro; }
+            set
+            {
+                float v = Math.Max(0f, Math.Min(1f, value));
+                if (v == _giro) return;
+                _giro = v;
+                Invalidate();
+            }
+        }
+
         /// <summary>O painel esta aberto: a seta aponta para cima e o texto fica na cor de enfase.</summary>
         public bool Aberto
         {
@@ -655,7 +792,8 @@ namespace MhiagosControl
             {
                 if (_aberto == value) return;
                 _aberto = value;
-                AccessibleDescription = value ? "aberto" : "fechado";
+                _giro = value ? 1f : 0f;
+                AccessibilityNotifyClients(AccessibleEvents.StateChange, -1);
                 Invalidate();
             }
         }
@@ -700,11 +838,52 @@ namespace MhiagosControl
             int lt = TextRenderer.MeasureText(g, Text ?? "", Font, Size.Empty, TextFormatFlags.NoPadding).Width;
             TextRenderer.DrawText(g, Text ?? "", Font, new Rectangle(x, 0, lt + Ui.S(2), Height), cor, Meio);
             x += lt + Ui.S(8);
-            TextRenderer.DrawText(g, _aberto ? Fechar : Abrir, Ui.FontGlyph8, new Rectangle(x, 1, Ui.S(12), Height), cor, Meio | TextFormatFlags.HorizontalCenter);
+            DesenharSeta(g, new RectangleF(x, 1, Ui.S(12), Height), cor);
 
             if (Focused && ShowFocusCues)
                 ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(r, -3, -3), cor, Color.Transparent);
         }
+
+        /// <summary>
+        /// A seta desenhada, e nao o glifo: o glifo so tem as duas pontas, e a
+        /// seta tem de girar junto com o painel abrindo e fechando.
+        /// </summary>
+        private void DesenharSeta(Graphics g, RectangleF area, Color cor)
+        {
+            float u = Ui.Escala;
+            float cx = area.X + area.Width / 2f, cy = area.Y + area.Height / 2f;
+            PointF[] pts = { new PointF(cx - 4 * u, cy - 2 * u), new PointF(cx, cy + 2 * u), new PointF(cx + 4 * u, cy - 2 * u) };
+            using (Matrix m = new Matrix())
+            using (Pen pen = new Pen(cor, 1.4f * u))
+            {
+                m.RotateAt(180f * _giro, new PointF(cx, cy));
+                m.TransformPoints(pts);
+                pen.StartCap = LineCap.Round; pen.EndCap = LineCap.Round; pen.LineJoin = LineJoin.Round;
+                g.DrawLines(pen, pts);
+            }
+        }
+
+        protected override AccessibleObject CreateAccessibilityInstance() { return new Acessivel(this); }
+
+        /// <summary>Expandido ou recolhido, o estado que o leitor de tela anuncia.</summary>
+        private sealed class Acessivel : ControlAccessibleObject
+        {
+            private readonly BotaoDoWidget _dono;
+            public Acessivel(BotaoDoWidget dono) : base(dono) { _dono = dono; }
+            public override AccessibleRole Role { get { return AccessibleRole.PushButton; } }
+            public override AccessibleStates State
+            {
+                get
+                {
+                    AccessibleStates s = base.State & ~(AccessibleStates.Expanded | AccessibleStates.Collapsed);
+                    return s | (_dono.Aberto ? AccessibleStates.Expanded : AccessibleStates.Collapsed);
+                }
+            }
+            public override void DoDefaultAction() { _dono.PerformClick(); }
+        }
+
+        /// <summary>O clique pelo teclado ou pela acessibilidade, igual ao do mouse.</summary>
+        public void PerformClick() { OnClick(EventArgs.Empty); }
     }
 
     /// <summary>

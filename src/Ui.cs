@@ -221,10 +221,17 @@ namespace MhiagosControl
         {
             get
             {
+                if (AnimacoesForcadas.HasValue) return AnimacoesForcadas.Value;
                 try { return SystemInformation.UIEffectsEnabled; }
                 catch { return true; }
             }
         }
+
+        /// <summary>
+        /// Os testes fixam a resposta: a opcao do Windows varia de maquina para
+        /// maquina, e o que eles conferem e o estado final ou o quadro pedido.
+        /// </summary>
+        internal static bool? AnimacoesForcadas;
 
         private static Color C(int r, int g, int b) { return Color.FromArgb(r, g, b); }
 
@@ -1342,64 +1349,52 @@ namespace MhiagosControl
 
         // ---------------- animacao ----------------
 
-        private Timer _anim;
+        private AnimacaoDeRecolher _anim;
         private int _alvo = 0, _origem = 0;
-        private DateTime _inicio;
-        private const int DuracaoMs = 160;
 
         /// <summary>
         /// Desliza a largura ate o alvo.
         ///
-        /// 160 ms com desaceleracao. Instantaneo, a coluna parece piscar e a
-        /// pagina ao lado salta sem explicar de onde veio o espaco; muito mais
-        /// lento, vira espera. Com a desaceleracao o movimento comeca rapido e
-        /// assenta - e o que faz parecer que a barra tem peso em vez de teleporte.
+        /// Pelo mesmo relogio dos paineis que abrem e fecham (AnimacaoDeRecolher):
+        /// 250 ms, saida suave, Stopwatch. Instantaneo, a coluna parece piscar e
+        /// a pagina ao lado salta sem explicar de onde veio o espaco; muito mais
+        /// lento, vira espera.
         ///
-        /// Sem animacao nenhuma se a janela ainda nao tem alca: antes disso
-        /// mudar largura por temporizador nao pinta nada, so atrasa o arranque.
+        /// Sem animacao nenhuma se a janela ainda nao tem alca, ou com os efeitos
+        /// visuais desligados no Windows: vai direto a largura final.
         /// </summary>
         private void Animar(int alvo)
         {
-            // Sem handle, ou com as animacoes do Windows desligadas: direto ao fim.
-            if (!IsHandleCreated || !Ui.Animacoes)
-            {
-                if (_anim != null) _anim.Stop();
-                Width = alvo; _alvo = 0; Invalidate();
-                return;
-            }
-
-            _origem = Width; _alvo = alvo; _inicio = DateTime.UtcNow;
-
             if (_anim == null)
             {
-                _anim = new Timer();
-                _anim.Interval = 15;
-                _anim.Tick += new EventHandler(OnAnim);
-            }
-            _anim.Start();
-        }
-
-        private void OnAnim(object sender, EventArgs e)
-        {
-            double t = (DateTime.UtcNow - _inicio).TotalMilliseconds / DuracaoMs;
-            if (t >= 1)
-            {
-                _anim.Stop();
-                Width = _alvo;
-                _alvo = 0;
-                Invalidate();
-                return;
+                _anim = new AnimacaoDeRecolher(false);
+                _anim.Quadro += delegate
+                {
+                    if (_alvo == 0) return;
+                    Width = _origem + (int)Math.Round((_alvo - _origem) * _anim.Valor);
+                    Invalidate();
+                };
+                _anim.Terminou += delegate
+                {
+                    if (_alvo == 0) return;
+                    Width = _alvo;
+                    _alvo = 0;
+                    Invalidate();
+                };
             }
 
-            // desaceleracao cubica: rapido no comeco, assenta no fim
-            double e3 = 1 - Math.Pow(1 - t, 3);
-            Width = _origem + (int)Math.Round((_alvo - _origem) * e3);
-            Invalidate();
+            // Recomeca do zero a partir da largura de agora: virar no meio do
+            // deslize parte de onde a barra esta, sem salto.
+            _alvo = 0;
+            _anim.Ir(false, false);
+            _origem = Width;
+            _alvo = alvo;
+            _anim.Ir(true, IsHandleCreated);
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && _anim != null) { _anim.Stop(); _anim.Dispose(); _anim = null; }
+            if (disposing && _anim != null) { _anim.Dispose(); _anim = null; }
             base.Dispose(disposing);
         }
 

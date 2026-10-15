@@ -1372,12 +1372,20 @@ namespace MhiagosControl
                 _dicaDoWidget.SetToolTip(_btWidget, T.WidgetButtonTip);
                 _pgBaterias.Controls.Add(_btWidget);
 
+                // O cartao mora num CollapsiblePanel: abrir e fechar desliza a
+                // altura e os aparelhos de baixo acompanham, em vez de saltar.
                 Card c = MontarCartaoDoWidget();
-                c.Visible = _btWidget.Aberto;
-                _pgBaterias.Controls.Add(c);
+                _painelDoWidget = new CollapsiblePanel(_btWidget.Aberto);
+                _painelDoWidget.AccessibleName = T.WidgetCard;
+                _painelDoWidget.Conteudo = c;
+                _painelDoWidget.AlturaAberta = AlturaDoCartaoDoWidget;
+                _painelDoWidget.AlturaMudou += delegate { ArranjarBaterias(); };
+                _pgBaterias.Controls.Add(_painelDoWidget);
             }
             return _pgBaterias;
         }
+
+        private CollapsiblePanel _painelDoWidget;
 
         private BotaoDoWidget _btWidget;
         private readonly ToolTip _dicaDoWidget = new ToolTip();
@@ -1394,7 +1402,12 @@ namespace MhiagosControl
         {
             if (_btWidget == null) return;
             DetalhesDaBateria.Alternar(ChaveDoPainelDoWidget);
-            _btWidget.Aberto = DetalhesDaBateria.Aberto(ChaveDoPainelDoWidget);
+            bool aberto = DetalhesDaBateria.Aberto(ChaveDoPainelDoWidget);
+            // O botao muda de estado na hora; a seta dele gira com o painel,
+            // pelo ArranjarBaterias de cada quadro.
+            _btWidget.Aberto = aberto;
+            if (aberto) SincronizarWidget();   // conteudo certo antes de aparecer
+            if (_painelDoWidget != null) _painelDoWidget.Definir(aberto, true);
             ArranjarBaterias();
         }
 
@@ -1585,34 +1598,41 @@ namespace MhiagosControl
             if (larg < Ui.S(460)) larg = Ui.S(460);
             int x = Ui.S(2) + Math.Max(0, (disp - larg) / 2);
 
-            int y = Ui.S(2);
-            if (_btWidget != null)
+            // Um rearranjo por quadro de animacao: os filhos andam juntos e a
+            // pagina so refaz o layout uma vez, no ResumeLayout.
+            _pgBaterias.SuspendLayout();
+            try
             {
-                int lb = _btWidget.LarguraDesejada();
-                _btWidget.SetBounds(x + larg - lb, y, lb, AlturaDoBotaoDoWidget);
-                y += AlturaDoBotaoDoWidget + Ui.S(8);
-            }
-            if (_cardWidget != null)
-            {
-                bool aberto = _btWidget == null || _btWidget.Aberto;
-                _cardWidget.Visible = aberto;
-                if (aberto)
+                int y = Ui.S(2);
+                if (_btWidget != null)
                 {
-                    SincronizarWidget();
-                    _cardWidget.SetBounds(x, y, larg, AlturaDoCartaoDoWidget);
-                    y += AlturaDoCartaoDoWidget + Esp;
+                    int lb = _btWidget.LarguraDesejada();
+                    _btWidget.SetBounds(x + larg - lb, y, lb, AlturaDoBotaoDoWidget);
+                    y += AlturaDoBotaoDoWidget + Ui.S(8);
+                }
+                if (_painelDoWidget != null)
+                {
+                    // A cada quadro da animacao: a casca na altura do quadro, a
+                    // seta do botao no mesmo ponto da curva e o vao abaixo
+                    // crescendo junto, para os aparelhos descerem sem degrau.
+                    if (_painelDoWidget.Expandido && !_painelDoWidget.Animando) SincronizarWidget();
+                    int h = _painelDoWidget.AlturaAtual;
+                    _painelDoWidget.SetBounds(x, y, larg, h);
+                    if (_btWidget != null) _btWidget.Giro = _painelDoWidget.Progresso;
+                    if (h > 0) y += h + (int)Math.Round(Esp * _painelDoWidget.Progresso);
+                }
+
+                _lbBateriasVazio.Visible = _cartoesDeBateria.Count == 0;
+                _lbBateriasVazio.SetBounds(x, y + Ui.S(2), larg, Ui.S(40));
+
+                foreach (CartaoDeBateria c in _cartoesDeBateria)
+                {
+                    int alt = c.AlturaDesejada(larg);
+                    c.SetBounds(x, y, larg, alt);
+                    y += alt + Esp;
                 }
             }
-
-            _lbBateriasVazio.Visible = _cartoesDeBateria.Count == 0;
-            _lbBateriasVazio.SetBounds(x, y + Ui.S(2), larg, Ui.S(40));
-
-            foreach (CartaoDeBateria c in _cartoesDeBateria)
-            {
-                int alt = c.AlturaDesejada(larg);
-                c.SetBounds(x, y, larg, alt);
-                y += alt + Esp;
-            }
+            finally { _pgBaterias.ResumeLayout(); }
             _pgBaterias.Sincronizar();
         }
 

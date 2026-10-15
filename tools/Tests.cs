@@ -36,6 +36,10 @@ namespace MhiagosControl
                 return RegressionChild(args);
             if (args.Length > 2 && args[0] == "--captura-escala")
                 return CapturaDeEscala(args);
+            // Sem animacao por padrao: a opcao do Windows muda de maquina para
+            // maquina, e as conferencias olham o estado final. Os testes das
+            // animacoes ligam e conduzem os quadros a mao.
+            Ui.AnimacoesForcadas = false;
             QuadroDoPainel();
             PreparoDoValor();
             IntegracaoDoCicloDoPainel();
