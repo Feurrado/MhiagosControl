@@ -731,6 +731,18 @@ namespace MhiagosControl
             DrawFocus(g, r, fore);
         }
 
+        protected override AccessibleObject CreateAccessibilityInstance() { return new Acessivel(this); }
+
+        /// <summary>Botao para o leitor de tela, acionavel pela acao padrao.</summary>
+        private sealed class Acessivel : ControlAccessibleObject
+        {
+            private readonly FlatBtn _dono;
+            public Acessivel(FlatBtn dono) : base(dono) { _dono = dono; }
+            public override string Name { get { return _dono.AccessibleName ?? _dono.Text; } }
+            public override AccessibleRole Role { get { return AccessibleRole.PushButton; } }
+            public override void DoDefaultAction() { if (_dono.Enabled) _dono.OnClick(EventArgs.Empty); }
+        }
+
         private void DrawFocus(Graphics g, Rectangle r, Color fore)
         {
             if (Focused && ShowFocusCues)
@@ -753,6 +765,7 @@ namespace MhiagosControl
                 if (_on == value) return;
                 _on = value;
                 Invalidate();
+                if (IsHandleCreated) AccessibilityNotifyClients(AccessibleEvents.StateChange, -1);
                 if (CheckedChanged != null) CheckedChanged(this, EventArgs.Empty);
             }
         }
@@ -783,12 +796,33 @@ namespace MhiagosControl
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Space)
+            // Enter tambem: e o que se tenta primeiro num interruptor.
+            if (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter)
             {
                 Checked = !Checked;
                 e.Handled = true; e.SuppressKeyPress = true;
             }
             base.OnKeyDown(e);
+        }
+
+        protected override AccessibleObject CreateAccessibilityInstance() { return new Acessivel(this); }
+
+        /// <summary>Caixa de selecao para o leitor de tela: o rotulo e se esta ligado.</summary>
+        private sealed class Acessivel : ControlAccessibleObject
+        {
+            private readonly Toggle _dono;
+            public Acessivel(Toggle dono) : base(dono) { _dono = dono; }
+            public override string Name { get { return _dono.AccessibleName ?? _dono.Label; } }
+            public override AccessibleRole Role { get { return AccessibleRole.CheckButton; } }
+            public override AccessibleStates State
+            {
+                get
+                {
+                    AccessibleStates s = base.State & ~AccessibleStates.Checked;
+                    return _dono.Checked ? s | AccessibleStates.Checked : s;
+                }
+            }
+            public override void DoDefaultAction() { if (_dono.Enabled) _dono.Checked = !_dono.Checked; }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -891,6 +925,7 @@ namespace MhiagosControl
                 if (v == _sel) return;
                 _sel = v;
                 Invalidate();
+                if (IsHandleCreated) AccessibilityNotifyClients(AccessibleEvents.ValueChange, -1);
                 if (SelectedIndexChanged != null) SelectedIndexChanged(this, EventArgs.Empty);
             }
         }
@@ -989,6 +1024,21 @@ namespace MhiagosControl
             if (!Enabled) _hover = -1;
             Invalidate();
             base.OnEnabledChanged(e);
+        }
+
+        protected override AccessibleObject CreateAccessibilityInstance() { return new Acessivel(this); }
+
+        /// <summary>Lista de opcoes para o leitor de tela; o valor e a opcao escolhida.</summary>
+        private sealed class Acessivel : ControlAccessibleObject
+        {
+            private readonly Segmented _dono;
+            public Acessivel(Segmented dono) : base(dono) { _dono = dono; }
+            public override AccessibleRole Role { get { return AccessibleRole.List; } }
+            public override string Value
+            {
+                get { return _dono._sel >= 0 && _dono._sel < _dono._items.Count ? _dono._items[_dono._sel] : ""; }
+                set { }
+            }
         }
     }
 
@@ -1135,6 +1185,21 @@ namespace MhiagosControl
             base.OnEnabledChanged(e);
         }
 
+        protected override AccessibleObject CreateAccessibilityInstance() { return new Acessivel(this); }
+
+        /// <summary>Campo numerico com setas para o leitor de tela.</summary>
+        private sealed class Acessivel : ControlAccessibleObject
+        {
+            private readonly NumberBox _dono;
+            public Acessivel(NumberBox dono) : base(dono) { _dono = dono; }
+            public override AccessibleRole Role { get { return AccessibleRole.SpinButton; } }
+            public override string Value
+            {
+                get { return _dono.Value.ToString(System.Globalization.CultureInfo.CurrentCulture); }
+                set { int v; if (int.TryParse(value, out v)) _dono.Value = v; }
+            }
+        }
+
         private static void DrawSign(Graphics g, Rectangle area, string sign, bool hover, bool enabled)
         {
             if (hover && enabled)
@@ -1278,7 +1343,23 @@ namespace MhiagosControl
                 if (value < 0 || value >= _items.Count || value == _selected) return;
                 _selected = value;
                 Invalidate();
+                if (IsHandleCreated) AccessibilityNotifyClients(AccessibleEvents.ValueChange, -1);
                 if (SelectionChanged != null) SelectionChanged(this, EventArgs.Empty);
+            }
+        }
+
+        protected override AccessibleObject CreateAccessibilityInstance() { return new Acessivel(this); }
+
+        /// <summary>Lista de abas para o leitor de tela; o valor e a pagina aberta.</summary>
+        private sealed class Acessivel : ControlAccessibleObject
+        {
+            private readonly NavBar _dono;
+            public Acessivel(NavBar dono) : base(dono) { _dono = dono; }
+            public override AccessibleRole Role { get { return AccessibleRole.PageTabList; } }
+            public override string Value
+            {
+                get { return _dono.Selected != null ? _dono.Selected.Text : ""; }
+                set { }
             }
         }
 

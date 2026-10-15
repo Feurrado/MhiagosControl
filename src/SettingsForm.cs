@@ -4485,6 +4485,9 @@ namespace MhiagosControl
 
         private void OnTick(object sender, EventArgs e)
         {
+            // Minimizada, ninguem ve: os valores voltam no primeiro tick
+            // depois de restaurar.
+            if (WindowState == FormWindowState.Minimized) return;
             try
             {
                 Control ativa = _nav != null && _nav.Selected != null ? _nav.Selected.Page : null;

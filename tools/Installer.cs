@@ -83,6 +83,7 @@ namespace MhiagosSetup
                 string alvo = Path.Combine(local, @"Microsoft\WindowsApps\winget.exe");
                 if (!File.Exists(alvo)) return null;
                 if ((File.GetAttributes(alvo) & FileAttributes.ReparsePoint) == 0) return null;
+                if (MhiagosControl.AliasDoWindows.Alvo(alvo) == null) return null;   // alias de app de verdade
                 return alvo;
             }
             catch { return null; }
