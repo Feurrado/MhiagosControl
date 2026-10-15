@@ -87,10 +87,20 @@ namespace MhiagosControl
             get { lock (_trava) return _geracao; }
         }
 
-        private static string Arquivo
+        private static string _caminho;
+
+        /// <summary>Arquivo do historico; os testes apontam para uma pasta temporaria.</summary>
+        internal static string Arquivo
         {
-            get { return Path.Combine(Paths.DataDir, "history.dat"); }
+            get { return _caminho ?? Path.Combine(Paths.DataDir, "history.dat"); }
+            set { _caminho = value; }
         }
+
+        /// <summary>
+        /// O arquivo existe e nao foi lido nem posto de lado: gravar por cima
+        /// apagaria o historico que ele guarda. Vale ate o proximo Carregar.
+        /// </summary>
+        private static bool _semGravacao = false;
 
         private static long BaldeAgora()
         {
@@ -260,19 +270,21 @@ namespace MhiagosControl
             long faltando = agora - _balde;
             if (faltando > Baldes) faltando = Baldes;   // ficou desligado mais que a janela inteira
 
-            for (long k = 0; k < faltando; k++)
+            // Um deslocamento so, de todos os baldes que passaram. Antes era um
+            // Array.Copy da serie inteira por balde vencido: depois de uma noite
+            // desligado, milhoes de copias por serie no arranque, na thread da
+            // interface.
+            int n = (int)faltando;
+            foreach (KeyValuePair<string, Serie> kv in _series)
             {
-                bool primeiro = (k == 0);
-                foreach (KeyValuePair<string, Serie> kv in _series)
-                {
-                    Serie s = kv.Value;
-                    Array.Copy(s.V, 1, s.V, 0, Baldes - 1);
+                Serie s = kv.Value;
+                if (n < Baldes) Array.Copy(s.V, n, s.V, 0, Baldes - n);
+                for (int i = Baldes - n; i < Baldes; i++) s.V[i] = float.NaN;
 
-                    // Só o primeiro balde recebe o que foi acumulado; os
-                    // seguintes sao tempo em que ninguem leu nada.
-                    s.V[Baldes - 1] = (primeiro && s.Cont > 0) ? (float)(s.Soma / s.Cont) : float.NaN;
-                    s.Soma = 0; s.Cont = 0;
-                }
+                // Só o primeiro balde fechado recebe o que foi acumulado; os
+                // seguintes sao tempo em que ninguem leu nada.
+                if (s.Cont > 0) s.V[Baldes - n] = (float)(s.Soma / s.Cont);
+                s.Soma = 0; s.Cont = 0;
             }
 
             _balde = agora;
@@ -420,6 +432,7 @@ namespace MhiagosControl
             {
                 _series.Clear();
                 _balde = BaldeAgora();
+                _semGravacao = false;
 
                 string caminho = Arquivo;
                 if (!File.Exists(caminho)) return;
@@ -432,13 +445,13 @@ namespace MhiagosControl
                         // Formato e passo conferidos antes de qualquer leitura: um
                         // arquivo de outra versao lido como se fosse deste daria
                         // uma curva plausivel e errada, que e pior que nenhuma.
-                        if (r.ReadString() != Magica) return;
+                        if (r.ReadString() != Magica) throw new InvalidDataException("assinatura desconhecida");
                         if (r.ReadInt32() != PassoSeg) return;
                         if (r.ReadInt32() != Baldes) return;
 
                         long balde = r.ReadInt64();
                         int n = r.ReadInt32();
-                        if (n < 0 || n > 4096) return;
+                        if (n < 0 || n > 4096) throw new InvalidDataException("quantidade de series invalida: " + n);
 
                         for (int i = 0; i < n; i++)
                         {
@@ -463,7 +476,31 @@ namespace MhiagosControl
                     Log.Error("leitura do historico de metricas", ex);
                     _series.Clear();
                     _balde = BaldeAgora();
+                    PorDeLado(caminho);
                 }
+            }
+        }
+
+        /// <summary>
+        /// O arquivo nao pode ser lido. Antes, a sessao comecava do zero e a
+        /// primeira gravacao o substituia: um arquivo apenas preso por outro
+        /// programa no logon perdia as seis horas. Agora ele e renomeado e fica
+        /// guardado; se nem renomear for possivel - preso, justamente -, esta
+        /// sessao nao grava, e o arquivo continua intacto para o proximo arranque.
+        /// </summary>
+        private static void PorDeLado(string caminho)
+        {
+            try
+            {
+                string destino = caminho + ".ilegivel-" +
+                    DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+                File.Move(caminho, destino);
+                Log.Write("historico de metricas ilegivel guardado em " + destino);
+            }
+            catch (Exception ex)
+            {
+                _semGravacao = true;
+                Log.Error("historico de metricas fica sem gravacao nesta sessao", ex);
             }
         }
 
@@ -476,7 +513,7 @@ namespace MhiagosControl
             lock (_trava)
             {
                 if (!_sujo && _ultimaGravacao != DateTime.MinValue) return;
-                if (_gravando) return;
+                if (_gravando || _semGravacao) return;
                 _gravando = true;
 
                 geracao = _geracao;
@@ -493,12 +530,12 @@ namespace MhiagosControl
             }
 
             string caminho = Arquivo;
-            string temp = caminho + ".tmp";
             try
             {
-                using (FileStream fs = File.Create(temp))
-                using (BinaryWriter w = new BinaryWriter(fs))
+                // Nunca apaga o arquivo anterior antes de o novo estar pronto.
+                GravacaoAtomica.Escrever(caminho, delegate(Stream fs)
                 {
+                    BinaryWriter w = new BinaryWriter(fs);
                     w.Write(Magica);
                     w.Write(PassoSeg);
                     w.Write(Baldes);
@@ -509,11 +546,8 @@ namespace MhiagosControl
                         w.Write(ids[i]);
                         for (int k = 0; k < Baldes; k++) w.Write(valores[i][k]);
                     }
-                }
-
-                // Nunca apaga o arquivo anterior antes de o novo estar pronto.
-                if (File.Exists(caminho)) File.Replace(temp, caminho, null);
-                else File.Move(temp, caminho);
+                    w.Flush();
+                });
 
                 lock (_trava)
                 {
@@ -531,10 +565,7 @@ namespace MhiagosControl
                     _proximaTentativa = DateTime.UtcNow.AddMinutes(1);
                     _sujo = true;
                     _gravando = false;
-                }
-                try { if (File.Exists(temp)) File.Delete(temp); }
-                catch (Exception ex2) { Log.Error("descarte do historico temporario", ex2); }
-            }
+                }            }
         }
     }
 }

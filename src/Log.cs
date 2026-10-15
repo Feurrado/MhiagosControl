@@ -101,6 +101,12 @@ namespace MhiagosControl
     }
 
     /// <summary>Localizacao dos dados do aplicativo.</summary>
+    /// <remarks>
+    /// Regra de seguranca: o app roda elevado e esta pasta e gravavel sem
+    /// elevacao. Nada lido daqui pode virar caminho executado ou biblioteca
+    /// carregada - so dados. Quem precisar disso confere a origem antes, como
+    /// HwInfo.Adotar e AliasDoWindows fazem.
+    /// </remarks>
     public static class Paths
     {
         /// <summary>

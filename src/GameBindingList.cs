@@ -39,7 +39,7 @@ namespace MhiagosControl
             // um retangulo. O cartao desenhado por cima tem cantos redondos,
             // mas os quatro cantos do fundo quadrado continuam aparecendo.
             BackColor = Color.Transparent;
-            Size = new Size(48, 48);
+            Size = new Size(Ui.S(48), Ui.S(48));
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -47,7 +47,7 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(r, 10))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(10)))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -55,7 +55,7 @@ namespace MhiagosControl
             }
             if (_gameIcon != null)
             {
-                Rectangle icon = Fit(_gameIcon, Rectangle.Inflate(r, -6, -6));
+                Rectangle icon = Fit(_gameIcon, Rectangle.Inflate(r, -Ui.S(6), -Ui.S(6)));
                 DrawOriginal(g, _gameIcon, icon);
             }
             else
@@ -124,11 +124,11 @@ namespace MhiagosControl
     {
         private readonly List<GameBindingView> _items = new List<GameBindingView>();
         private int _hover = -1, _top;
-        internal const int RowH = 62;
+        internal static readonly int RowH = Ui.S(62);
 
         internal static int PreferredHeight(int count)
         {
-            return count <= 0 ? 82 : Math.Min(3, count) * RowH + 8;
+            return count <= 0 ? Ui.S(82) : Math.Min(3, count) * RowH + Ui.S(8);
         }
 
         public string EmptyText = "";
@@ -149,13 +149,13 @@ namespace MhiagosControl
             Limitar(); Invalidate();
         }
 
-        private int PorTela { get { return Math.Max(1, (Height - 8) / RowH); } }
+        private int PorTela { get { return Math.Max(1, (Height - Ui.S(8)) / RowH); } }
         private void Limitar() { _top = Math.Max(0, Math.Min(_top, Math.Max(0, _items.Count - PorTela))); }
 
         private int Hit(Point point)
         {
-            if (point.Y < 4) return -1;
-            int i = _top + (point.Y - 4) / RowH;
+            if (point.Y < Ui.S(4)) return -1;
+            int i = _top + (point.Y - Ui.S(4)) / RowH;
             return i >= _top && i < _items.Count && i < _top + PorTela ? i : -1;
         }
 
@@ -163,7 +163,7 @@ namespace MhiagosControl
         {
             int i = Hit(e.Location);
             if (i != _hover) { _hover = i; Invalidate(); }
-            Cursor = i >= 0 && e.X >= Width - 46 ? Cursors.Hand : Cursors.Default;
+            Cursor = i >= 0 && e.X >= Width - Ui.S(46) ? Cursors.Hand : Cursors.Default;
             base.OnMouseMove(e);
         }
 
@@ -175,7 +175,7 @@ namespace MhiagosControl
         protected override void OnMouseUp(MouseEventArgs e)
         {
             int i = Hit(e.Location);
-            if (e.Button == MouseButtons.Left && i >= 0 && e.X >= Width - 46 && RemoveRequested != null)
+            if (e.Button == MouseButtons.Left && i >= 0 && e.X >= Width - Ui.S(46) && RemoveRequested != null)
                 RemoveRequested(_items[i].Key);
             base.OnMouseUp(e);
         }
@@ -190,30 +190,30 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
             Rectangle outer = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(outer, 8))
+            using (GraphicsPath p = Ui.RoundRect(outer, Ui.S(8)))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             { g.FillPath(b, p); g.DrawPath(pen, p); }
 
             if (_items.Count == 0)
             {
-                TextRenderer.DrawText(g, EmptyText, Ui.FontBase, Rectangle.Inflate(outer, -16, -8), Ui.Muted,
+                TextRenderer.DrawText(g, EmptyText, Ui.FontBase, Rectangle.Inflate(outer, -Ui.S(16), -Ui.S(8)), Ui.Muted,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
                     TextFormatFlags.WordBreak);
                 return;
             }
 
-            int y = 4;
+            int y = Ui.S(4);
             for (int i = _top; i < _items.Count && i < _top + PorTela; i++, y += RowH)
-                DrawRow(g, _items[i], i, new Rectangle(4, y, Width - 8, RowH - 2));
+                DrawRow(g, _items[i], i, new Rectangle(Ui.S(4), y, Width - Ui.S(8), RowH - Ui.S(2)));
 
             if (_items.Count > PorTela)
             {
-                int track = Height - 12;
-                int h = Math.Max(24, track * PorTela / _items.Count);
+                int track = Height - Ui.S(12);
+                int h = Math.Max(Ui.S(24), track * PorTela / _items.Count);
                 int max = _items.Count - PorTela;
                 int top = max == 0 ? 0 : (track - h) * _top / max;
-                using (GraphicsPath p = Ui.RoundRect(new Rectangle(Width - 7, 6 + top, 3, h), 2))
+                using (GraphicsPath p = Ui.RoundRect(new Rectangle(Width - Ui.S(7), Ui.S(6) + top, Ui.S(3), h), Ui.S(2)))
                 using (SolidBrush b = new SolidBrush(Ui.Thumb)) g.FillPath(b, p);
             }
         }
@@ -222,32 +222,32 @@ namespace MhiagosControl
         {
             bool hover = index == _hover;
             if (item.Current || hover)
-                using (GraphicsPath p = Ui.RoundRect(row, 6))
+                using (GraphicsPath p = Ui.RoundRect(row, Ui.S(6)))
                 using (SolidBrush b = new SolidBrush(item.Current ? Ui.AccentSoft : Ui.Hover))
                     g.FillPath(b, p);
 
-            Rectangle icon = new Rectangle(row.X + 10, row.Y + 10, 40, 40);
-            using (GraphicsPath p = Ui.RoundRect(icon, 8))
+            Rectangle icon = new Rectangle(row.X + Ui.S(10), row.Y + Ui.S(10), Ui.S(40), Ui.S(40));
+            using (GraphicsPath p = Ui.RoundRect(icon, Ui.S(8)))
             using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillPath(b, p);
             if (item.Icon != null)
             {
-                Rectangle image = GameIconView.Fit(item.Icon, Rectangle.Inflate(icon, -5, -5));
+                Rectangle image = GameIconView.Fit(item.Icon, Rectangle.Inflate(icon, -Ui.S(5), -Ui.S(5)));
                 GameIconView.DrawOriginal(g, item.Icon, image);
             }
             else TextRenderer.DrawText(g, "\uE7FC", Ui.FontGlyph18, icon, Ui.Accent,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-            int right = row.Right - 48;
+            int right = row.Right - Ui.S(48);
             TextRenderer.DrawText(g, item.Name, Ui.FontMed,
-                new Rectangle(icon.Right + 12, row.Y + 9, right - icon.Right - 18, 20), Ui.Text,
+                new Rectangle(icon.Right + Ui.S(12), row.Y + Ui.S(9), right - icon.Right - Ui.S(18), Ui.S(20)), Ui.Text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             TextRenderer.DrawText(g, "\u2192  " + item.Profile, Ui.FontSmall,
-                new Rectangle(icon.Right + 12, row.Y + 31, right - icon.Right - 18, 18), Ui.Accent,
+                new Rectangle(icon.Right + Ui.S(12), row.Y + Ui.S(31), right - icon.Right - Ui.S(18), Ui.S(18)), Ui.AccentText,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
-            Rectangle remove = new Rectangle(row.Right - 40, row.Y + 12, 30, 30);
+            Rectangle remove = new Rectangle(row.Right - Ui.S(40), row.Y + Ui.S(12), Ui.S(30), Ui.S(30));
             if (hover)
-                using (GraphicsPath p = Ui.RoundRect(remove, 6))
+                using (GraphicsPath p = Ui.RoundRect(remove, Ui.S(6)))
                 using (SolidBrush b = new SolidBrush(Ui.Hover)) g.FillPath(b, p);
             TextRenderer.DrawText(g, "\uE711", Ui.FontGlyph9, remove, hover ? Ui.Danger : Ui.Faint,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);

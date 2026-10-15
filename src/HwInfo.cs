@@ -158,6 +158,15 @@ namespace MhiagosControl
             erro = null;
             try
             {
+                // A copia vai ser carregada elevada. Uma origem que usuario comum
+                // pode trocar viraria caminho para codigo de qualquer um rodar
+                // como administrador; nesse caso a copia nao acontece.
+                if (GravavelPorUsuarioComum(origem))
+                {
+                    erro = "a pasta de origem pode ser alterada sem privilegio de administrador";
+                    Log.Write("biblioteca do HWiNFO nao adotada: " + erro + " (" + origem + ")");
+                    return false;
+                }
                 string destino = EnginePath;
                 string dir = Path.GetDirectoryName(destino);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
@@ -171,6 +180,49 @@ namespace MhiagosControl
                 Log.Error("copia da biblioteca para engine", ex);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// O arquivo, ou a pasta dele, deixa Usuarios, Usuarios autenticados,
+        /// Todos ou Interativo escrever? Quem pode escrever pode trocar a DLL.
+        /// Na duvida (sem conseguir ler a ACL), responde que sim.
+        /// </summary>
+        internal static bool GravavelPorUsuarioComum(string arquivo)
+        {
+            try
+            {
+                const System.Security.AccessControl.FileSystemRights NoArquivo =
+                    System.Security.AccessControl.FileSystemRights.WriteData |
+                    System.Security.AccessControl.FileSystemRights.AppendData |
+                    System.Security.AccessControl.FileSystemRights.Delete |
+                    System.Security.AccessControl.FileSystemRights.ChangePermissions |
+                    System.Security.AccessControl.FileSystemRights.TakeOwnership;
+                const System.Security.AccessControl.FileSystemRights NaPasta =
+                    System.Security.AccessControl.FileSystemRights.DeleteSubdirectoriesAndFiles |
+                    System.Security.AccessControl.FileSystemRights.ChangePermissions |
+                    System.Security.AccessControl.FileSystemRights.TakeOwnership;
+                return Concede(File.GetAccessControl(arquivo), NoArquivo) ||
+                       Concede(Directory.GetAccessControl(Path.GetDirectoryName(arquivo)), NaPasta);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("leitura das permissoes da biblioteca de origem", ex);
+                return true;
+            }
+        }
+
+        private static bool Concede(System.Security.AccessControl.FileSystemSecurity acl,
+                                    System.Security.AccessControl.FileSystemRights perigosos)
+        {
+            string[] comuns = { "S-1-5-32-545", "S-1-5-11", "S-1-1-0", "S-1-5-4" };
+            foreach (System.Security.AccessControl.FileSystemAccessRule r in
+                     acl.GetAccessRules(true, true, typeof(System.Security.Principal.SecurityIdentifier)))
+            {
+                if (r.AccessControlType != System.Security.AccessControl.AccessControlType.Allow) continue;
+                if (Array.IndexOf(comuns, r.IdentityReference.Value) < 0) continue;
+                if ((r.FileSystemRights & perigosos) != 0) return true;
+            }
+            return false;
         }
 
         public bool Open()

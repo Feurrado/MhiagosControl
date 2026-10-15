@@ -33,7 +33,7 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.22.0";
+        public const string Versao = "2.23.0";
         public const string TaskName = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
@@ -83,6 +83,7 @@ namespace MhiagosSetup
                 string alvo = Path.Combine(local, @"Microsoft\WindowsApps\winget.exe");
                 if (!File.Exists(alvo)) return null;
                 if ((File.GetAttributes(alvo) & FileAttributes.ReparsePoint) == 0) return null;
+                if (MhiagosControl.AliasDoWindows.Alvo(alvo) == null) return null;   // alias de app de verdade
                 return alvo;
             }
             catch { return null; }

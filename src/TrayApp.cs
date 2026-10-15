@@ -202,7 +202,7 @@ namespace MhiagosControl
                         if (qual == 2)
                         {
                             Log.Write("encerramento pedido pelo instalador");
-                            Marshal(delegate { OnExit(this, EventArgs.Empty); });
+                            Marshal(delegate { Sair(false); });
                             return;
                         }
                         if (qual != 0) return;
@@ -315,12 +315,7 @@ namespace MhiagosControl
                 _sensorsOk = true;
                 Log.Write("sensores abertos: " + _cache.Count + " disponiveis");
             }
-            else
-            {
-                Log.Error("inicializacao dos sensores", falha);
-                MessageBox.Show(T.SensorInitFailed(falha.Message, Log.Path),
-                    T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            else Log.Error("inicializacao dos sensores", falha);
 
             // Recuperacoes e migracoes podem usar nomes portaveis. Resolve-los
             // somente depois de as fontes abrirem evita gravar um ID da fonte
@@ -344,8 +339,6 @@ namespace MhiagosControl
                 _openWhenReady = true;
             }
 
-            WarnAboutOriginalTask();
-
             Microsoft.Win32.SystemEvents.SessionEnded += new Microsoft.Win32.SessionEndedEventHandler(OnSessionEnded);
 
             IniciarVigiaDeJogo();
@@ -358,6 +351,12 @@ namespace MhiagosControl
             _worker.Start();
             Interlocked.CompareExchange(ref _runtimeState,
                 (int)RuntimeState.Running, (int)RuntimeState.Starting);
+
+            // Os avisos vem DEPOIS de o mostrador andar. Antes eles abriam no
+            // meio do arranque e o worker so comecava quando alguem respondia:
+            // no logon automatico o dialogo podia ficar atras de outras janelas
+            // e o painel, apagado, esperando por ele.
+            _marshal.BeginInvoke(new SensoresProntosHandler(AvisosDoArranque), falha);
 
             if (_openWhenReady)
             {
@@ -692,13 +691,32 @@ namespace MhiagosControl
                     T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
+        /// <summary>Os dialogos do arranque, ja com o mostrador funcionando.</summary>
+        private void AvisosDoArranque(Exception falha)
+        {
+            if (IsStopping) return;
+            if (falha != null)
+                Avisar(T.SensorInitFailed(falha.Message, Log.Path),
+                    T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            WarnAboutOriginalTask();
+        }
+
+        /// <summary>Substitui o MessageBox do arranque; os testes respondem por aqui.</summary>
+        internal Func<string, string, MessageBoxButtons, MessageBoxIcon, DialogResult> MostrarAviso;
+
+        private DialogResult Avisar(string texto, string titulo, MessageBoxButtons botoes, MessageBoxIcon icone)
+        {
+            return MostrarAviso != null ? MostrarAviso(texto, titulo, botoes, icone)
+                                        : MessageBox.Show(texto, titulo, botoes, icone);
+        }
+
         /// <summary>A tarefa do software de fabrica disputaria o painel a cada logon.</summary>
         private void WarnAboutOriginalTask()
         {
             try
             {
                 if (!Autostart.OriginalAppTaskEnabled()) return;
-                DialogResult r = MessageBox.Show(T.OriginalTaskWarning,
+                DialogResult r = Avisar(T.OriginalTaskWarning,
                     T.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 if (r == DialogResult.Yes) Autostart.DisableOriginalAppTask();
             }
@@ -1133,7 +1151,9 @@ namespace MhiagosControl
         private void SetTooltip(string text)
         {
             if (text.Length > 63) text = text.Substring(0, 60) + "...";
-            Marshal(delegate { try { _icon.Text = text; } catch { } });
+            // Uma dica enfileirada pelo worker antes da pausa nao pode apagar o
+            // "Pausado" que o menu acabou de escrever.
+            Marshal(delegate { try { if (!_paused) _icon.Text = text; } catch { } });
         }
 
         /// <summary>NotifyIcon so pode ser tocado na thread de UI.</summary>
@@ -1305,9 +1325,13 @@ namespace MhiagosControl
                         r = f.ShowDialog();
                         _settingsForm = null;
                     }
-                    if (r == DialogResult.Retry) _cache = ReListSensors();
+                    if (r == DialogResult.Retry && !IsStopping) _cache = ReListSensors();
                 }
-                while (r == DialogResult.Retry);
+                while (r == DialogResult.Retry && !IsStopping);
+
+                // Saiu pela bandeja com a janela aberta: sensores e menu ja
+                // foram desmontados, nao ha o que republicar.
+                if (IsStopping) return;
 
                 _snapshotWanted = false;
                 _janelaAberta = false;   // antes de Publicar, que reaplica o foco
@@ -1408,14 +1432,52 @@ namespace MhiagosControl
         private void OnSessionEnded(object sender, Microsoft.Win32.SessionEndedEventArgs e)
         {
             Log.Write("sessao do Windows encerrando");
-            Shutdown();
-            Application.Exit();
+            Sair(false);
         }
 
         private void OnExit(object sender, EventArgs e)
         {
+            Sair(true);
+        }
+
+        /// <summary>
+        /// Sai do aplicativo, fechando a configuracao ANTES de desmontar.
+        ///
+        /// A ordem era a inversa: Shutdown parava threads, painel, sensores e
+        /// icone, e so depois o Application.Exit perguntava a janela aberta se
+        /// podia fechar. Com edicao pendente ela oferecia Cancelar - e o
+        /// Cancelar cancelava a saida inteira, deixando um processo sem icone,
+        /// com o mostrador parado e dono do mutex. Abrir o app de novo so
+        /// acendia o evento de ativacao, cuja thread ja tinha terminado.
+        ///
+        /// Perguntar = falso e para quem nao pode ouvir um nao: o instalador e o
+        /// fim da sessao do Windows. Ai a edicao pendente e descartada calada.
+        /// </summary>
+        internal bool Sair(bool perguntar)
+        {
+            if (IsStopping) return true;
+            if (!FecharConfiguracao(perguntar))
+            {
+                Log.Write("saida cancelada na janela de configuracao");
+                return false;
+            }
             Shutdown();
             Application.Exit();
+            return true;
+        }
+
+        /// <summary>Fecha a janela de configuracao, se houver; devolve se ela aceitou.</summary>
+        internal bool FecharConfiguracao(bool perguntar)
+        {
+            SettingsForm f = _settingsForm;
+            if (f == null || f.IsDisposed) return true;
+            if (perguntar) f.Close();
+            else f.FecharSemPerguntar();
+
+            // Modal, a janela aceita marcando o DialogResult e some quando o
+            // ShowDialog voltar; recusando, o WinForms o devolve a None. Sem
+            // ser modal, aceitar ja a descarta.
+            return f.IsDisposed || f.DialogResult != DialogResult.None;
         }
 
         private void Shutdown()
@@ -1459,7 +1521,8 @@ namespace MhiagosControl
 
             FecharWidget();
             if (_icon != null) { _icon.Visible = false; _icon.Dispose(); }
-            if (_iconNormal != null) _iconNormal.Dispose();
+            // _iconNormal e o Assets.TrayIcon, guardado e compartilhado (pode ser o
+            // icone de reserva das janelas): nao e deste dono para descartar.
             if (_iconBaixa != null) _iconBaixa.Dispose();
             if (_hIconBaixa != IntPtr.Zero) { DestroyIcon(_hIconBaixa); _hIconBaixa = IntPtr.Zero; }
 

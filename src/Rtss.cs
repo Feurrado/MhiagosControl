@@ -166,6 +166,9 @@ namespace MhiagosControl
                 // O atalho do App Installer e um ponto de reparse, e nao um
                 // executavel comum largado na pasta.
                 if ((File.GetAttributes(alvo) & FileAttributes.ReparsePoint) == 0) return null;
+                // E precisa ser um alias de app que aponta para o pacote
+                // instalado pelo sistema: veja AliasDoWindows.
+                if (AliasDoWindows.Alvo(alvo) == null) return null;
                 return alvo;
             }
             catch { return null; }

@@ -74,7 +74,7 @@ $arguments = @(
     ('/reference:' + (Join-Path $fw 'System.Core.dll')),
     ('/reference:' + (Join-Path $fw 'System.Drawing.dll')),
     ('/reference:' + (Join-Path $fw 'System.Windows.Forms.dll'))
-) + $recursos + @((Join-Path $root 'tools\Installer.cs'))
+) + $recursos + @((Join-Path $root 'tools\Installer.cs'), (Join-Path $root 'src\AliasDoWindows.cs'))
 
 & $csc $arguments 2>&1 | Out-String | Write-Output
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) { Write-Output "FALHOU ao compilar o instalador"; exit 1 }

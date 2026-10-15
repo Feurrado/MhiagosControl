@@ -189,10 +189,13 @@ namespace MhiagosControl
         public static bool Esperar(int ms)
         {
             if (ms < 1) ms = 1;
+            // Um prazo para todas, e nao um para cada: com tres threads presas
+            // o encerramento esperava o triplo do combinado.
+            Stopwatch prazo = Stopwatch.StartNew();
             bool todas = true;
             lock (_threads)
                 foreach (Thread t in _threads)
-                    if (!t.Join(ms)) todas = false;
+                    if (!t.Join(Math.Max(1, ms - (int)prazo.ElapsedMilliseconds))) todas = false;
             return todas;
         }
 

@@ -29,7 +29,7 @@ namespace MhiagosControl
             _box.TextChanged += delegate { Invalidate(); if (QueryChanged != null) QueryChanged(this, EventArgs.Empty); };
             Controls.Add(_box);
 
-            Height = 30;
+            Height = Ui.S(30);
             BackColor = Color.Transparent;
         }
 
@@ -37,7 +37,7 @@ namespace MhiagosControl
         {
             base.OnResize(e);
             if (_box == null) return;   // resize pode ocorrer durante a construcao
-            _box.SetBounds(30, (Height - _box.PreferredHeight) / 2 + 1, Math.Max(10, Width - 40), _box.PreferredHeight);
+            _box.SetBounds(Ui.S(30), (Height - _box.PreferredHeight) / 2 + 1, Math.Max(Ui.S(10), Width - Ui.S(40)), _box.PreferredHeight);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -57,11 +57,11 @@ namespace MhiagosControl
             }
 
             using (SolidBrush b = new SolidBrush(Ui.Muted))
-                g.DrawString("", Ui.FontGlyph9, b, 9, (Height - 16) / 2);
+                g.DrawString("", Ui.FontGlyph9, b, Ui.S(9), (Height - Ui.S(16)) / 2);
 
             if (_box.Text.Length == 0)
                 TextRenderer.DrawText(g, Placeholder, Ui.FontBase,
-                    new Rectangle(30, 0, Width - 40, Height), Ui.Muted,
+                    new Rectangle(Ui.S(30), 0, Width - Ui.S(40), Height), Ui.Muted,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
         }
     }
@@ -86,7 +86,7 @@ namespace MhiagosControl
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
             Font = Ui.FontSmall;
-            Height = 30;
+            Height = Ui.S(30);
             Cursor = Cursors.Hand;
         }
 
@@ -112,8 +112,8 @@ namespace MhiagosControl
         // Folga apertada de proposito: com oito categorias, cada pixel a mais de
         // recheio empurra a ultima pilula para uma segunda fileira que rouba
         // 28 px da lista.
-        private const int ChipH = 24, ChipGap = 5, ChipPad = 18;
-        private const int TopPad = 6, BottomPad = 10;
+        private static readonly int ChipH = Ui.S(24), ChipGap = Ui.S(5), ChipPad = Ui.S(18);
+        private static readonly int TopPad = Ui.S(6), BottomPad = Ui.S(10);
 
         /// <summary>
         /// Posiciona as pilulas quebrando linha quando nao couberem. Sem quebra,
@@ -306,7 +306,7 @@ namespace MhiagosControl
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
-            Width = 12;
+            Width = Ui.S(12);
             Cursor = Cursors.Default;
         }
 
@@ -325,11 +325,11 @@ namespace MhiagosControl
             int total = Total, tela = PorTela;
             if (total <= tela) return Rectangle.Empty;
 
-            int trilho = Height - 8;
-            int alt = Math.Max(28, trilho * tela / total);
+            int trilho = Height - Ui.S(8);
+            int alt = Math.Max(Ui.S(28), trilho * tela / total);
             int max = total - tela;
             int topo = max <= 0 ? 0 : (trilho - alt) * Math.Min(_list.TopIndex, max) / max;
-            return new Rectangle(3, 4 + topo, Width - 6, alt);
+            return new Rectangle(Ui.S(3), Ui.S(4) + topo, Width - Ui.S(6), alt);
         }
 
         public void Sincronizar()
@@ -386,11 +386,11 @@ namespace MhiagosControl
             if (total <= tela) return;
 
             Rectangle t = Polegar();
-            int trilho = Height - 8;
+            int trilho = Height - Ui.S(8);
             int curso = trilho - t.Height;
             if (curso <= 0) return;
 
-            int topo = Math.Max(0, Math.Min(curso, y - _pegaEm - 4));
+            int topo = Math.Max(0, Math.Min(curso, y - _pegaEm - Ui.S(4)));
             _list.TopIndex = topo * (total - tela) / curso;
             Invalidate();
         }
@@ -403,7 +403,7 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
 
-            using (GraphicsPath p = Ui.RoundRect(new Rectangle(4, 4, Width - 8, Height - 8), (Width - 8) / 2))
+            using (GraphicsPath p = Ui.RoundRect(new Rectangle(Ui.S(4), Ui.S(4), Width - Ui.S(8), Height - Ui.S(8)), (Width - Ui.S(8)) / 2))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
                 g.FillPath(b, p);
 
@@ -482,7 +482,7 @@ namespace MhiagosControl
             _list = new SmoothListBox();
             _list.Dock = DockStyle.Fill;
             _list.DrawMode = DrawMode.OwnerDrawFixed;
-            _list.ItemHeight = 26;
+            _list.ItemHeight = Ui.S(26);
             _list.BorderStyle = BorderStyle.None;
             _list.IntegralHeight = false;
             _list.Font = Ui.FontBase;
@@ -502,7 +502,7 @@ namespace MhiagosControl
 
             _spacer = new Panel();
             _spacer.Dock = DockStyle.Top;
-            _spacer.Height = 8;
+            _spacer.Height = Ui.S(8);
             _spacer.BackColor = Color.Transparent;
 
             _scroll = new ScrollStrip(_list);
@@ -756,10 +756,10 @@ namespace MhiagosControl
             if (grp != null)
             {
                 TextRenderer.DrawText(g, T.Category(grp.Name).ToUpperInvariant(), Ui.FontSmall,
-                    new Rectangle(r.X + 10, r.Y, r.Width - 14, r.Height), Ui.Muted,
+                    new Rectangle(r.X + Ui.S(10), r.Y, r.Width - Ui.S(14), r.Height), Ui.Muted,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
                 using (Pen pen = new Pen(Ui.Border))
-                    g.DrawLine(pen, r.X + 10, r.Bottom - 1, r.Right - 10, r.Bottom - 1);
+                    g.DrawLine(pen, r.X + Ui.S(10), r.Bottom - 1, r.Right - Ui.S(10), r.Bottom - 1);
                 return;
             }
 
@@ -771,12 +771,12 @@ namespace MhiagosControl
 
             if (selected || hovered)
             {
-                Rectangle rr = new Rectangle(r.X + 4, r.Y + 1, r.Width - 8, r.Height - 2);
-                using (GraphicsPath p = Ui.RoundRect(rr, 5))
+                Rectangle rr = new Rectangle(r.X + Ui.S(4), r.Y + 1, r.Width - Ui.S(8), r.Height - Ui.S(2));
+                using (GraphicsPath p = Ui.RoundRect(rr, Ui.S(5)))
                 using (SolidBrush b = new SolidBrush(selected ? Ui.AccentSoft : Ui.Hover))
                     g.FillPath(b, p);
                 if (selected)
-                    using (GraphicsPath p = Ui.RoundRect(rr, 5))
+                    using (GraphicsPath p = Ui.RoundRect(rr, Ui.S(5)))
                     using (Pen pen = new Pen(Ui.Accent))
                         g.DrawPath(pen, p);
             }
@@ -789,11 +789,11 @@ namespace MhiagosControl
             Color valColor = noRead ? Ui.Muted : (selected ? Ui.Accent : Ui.Muted);
 
             TextRenderer.DrawText(g, value, Ui.FontBase,
-                new Rectangle(r.Right - vs.Width - 14, r.Y, vs.Width + 4, r.Height), valColor,
+                new Rectangle(r.Right - vs.Width - Ui.S(14), r.Y, vs.Width + Ui.S(4), r.Height), valColor,
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
 
             TextRenderer.DrawText(g, s.Name, selected ? Ui.FontMed : Ui.FontBase,
-                new Rectangle(r.X + 14, r.Y, r.Width - vs.Width - 34, r.Height), Ui.Text,
+                new Rectangle(r.X + Ui.S(14), r.Y, r.Width - vs.Width - Ui.S(34), r.Height), Ui.Text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
 

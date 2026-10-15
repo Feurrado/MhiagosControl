@@ -33,7 +33,7 @@ namespace MhiagosControl
         private readonly List<double> _discosGb = new List<double>();
         private bool _sobre;
 
-        private const int Pad = 16;
+        private static readonly int Pad = Ui.S(16);
 
         public BlocoDeSpec(SpecGrupo g)
         {
@@ -186,13 +186,13 @@ namespace MhiagosControl
         /// <summary>A altura que o conteudo pede na largura dada.</summary>
         public int AlturaPara(int largura)
         {
-            int h = Pad + 16 + 4;                         // titulo
-            h += 26;                                      // destaque
-            if (!string.IsNullOrEmpty(_sub)) h += 18;
-            if (_etiquetas.Count > 0) h += 8 + LinhasDeEtiquetas(largura) * 26;
-            if (_slotsTotal > 0) h += 10 + 34 + (_slots != null ? AlturaDoNomeDoSlot : 0);
-            if (_discos.Count > 0) h += 6 + _discos.Count * 34;
-            return h + Pad - 4;
+            int h = Pad + Ui.S(16) + Ui.S(4);                         // titulo
+            h += Ui.S(26);                                      // destaque
+            if (!string.IsNullOrEmpty(_sub)) h += Ui.S(18);
+            if (_etiquetas.Count > 0) h += Ui.S(8) + LinhasDeEtiquetas(largura) * Ui.S(26);
+            if (_slotsTotal > 0) h += Ui.S(10) + Ui.S(34) + (_slots != null ? AlturaDoNomeDoSlot : 0);
+            if (_discos.Count > 0) h += Ui.S(6) + _discos.Count * Ui.S(34);
+            return h + Pad - Ui.S(4);
         }
 
         private int LinhasDeEtiquetas(int largura)
@@ -200,14 +200,14 @@ namespace MhiagosControl
             int x = Pad, linhas = 1;
             foreach (string e in _etiquetas)
             {
-                int w = TextRenderer.MeasureText(e, Ui.FontSmall).Width + 14;
+                int w = TextRenderer.MeasureText(e, Ui.FontSmall).Width + Ui.S(14);
                 if (x > Pad && x + w > largura - Pad) { linhas++; x = Pad; }
-                x += w + 6;
+                x += w + Ui.S(6);
             }
             return linhas;
         }
 
-        private const int AlturaDoNomeDoSlot = 16;
+        private static readonly int AlturaDoNomeDoSlot = Ui.S(16);
 
         protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _sobre = true; Invalidate(); }
 
@@ -232,7 +232,7 @@ namespace MhiagosControl
             Invalidate();
             if (i < 0 || i >= _slots.Count) { _dica.Hide(this); return; }
             Rectangle a = _areasDosSlots[i];
-            _dica.Show(TextoDoSlot(_slots[i]), this, a.Right + 4, a.Y, 6000);
+            _dica.Show(TextoDoSlot(_slots[i]), this, a.Right + Ui.S(4), a.Y, 6000);
         }
 
         internal static string TextoDoSlot(SlotDeMemoria s)
@@ -263,91 +263,91 @@ namespace MhiagosControl
                 using (Pen pen = new Pen(_sobre ? Ui.Accent : Ui.Border)) g.DrawPath(pen, p);
             }
 
-            int y = Pad - 2;
+            int y = Pad - Ui.S(2);
             TextRenderer.DrawText(g, _g.Titulo, Ui.FontSmall, new Point(Pad, y), Ui.Muted, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, T.SpecSeeAll, Ui.FontSmall, new Rectangle(Pad, y, Width - 2 * Pad, 16),
-                _sobre ? Ui.Accent : Ui.Faint, TextFormatFlags.Right | TextFormatFlags.NoPadding);
-            y += 20;
+            TextRenderer.DrawText(g, T.SpecSeeAll, Ui.FontSmall, new Rectangle(Pad, y, Width - 2 * Pad, Ui.S(16)),
+                _sobre ? Ui.AccentText : Ui.Faint, TextFormatFlags.Right | TextFormatFlags.NoPadding);
+            y += Ui.S(20);
 
-            TextRenderer.DrawText(g, _destaque ?? "", Ui.FontTileValue, new Rectangle(Pad, y, Width - 2 * Pad, 24),
+            TextRenderer.DrawText(g, _destaque ?? "", Ui.FontTileValue, new Rectangle(Pad, y, Width - 2 * Pad, Ui.S(24)),
                 Ui.Text, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-            y += 26;
+            y += Ui.S(26);
             if (!string.IsNullOrEmpty(_sub))
             {
-                TextRenderer.DrawText(g, _sub, Ui.FontSmall, new Rectangle(Pad, y, Width - 2 * Pad, 16),
+                TextRenderer.DrawText(g, _sub, Ui.FontSmall, new Rectangle(Pad, y, Width - 2 * Pad, Ui.S(16)),
                     Ui.Muted, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-                y += 18;
+                y += Ui.S(18);
             }
 
             if (_etiquetas.Count > 0)
             {
-                y += 8;
+                y += Ui.S(8);
                 int x = Pad;
                 foreach (string et in _etiquetas)
                 {
-                    int w = TextRenderer.MeasureText(et, Ui.FontSmall).Width + 14;
-                    if (x > Pad && x + w > Width - Pad) { x = Pad; y += 26; }
-                    Rectangle c = new Rectangle(x, y, Math.Min(w, Width - 2 * Pad), 20);
-                    using (GraphicsPath p = Ui.RoundRect(c, 10))
+                    int w = TextRenderer.MeasureText(et, Ui.FontSmall).Width + Ui.S(14);
+                    if (x > Pad && x + w > Width - Pad) { x = Pad; y += Ui.S(26); }
+                    Rectangle c = new Rectangle(x, y, Math.Min(w, Width - 2 * Pad), Ui.S(20));
+                    using (GraphicsPath p = Ui.RoundRect(c, Ui.S(10)))
                     using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(b, p);
-                    using (GraphicsPath p = Ui.RoundRect(c, 10))
+                    using (GraphicsPath p = Ui.RoundRect(c, Ui.S(10)))
                     using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, p);
                     TextRenderer.DrawText(g, et, Ui.FontSmall, c, Ui.Text,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-                    x += w + 6;
+                    x += w + Ui.S(6);
                 }
-                y += 26;
+                y += Ui.S(26);
             }
 
             if (_slotsTotal > 0)
             {
-                y += 10;
+                y += Ui.S(10);
                 // Com os slots da BIOS, um pouco mais de passo: o nome embaixo
                 // ("A1") e mais largo que o quadrado.
                 bool nomeados = _slots != null;
-                int passo = nomeados ? 28 : 22, larg = nomeados ? 16 : 14;
+                int passo = nomeados ? Ui.S(28) : Ui.S(22), larg = nomeados ? Ui.S(16) : Ui.S(14);
                 _areasDosSlots.Clear();
                 for (int i = 0; i < _slotsTotal; i++)
                 {
-                    Rectangle s = new Rectangle(Pad + i * passo, y, larg, 30);
+                    Rectangle s = new Rectangle(Pad + i * passo, y, larg, Ui.S(30));
                     bool cheio = nomeados ? _slots[i].Ocupado : i < _slotsUsados;
                     bool sob = nomeados && i == _slotSobMouse;
-                    using (GraphicsPath p = Ui.RoundRect(s, 2))
+                    using (GraphicsPath p = Ui.RoundRect(s, Ui.S(2)))
                     {
                         using (SolidBrush b = new SolidBrush(cheio ? Ui.Accent : Ui.SurfaceAlt)) g.FillPath(b, p);
                         using (Pen pen = new Pen(sob ? Ui.Text : (cheio ? Ui.Accent : Ui.Border))) g.DrawPath(pen, p);
                     }
                     if (!nomeados) continue;
-                    Rectangle nome = new Rectangle(s.X - 6, y + 32, larg + 12, AlturaDoNomeDoSlot - 2);
+                    Rectangle nome = new Rectangle(s.X - Ui.S(6), y + Ui.S(32), larg + Ui.S(12), AlturaDoNomeDoSlot - Ui.S(2));
                     TextRenderer.DrawText(g, _slots[i].Nome, Ui.FontSmall, nome, cheio ? Ui.Text : Ui.Faint,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
-                    _areasDosSlots.Add(new Rectangle(s.X - 5, y - 2, larg + 10, 30 + AlturaDoNomeDoSlot + 2));
+                    _areasDosSlots.Add(new Rectangle(s.X - Ui.S(5), y - Ui.S(2), larg + Ui.S(10), Ui.S(30) + AlturaDoNomeDoSlot + Ui.S(2)));
                 }
                 TextRenderer.DrawText(g, T.SpecSlotsUsed(_slotsUsados, _slotsTotal), Ui.FontSmall,
-                    new Point(Pad + (_slotsTotal - 1) * passo + larg + 8, y + 8), Ui.Muted, TextFormatFlags.NoPadding);
-                y += 34 + (nomeados ? AlturaDoNomeDoSlot : 0);
+                    new Point(Pad + (_slotsTotal - 1) * passo + larg + Ui.S(8), y + Ui.S(8)), Ui.Muted, TextFormatFlags.NoPadding);
+                y += Ui.S(34) + (nomeados ? AlturaDoNomeDoSlot : 0);
             }
 
             if (_discos.Count > 0)
             {
-                y += 6;
+                y += Ui.S(6);
                 double maior = 1;
                 foreach (double v in _discosGb) if (v > maior) maior = v;
                 for (int i = 0; i < _discos.Count; i++)
                 {
                     int w = Width - 2 * Pad;
-                    TextRenderer.DrawText(g, _discos[i][1], Ui.FontSemi, new Rectangle(Pad, y, w - 70, 16),
+                    TextRenderer.DrawText(g, _discos[i][1], Ui.FontSemi, new Rectangle(Pad, y, w - Ui.S(70), Ui.S(16)),
                         Ui.Text, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-                    TextRenderer.DrawText(g, _discos[i][0], Ui.FontSmall, new Rectangle(Pad, y, w, 16),
+                    TextRenderer.DrawText(g, _discos[i][0], Ui.FontSmall, new Rectangle(Pad, y, w, Ui.S(16)),
                         Ui.Muted, TextFormatFlags.Right | TextFormatFlags.NoPadding);
-                    if (_discosGb[i] <= 0) { y += 26; continue; }   // sem tamanho (leitor USB): sem barra
-                    Rectangle trilho = new Rectangle(Pad, y + 19, w, 6);
-                    using (GraphicsPath p = Ui.RoundRect(trilho, 3))
+                    if (_discosGb[i] <= 0) { y += Ui.S(26); continue; }   // sem tamanho (leitor USB): sem barra
+                    Rectangle trilho = new Rectangle(Pad, y + Ui.S(19), w, Ui.S(6));
+                    using (GraphicsPath p = Ui.RoundRect(trilho, Ui.S(3)))
                     using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(b, p);
-                    int cheio = Math.Max(6, (int)(w * Math.Min(1.0, _discosGb[i] / maior)));
-                    using (GraphicsPath p = Ui.RoundRect(new Rectangle(Pad, y + 19, cheio, 6), 3))
+                    int cheio = Math.Max(Ui.S(6), (int)(w * Math.Min(1.0, _discosGb[i] / maior)));
+                    using (GraphicsPath p = Ui.RoundRect(new Rectangle(Pad, y + Ui.S(19), cheio, Ui.S(6)), Ui.S(3)))
                     using (SolidBrush b = new SolidBrush(Ui.Accent)) g.FillPath(b, p);
-                    y += 34;
+                    y += Ui.S(34);
                 }
             }
         }

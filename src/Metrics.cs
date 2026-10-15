@@ -71,7 +71,7 @@ namespace MhiagosControl
             // cada pintura - numa grade de doze cartoes, doze vezes.
             BackColor = Ui.Window;
             Font = Ui.FontBase;
-            Size = new Size(172, 104);
+            Size = new Size(Ui.S(172), Ui.S(104));
         }
 
         /// <summary>Leitura do ciclo corrente. A serie e alimentada em outro lugar.</summary>
@@ -190,7 +190,7 @@ namespace MhiagosControl
                 return;
             }
 
-            int hx = (s < 0 && Height >= 140) ? e.X : -1;
+            int hx = (s < 0 && Height >= Ui.S(140)) ? e.X : -1;
 
             if (s != _sobre || hx != _hoverX)
             {
@@ -224,7 +224,7 @@ namespace MhiagosControl
         private bool _armado = false;
 
         /// <summary>Quantos pixels o ponteiro anda antes de virar arraste.</summary>
-        private const int Limiar = 6;
+        private static readonly int Limiar = Ui.S(6);
 
         /// <summary>
         /// Onde o cartao foi pego, em coordenadas dele.
@@ -256,10 +256,10 @@ namespace MhiagosControl
 
         private void DesenharBotoes(Graphics g)
         {
-            int t = 20, y = 6, x = Width - 8 - t;
-            _bRem = new Rectangle(x, y, t, t); x -= t + 2;
-            _bTam = new Rectangle(x, y, t, t); x -= t + 2;
-            _bDir = new Rectangle(x, y, t, t); x -= t + 2;
+            int t = Ui.S(20), y = Ui.S(6), x = Width - Ui.S(8) - t;
+            _bRem = new Rectangle(x, y, t, t); x -= t + Ui.S(2);
+            _bTam = new Rectangle(x, y, t, t); x -= t + Ui.S(2);
+            _bDir = new Rectangle(x, y, t, t); x -= t + Ui.S(2);
             _bEsq = new Rectangle(x, y, t, t);
 
             if (!_mouseDentro || !Editavel) return;
@@ -277,7 +277,7 @@ namespace MhiagosControl
                 {
                     bool ativo = (_sobre == i);
                     if (ativo)
-                        using (GraphicsPath p = Ui.RoundRect(areas[i], 4))
+                        using (GraphicsPath p = Ui.RoundRect(areas[i], Ui.S(4)))
                         using (SolidBrush b = new SolidBrush(Ui.Hover))
                             g.FillPath(b, p);
 
@@ -304,8 +304,8 @@ namespace MhiagosControl
 
             // Cartao alto sobra area util abaixo do valor: a curva desce e ganha
             // eixo e grade. No pequeno ela continua sendo pano de fundo.
-            bool detalhado = Height >= 140;
-            int topo = detalhado ? 66 : Height / 2;
+            bool detalhado = Height >= Ui.S(140);
+            int topo = detalhado ? Ui.S(66) : Height / 2;
 
             using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))
             {
@@ -321,24 +321,24 @@ namespace MhiagosControl
 
             // O rotulo cede espaco quando os botoes estao a mostra, em vez de
             // ficar por baixo deles.
-            int recuo = (_mouseDentro && Editavel) ? 106 : 24;
-            TextRenderer.DrawText(g, Titulo, Ui.FontSmall, new Rectangle(12, 8, Width - recuo, 15),
+            int recuo = Ui.S((_mouseDentro && Editavel) ? 106 : 24);
+            TextRenderer.DrawText(g, Titulo, Ui.FontSmall, new Rectangle(Ui.S(12), Ui.S(8), Width - recuo, Ui.S(15)),
                 Ui.Muted, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
 
             DesenharBotoes(g);
 
             if (!string.IsNullOrEmpty(Sub))
-                TextRenderer.DrawText(g, Sub, Ui.FontSmall, new Rectangle(12, Height - 20, Width - 24, 15),
+                TextRenderer.DrawText(g, Sub, Ui.FontSmall, new Rectangle(Ui.S(12), Height - Ui.S(20), Width - Ui.S(24), Ui.S(15)),
                     Ui.Faint, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
 
             string txt = Formatado();
             Size ts = TextRenderer.MeasureText(g, txt, Ui.FontValue);
-            int y = 28;
-            TextRenderer.DrawText(g, txt, Ui.FontValue, new Point(10, y), cor);
+            int y = Ui.S(28);
+            TextRenderer.DrawText(g, txt, Ui.FontValue, new Point(Ui.S(10), y), cor);
 
             if (!string.IsNullOrEmpty(Unidade))
                 TextRenderer.DrawText(g, Unidade, Ui.FontSmall,
-                    new Point(10 + ts.Width - 4, y + ts.Height - 15), Ui.Muted);
+                    new Point(Ui.S(10) + ts.Width - Ui.S(4), y + ts.Height - Ui.S(15)), Ui.Muted);
         }
 
         /// <summary>
@@ -379,7 +379,7 @@ namespace MhiagosControl
             faixa = alto - baixo;
 
             int alt = Height - topo;
-            if (alt < 8) return;
+            if (alt < Ui.S(8)) return;
 
             if (detalhado) DesenharGrade(g, topo, alt);
 
@@ -482,21 +482,21 @@ namespace MhiagosControl
                          "   " + t.ToString(Janela <= 600 ? "HH:mm:ss" : "HH:mm");
 
             Size ts = TextRenderer.MeasureText(g, txt, Ui.FontSmall);
-            int w = ts.Width + 14, h = ts.Height + 8;
+            int w = ts.Width + Ui.S(14), h = ts.Height + Ui.S(8);
 
             // Acima do ponto por padrao; abaixo quando nao cabe. Grudado na
             // borda de cima, o balao sairia do desenho e tamparia o rotulo.
             int bx = (int)Math.Round(x) - w / 2;
-            int by = (int)Math.Round(y) - h - 10;
-            if (by < topo + 2) by = (int)Math.Round(y) + 10;
+            int by = (int)Math.Round(y) - h - Ui.S(10);
+            if (by < topo + Ui.S(2)) by = (int)Math.Round(y) + Ui.S(10);
             // A faixa de baixo e do rodape do cartao, que e desenhado DEPOIS
             // desta rotina: encostar ali poria o rodape por cima do balao.
-            if (by + h > Height - 22) by = Height - 22 - h;
-            if (bx < 2) bx = 2;
-            if (bx + w > Width - 2) bx = Width - 2 - w;
+            if (by + h > Height - Ui.S(22)) by = Height - Ui.S(22) - h;
+            if (bx < Ui.S(2)) bx = Ui.S(2);
+            if (bx + w > Width - Ui.S(2)) bx = Width - Ui.S(2) - w;
 
             Rectangle balao = new Rectangle(bx, by, w, h);
-            using (GraphicsPath gp = Ui.RoundRect(balao, 4))
+            using (GraphicsPath gp = Ui.RoundRect(balao, Ui.S(4)))
             {
                 using (SolidBrush b = new SolidBrush(Ui.Window)) g.FillPath(b, gp);
                 using (Pen p = new Pen(Ui.Border)) g.DrawPath(p, gp);
@@ -577,9 +577,9 @@ namespace MhiagosControl
 
             foreach (string txt in formas)
             {
-                if (TextRenderer.MeasureText(g, txt, Ui.FontSmall).Width > Width - 20) continue;
+                if (TextRenderer.MeasureText(g, txt, Ui.FontSmall).Width > Width - Ui.S(20)) continue;
                 TextRenderer.DrawText(g, txt, Ui.FontSmall,
-                    new Rectangle(10, topo + 2, Width - 20, 14), Ui.Faint,
+                    new Rectangle(Ui.S(10), topo + Ui.S(2), Width - Ui.S(20), Ui.S(14)), Ui.Faint,
                     TextFormatFlags.Right | TextFormatFlags.NoPadding);
                 return;
             }
@@ -613,9 +613,9 @@ namespace MhiagosControl
 
         public static int Altura(int tamanho)
         {
-            if (tamanho >= 2) return 220;
-            if (tamanho == 1) return 140;
-            return 104;
+            if (tamanho >= 2) return Ui.S(220);
+            if (tamanho == 1) return Ui.S(140);
+            return Ui.S(104);
         }
 
         // ---------------- nomes ----------------

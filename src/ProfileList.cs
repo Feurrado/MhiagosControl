@@ -36,7 +36,7 @@ namespace MhiagosControl
         /// <summary>Duplo clique numa linha - a pagina usa para aplicar o perfil.</summary>
         public event EventHandler ItemActivated;
 
-        private const int RowH = 54;
+        private static readonly int RowH = Ui.S(54);
 
         /// <summary>Seta circular (U+21BB), presente nas fontes que o Windows entrega.</summary>
         private const string RotaGlifo = "↻";
@@ -71,7 +71,7 @@ namespace MhiagosControl
             }
         }
 
-        private int PorTela { get { return Math.Max(1, (Height - 8) / RowH); } }
+        private int PorTela { get { return Math.Max(1, (Height - Ui.S(8)) / RowH); } }
 
         private void Visivel(int i)
         {
@@ -91,7 +91,7 @@ namespace MhiagosControl
 
         private int Hit(Point p)
         {
-            int i = _top + (p.Y - 4) / RowH;
+            int i = _top + (p.Y - Ui.S(4)) / RowH;
             return (i >= _top && i < _items.Count && i < _top + PorTela) ? i : -1;
         }
 
@@ -168,9 +168,9 @@ namespace MhiagosControl
             bool temRolagem = _items.Count > PorTela;
             // A barra tem uma coluna própria. Antes ela era pintada sobre o
             // último pixel do highlight, parecendo cortar o perfil selecionado.
-            int limiteDireito = Width - (temRolagem ? 14 : 4);
+            int limiteDireito = Width - (temRolagem ? Ui.S(14) : Ui.S(4));
 
-            using (GraphicsPath p = Ui.RoundRect(new Rectangle(0, 0, Width - 1, Height - 1), 8))
+            using (GraphicsPath p = Ui.RoundRect(new Rectangle(0, 0, Width - 1, Height - 1), Ui.S(8)))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -178,20 +178,20 @@ namespace MhiagosControl
                 g.DrawPath(pen, p);
             }
 
-            int y = 4;
+            int y = Ui.S(4);
             for (int i = _top; i < _items.Count && i < _top + PorTela; i++, y += RowH)
             {
                 Profile p = _items[i];
-                Rectangle r = new Rectangle(4, y, Math.Max(1, limiteDireito - 4), RowH - 2);
+                Rectangle r = new Rectangle(Ui.S(4), y, Math.Max(1, limiteDireito - Ui.S(4)), RowH - Ui.S(2));
 
                 bool sel = i == _sel;
                 if (sel || i == _hover)
                 {
-                    using (GraphicsPath gp = Ui.RoundRect(r, 6))
+                    using (GraphicsPath gp = Ui.RoundRect(r, Ui.S(6)))
                     using (SolidBrush b = new SolidBrush(sel ? Ui.AccentSoft : Ui.Hover))
                         g.FillPath(b, gp);
                     if (sel)
-                        using (GraphicsPath gp = Ui.RoundRect(r, 6))
+                        using (GraphicsPath gp = Ui.RoundRect(r, Ui.S(6)))
                         using (Pen pen = new Pen(Ui.Accent))
                             g.DrawPath(pen, gp);
                 }
@@ -199,34 +199,34 @@ namespace MhiagosControl
                 // O distintivo e medido antes do nome: e ele que define quanto
                 // sobra para o texto, e nao o contrario.
                 bool ativo = string.Equals(p.Name, ActiveName, StringComparison.Ordinal);
-                int right = r.Right - 10;
+                int right = r.Right - Ui.S(10);
                 if (ativo)
                 {
                     Size bs = TextRenderer.MeasureText(g, T.ActiveBadge, Ui.FontSmall);
-                    Rectangle badge = new Rectangle(right - bs.Width - 14, r.Y + 9, bs.Width + 14, 18);
-                    using (GraphicsPath gp = Ui.RoundRect(badge, 9))
+                    Rectangle badge = new Rectangle(right - bs.Width - Ui.S(14), r.Y + Ui.S(9), bs.Width + Ui.S(14), Ui.S(18));
+                    using (GraphicsPath gp = Ui.RoundRect(badge, Ui.S(9)))
                     using (SolidBrush b = new SolidBrush(Ui.Accent))
                         g.FillPath(b, gp);
                     TextRenderer.DrawText(g, T.ActiveBadge, Ui.FontSmall, badge, Color.White,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-                    right = badge.Left - 8;
+                    right = badge.Left - Ui.S(8);
                 }
 
                 bool padrao = string.Equals(p.Name, DefaultName, StringComparison.Ordinal);
                 if (padrao)
                 {
                     Size bs = TextRenderer.MeasureText(g, T.DefaultBadge, Ui.FontSmall);
-                    Rectangle badge = new Rectangle(right - bs.Width - 14, r.Y + 9, bs.Width + 14, 18);
-                    using (GraphicsPath gp = Ui.RoundRect(badge, 9))
+                    Rectangle badge = new Rectangle(right - bs.Width - Ui.S(14), r.Y + Ui.S(9), bs.Width + Ui.S(14), Ui.S(18));
+                    using (GraphicsPath gp = Ui.RoundRect(badge, Ui.S(9)))
                     using (SolidBrush b = new SolidBrush(Ui.Surface))
                     using (Pen pen = new Pen(Ui.Accent))
                     {
                         g.FillPath(b, gp);
                         g.DrawPath(pen, gp);
                     }
-                    TextRenderer.DrawText(g, T.DefaultBadge, Ui.FontSmall, badge, Ui.Accent,
+                    TextRenderer.DrawText(g, T.DefaultBadge, Ui.FontSmall, badge, Ui.AccentText,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-                    right = badge.Left - 8;
+                    right = badge.Left - Ui.S(8);
                 }
 
                 // Marca do rodizio. Simbolo e nao pastilha: ela dividiria a
@@ -235,18 +235,18 @@ namespace MhiagosControl
                 if (p.Rotate)
                 {
                     Size gs = TextRenderer.MeasureText(g, RotaGlifo, Ui.FontMed);
-                    Rectangle marca = new Rectangle(right - gs.Width, r.Y + 8, gs.Width, 20);
+                    Rectangle marca = new Rectangle(right - gs.Width, r.Y + Ui.S(8), gs.Width, Ui.S(20));
                     TextRenderer.DrawText(g, RotaGlifo, Ui.FontMed, marca, Ui.Accent,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-                    right = marca.Left - 6;
+                    right = marca.Left - Ui.S(6);
                 }
 
                 TextRenderer.DrawText(g, p.Name, Ui.FontMed,
-                    new Rectangle(r.X + 12, r.Y + 6, right - r.X - 16, 20), Ui.Text,
+                    new Rectangle(r.X + Ui.S(12), r.Y + Ui.S(6), right - r.X - Ui.S(16), Ui.S(20)), Ui.Text,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
                 TextRenderer.DrawText(g, Resumo(p), Ui.FontSmall,
-                    new Rectangle(r.X + 12, r.Y + 27, r.Width - 24, 18), Ui.Muted,
+                    new Rectangle(r.X + Ui.S(12), r.Y + Ui.S(27), r.Width - Ui.S(24), Ui.S(18)), Ui.Muted,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             }
 
@@ -254,11 +254,11 @@ namespace MhiagosControl
             // a lateral em vez de roubar largura do resumo.
             if (temRolagem)
             {
-                int trilho = Height - 12;
-                int alt = Math.Max(24, trilho * PorTela / _items.Count);
+                int trilho = Height - Ui.S(12);
+                int alt = Math.Max(Ui.S(24), trilho * PorTela / _items.Count);
                 int max = _items.Count - PorTela;
                 int topo = max <= 0 ? 0 : (trilho - alt) * _top / max;
-                using (GraphicsPath gp = Ui.RoundRect(new Rectangle(Width - 8, 6 + topo, 4, alt), 2))
+                using (GraphicsPath gp = Ui.RoundRect(new Rectangle(Width - Ui.S(8), Ui.S(6) + topo, Ui.S(4), alt), Ui.S(2)))
                 using (SolidBrush b = new SolidBrush(Ui.Thumb))
                     g.FillPath(b, gp);
             }

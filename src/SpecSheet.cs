@@ -88,7 +88,10 @@ namespace MhiagosControl
             List<SpecGrupo> uteis = new List<SpecGrupo>();
             foreach (SpecGrupo x in g) if (x != null && x.Linhas.Count > 0) uteis.Add(x);
 
-            lock (_trava) { _folha = uteis; }
+            // Nada lido e falha, e nao maquina sem hardware: guardar a folha
+            // vazia deixava a aba em branco pelo resto da execucao, sem dizer
+            // o que houve nem deixar tentar de novo.
+            lock (_trava) { if (uteis.Count > 0) _folha = uteis; }
             return uteis;
         }
 

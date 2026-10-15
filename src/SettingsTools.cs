@@ -148,7 +148,7 @@ namespace MhiagosControl
         private void ArrangeSettings()
         {
             if (_pgConfig == null || !_pgConfig.Visible) return;
-            int width = Math.Max(300, Math.Min(LarguraMaxDaPagina, _pgConfig.ClientSize.Width - Pagina.LarguraDaBarra - 4));
+            int width = Math.Max(Ui.S(300), Math.Min(LarguraMaxDaPagina, _pgConfig.ClientSize.Width - Pagina.LarguraDaBarra - Ui.S(4)));
             int y = 0;
             bool primeiro = true;
             foreach (Control item in _itensDaConfig)
@@ -158,19 +158,19 @@ namespace MhiagosControl
                 {
                     linha.Location = new Point(0, y);
                     linha.Arranjar(width);
-                    y = linha.Bottom + 4;
+                    y = linha.Bottom + Ui.S(4);
                 }
                 else if ((item.Tag as string) == "grupo")
                 {
-                    if (!primeiro) y += 18;
-                    item.SetBounds(2, y, width - 4, 24);
-                    y = item.Bottom + 6;
+                    if (!primeiro) y += Ui.S(18);
+                    item.SetBounds(Ui.S(2), y, width - Ui.S(4), Ui.S(24));
+                    y = item.Bottom + Ui.S(6);
                 }
                 else
                 {
-                    int h = item is Label ? ((Label)item).GetPreferredSize(new Size(width - 4, 0)).Height : item.Height;
-                    item.SetBounds(2, y + 10, width - 4, Math.Max(18, h));
-                    y = item.Bottom + 8;
+                    int h = item is Label ? ((Label)item).GetPreferredSize(new Size(width - Ui.S(4), 0)).Height : item.Height;
+                    item.SetBounds(Ui.S(2), y + Ui.S(10), width - Ui.S(4), Math.Max(Ui.S(18), h));
+                    y = item.Bottom + Ui.S(8);
                 }
                 primeiro = false;
             }
@@ -185,9 +185,9 @@ namespace MhiagosControl
         private void ArrangeProfiles()
         {
             if (_pgPerfis == null || !_pgPerfis.Visible || _profilesPreviewCard == null) return;
-            const int Esp = 12;
-            int width = Math.Max(320, Math.Min(LarguraMaxDaPagina, _pgPerfis.Width - Pagina.LarguraDaBarra - 4));
-            bool lado = width >= 700;
+            int Esp = Ui.S(12);
+            int width = Math.Max(Ui.S(320), Math.Min(LarguraMaxDaPagina, _pgPerfis.Width - Pagina.LarguraDaBarra - Ui.S(4)));
+            bool lado = width >= Ui.S(700);
             int lw = lado ? (width - Esp) * 40 / 100 : width;
             int rw = lado ? width - lw - Esp : width;
 
@@ -199,73 +199,73 @@ namespace MhiagosControl
 
             // ---- previa: imagem a esquerda e os quatro botoes ao lado; se a
             // coluna for estreita, os botoes descem para baixo da imagem
-            bool botoesAoLado = rw >= 520;
-            int colBotoes = botoesAoLado ? Math.Max(170, Math.Min(240, (rw - 24) * 42 / 100)) : 0;
-            int pw = botoesAoLado ? rw - 24 - colBotoes - 12 : rw - 24;
-            int ph = Math.Max(150, Math.Min(260, pw * 250 / 386));
-            _profilePreview.SetBounds(12, 44, pw, ph);
+            bool botoesAoLado = rw >= Ui.S(520);
+            int colBotoes = botoesAoLado ? Math.Max(Ui.S(170), Math.Min(Ui.S(240), (rw - Ui.S(24)) * 42 / 100)) : 0;
+            int pw = botoesAoLado ? rw - Ui.S(24) - colBotoes - Ui.S(12) : rw - Ui.S(24);
+            int ph = Math.Max(Ui.S(150), Math.Min(Ui.S(260), pw * 250 / 386));
+            _profilePreview.SetBounds(Ui.S(12), Ui.S(44), pw, ph);
             FlatBtn[] daPrevia = { _profileSensor1, _profileSensor2, _btnDefault, _btnApply };
             int alturaPrevia;
             if (botoesAoLado)
             {
-                int bx = _profilePreview.Right + 12;
-                int total = 4 * 34 + 3 * 8;
-                int by = 44 + Math.Max(0, (ph - total) / 2);
-                foreach (FlatBtn b in daPrevia) { b.SetBounds(bx, by, colBotoes, 34); by += 42; }
-                alturaPrevia = Math.Max(_profilePreview.Bottom, by - 8) + 14;
+                int bx = _profilePreview.Right + Ui.S(12);
+                int total = 4 * Ui.S(34) + 3 * Ui.S(8);
+                int by = Ui.S(44) + Math.Max(0, (ph - total) / 2);
+                foreach (FlatBtn b in daPrevia) { b.SetBounds(bx, by, colBotoes, Ui.S(34)); by += Ui.S(42); }
+                alturaPrevia = Math.Max(_profilePreview.Bottom, by - Ui.S(8)) + Ui.S(14);
             }
             else
             {
-                int bw = (pw - 8) / 2, by = _profilePreview.Bottom + 12;
+                int bw = (pw - Ui.S(8)) / 2, by = _profilePreview.Bottom + Ui.S(12);
                 for (int i = 0; i < 4; i++)
-                    daPrevia[i].SetBounds(12 + (i % 2) * (bw + 8), by + (i / 2) * 42, i % 2 == 0 ? bw : pw - bw - 8, 34);
-                alturaPrevia = by + 42 + 34 + 14;
+                    daPrevia[i].SetBounds(Ui.S(12) + (i % 2) * (bw + Ui.S(8)), by + (i / 2) * Ui.S(42), i % 2 == 0 ? bw : pw - bw - Ui.S(8), Ui.S(34));
+                alturaPrevia = by + Ui.S(42 + 34 + 14);
             }
 
             // ---- perfil por jogo, na largura da coluna da direita
-            bool compactGame = rw < 620;
-            _tgJogo.Width = rw - 32;
+            bool compactGame = rw < Ui.S(620);
+            _tgJogo.Width = rw - Ui.S(32);
             _lbJogoNome.AutoEllipsis = true;
-            _lbJogoNome.SetBounds(82, 106, rw - 98 - (compactGame ? 0 : 250), 26);
+            _lbJogoNome.SetBounds(Ui.S(82), Ui.S(106), rw - Ui.S(98) - (compactGame ? 0 : Ui.S(250)), Ui.S(26));
             _lbJogoAtual.Width = _lbJogoNome.Width;
             if (compactGame)
             {
-                int buttonWidth = (rw - 40) / 2;
-                _btVincular.SetBounds(16, 174, buttonWidth, 34);
-                _btDesvincular.SetBounds(24 + buttonWidth, 174, buttonWidth, 34);
+                int buttonWidth = (rw - Ui.S(40)) / 2;
+                _btVincular.SetBounds(Ui.S(16), Ui.S(174), buttonWidth, Ui.S(34));
+                _btDesvincular.SetBounds(Ui.S(24) + buttonWidth, Ui.S(174), buttonWidth, Ui.S(34));
             }
             else
             {
-                _btVincular.SetBounds(rw - 246, 106, 230, 34);
-                _btDesvincular.SetBounds(rw - 246, 146, 230, 30);
+                _btVincular.SetBounds(rw - Ui.S(246), Ui.S(106), Ui.S(230), Ui.S(34));
+                _btDesvincular.SetBounds(rw - Ui.S(246), Ui.S(146), Ui.S(230), Ui.S(30));
             }
-            _lbJogoNota.SetBounds(16, compactGame ? 218 : 177, rw - 32, 38);
-            _gameFileButton.Top = compactGame ? 262 : 220;
-            _gameFileNote.SetBounds(16, compactGame ? 302 : 260, rw - 32, 50);
-            _gameBindingsHeading.Top = compactGame ? 361 : 319;
-            _gameBindings.SetBounds(16, compactGame ? 388 : 346, rw - 32, _gameBindings.Height);
-            int alturaJogo = _gameBindings.Bottom + 16;
+            _lbJogoNota.SetBounds(Ui.S(16), Ui.S(compactGame ? 218 : 177), rw - Ui.S(32), Ui.S(38));
+            _gameFileButton.Top = Ui.S(compactGame ? 262 : 220);
+            _gameFileNote.SetBounds(Ui.S(16), Ui.S(compactGame ? 302 : 260), rw - Ui.S(32), Ui.S(50));
+            _gameBindingsHeading.Top = Ui.S(compactGame ? 361 : 319);
+            _gameBindings.SetBounds(Ui.S(16), Ui.S(compactGame ? 388 : 346), rw - Ui.S(32), _gameBindings.Height);
+            int alturaJogo = _gameBindings.Bottom + Ui.S(16);
 
             // ---- rodizio, na largura da coluna da esquerda: estreito, o rotulo
             // do interruptor quebra em duas linhas e a nota desce
-            bool rotuloCabe = 48 + TextRenderer.MeasureText(T.IncludeInRotation, Ui.FontBase).Width <= lw - 32;
-            _tgRotate.SetBounds(16, 48, lw - 32, rotuloCabe ? 26 : 42);
-            _rotSecs.Top = _tgRotate.Bottom + 10;
-            bool notaAoLado = lw >= 480;
+            bool rotuloCabe = Ui.S(48) + TextRenderer.MeasureText(T.IncludeInRotation, Ui.FontBase).Width <= lw - Ui.S(32);
+            _tgRotate.SetBounds(Ui.S(16), Ui.S(48), lw - Ui.S(32), Ui.S(rotuloCabe ? 26 : 42));
+            _rotSecs.Top = _tgRotate.Bottom + Ui.S(10);
+            bool notaAoLado = lw >= Ui.S(480);
             _rotNote.AutoSize = false;
-            if (notaAoLado) _rotNote.SetBounds(134, _rotSecs.Top, lw - 150, 32);
-            else _rotNote.SetBounds(16, _rotSecs.Bottom + 8, lw - 32, Math.Max(32, _rotNote.GetPreferredSize(new Size(lw - 32, 0)).Height));
-            int alturaRodizio = Math.Max(150, _rotNote.Bottom + 16);
+            if (notaAoLado) _rotNote.SetBounds(Ui.S(134), _rotSecs.Top, lw - Ui.S(150), Ui.S(32));
+            else _rotNote.SetBounds(Ui.S(16), _rotSecs.Bottom + Ui.S(8), lw - Ui.S(32), Math.Max(Ui.S(32), _rotNote.GetPreferredSize(new Size(lw - Ui.S(32), 0)).Height));
+            int alturaRodizio = Math.Max(Ui.S(150), _rotNote.Bottom + Ui.S(16));
 
             // ---- lista: grade de tres por dois embaixo, ou dois por tres se estreita
-            int colunas = lw >= 330 ? 3 : 2;
+            int colunas = lw >= Ui.S(330) ? 3 : 2;
             int linhasDeBotoes = (_botoesDePerfil.Count + colunas - 1) / colunas;
-            int alturaDosBotoes = linhasDeBotoes * 32 + (linhasDeBotoes - 1) * 8;
+            int alturaDosBotoes = linhasDeBotoes * Ui.S(32) + (linhasDeBotoes - 1) * Ui.S(8);
             int y;
             if (lado)
             {
                 int direita = alturaPrevia + Esp + alturaJogo;
-                int alturaLista = Math.Max(44 + 150 + 12 + alturaDosBotoes + 14, direita - Esp - alturaRodizio);
+                int alturaLista = Math.Max(Ui.S(44 + 150 + 12) + alturaDosBotoes + Ui.S(14), direita - Esp - alturaRodizio);
                 _profilesListCard.SetBounds(0, 0, lw, alturaLista);
                 _cardRotation.SetBounds(0, _profilesListCard.Bottom + Esp, lw, alturaRodizio);
                 _profilesPreviewCard.SetBounds(lw + Esp, 0, rw, alturaPrevia);
@@ -276,7 +276,7 @@ namespace MhiagosControl
             }
             else
             {
-                int alturaLista = 44 + Math.Min(320, Math.Max(150, _cfg.Profiles.Count * 54 + 8)) + 12 + alturaDosBotoes + 14;
+                int alturaLista = Ui.S(44) + Math.Min(Ui.S(320), Math.Max(Ui.S(150), _cfg.Profiles.Count * Ui.S(54) + Ui.S(8))) + Ui.S(12) + alturaDosBotoes + Ui.S(14);
                 _profilesListCard.SetBounds(0, 0, width, alturaLista);
                 _profilesPreviewCard.SetBounds(0, _profilesListCard.Bottom + Esp, width, alturaPrevia);
                 _cardGame.SetBounds(0, _profilesPreviewCard.Bottom + Esp, width, alturaJogo);
@@ -284,18 +284,18 @@ namespace MhiagosControl
                 y = _cardRotation.Bottom + Esp;
             }
 
-            int larguraLista = _profilesListCard.Width - 24;
-            int bwl = (larguraLista - (colunas - 1) * 8) / colunas;
-            int topoBotoes = _profilesListCard.Height - 14 - alturaDosBotoes;
+            int larguraLista = _profilesListCard.Width - Ui.S(24);
+            int bwl = (larguraLista - (colunas - 1) * Ui.S(8)) / colunas;
+            int topoBotoes = _profilesListCard.Height - Ui.S(14) - alturaDosBotoes;
             for (int i = 0; i < _botoesDePerfil.Count; i++)
             {
                 int col = i % colunas, lin = i / colunas;
-                int w = col == colunas - 1 ? larguraLista - (colunas - 1) * (bwl + 8) : bwl;
-                _botoesDePerfil[i].SetBounds(12 + col * (bwl + 8), topoBotoes + lin * 40, w, 32);
+                int w = col == colunas - 1 ? larguraLista - (colunas - 1) * (bwl + Ui.S(8)) : bwl;
+                _botoesDePerfil[i].SetBounds(Ui.S(12) + col * (bwl + Ui.S(8)), topoBotoes + lin * Ui.S(40), w, Ui.S(32));
             }
-            _profileList.SetBounds(12, 44, larguraLista, topoBotoes - 12 - 44);
+            _profileList.SetBounds(Ui.S(12), Ui.S(44), larguraLista, topoBotoes - Ui.S(12 + 44));
 
-            _profilesNote.SetBounds(2, y, width - 4, 48);
+            _profilesNote.SetBounds(Ui.S(2), y, width - Ui.S(4), Ui.S(48));
             ((Pagina)_pgPerfis).Sincronizar();
         }
 
@@ -308,8 +308,8 @@ namespace MhiagosControl
         private void ArrangeAboutBounds(Control page)
         {
             if (page == null || !page.Visible) return;
-            int width = Math.Min(LarguraMaxDaPagina, page.Width - Pagina.LarguraDaBarra - 4);
-            int margin = Math.Max(0, (page.Width - Pagina.LarguraDaBarra - 4 - width) / 2);
+            int width = Math.Min(LarguraMaxDaPagina, page.Width - Pagina.LarguraDaBarra - Ui.S(4));
+            int margin = Math.Max(0, (page.Width - Pagina.LarguraDaBarra - Ui.S(4) - width) / 2);
             int y = 0;
             foreach (Control card in page.Controls)
             {
@@ -325,9 +325,9 @@ namespace MhiagosControl
                     Label label = child as Label;
                     if (label != null)
                     {
-                        child.Width = Math.Max(40, Math.Min(original.Width, width - child.Left - 16));
+                        child.Width = Math.Max(Ui.S(40), Math.Min(original.Width, width - child.Left - Ui.S(16)));
                         child.Height = Math.Max(original.Height,
-                            label.GetPreferredSize(new Size(child.Width, 0)).Height + 4);
+                            label.GetPreferredSize(new Size(child.Width, 0)).Height + Ui.S(4));
                     }
                     // Uma linha que cresceu empurra somente o conteudo abaixo
                     // dela; colunas que ja coexistiam na mesma faixa permanecem.
@@ -341,8 +341,8 @@ namespace MhiagosControl
                     child.Top = original.Top + shift;
                     bottom = Math.Max(bottom, child.Bottom);
                 }
-                card.Height = Math.Max(cardOriginal.Height, bottom + 16);
-                y = card.Bottom + 12;
+                card.Height = Math.Max(cardOriginal.Height, bottom + Ui.S(16));
+                y = card.Bottom + Ui.S(12);
             }
             ((Pagina)page).Sincronizar();
         }
@@ -375,20 +375,20 @@ namespace MhiagosControl
             Text = title; Icon = Assets.AppIcon; BackColor = Ui.Window; ForeColor = Ui.Text;
             Font = Ui.FontBase; StartPosition = FormStartPosition.CenterParent;
             MinimizeBox = false; ShowInTaskbar = false;
-            MinimumSize = new Size(480, 360);
-            ClientSize = SettingsForm.FitInitialClient(new Size(680, 510), Screen.FromPoint(Cursor.Position).WorkingArea.Size);
+            MinimumSize = new Size(Ui.S(480), Ui.S(360));
+            ClientSize = SettingsForm.FitInitialClient(new Size(Ui.S(680), Ui.S(510)), Screen.FromPoint(Cursor.Position).WorkingArea.Size);
             TextBox content = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
                 Text = text, BackColor = Ui.SurfaceAlt, ForeColor = Ui.Text, BorderStyle = BorderStyle.FixedSingle };
-            content.SetBounds(16, 16, ClientSize.Width - 32, ClientSize.Height - 84);
+            content.SetBounds(Ui.S(16), Ui.S(16), ClientSize.Width - Ui.S(32), ClientSize.Height - Ui.S(84));
             content.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             Controls.Add(content);
             FlatBtn cancel = new FlatBtn { Text = T.Cancel };
-            cancel.SetBounds(ClientSize.Width - 330, ClientSize.Height - 52, 130, 36);
+            cancel.SetBounds(ClientSize.Width - Ui.S(330), ClientSize.Height - Ui.S(52), Ui.S(130), Ui.S(36));
             cancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(cancel);
             FlatBtn apply = new FlatBtn { Text = action, Primary = true };
-            apply.SetBounds(ClientSize.Width - 190, ClientSize.Height - 52, 174, 36);
+            apply.SetBounds(ClientSize.Width - Ui.S(190), ClientSize.Height - Ui.S(52), Ui.S(174), Ui.S(36));
             apply.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             apply.Click += delegate { DialogResult = DialogResult.OK; Close(); };
             Controls.Add(apply);

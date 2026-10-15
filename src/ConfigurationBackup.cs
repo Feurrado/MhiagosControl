@@ -27,14 +27,7 @@ namespace MhiagosControl
             // Exportar nunca deve substituir o arquivo de configuracao ativo.
             if (!string.IsNullOrEmpty(config.SavePath) && string.Equals(Path.GetFullPath(path),
                 config.SavePath, StringComparison.OrdinalIgnoreCase)) throw new IOException(T.BackupOwnFile);
-            string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
-            {
-                File.WriteAllText(temp, text, new UTF8Encoding(false));
-                if (File.Exists(path)) File.Replace(temp, path, null);
-                else File.Move(temp, path);
-            }
-            finally { if (File.Exists(temp)) File.Delete(temp); }
+            GravacaoAtomica.Escrever(path, text, new UTF8Encoding(false));
         }
 
         internal static Config Read(string path)
