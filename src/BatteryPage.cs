@@ -50,11 +50,17 @@ namespace MhiagosControl
             // antes so respondia ao mouse.
             SetStyle(ControlStyles.Selectable, true);
             TabStop = true;
+            _presenca.Quadro += delegate { Invalidate(); AvisarAltura(); };
+            _presenca.Terminou += delegate
+            {
+                EventHandler h = Saiu;
+                if (!_presenca.Aberto && h != null) h(this, EventArgs.Empty);
+            };
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _animador.Dispose(); _dica.Dispose(); if (_detalhes != null) _detalhes.Dispose(); }
+            if (disposing) { _animador.Dispose(); _dica.Dispose(); _presenca.Dispose(); if (_detalhes != null) _detalhes.Dispose(); }
             base.Dispose(disposing);
         }
 
@@ -92,6 +98,12 @@ namespace MhiagosControl
         /// rearranja os cartoes de baixo junto.
         /// </summary>
         public int AlturaDesejada(int largura)
+        {
+            int cheia = AlturaCheia(largura);
+            return _presenca.Valor >= 0.999f ? cheia : (int)Math.Round(cheia * _presenca.Valor);
+        }
+
+        private int AlturaCheia(int largura)
         {
             if (_detalhes == null) return AlturaPara(largura, DetalhesAbertos);
             int fechado = AlturaPara(largura, false), aberto = AlturaPara(largura, true);
@@ -179,6 +191,39 @@ namespace MhiagosControl
         {
             EventHandler h = AlturaMudou;
             if (h != null) h(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Entrada e saida do cartao quando o aparelho aparece ou some: a altura
+        /// cresce (ou encolhe) e o conteudo esmaece, na mesma duracao e curva dos
+        /// paineis que recolhem. A pagina rearranja os de baixo junto.
+        /// </summary>
+        private readonly AnimacaoDeRecolher _presenca = new AnimacaoDeRecolher(true);
+
+        /// <summary>De 0 (ausente) a 1 (inteiro) no quadro corrente.</summary>
+        public float Presenca { get { return _presenca.Valor; } }
+
+        /// <summary>O aparelho sumiu da leitura: o cartao esta saindo e sera removido ao fim.</summary>
+        public bool Saindo { get { return !_presenca.Aberto; } }
+
+        /// <summary>O cartao saiu de vez (presenca zero): a pagina deve tira-lo.</summary>
+        public event EventHandler Saiu;
+
+        public void Entrar()
+        {
+            _presenca.Ir(true, PodeAnimar());
+        }
+
+        public void Sair()
+        {
+            _presenca.Ir(false, PodeAnimar());
+        }
+
+        /// <summary>Nasce ausente e entra. Quem chama decide se anima (a primeira carga da pagina nao).</summary>
+        public void NascerEntrando()
+        {
+            _presenca.Ir(false, false);
+            _presenca.Ir(true, true);
         }
 
         /// <summary>So com a janela na tela; antes disso o estado final e o que conta.</summary>
@@ -286,6 +331,10 @@ namespace MhiagosControl
             _animador.ComecarQuadro();
             try { Pintar(e.Graphics); }
             finally { _animador.Ajustar(); }
+            // entrando ou saindo: o cartao esmaece cobrindo-se com a cor da pagina
+            if (_presenca.Valor < 0.999f)
+                using (SolidBrush b = new SolidBrush(Color.FromArgb((int)Math.Round(255 * (1f - _presenca.Valor)), Ui.Window)))
+                    e.Graphics.FillRectangle(b, ClientRectangle);
         }
 
         private void Pintar(Graphics g)
