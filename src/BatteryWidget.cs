@@ -84,8 +84,8 @@ namespace MhiagosControl
             sb.AppendLine("ativo=" + (Ativo ? "1" : "0"));
             if (TemPosicao)
             {
-                sb.AppendLine("x=" + X.ToString(CultureInfo.InvariantCulture));
-                sb.AppendLine("y=" + Y.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("ancora_x=" + X.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("ancora_y=" + Y.ToString(CultureInfo.InvariantCulture));
             }
             sb.AppendLine("layout=" + (Layout == LayoutDoWidget.Lista ? "lista" : "aneis"));
             sb.AppendLine("fosco=" + (Fosco ? "1" : "0"));
@@ -114,8 +114,8 @@ namespace MhiagosControl
                 switch (k)
                 {
                     case "ativo": c.Ativo = v == "1"; break;
-                    case "x": if (numero) c.X = n; break;
-                    case "y": if (numero) c.Y = n; break;
+                    case "ancora_x": if (numero) c.X = n; break;
+                    case "ancora_y": if (numero) c.Y = n; break;
                     case "layout": c.Layout = v == "lista" ? LayoutDoWidget.Lista : LayoutDoWidget.Aneis; break;
                     case "fosco": c.Fosco = v == "1"; break;
                     case "nitido": c.Nitido = v == "1"; break;
@@ -1326,17 +1326,45 @@ namespace MhiagosControl
         {
             Size tam = Medida();
             Point p;
-            if (_cfg.TemPosicao && Visivel(new Rectangle(_cfg.X, _cfg.Y, tam.Width, tam.Height)))
-                p = new Point(_cfg.X, _cfg.Y);
-            else
+            if (_cfg.TemPosicao)
             {
-                Rectangle area = Screen.PrimaryScreen.WorkingArea;
-                int m = (int)(24 * _escala);
-                p = new Point(area.Right - tam.Width - m, area.Top + m);
+                Rectangle area = Screen.FromPoint(new Point(_cfg.X - 1, _cfg.Y - 1)).WorkingArea;
+                p = DoCanto(new Point(_cfg.X, _cfg.Y), tam, area);
+                if (!Visivel(new Rectangle(p, tam))) p = PosicaoPadrao(tam);
             }
+            else p = PosicaoPadrao(tam);
             Location = p;
             ManterNaTela();
             Renderizar();
+        }
+
+        /// <summary>Canto inferior direito da area de trabalho, um pouco longe da borda.</summary>
+        private Point PosicaoPadrao(Size tam)
+        {
+            Rectangle area = Screen.PrimaryScreen.WorkingArea;
+            int m = (int)(48 * _escala);
+            return DoCanto(new Point(area.Right - m, area.Bottom - m), tam, area);
+        }
+
+        /// <summary>
+        /// O canto que fica parado quando o widget muda de tamanho: o mais
+        /// proximo da borda da tela (direito se o centro esta na metade direita,
+        /// de baixo se esta na metade de baixo). E ele que se guarda: assim o
+        /// widget reabre no mesmo lugar mesmo com mais ou menos aparelhos.
+        /// </summary>
+        internal static Point CantoAncora(Rectangle b, Rectangle area)
+        {
+            bool dir = b.Left + b.Width / 2 > area.Left + area.Width / 2;
+            bool baixo = b.Top + b.Height / 2 > area.Top + area.Height / 2;
+            return new Point(dir ? b.Right : b.Left, baixo ? b.Bottom : b.Top);
+        }
+
+        /// <summary>Onde fica o canto de cima a esquerda, dado o canto guardado e o tamanho de agora.</summary>
+        internal static Point DoCanto(Point canto, Size tam, Rectangle area)
+        {
+            bool dir = canto.X > area.Left + area.Width / 2;
+            bool baixo = canto.Y > area.Top + area.Height / 2;
+            return new Point(dir ? canto.X - tam.Width : canto.X, baixo ? canto.Y - tam.Height : canto.Y);
         }
 
         /// <summary>Visivel o bastante para alguem achar e arrastar de volta.</summary>
@@ -1388,8 +1416,9 @@ namespace MhiagosControl
 
         private void GuardarPosicao()
         {
-            _cfg.X = Left;
-            _cfg.Y = Top;
+            Point c = CantoAncora(Bounds, Screen.FromRectangle(Bounds).WorkingArea);
+            _cfg.X = c.X;
+            _cfg.Y = c.Y;
             _cfg.Salvar();
         }
 

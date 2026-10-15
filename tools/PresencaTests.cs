@@ -173,6 +173,21 @@ namespace MhiagosControl
             Igual(0.5f, PintorDoWidget.FracaoDeNome(new Periferico[] { g, longo }, new float[] { 1f, 0.5f }), "a fracao do nome acompanha a presenca de quem a usa");
             Igual(0f, PintorDoWidget.FracaoDeNome(new Periferico[] { g }, new float[] { 1f }), "sem aparelho com nome, nenhuma linha extra");
 
+            // posicao guardada: o canto que fica parado, e nao o de cima a esquerda
+            Rectangle areaT = new Rectangle(0, 0, 1920, 1040);
+            Rectangle noCanto = new Rectangle(1920 - 48 - 300, 1040 - 48 - 120, 300, 120);
+            Point canto = WidgetDeBateria.CantoAncora(noCanto, areaT);
+            Igual(new Point(1920 - 48, 1040 - 48), canto, "no canto inferior direito se guarda o canto inferior direito");
+            foreach (Size outro in new Size[] { new Size(150, 120), new Size(480, 200) })
+            {
+                Point topo = WidgetDeBateria.DoCanto(canto, outro, areaT);
+                Igual(canto, new Point(topo.X + outro.Width, topo.Y + outro.Height), "com " + outro + " o canto continua no mesmo lugar");
+            }
+            Igual(new Point(20, 30), WidgetDeBateria.DoCanto(new Point(20, 30), new Size(200, 100), areaT), "na metade de cima e a esquerda o canto e o de cima a esquerda");
+            ConfigDoWidget cp = new ConfigDoWidget(); cp.X = 1872; cp.Y = 992;
+            string txt = cp.ParaTexto();
+            Verdade(txt.Contains("ancora_x=1872") && txt.Contains("ancora_y=992"), "o arquivo guarda a ancora");
+
             Rectangle tela = new Rectangle(0, 0, 1920, 1080);
             Point perto = WidgetDeBateria.AncorarCrescimento(new Rectangle(1600, 20, 200, 100), new Size(300, 100), tela);
             Igual(1500, perto.X, "na metade direita da tela a borda direita fica parada");
