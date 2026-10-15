@@ -148,8 +148,6 @@ namespace MhiagosControl
             _marshal = new Control();
             GC.KeepAlive(_marshal.Handle);   // cria o handle na thread de UI
 
-            Autostart.RemoveLegacyTask();
-
             _iconNormal = Assets.TrayIcon;
 
             _icon = new NotifyIcon();

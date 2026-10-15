@@ -24,23 +24,6 @@ namespace MhiagosControl
             get { return Assembly.GetExecutingAssembly().Location; }
         }
 
-        /// <summary>
-        /// O aplicativo se chamava RiseModePanel. Remove a tarefa antiga, que
-        /// apontaria para um executavel que nao existe mais e disputaria o painel.
-        /// </summary>
-        public static void RemoveLegacyTask()
-        {
-            try
-            {
-                int code;
-                string output = Run("/query /tn \"RiseModePanel\"", out code);
-                if (code != 0) return;
-                Run("/delete /tn \"RiseModePanel\" /f", out code);
-                Log.Write("tarefa agendada antiga (RiseModePanel) removida");
-            }
-            catch (Exception ex) { Log.Error("remocao da tarefa antiga", ex); }
-        }
-
         public static bool IsEnabled()
         {
             try

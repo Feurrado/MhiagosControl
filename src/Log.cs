@@ -110,8 +110,6 @@ namespace MhiagosControl
         /// esta numa pasta gravavel, e quebra em Program Files. Dados de um
         /// unico usuario, em uma unica maquina, pertencem ao LocalApplicationData.
         /// </summary>
-        private static bool _migrated = false;
-
         public static string DataDir
         {
             get
@@ -119,26 +117,6 @@ namespace MhiagosControl
                 string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 string dir = System.IO.Path.Combine(local, "MhiagosControl");
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-
-                // o aplicativo se chamava RiseModePanel; traz perfis e log antigos
-                if (!_migrated)
-                {
-                    _migrated = true;
-                    try
-                    {
-                        string old = System.IO.Path.Combine(local, "RiseModePanel");
-                        if (Directory.Exists(old))
-                        {
-                            foreach (string f in Directory.GetFiles(old))
-                            {
-                                string target = System.IO.Path.Combine(dir, System.IO.Path.GetFileName(f));
-                                if (!File.Exists(target)) File.Copy(f, target);
-                            }
-                            Directory.Delete(old, true);
-                        }
-                    }
-                    catch { /* migracao e conveniencia, nao pode impedir o arranque */ }
-                }
                 return dir;
             }
         }

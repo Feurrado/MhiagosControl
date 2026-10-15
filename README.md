@@ -438,8 +438,7 @@ Ficam em `%LOCALAPPDATA%\MhiagosControl\`, acessível pelo menu da bandeja em
 | `widget.ini` | lugar e aparência do widget de bateria |
 | `log.txt` | diagnóstico, com rotação em 512 KB (`log.txt.1`) |
 
-Configurações de versões antigas (inclusive da época em que o projeto se
-chamava *RiseModePanel*) são migradas no primeiro arranque.
+Configurações de versões antigas são migradas no primeiro arranque.
 
 ## O que este projeto evita do software original
 
