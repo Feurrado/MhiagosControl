@@ -145,6 +145,14 @@ namespace MhiagosControl
                         layout + ": com meia presenca o item esta mais transparente que inteiro e mais opaco que ausente");
             }
 
+            Rectangle tela = new Rectangle(0, 0, 1920, 1080);
+            Point perto = WidgetDeBateria.AncorarCrescimento(new Rectangle(1600, 20, 200, 100), new Size(300, 100), tela);
+            Igual(1500, perto.X, "na metade direita da tela a borda direita fica parada");
+            Igual(20, perto.Y, "e em cima o topo");
+            Point baixo = WidgetDeBateria.AncorarCrescimento(new Rectangle(100, 900, 200, 100), new Size(200, 160), tela);
+            Igual(100, baixo.X, "na metade esquerda a borda esquerda fica parada");
+            Igual(840, baixo.Y, "embaixo a borda de baixo fica parada");
+
             string[] chaves = WidgetDeBateria.Chaves(new Periferico[] { g, g });
             Verdade(chaves[0] != chaves[1], "duas chaves iguais ganham sufixo para nao se fundirem na lista");
         }

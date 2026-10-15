@@ -1038,7 +1038,11 @@ namespace MhiagosControl
                 Size tam = PintorDoWidget.Medir(_cfg.Layout, Soma(_presenca), _escala, PintorDoWidget.ComNome(_itens));
                 if (tam != Size)
                 {
+                    Rectangle antes = Bounds;
                     Size = tam;
+                    // cresce para o lado da tela que tem mais espaco: perto da
+                    // borda direita (ou de baixo) a borda do widget fica parada
+                    Location = AncorarCrescimento(antes, tam, Screen.FromRectangle(antes).WorkingArea);
                     AplicarRegiao(tam);
                     ManterNaTela();
                 }
@@ -1238,6 +1242,19 @@ namespace MhiagosControl
         /// Encaixa a placa dentro da area util da tela em que esta. Com mais um
         /// aparelho ela cresce para a direita, e no canto direito sairia da tela.
         /// </summary>
+        /// <summary>
+        /// Onde fica o canto de cima a esquerda quando o widget muda de tamanho:
+        /// na metade direita da tela a borda direita fica parada (cresce para a
+        /// esquerda), na de baixo a borda de baixo; senao, a esquerda e o topo.
+        /// </summary>
+        internal static Point AncorarCrescimento(Rectangle antes, Size novo, Rectangle area)
+        {
+            int x = antes.Left, y = antes.Top;
+            if (antes.Left + antes.Width / 2 > area.Left + area.Width / 2) x = antes.Right - novo.Width;
+            if (antes.Top + antes.Height / 2 > area.Top + area.Height / 2) y = antes.Bottom - novo.Height;
+            return new Point(x, y);
+        }
+
         private void ManterNaTela()
         {
             Rectangle area = Screen.FromRectangle(Bounds).WorkingArea;
