@@ -208,7 +208,7 @@ namespace MhiagosControl
                 CarregarSePreciso();
                 if (!_carregado) return;   // arquivo ainda ilegivel: veja CarregarSePreciso
                 foreach (Periferico p in atual)
-                    if (p != null && p.Bateria.HasValue) Registrar(p, agora);
+                    if (p != null && p.Bateria.HasValue && p.Fonte != FontePeriferico.Bluetooth) Registrar(p, agora);
                 gravar = _sujo && agora - _ultimaGravacao >= IntervaloDeGravacao;
             }
             if (gravar) Salvar(agora);
@@ -368,10 +368,11 @@ namespace MhiagosControl
                 Dictionary<string, Periferico> vivos = new Dictionary<string, Periferico>();
                 if (atual != null)
                     foreach (Periferico p in atual)
-                        if (p != null && (p.Bateria.HasValue || _aparelhos.ContainsKey(Chave(p))))
+                        if (p != null && p.Fonte != FontePeriferico.Bluetooth && (p.Bateria.HasValue || _aparelhos.ContainsKey(Chave(p))))
                             vivos[Chave(p)] = p;
 
-                foreach (Aparelho a in _aparelhos.Values) l.Add(Analisar(a, vivos));
+                foreach (Aparelho a in _aparelhos.Values)
+                    if (a.Fonte != FontePeriferico.Bluetooth) l.Add(Analisar(a, vivos));
             }
             l.Sort(delegate(AnaliseDeBateria x, AnaliseDeBateria y)
             {

@@ -156,9 +156,9 @@ namespace MhiagosControl
         private const float BolhaDaLista = 40f;
 
         /// <summary>
-        /// O que vai para o widget: todo aparelho do G HUB e da Attack Shark,
-        /// mesmo desligado, e do Bluetooth so quem deu leitura. O marcador vazio
-        /// do Bluetooth ("nenhum conectado") faz sentido na Visao geral, mas
+        /// O que vai para o widget: so o fone e o mouse (G HUB e Attack Shark) que
+        /// estao conectados, com leitura. Desligado, o icone some; Bluetooth nao entra.
+        /// O marcador vazio do Bluetooth faz sentido na Visao geral, mas
         /// num widget de bateria seria um anel sem bateria nenhuma.
         /// </summary>
         internal static Periferico[] Visiveis(Periferico[] todos)
@@ -166,7 +166,7 @@ namespace MhiagosControl
             List<Periferico> l = new List<Periferico>();
             if (todos != null)
                 foreach (Periferico p in todos)
-                    if (p != null && (p.Bateria.HasValue || p.Fonte != FontePeriferico.Bluetooth)) l.Add(p);
+                    if (p != null && p.Bateria.HasValue && p.Fonte != FontePeriferico.Bluetooth) l.Add(p);
             return l.ToArray();
         }
 
