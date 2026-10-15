@@ -34,6 +34,8 @@ namespace MhiagosControl
             System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
             if (args.Length > 0 && args[0] == "--regression-child")
                 return RegressionChild(args);
+            if (args.Length > 2 && args[0] == "--captura-escala")
+                return CapturaDeEscala(args);
             QuadroDoPainel();
             PreparoDoValor();
             IntegracaoDoCicloDoPainel();

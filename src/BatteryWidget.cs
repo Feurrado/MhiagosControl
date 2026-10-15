@@ -846,6 +846,7 @@ namespace MhiagosControl
             bool carregando = false;
             foreach (Periferico p in _itens) if (p.Carregando && p.Bateria.HasValue) carregando = true;
             carregando |= _transicao;
+            carregando &= Ui.Animacoes;   // sem animacoes no Windows, o quadro fica parado
             if (carregando && !_animacao.Enabled) _animacao.Start();
             else if (!carregando && _animacao.Enabled) _animacao.Stop();
         }
@@ -883,7 +884,7 @@ namespace MhiagosControl
                 q.Nitido = _cfg.Nitido;
                 q.Sobre = _sobre;
                 q.Escala = _escala;
-                q.Fase = (Environment.TickCount & int.MaxValue) % CicloMs / (float)CicloMs;
+                q.Fase = Ui.Animacoes ? (Environment.TickCount & int.MaxValue) % CicloMs / (float)CicloMs : 0f;
                 bool transicao = false;
                 q.Carga = new float[_itens.Length];
                 for (int i = 0; i < _itens.Length; i++)

@@ -16,6 +16,26 @@ namespace MhiagosControl
     /// </summary>
     public static class Ui
     {
+        /// <summary>
+        /// Escala extra so para a captura de telas dos testes, que simula 150%
+        /// e 200% numa maquina a 100%: as fontes crescem como o Windows faria e
+        /// S() cresce junto. Fora dos testes vale sempre 1. Declarada antes das
+        /// fontes porque a ordem dos campos estaticos e a ordem do arquivo.
+        /// </summary>
+        private static readonly float _zoom = LerZoom();
+
+        private static float LerZoom()
+        {
+            try
+            {
+                object z = AppDomain.CurrentDomain.GetData("MhiagosControl.Zoom");
+                return z is float && (float)z >= 1f ? (float)z : 1f;
+            }
+            catch { return 1f; }
+        }
+
+        internal static float Pt(float pontos) { return pontos * _zoom; }
+
         public static bool Dark { get { return Theme.IsDark; } }
 
         /// <summary>
@@ -26,7 +46,7 @@ namespace MhiagosControl
         /// mesmo papel no novo. Rotulos montados com a cor fixa na construcao
         /// ficavam no tema velho - texto quase branco sobre fundo claro.
         /// </summary>
-        private enum Papel { Window, Sidebar, Surface, SurfaceAlt, Border, Text, Muted, Faint, Thumb, AccentSoft, Hover }
+        private enum Papel { Window, Sidebar, Surface, SurfaceAlt, Border, Text, Muted, Faint, Thumb, AccentSoft, Hover, AccentText }
 
         private static readonly int[][] Tons =
         {
@@ -36,11 +56,16 @@ namespace MhiagosControl
             new int[] { 0x2E2E33, 0xF7F8FA },   // SurfaceAlt
             new int[] { 0x38383E, 0xDADDE3 },   // Border
             new int[] { 0xF0F0F3, 0x1B1D21 },   // Text
-            new int[] { 0x9699A3, 0x6B707B },   // Muted
-            new int[] { 0x8A8E99, 0x7C828D },   // Faint
+            // Muted e Faint claros escureceram um degrau: o Faint antigo
+            // (7C828D) dava 3,5:1 sobre o fundo da janela, abaixo dos 4,5:1
+            // que texto pequeno pede, e ele aparece em eixo, nota e nome de
+            // aparelho. Os dois descem juntos para a hierarquia continuar.
+            new int[] { 0x9699A3, 0x5F646E },   // Muted
+            new int[] { 0x8A8E99, 0x6B707B },   // Faint
             new int[] { 0x555862, 0xB4BAC4 },   // Thumb
             new int[] { 0x1E3352, 0xDEEAFF },   // AccentSoft
             new int[] { 0x323238, 0xECEFF4 },   // Hover
+            new int[] { 0x6AA6FF, 0x1F6AE0 },   // AccentText
         };
 
         private static Color De(Papel p, bool escuro)
@@ -90,15 +115,22 @@ namespace MhiagosControl
         public static Color AccentHover { get { return C(0x4A, 0x91, 0xFF); } }
         public static Color AccentSoft { get { return De(Papel.AccentSoft, Dark); } }
 
+        /// <summary>
+        /// O azul quando ele E o texto: link, aviso do rodape. O Accent como
+        /// letra dava 3,9:1 nos dois temas; este passa de 4,5:1 sobre a
+        /// superficie e sobre a janela. Preenchimento continua no Accent.
+        /// </summary>
+        public static Color AccentText { get { return De(Papel.AccentText, Dark); } }
+
         // estados
         public static Color Warn { get { return C(0xF0, 0xAF, 0x3C); } }
         public static Color Danger { get { return C(0xEB, 0x5A, 0x4B); } }
         public static Color Hover { get { return De(Papel.Hover, Dark); } }
 
-        public static readonly Font FontBase = new Font("Segoe UI", 9f);
-        public static readonly Font FontMed = new Font("Segoe UI", 9f, FontStyle.Bold);
-        public static readonly Font FontTitle = new Font("Segoe UI", 14f, FontStyle.Regular);
-        public static readonly Font FontSection = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+        public static readonly Font FontBase = new Font("Segoe UI", Pt(9f));
+        public static readonly Font FontMed = new Font("Segoe UI", Pt(9f), FontStyle.Bold);
+        public static readonly Font FontTitle = new Font("Segoe UI", Pt(14f), FontStyle.Regular);
+        public static readonly Font FontSection = new Font("Segoe UI", Pt(10.5f), FontStyle.Bold);
         /// <summary>
         /// O corpo pequeno, usado em rotulo de apoio e nota.
         ///
@@ -107,7 +139,7 @@ namespace MhiagosControl
         /// cheio e o antisserrilhado apaga o que sobra. Um ponto a mais devolve
         /// peso sem tirar a hierarquia, que continua vindo da COR.
         /// </summary>
-        public static readonly Font FontSmall = new Font("Segoe UI", 9f);
+        public static readonly Font FontSmall = new Font("Segoe UI", Pt(9f));
 
         /// <summary>
         /// Seminegrito, para o valor que precisa ter presenca sem virar titulo.
@@ -116,14 +148,14 @@ namespace MhiagosControl
         /// da "Segoe UI": pedir FontStyle.Bold daria o negrito cheio, que num
         /// rotulo de tres palavras pesa demais.
         /// </summary>
-        public static readonly Font FontSemi = Semi(9f);
+        public static readonly Font FontSemi = Semi(Pt(9f));
         /// <summary>Valor dos blocos de resumo da pagina Baterias.</summary>
-        public static readonly Font FontTileValue = Semi(11f);
+        public static readonly Font FontTileValue = Semi(Pt(11f));
 
         /// <summary>O nome do aplicativo no alto do Sobre.</summary>
-        public static readonly Font FontAppName = Semi(18f);
+        public static readonly Font FontAppName = Semi(Pt(18f));
         /// <summary>A porcentagem grande do cartao de bateria.</summary>
-        public static readonly Font FontBigPct = new Font("Segoe UI", 20f, FontStyle.Bold);
+        public static readonly Font FontBigPct = new Font("Segoe UI", Pt(20f), FontStyle.Bold);
 
         private static Font Semi(float tamanho)
         {
@@ -140,16 +172,59 @@ namespace MhiagosControl
         }
 
         /// <summary>Leitura em destaque - o numero e o assunto do cartao.</summary>
-        public static readonly Font FontValue = new Font("Segoe UI", 16f, FontStyle.Bold);
-        public static readonly Font FontGlyph8 = new Font("Segoe MDL2 Assets", 8f);
-        public static readonly Font FontGlyph9 = new Font("Segoe MDL2 Assets", 9f);
-        public static readonly Font FontGlyph10 = new Font("Segoe MDL2 Assets", 10f);
-        public static readonly Font FontGlyph11 = new Font("Segoe MDL2 Assets", 11f);
-        public static readonly Font FontGlyph18 = new Font("Segoe MDL2 Assets", 18f);
-        public static readonly Font FontBadge = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+        public static readonly Font FontValue = new Font("Segoe UI", Pt(16f), FontStyle.Bold);
+        public static readonly Font FontGlyph8 = new Font("Segoe MDL2 Assets", Pt(8f));
+        public static readonly Font FontGlyph9 = new Font("Segoe MDL2 Assets", Pt(9f));
+        public static readonly Font FontGlyph10 = new Font("Segoe MDL2 Assets", Pt(10f));
+        public static readonly Font FontGlyph11 = new Font("Segoe MDL2 Assets", Pt(11f));
+        public static readonly Font FontGlyph18 = new Font("Segoe MDL2 Assets", Pt(18f));
+        public static readonly Font FontBadge = new Font("Segoe UI", Pt(7.5f), FontStyle.Bold);
 
-        public const int Radius = 8;
-        public const int Gap = 12;
+
+        /// <summary>
+        /// Escala da tela: 1 a 100%, 1,5 a 150%.
+        ///
+        /// As fontes sao em pontos e ja crescem com o DPI; as medidas em pixel
+        /// do layout nao cresciam. A 150% o titulo de 10,5 pt de um cartao
+        /// passava da linha desenhada em 34 px, e um rotulo de 18 px cortava
+        /// a base do texto de 9 pt. Medida de layout que convive com texto
+        /// passa por S().
+        /// </summary>
+        public static readonly float Escala = LerEscala();
+
+        private static float LerEscala()
+        {
+            try
+            {
+                using (Graphics g = Graphics.FromHwnd(IntPtr.Zero))
+                    return Math.Max(1f, g.DpiX / 96f) * _zoom;
+            }
+            catch { return 1f; }
+        }
+
+        /// <summary>
+        /// Pixels de projeto (a 96 dpi) na escala da tela.
+        /// Arredonda para cima: com 150% um rotulo de 15 px daria 22,5, e o
+        /// arredondamento comum (22) cortava a perna do "g" de 13,5 pt.
+        /// </summary>
+        public static int S(int px) { return (int)Math.Ceiling(px * Escala - 0.001f); }
+
+        // Depois de Escala: campo estatico se inicializa na ordem do arquivo.
+        public static readonly int Radius = Ui.S(8);
+        public static readonly int Gap = Ui.S(12);
+
+        /// <summary>
+        /// Animacoes ligadas no Windows (Acessibilidade > Efeitos visuais).
+        /// Desligadas, tudo que desliza ou pulsa vai direto ao estado final.
+        /// </summary>
+        public static bool Animacoes
+        {
+            get
+            {
+                try { return SystemInformation.UIEffectsEnabled; }
+                catch { return true; }
+            }
+        }
 
         private static Color C(int r, int g, int b) { return Color.FromArgb(r, g, b); }
 
@@ -260,7 +335,7 @@ namespace MhiagosControl
         }
 
         /// <summary>Largura da barra propria. Entra na conta de quem arranja.</summary>
-        public const int LarguraDaBarra = 10;
+        public static readonly int LarguraDaBarra = Ui.S(10);
 
         private ScrollFina _barra;
         private int _aplicado = 0;
@@ -310,7 +385,7 @@ namespace MhiagosControl
                 if (c.Bottom > conteudo) conteudo = c.Bottom;
             }
 
-            _barra.Definir(conteudo + 8, Height);
+            _barra.Definir(conteudo + Ui.S(8), Height);
             _barra.Visible = _barra.Precisa;
             AplicarRolagem();
         }
@@ -370,7 +445,7 @@ namespace MhiagosControl
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            Width = 10;
+            Width = Pagina.LarguraDaBarra;
         }
 
         /// <summary>Ha o que rolar?</summary>
@@ -403,11 +478,11 @@ namespace MhiagosControl
 
             // Minimo de 28 px: proporcional puro, um conteudo de dez telas daria
             // um polegar de seis pixels, que nao da para pegar com o ponteiro.
-            int h = Math.Max(28, (int)((long)Height * Janela / Maximo));
+            int h = Math.Max(Ui.S(28), (int)((long)Height * Janela / Maximo));
             int curso = Height - h;
             int teto = Maximo - Janela;
             int y = teto <= 0 ? 0 : (int)((long)curso * Valor / teto);
-            return new Rectangle(2, y, Width - 4, h);
+            return new Rectangle(Ui.S(2), y, Width - Ui.S(4), h);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -478,7 +553,7 @@ namespace MhiagosControl
     public class Card : Panel
     {
         public string Title = null;
-        public int TitleHeight = 34;
+        public int TitleHeight = Ui.S(34);
 
         public Card()
         {
@@ -518,7 +593,7 @@ namespace MhiagosControl
             if (!string.IsNullOrEmpty(Title))
             {
                 using (SolidBrush b = new SolidBrush(Ui.Text))
-                    g.DrawString(Title, Ui.FontSection, b, 14, 10);
+                    g.DrawString(Title, Ui.FontSection, b, Ui.S(14), Ui.S(10));
                 using (Pen pen = new Pen(Ui.Border))
                     g.DrawLine(pen, 1, TitleHeight, Width - 2, TitleHeight);
             }
@@ -553,7 +628,7 @@ namespace MhiagosControl
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
             Font = Ui.FontBase;
-            Size = new Size(96, 32);
+            Size = new Size(Ui.S(96), Ui.S(32));
             Cursor = Cursors.Hand;
             TabStop = true;
             SetStyle(ControlStyles.Selectable, true);
@@ -626,7 +701,7 @@ namespace MhiagosControl
                 border = Ui.Border;
             }
 
-            using (GraphicsPath p = Ui.RoundRect(r, 6))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(6)))
             {
                 if (fill != Color.Transparent)
                     using (SolidBrush b = new SolidBrush(fill)) g.FillPath(b, p);
@@ -635,7 +710,7 @@ namespace MhiagosControl
 
             // Estreito demais para o texto: vale o glifo, quando ha um. Sem ele,
             // o rotulo sairia como "Sa..." - tres pixels de informacao.
-            bool cabe = TextRenderer.MeasureText(g, Text, Font).Width <= Width - 12;
+            bool cabe = TextRenderer.MeasureText(g, Text, Font).Width <= Width - Ui.S(12);
             if (!cabe && !string.IsNullOrEmpty(Glyph))
             {
                 TextRenderer.DrawText(g, Glyph, Ui.FontGlyph10, r, fore,
@@ -688,7 +763,7 @@ namespace MhiagosControl
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
             Font = Ui.FontBase;
-            Size = new Size(240, 26);
+            Size = new Size(Ui.S(240), Ui.S(26));
             Cursor = Cursors.Hand;
             TabStop = true;
             SetStyle(ControlStyles.Selectable, true);
@@ -714,42 +789,59 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
 
-            int h = 20, w = 38;
+            int h = Ui.S(20), w = Ui.S(38);
             int top = (Height - h) / 2;
             Rectangle track = new Rectangle(0, top, w, h);
 
-            Color fill = _on ? (_hover ? Ui.AccentHover : Ui.Accent)
-                             : (_hover ? Ui.Border : (Ui.Dark ? Ui.SurfaceAlt : Color.FromArgb(0xCF, 0xD3, 0xDA)));
+            bool hover = _hover && Enabled;
+            Color fill = _on ? (hover ? Ui.AccentHover : Ui.Accent)
+                             : (hover ? Ui.Border : (Ui.Dark ? Ui.SurfaceAlt : Color.FromArgb(0xCF, 0xD3, 0xDA)));
+            // Desabilitado parecia igual ao habilitado: o interruptor de perfil
+            // por jogo, sem RTSS, era clicavel a vista e nao respondia.
+            if (!Enabled) fill = _on ? Color.FromArgb(110, Ui.Accent) : Ui.SurfaceAlt;
+            Color texto = Enabled ? Ui.Text : Ui.Faint;
 
             using (GraphicsPath p = Ui.RoundRect(track, h / 2))
             using (SolidBrush b = new SolidBrush(fill))
                 g.FillPath(b, p);
+            if (!Enabled)
+                using (GraphicsPath p = Ui.RoundRect(track, h / 2))
+                using (Pen pen = new Pen(Ui.Border))
+                    g.DrawPath(pen, p);
 
             if (Focused && ShowFocusCues)
                 using (GraphicsPath p = Ui.RoundRect(Rectangle.Inflate(track, 1, 1), h / 2 + 1))
                 using (Pen pen = new Pen(Ui.Accent, 1.5f))
                     g.DrawPath(pen, p);
 
-            int knob = h - 6;
-            int kx = _on ? track.Right - knob - 3 : track.X + 3;
-            using (SolidBrush b = new SolidBrush(Color.White))
-                g.FillEllipse(b, kx, top + 3, knob, knob);
+            int folga = Ui.S(3);
+            int knob = h - 2 * folga;
+            int kx = _on ? track.Right - knob - folga : track.X + folga;
+            using (SolidBrush b = new SolidBrush(Enabled ? Color.White : (Ui.Dark ? Ui.Faint : Color.FromArgb(0xF0, 0xF1, 0xF4))))
+                g.FillEllipse(b, kx, top + folga, knob, knob);
 
             if (!string.IsNullOrEmpty(Label))
             {
-                Rectangle tr = new Rectangle(w + 10, 0, Width - w - 10, Height);
-                if (Height >= 36)
+                Rectangle tr = new Rectangle(w + Ui.S(10), 0, Width - w - Ui.S(10), Height);
+                if (Height >= Ui.S(36))
                 {
                     // Alto o bastante para duas linhas: quebra em vez de cortar
                     // com reticencias, que num cartao estreito comia o fim da frase.
                     Size t = TextRenderer.MeasureText(g, Label, Font, new Size(tr.Width, 0), TextFormatFlags.WordBreak);
                     tr = new Rectangle(tr.X, Math.Max(0, (Height - t.Height) / 2), tr.Width, Math.Min(Height, t.Height));
-                    TextRenderer.DrawText(g, Label, Font, tr, Ui.Text, TextFormatFlags.Left | TextFormatFlags.WordBreak);
+                    TextRenderer.DrawText(g, Label, Font, tr, texto, TextFormatFlags.Left | TextFormatFlags.WordBreak);
                 }
                 else
-                    TextRenderer.DrawText(g, Label, Font, tr, Ui.Text,
+                    TextRenderer.DrawText(g, Label, Font, tr, texto,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             }
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+            base.OnEnabledChanged(e);
         }
     }
 
@@ -775,7 +867,7 @@ namespace MhiagosControl
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
             Font = Ui.FontBase;
-            Size = new Size(160, 30);
+            Size = new Size(Ui.S(160), Ui.S(30));
             Cursor = Cursors.Hand;
             TabStop = true;
             SetStyle(ControlStyles.Selectable, true);
@@ -865,23 +957,31 @@ namespace MhiagosControl
                 {
                     // A pastilha acesa recua 3 px para que a borda externa
                     // continue visivel em volta dela.
-                    Rectangle fill = new Rectangle(seg.X + 3, 3, seg.Width - 6, Height - 7);
+                    Rectangle fill = new Rectangle(seg.X + Ui.S(3), Ui.S(3), seg.Width - Ui.S(6), Height - Ui.S(7));
                     using (GraphicsPath p = Ui.RoundRect(fill, fill.Height / 2))
-                    using (SolidBrush b = new SolidBrush(Ui.Accent))
+                    using (SolidBrush b = new SolidBrush(Enabled ? Ui.Accent : Ui.Border))
                         g.FillPath(b, p);
                 }
-                else if (i == _hover)
+                else if (i == _hover && Enabled)
                 {
-                    Rectangle fill = new Rectangle(seg.X + 3, 3, seg.Width - 6, Height - 7);
+                    Rectangle fill = new Rectangle(seg.X + Ui.S(3), Ui.S(3), seg.Width - Ui.S(6), Height - Ui.S(7));
                     using (GraphicsPath p = Ui.RoundRect(fill, fill.Height / 2))
                     using (SolidBrush b = new SolidBrush(Ui.Hover))
                         g.FillPath(b, p);
                 }
 
-                TextRenderer.DrawText(g, _items[i], sel ? Ui.FontMed : Ui.FontBase, seg,
-                    sel ? Color.White : Ui.Text,
+                Color cor = !Enabled ? Ui.Faint : (sel ? Color.White : Ui.Text);
+                TextRenderer.DrawText(g, _items[i], sel ? Ui.FontMed : Ui.FontBase, seg, cor,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             }
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            if (!Enabled) _hover = -1;
+            Invalidate();
+            base.OnEnabledChanged(e);
         }
     }
 
@@ -929,7 +1029,7 @@ namespace MhiagosControl
 
             BackColor = Color.Transparent;
             Font = Ui.FontBase;
-            Size = new Size(120, 32);
+            Size = new Size(Ui.S(120), Ui.S(32));
         }
 
         public int Value
@@ -959,13 +1059,13 @@ namespace MhiagosControl
             if (_box.Text != t) { _guard = true; _box.Text = t; _guard = false; Invalidate(); }
         }
 
-        private int BtnW { get { return 30; } }
+        private int BtnW { get { return Ui.S(30); } }
 
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
             if (_box == null) return;
-            _box.SetBounds(BtnW, (Height - _box.PreferredHeight) / 2, Math.Max(10, Width - BtnW * 2), _box.PreferredHeight);
+            _box.SetBounds(BtnW, (Height - _box.PreferredHeight) / 2, Math.Max(Ui.S(10), Width - BtnW * 2), _box.PreferredHeight);
         }
 
         private int HitBtn(Point p)
@@ -1006,10 +1106,10 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
             _box.BackColor = Ui.SurfaceAlt;
-            _box.ForeColor = Ui.Text;
+            _box.ForeColor = Enabled ? Ui.Text : Ui.Faint;
 
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(r, 8))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(8)))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -1017,14 +1117,21 @@ namespace MhiagosControl
                 g.DrawPath(pen, p);
             }
 
-            DrawSign(g, new Rectangle(0, 0, BtnW, Height), "−", _hover == 1, Value > Minimum);
-            DrawSign(g, new Rectangle(Width - BtnW, 0, BtnW, Height), "+", _hover == 2, Value < Maximum);
+            DrawSign(g, new Rectangle(0, 0, BtnW, Height), "−", _hover == 1, Enabled && Value > Minimum);
+            DrawSign(g, new Rectangle(Width - BtnW, 0, BtnW, Height), "+", _hover == 2, Enabled && Value < Maximum);
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            if (!Enabled) _hover = 0;
+            Invalidate();
+            base.OnEnabledChanged(e);
         }
 
         private static void DrawSign(Graphics g, Rectangle area, string sign, bool hover, bool enabled)
         {
             if (hover && enabled)
-                using (GraphicsPath p = Ui.RoundRect(new Rectangle(area.X + 3, 3, area.Width - 6, area.Height - 7), 6))
+                using (GraphicsPath p = Ui.RoundRect(new Rectangle(area.X + Ui.S(3), Ui.S(3), area.Width - Ui.S(6), area.Height - Ui.S(7)), Ui.S(6)))
                 using (SolidBrush b = new SolidBrush(Ui.Hover))
                     g.FillPath(b, p);
 
@@ -1168,12 +1275,12 @@ namespace MhiagosControl
             }
         }
 
-        private const int HeaderH = 116;
-        private const int RowH = 40;
+        private static readonly int HeaderH = Ui.S(116);
+        private static readonly int RowH = Ui.S(40);
 
-        public const int LarguraRecolhida = 56;
-        private const int LarguraMinima = 210;
-        private const int LarguraMaxima = 330;
+        public static readonly int LarguraRecolhida = Ui.S(56);
+        private static readonly int LarguraMinima = Ui.S(210);
+        private static readonly int LarguraMaxima = Ui.S(330);
 
         private int _larguraAberta = LarguraMinima;
 
@@ -1196,11 +1303,11 @@ namespace MhiagosControl
 
             foreach (NavItem it in _items)
                 precisa = Math.Max(precisa,
-                    42 + TextRenderer.MeasureText(it.Text, Ui.FontMed).Width + 16);
+                    Ui.S(42) + TextRenderer.MeasureText(it.Text, Ui.FontMed).Width + Ui.S(16));
 
-            precisa = Math.Max(precisa, 60 + TextRenderer.MeasureText(AppName, Ui.FontMed).Width + 46);
+            precisa = Math.Max(precisa, Ui.S(60) + TextRenderer.MeasureText(AppName, Ui.FontMed).Width + Ui.S(46));
             if (!string.IsNullOrEmpty(Subtitle))
-                precisa = Math.Max(precisa, 18 + TextRenderer.MeasureText(Subtitle, Ui.FontBase).Width + 18);
+                precisa = Math.Max(precisa, Ui.S(18) + TextRenderer.MeasureText(Subtitle, Ui.FontBase).Width + Ui.S(18));
 
             // O nome das pecas nao entra mais na conta: com o resumo fora da
             // barra, "AMD Ryzen 5 5600X" alargava a coluna de navegacao para
@@ -1253,7 +1360,13 @@ namespace MhiagosControl
         /// </summary>
         private void Animar(int alvo)
         {
-            if (!IsHandleCreated) { Width = alvo; Invalidate(); return; }
+            // Sem handle, ou com as animacoes do Windows desligadas: direto ao fim.
+            if (!IsHandleCreated || !Ui.Animacoes)
+            {
+                if (_anim != null) _anim.Stop();
+                Width = alvo; _alvo = 0; Invalidate();
+                return;
+            }
 
             _origem = Width; _alvo = alvo; _inicio = DateTime.UtcNow;
 
@@ -1298,12 +1411,12 @@ namespace MhiagosControl
         /// largura corrente, o conteudo cede quando o espaco acaba - que e o que
         /// a pessoa espera ver.
         /// </summary>
-        private bool Estreita { get { return Width < 150; } }
+        private bool Estreita { get { return Width < Ui.S(150); } }
 
         private Rectangle _botao = Rectangle.Empty;
         private bool _sobreBotao = false;
 
-        private int TopoDosItens { get { return Estreita ? 104 : HeaderH; } }
+        private int TopoDosItens { get { return Estreita ? Ui.S(104) : HeaderH; } }
 
         // ---------------- arrastar para reordenar ----------------
 
@@ -1316,11 +1429,11 @@ namespace MhiagosControl
         private int _destino = -1;
 
         /// <summary>Px de folga antes de um clique virar arraste: mao tremula nao reordena nada.</summary>
-        private const int LimiarDeArraste = 6;
+        private static readonly int LimiarDeArraste = Ui.S(6);
 
         private int PosicaoDeInsercao(int y)
         {
-            int pos = (int)Math.Floor((y - TopoDosItens + (RowH + 2) / 2.0) / (RowH + 2));
+            int pos = (int)Math.Floor((y - TopoDosItens + (RowH + Ui.S(2)) / 2.0) / (RowH + Ui.S(2)));
             return Math.Max(0, Math.Min(_items.Count, pos));
         }
 
@@ -1415,18 +1528,18 @@ namespace MhiagosControl
             for (int i = 0; i < _items.Count; i++)
             {
                 NavItem it = _items[i];
-                it.Bounds = new Rectangle(Estreita ? 6 : 8, y, Width - (Estreita ? 12 : 16), RowH);
+                it.Bounds = new Rectangle(Ui.S(Estreita ? 6 : 8), y, Width - Ui.S(Estreita ? 12 : 16), RowH);
 
                 bool sel = (i == _selected);
                 if (sel || i == _hover)
                 {
-                    using (GraphicsPath p = Ui.RoundRect(it.Bounds, 6))
+                    using (GraphicsPath p = Ui.RoundRect(it.Bounds, Ui.S(6)))
                     using (SolidBrush b = new SolidBrush(sel ? Ui.AccentSoft : Ui.Hover))
                         g.FillPath(b, p);
                 }
                 if (sel)
                 {
-                    using (GraphicsPath p = Ui.RoundRect(new Rectangle(it.Bounds.X, it.Bounds.Y + 9, 3, RowH - 18), 2))
+                    using (GraphicsPath p = Ui.RoundRect(new Rectangle(it.Bounds.X, it.Bounds.Y + Ui.S(9), Ui.S(3), RowH - Ui.S(18)), Ui.S(2)))
                     using (SolidBrush b = new SolidBrush(Ui.Accent))
                         g.FillPath(b, p);
                 }
@@ -1436,7 +1549,7 @@ namespace MhiagosControl
                 {
                     // o mesmo quadrado que um glifo de 11 pt ocuparia ali
                     float em = Ui.FontGlyph11.SizeInPoints * g.DpiY / 72f;
-                    float gx = Estreita ? it.Bounds.X + (it.Bounds.Width - em) / 2f : it.Bounds.X + 14 + em / 6f;
+                    float gx = Estreita ? it.Bounds.X + (it.Bounds.Width - em) / 2f : it.Bounds.X + Ui.S(14) + em / 6f;
                     RectangleF cel = new RectangleF(gx, it.Bounds.Y + (RowH - em) / 2f, em, em);
                     it.Icone(g, cel, sel ? Ui.Accent : fore);
                 }
@@ -1450,30 +1563,30 @@ namespace MhiagosControl
                         {
                             SizeF t = g.MeasureString(it.Glyph, Ui.FontGlyph11);
                             g.DrawString(it.Glyph, Ui.FontGlyph11, b,
-                                it.Bounds.X + (it.Bounds.Width - t.Width) / 2f, it.Bounds.Y + 11);
+                                it.Bounds.X + (it.Bounds.Width - t.Width) / 2f, it.Bounds.Y + Ui.S(11));
                         }
-                        else g.DrawString(it.Glyph, Ui.FontGlyph11, b, it.Bounds.X + 14, it.Bounds.Y + 11);
+                        else g.DrawString(it.Glyph, Ui.FontGlyph11, b, it.Bounds.X + Ui.S(14), it.Bounds.Y + Ui.S(11));
                     }
                 }
                 if (!Estreita)
                     TextRenderer.DrawText(g, it.Text, sel ? Ui.FontMed : Ui.FontBase,
-                        new Rectangle(it.Bounds.X + 42, it.Bounds.Y, it.Bounds.Width - 46, RowH), fore,
+                        new Rectangle(it.Bounds.X + Ui.S(42), it.Bounds.Y, it.Bounds.Width - Ui.S(46), RowH), fore,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
-                y += RowH + 2;
+                y += RowH + Ui.S(2);
             }
 
             // Arrastando: uma linha marca onde a pagina vai cair.
             if (_arrastando && _destino >= 0)
             {
-                int ly = TopoDosItens + _destino * (RowH + 2) - 1;
-                int x0 = Estreita ? 6 : 8, x1 = Width - (Estreita ? 6 : 8);
+                int ly = TopoDosItens + _destino * (RowH + Ui.S(2)) - 1;
+                int x0 = Ui.S(Estreita ? 6 : 8), x1 = Width - Ui.S(Estreita ? 6 : 8);
                 using (Pen pen = new Pen(Ui.Accent, 2f))
-                    g.DrawLine(pen, x0 + 4, ly, x1 - 4, ly);
+                    g.DrawLine(pen, x0 + Ui.S(4), ly, x1 - Ui.S(4), ly);
                 using (SolidBrush b = new SolidBrush(Ui.Accent))
                 {
-                    g.FillEllipse(b, x0, ly - 3, 6, 6);
-                    g.FillEllipse(b, x1 - 6, ly - 3, 6, 6);
+                    g.FillEllipse(b, x0, ly - Ui.S(3), Ui.S(6), Ui.S(6));
+                    g.FillEllipse(b, x1 - Ui.S(6), ly - Ui.S(3), Ui.S(6), Ui.S(6));
                 }
             }
         }
@@ -1489,36 +1602,36 @@ namespace MhiagosControl
         {
             if (Estreita)
             {
-                if (Logo != null) g.DrawImage(Logo, (Width - 30) / 2, 18, 30, 30);
-                _botao = new Rectangle((Width - 30) / 2, 60, 30, 30);
+                if (Logo != null) g.DrawImage(Logo, (Width - Ui.S(30)) / 2, Ui.S(18), Ui.S(30), Ui.S(30));
+                _botao = new Rectangle((Width - Ui.S(30)) / 2, Ui.S(60), Ui.S(30), Ui.S(30));
             }
             else
             {
-                if (Logo != null) g.DrawImage(Logo, 18, 18, 34, 34);
+                if (Logo != null) g.DrawImage(Logo, Ui.S(18), Ui.S(18), Ui.S(34), Ui.S(34));
 
                 using (SolidBrush b = new SolidBrush(Ui.Text))
-                    g.DrawString(AppName, Ui.FontMed, b, 60, 26);
+                    g.DrawString(AppName, Ui.FontMed, b, Ui.S(60), Ui.S(26));
 
                 // O perfil ocupa a largura toda, abaixo do titulo. TextRenderer
                 // com retangulo delimitado, e nao DrawString: DrawString corta
                 // onde o controle acaba, sem reticencias.
-                int w = Width - 34;
+                int w = Width - Ui.S(34);
                 if (!string.IsNullOrEmpty(SubtitleCaption))
                     TextRenderer.DrawText(g, SubtitleCaption, Ui.FontSmall,
-                        new Rectangle(18, 62, w, 14), Ui.Faint,
+                        new Rectangle(Ui.S(18), Ui.S(62), w, Ui.S(14)), Ui.Faint,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
                 if (!string.IsNullOrEmpty(Subtitle))
                     TextRenderer.DrawText(g, Subtitle, Ui.FontBase,
-                        new Rectangle(18, 78, w, 18), Ui.Text,
+                        new Rectangle(Ui.S(18), Ui.S(78), w, Ui.S(18)), Ui.Text,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
-                _botao = new Rectangle(Width - 42, 20, 30, 30);
+                _botao = new Rectangle(Width - Ui.S(42), Ui.S(20), Ui.S(30), Ui.S(30));
             }
 
             if (_sobreBotao)
             {
-                using (GraphicsPath p = Ui.RoundRect(_botao, 6))
+                using (GraphicsPath p = Ui.RoundRect(_botao, Ui.S(6)))
                 using (SolidBrush b = new SolidBrush(Ui.Hover))
                     g.FillPath(b, p);
             }

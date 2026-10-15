@@ -25,18 +25,18 @@ namespace MhiagosControl
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
             Font = Ui.FontBase;
-            Height = 74;
+            Height = Ui.S(74);
 
             Button = new FlatBtn();
             Button.Text = T.Change;
-            Button.Size = new Size(78, 30);
+            Button.Size = new Size(Ui.S(78), Ui.S(30));
             Controls.Add(Button);
         }
 
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
-            if (Button != null) Button.SetBounds(Width - 92, (Height - 30) / 2, 78, 30);
+            if (Button != null) Button.SetBounds(Width - Ui.S(92), (Height - Ui.S(30)) / 2, Ui.S(78), Ui.S(30));
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -45,7 +45,7 @@ namespace MhiagosControl
             Ui.Smooth(g);
 
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(r, 8))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(8)))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -66,23 +66,23 @@ namespace MhiagosControl
             bool lido = Entry.Value.HasValue;
             Size vs = TextRenderer.MeasureText(g, val, lido ? Ui.FontValue : Ui.FontBase);
 
-            int right = Width - 100;                 // onde comeca o botao Trocar
-            int valX = right - vs.Width - 12;
+            int right = Width - Ui.S(100);                 // onde comeca o botao Trocar
+            int valX = right - vs.Width - Ui.S(12);
 
             TextRenderer.DrawText(g, val, lido ? Ui.FontValue : Ui.FontBase,
-                new Rectangle(valX, 0, vs.Width + 8, Height),
+                new Rectangle(valX, 0, vs.Width + Ui.S(8), Height),
                 lido ? Ui.Accent : Ui.Muted,
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
 
             // Bloco de texto centrado como um todo, medindo as duas linhas em
             // vez de fixar coordenadas - com fontes diferentes, chutar o topo
             // deixava o conjunto pousado alto no cartao.
-            const int TitleH = 22, SubH = 17;
+            int TitleH = Ui.S(22), SubH = Ui.S(17);
             int top = (Height - (TitleH + SubH)) / 2;
-            int tw = valX - 24;
+            int tw = valX - Ui.S(24);
 
             TextRenderer.DrawText(g, Entry.Name, Ui.FontSection,
-                new Rectangle(16, top, tw, TitleH), Ui.Text,
+                new Rectangle(Ui.S(16), top, tw, TitleH), Ui.Text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
             // categoria, e nao o nome do dispositivo: "NVIDIA GeForce RTX 3060
@@ -90,7 +90,7 @@ namespace MhiagosControl
             string sub = T.Category(string.IsNullOrEmpty(Entry.Category) ? "Outros" : Entry.Category) +
                          (string.IsNullOrEmpty(Entry.Source) ? "" : "  ·  " + Entry.Source);
             TextRenderer.DrawText(g, sub, Ui.FontSmall,
-                new Rectangle(16, top + TitleH, tw, SubH), Ui.Muted,
+                new Rectangle(Ui.S(16), top + TitleH, tw, SubH), Ui.Muted,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
     }
@@ -114,18 +114,18 @@ namespace MhiagosControl
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(560, 600);
+            ClientSize = new Size(Ui.S(560), Ui.S(600));
             BackColor = Ui.Window;
             Font = Ui.FontBase;
 
             Card card = new Card();
-            card.SetBounds(16, 16, 528, 508);
+            card.SetBounds(Ui.S(16), Ui.S(16), Ui.S(528), Ui.S(508));
             Controls.Add(card);
 
             _pick = new SensorPicker();
             _pick.Categories = true;
-            _pick.RowHeight = 30;
-            _pick.SetBounds(12, 12, 504, 484);
+            _pick.RowHeight = Ui.S(30);
+            _pick.SetBounds(Ui.S(12), Ui.S(12), Ui.S(504), Ui.S(484));
             _pick.SetSensors(sensors);
             _pick.SelectedId = current;
             // duplo clique escolhe e fecha, como em qualquer seletor
@@ -134,13 +134,13 @@ namespace MhiagosControl
 
             FlatBtn ok = new FlatBtn();
             ok.Text = T.Use; ok.Primary = true;
-            ok.SetBounds(448, 540, 96, 32);
+            ok.SetBounds(Ui.S(448), Ui.S(540), Ui.S(96), Ui.S(32));
             ok.Click += delegate { DialogResult = DialogResult.OK; Close(); };
             Controls.Add(ok);
 
             FlatBtn cancel = new FlatBtn();
             cancel.Text = T.Cancel;
-            cancel.SetBounds(344, 540, 96, 32);
+            cancel.SetBounds(Ui.S(344), Ui.S(540), Ui.S(96), Ui.S(32));
             cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(cancel);
 

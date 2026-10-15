@@ -141,19 +141,19 @@ namespace MhiagosControl
             StartPosition = FormStartPosition.CenterScreen;
             ShowInTaskbar = false;
             TopMost = true;
-            ClientSize = new Size(380, 148);
+            ClientSize = new Size(Ui.S(380), Ui.S(148));
             BackColor = Ui.Surface;
             Font = Ui.FontBase;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
                      ControlStyles.OptimizedDoubleBuffer, true);
 
-            using (GraphicsPath p = Ui.RoundRect(new Rectangle(0, 0, ClientSize.Width, ClientSize.Height), 10))
+            using (GraphicsPath p = Ui.RoundRect(new Rectangle(0, 0, ClientSize.Width, ClientSize.Height), Ui.S(10)))
                 Region = new Region(p);
 
             _anim = new System.Windows.Forms.Timer();
             _anim.Interval = 30;
-            _anim.Tick += delegate { _phase = (_phase + 4) % (ClientSize.Width + 160); Invalidate(); };
-            _anim.Start();
+            _anim.Tick += delegate { _phase = (_phase + Ui.S(4)) % (ClientSize.Width + Ui.S(160)); Invalidate(); };
+            if (Ui.Animacoes) _anim.Start();
         }
 
         protected override void Dispose(bool disposing)
@@ -176,7 +176,7 @@ namespace MhiagosControl
         /// <summary>Area do "x" de fechar, no canto superior direito.</summary>
         private Rectangle BotaoFechar
         {
-            get { return new Rectangle(ClientSize.Width - 34, 8, 26, 26); }
+            get { return new Rectangle(ClientSize.Width - Ui.S(34), Ui.S(8), Ui.S(26), Ui.S(26)); }
         }
 
         private bool _hoverFechar;
@@ -208,7 +208,7 @@ namespace MhiagosControl
             Ui.Smooth(g);
 
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(r, 10))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(10)))
             using (SolidBrush b = new SolidBrush(Ui.Surface))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -220,21 +220,21 @@ namespace MhiagosControl
             {
                 if (Assets.AppIcon != null)
                     using (Bitmap logo = Assets.AppIcon.ToBitmap())
-                        g.DrawImage(logo, 28, 30, 44, 44);
+                        g.DrawImage(logo, Ui.S(28), Ui.S(30), Ui.S(44), Ui.S(44));
             }
             catch (Exception ex) { Log.Error("logo da tela de carregamento", ex); }
 
             TextRenderer.DrawText(g, "Mhiagos Control", Ui.FontTitle,
-                new Rectangle(88, 28, Width - 110, 28), Ui.Text,
+                new Rectangle(Ui.S(88), Ui.S(28), Width - Ui.S(110), Ui.S(28)), Ui.Text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
 
             TextRenderer.DrawText(g, _status, Ui.FontBase,
-                new Rectangle(88, 56, Width - 130, 22), Ui.Muted,
+                new Rectangle(Ui.S(88), Ui.S(56), Width - Ui.S(130), Ui.S(22)), Ui.Muted,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
             Rectangle fechar = BotaoFechar;
             if (_hoverFechar)
-                using (GraphicsPath p = Ui.RoundRect(fechar, 6))
+                using (GraphicsPath p = Ui.RoundRect(fechar, Ui.S(6)))
                 using (SolidBrush b = new SolidBrush(Ui.Hover))
                     g.FillPath(b, p);
             // U+E8BB (ChromeClose) escrito por codigo: o caractere literal no
@@ -244,18 +244,18 @@ namespace MhiagosControl
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
             TextRenderer.DrawText(g, T.ClosingIsSafe, Ui.FontSmall,
-                new Rectangle(88, 76, Width - 130, 18), Ui.Faint,
+                new Rectangle(Ui.S(88), Ui.S(76), Width - Ui.S(130), Ui.S(18)), Ui.Faint,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
             // trilho e segmento deslizante
-            int trackY = Height - 34, trackH = 4;
-            Rectangle track = new Rectangle(28, trackY, Width - 56, trackH);
+            int trackY = Height - Ui.S(34), trackH = Ui.S(4);
+            Rectangle track = new Rectangle(Ui.S(28), trackY, Width - Ui.S(56), trackH);
             using (GraphicsPath p = Ui.RoundRect(track, trackH / 2))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
                 g.FillPath(b, p);
 
-            int segW = 120;
-            int x = 28 - segW + _phase;
+            int segW = Ui.S(120);
+            int x = Ui.S(28) - segW + _phase;
             Rectangle seg = Rectangle.Intersect(track, new Rectangle(x, trackY, segW, trackH));
             if (seg.Width > 1)
                 using (GraphicsPath p = Ui.RoundRect(seg, trackH / 2))

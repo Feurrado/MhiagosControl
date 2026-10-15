@@ -155,10 +155,10 @@ namespace MhiagosControl
             // O minimo e onde o projeto ainda fecha: 756 px de conteudo, a barra
             // lateral recolhida e as margens do hospedeiro. Abaixo disso os
             // cartoes parariam de encolher e passariam a ser cortados.
-            MinimumSize = new Size(880, 660);
+            MinimumSize = new Size(Ui.S(880), Ui.S(660));
 
             Size guardado = TamanhoGuardado();
-            ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(1010, 900),
+            ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(Ui.S(1010), Ui.S(900)),
                 Screen.FromPoint(Cursor.Position).WorkingArea.Size);
             BackColor = Ui.Window;
             Font = Ui.FontBase;
@@ -187,7 +187,7 @@ namespace MhiagosControl
         {
             _nav = new NavBar();
             _nav.Dock = DockStyle.Left;
-            _nav.Width = 210;
+            _nav.Width = Ui.S(210);
             _nav.Logo = IconImage();
             _nav.SubtitleCaption = T.ActiveProfile;
             _nav.Subtitle = _session.ActiveProfile.Name;
@@ -238,7 +238,7 @@ namespace MhiagosControl
             _nav.Controls.Add(_btClose);
 
             _footerNote = MakeLabel("", 0, 0, Ui.FontSmall);
-            _footerNote.ForeColor = Ui.Accent;
+            _footerNote.ForeColor = Ui.AccentText;
             _footerNote.Visible = false;
             _nav.Controls.Add(_footerNote);
 
@@ -252,7 +252,7 @@ namespace MhiagosControl
             // Afasta o primeiro cartao da barra de titulo. Quatro pixels faziam
             // o conteudo parecer colado ao topo, sobretudo nas paginas sem
             // titulo proprio, como Visao geral e Metricas.
-            _host.Padding = new Padding(18, 12, 18, 14);
+            _host.Padding = new Padding(Ui.S(18), Ui.S(12), Ui.S(18), Ui.S(14));
             Controls.Add(_host);
 
             // O Windows Forms encaixa os controles do fundo da ordem Z para a
@@ -446,18 +446,18 @@ namespace MhiagosControl
         {
             if (_nav == null || _btSave == null || _btClose == null) return;
 
-            const int Alt = 32;
-            const int Esp = 8;
+            int Alt = Ui.S(32);
+            int Esp = Ui.S(8);
 
-            bool estreita = _nav.Width < 120;
-            int margem = estreita ? 8 : 18;
+            bool estreita = _nav.Width < Ui.S(120);
+            int margem = Ui.S(estreita ? 8 : 18);
             int larg = _nav.Width - margem * 2;
 
             // Uma nota de duas linhas exige largura; recolhida, a barra nao tem.
             bool cabeNota = !estreita;
-            int alturaNota = cabeNota ? 32 : 0;
+            int alturaNota = cabeNota ? Ui.S(32) : 0;
 
-            int baixo = _nav.Height - 18;
+            int baixo = _nav.Height - Ui.S(18);
             int y = baixo - alturaNota - Alt - Esp - Alt;
 
             _btSave.SetBounds(margem, y, larg, Alt);
@@ -466,7 +466,7 @@ namespace MhiagosControl
             if (_footerNote != null)
             {
                 _footerNote.Visible = _footerNote.Visible && cabeNota;
-                _footerNote.SetBounds(margem, y + (Alt + Esp) * 2 + 4, larg, alturaNota);
+                _footerNote.SetBounds(margem, y + (Alt + Esp) * 2 + Ui.S(4), larg, alturaNota);
                 _footerNote.TextAlign = ContentAlignment.TopLeft;
             }
         }
@@ -559,7 +559,7 @@ namespace MhiagosControl
                 if (!p.RectangleToScreen(p.ClientRectangle).Contains(Cursor.Position)) return false;
 
                 int delta = (short)((long)m.WParam >> 16);
-                p.RolarPor(delta > 0 ? -60 : 60);
+                p.RolarPor(delta > 0 ? -Ui.S(60) : Ui.S(60));
                 return true;
             }
         }
@@ -618,7 +618,7 @@ namespace MhiagosControl
         /// olho perde o comeco da seguinte. Centralizado, o que sobra virou
         /// margem dos dois lados - que se le como decisao, e nao como o vao
         /// torto de um lado so.
-        private const int LarguraMaxDaPagina = 1100;
+        private static readonly int LarguraMaxDaPagina = Ui.S(1100);
 
         /// <summary>Medidas de projeto dos cartoes, antes de qualquer esticada.</summary>
         ///
@@ -669,8 +669,8 @@ namespace MhiagosControl
                 // fixa de projeto ele ultrapassava a area por poucos pixels e
                 // exibia uma barra de rolagem para praticamente nenhum conteudo.
                 // Pagina.Sincronizar reserva mais 8 px depois do ultimo filho.
-                int altura = _pgPaineis.ClientSize.Height - _panelPreviewCard.Top - 12;
-                _panelPreviewCard.Height = Math.Max(400, altura);
+                int altura = _pgPaineis.ClientSize.Height - _panelPreviewCard.Top - Ui.S(12);
+                _panelPreviewCard.Height = Math.Max(Ui.S(400), altura);
             });
         }
 
@@ -727,7 +727,7 @@ namespace MhiagosControl
             // quando ela some, e cada troca dispara um novo arranjo. Com a barra
             // nativa isso custava dezessete pixels de faixa morta; com a nossa,
             // que tem dez e some quando nao ha o que rolar, o preco cabe.
-            int disp = pagina.Width - 4;
+            int disp = pagina.Width - Ui.S(4);
             Pagina pg = pagina as Pagina;
             if (pg != null && pg.Rolavel) disp -= Pagina.LarguraDaBarra;
 
@@ -1076,15 +1076,15 @@ namespace MhiagosControl
             if (_pgVisao == null || _cardCooler == null) return;
             if (_pgVisao.Width <= 0 || _pgVisao.Height <= 0) return;
 
-            const int Esp = 10;
-            const int AlturaBloco = 148;
-            const int AlturaSpecs = 56;
-            const int AlturaPerif = 80;
-            const int MeioMin = 240;
+            int Esp = Ui.S(10);
+            int AlturaBloco = Ui.S(148);
+            int AlturaSpecs = Ui.S(56);
+            int AlturaPerif = Ui.S(80);
+            int MeioMin = Ui.S(240);
 
-            int disp = _pgVisao.Width - 4;
+            int disp = _pgVisao.Width - Ui.S(4);
             int alvo = disp > LarguraMaxDaPagina ? LarguraMaxDaPagina : disp;
-            if (alvo < 560) alvo = 560;
+            if (alvo < Ui.S(560)) alvo = Ui.S(560);
             int x0 = (disp - alvo) / 2;
             if (x0 < 0) x0 = 0;
 
@@ -1121,8 +1121,8 @@ namespace MhiagosControl
                 // ficava perdida no meio de um cartao vazio, com o texto a meio
                 // metro de distancia.
                 int wEsq = alvo * 42 / 100;
-                if (wEsq < 300) wEsq = 300;
-                if (wEsq > alvo - 260) wEsq = alvo - 260;
+                if (wEsq < Ui.S(300)) wEsq = Ui.S(300);
+                if (wEsq > alvo - Ui.S(260)) wEsq = alvo - Ui.S(260);
                 int wDir = alvo - wEsq - Esp;
 
                 _cardCooler.SetBounds(x0, yMeio, wEsq, hMeio);
@@ -1157,13 +1157,13 @@ namespace MhiagosControl
             int vis = 0;
             foreach (Label l in linhas) if (l != null && l.Visible) vis++;
 
-            const int AlturaLinha = 26;
+            int AlturaLinha = Ui.S(26);
             int hTexto = vis * AlturaLinha;
 
             // A previa fica com o que sobra, sempre quadrada: ela encaixa a foto
             // pela altura, entao largura a mais so viraria fundo preto ao lado.
-            int lado = Math.Min(w - 32, h - 52 - hTexto - 12);
-            if (lado < 80) lado = 80;
+            int lado = Math.Min(w - Ui.S(32), h - Ui.S(52) - hTexto - Ui.S(12));
+            if (lado < Ui.S(80)) lado = Ui.S(80);
 
             // O BLOCO INTEIRO centrado na altura util, e nao encostado no topo.
             //
@@ -1171,13 +1171,13 @@ namespace MhiagosControl
             // altura: sobrava um palmo de fundo embaixo das duas linhas de
             // texto, e a peca - que e o assunto do cartao - ficava empurrada
             // para cima como se o resto tivesse sido cortado.
-            int bloco = lado + 14 + hTexto;
-            int topo = 46 + (h - 46 - bloco) / 2;
-            if (topo < 46) topo = 46;
+            int bloco = lado + Ui.S(14) + hTexto;
+            int topo = Ui.S(46) + (h - Ui.S(46) - bloco) / 2;
+            if (topo < Ui.S(46)) topo = Ui.S(46);
 
             _vgPreview.SetBounds((w - lado) / 2, topo, lado, lado);
 
-            int y = topo + lado + 14;
+            int y = topo + lado + Ui.S(14);
             foreach (Label val in linhas)
             {
                 if (val == null || !val.Visible) continue;
@@ -1185,8 +1185,8 @@ namespace MhiagosControl
                 // Rotulo curto a esquerda, valor com TODO o resto: com 150 px
                 // reservados a um rotulo de uma palavra, o que sobrava para o
                 // valor nao dava nem para o nome do perfil.
-                if (cap != null) cap.SetBounds(16, y + 3, 92, 17);
-                val.SetBounds(112, y, w - 128, 20);
+                if (cap != null) cap.SetBounds(Ui.S(16), y + Ui.S(3), Ui.S(92), Ui.S(17));
+                val.SetBounds(Ui.S(112), y, w - Ui.S(128), Ui.S(20));
                 y += AlturaLinha;
             }
         }
@@ -1205,7 +1205,7 @@ namespace MhiagosControl
         {
             if (_vgSpecVal == null || _vgSpecVal.Length == 0) return;
 
-            const int Vao = 26;
+            int Vao = Ui.S(26);
             int n = _vgSpecVal.Length;
 
             int[] larg = new int[n];
@@ -1214,13 +1214,13 @@ namespace MhiagosControl
             {
                 int a = TextRenderer.MeasureText(_vgSpecCap[i].Text, Ui.FontSmall).Width;
                 int b = TextRenderer.MeasureText(_vgSpecVal[i].Text, Ui.FontSemi).Width;
-                larg[i] = Math.Max(a, b) + 4;
+                larg[i] = Math.Max(a, b) + Ui.S(4);
                 soma += larg[i];
             }
 
             // Se nao couber, todas encolhem na proporcao: cortar so a ultima
             // deixaria justamente o sistema operacional sem nome.
-            int disp = _cardSpecs.Width - 32 - (n - 1) * Vao;
+            int disp = _cardSpecs.Width - Ui.S(32) - (n - 1) * Vao;
             if (soma > disp && soma > 0)
                 for (int i = 0; i < n; i++) larg[i] = larg[i] * disp / soma;
 
@@ -1235,12 +1235,12 @@ namespace MhiagosControl
             for (int i = 0; i < n; i++) total += larg[i];
 
             int x = (_cardSpecs.Width - total) / 2;
-            if (x < 16) x = 16;
+            if (x < Ui.S(16)) x = Ui.S(16);
 
             for (int i = 0; i < n; i++)
             {
-                _vgSpecCap[i].SetBounds(x, 11, larg[i], 15);
-                _vgSpecVal[i].SetBounds(x, 28, larg[i], 18);
+                _vgSpecCap[i].SetBounds(x, Ui.S(11), larg[i], Ui.S(15));
+                _vgSpecVal[i].SetBounds(x, Ui.S(28), larg[i], Ui.S(18));
                 x += larg[i] + Vao;
             }
         }
@@ -1406,8 +1406,8 @@ namespace MhiagosControl
         private Segmented _sgWidgetLayout, _sgWidgetVidro, _sgWidgetCor;
         /// <summary>Preenchendo os controles com a configuracao: as mudancas nao sao do usuario.</summary>
         private bool _sincronizandoWidget;
-        private const int AlturaDoCartaoDoWidget = 330;
-        private const int AlturaDoBotaoDoWidget = 30;
+        private static readonly int AlturaDoCartaoDoWidget = Ui.S(330);
+        private static readonly int AlturaDoBotaoDoWidget = Ui.S(30);
 
         /// <summary>
         /// As mesmas opcoes do botao direito do widget, num lugar que se acha
@@ -1421,46 +1421,46 @@ namespace MhiagosControl
 
             _tgWidget = new Toggle();
             _tgWidget.Label = T.WidgetShow;
-            _tgWidget.SetBounds(16, 50, 480, 26);
+            _tgWidget.SetBounds(Ui.S(16), Ui.S(50), Ui.S(480), Ui.S(26));
             c.Controls.Add(_tgWidget);
 
             c.Controls.Add(MakeLabel(T.WidgetLayout, 16, 96, Ui.FontMed));
             _sgWidgetLayout = new Segmented();
             _sgWidgetLayout.SetItems(T.WidgetRings, T.WidgetList);
-            _sgWidgetLayout.SetBounds(16, 120, 220, 30);
+            _sgWidgetLayout.SetBounds(Ui.S(16), Ui.S(120), Ui.S(220), Ui.S(30));
             c.Controls.Add(_sgWidgetLayout);
 
             c.Controls.Add(MakeLabel(T.WidgetGlass, 260, 96, Ui.FontMed));
             _sgWidgetVidro = new Segmented();
             _sgWidgetVidro.SetItems(T.WidgetSharpShort, T.WidgetClear, T.WidgetFrosted);
-            _sgWidgetVidro.SetBounds(260, 120, 300, 30);
+            _sgWidgetVidro.SetBounds(Ui.S(260), Ui.S(120), Ui.S(300), Ui.S(30));
             c.Controls.Add(_sgWidgetVidro);
 
             c.Controls.Add(MakeLabel(T.WidgetTint, 16, 166, Ui.FontMed));
             _sgWidgetCor = new Segmented();
             _sgWidgetCor.SetItems(T.WidgetTintAutoShort, T.WidgetTintDark, T.WidgetTintLight);
-            _sgWidgetCor.SetBounds(16, 190, 380, 30);
+            _sgWidgetCor.SetBounds(Ui.S(16), Ui.S(190), Ui.S(380), Ui.S(30));
             c.Controls.Add(_sgWidgetCor);
 
             _tgWidgetFrente = new Toggle();
             _tgWidgetFrente.Label = T.WidgetOnTop;
-            _tgWidgetFrente.SetBounds(16, 238, 300, 26);
+            _tgWidgetFrente.SetBounds(Ui.S(16), Ui.S(238), Ui.S(300), Ui.S(26));
             c.Controls.Add(_tgWidgetFrente);
 
             _tgWidgetTrava = new Toggle();
             _tgWidgetTrava.Label = T.WidgetLock;
-            _tgWidgetTrava.SetBounds(330, 238, 240, 26);
+            _tgWidgetTrava.SetBounds(Ui.S(330), Ui.S(238), Ui.S(240), Ui.S(26));
             c.Controls.Add(_tgWidgetTrava);
 
             FlatBtn canto = new FlatBtn();
             canto.Text = T.WidgetBackToCorner;
-            canto.SetBounds(16, 280, 220, 32);
+            canto.SetBounds(Ui.S(16), Ui.S(280), Ui.S(220), Ui.S(32));
             canto.Click += delegate { _widget.WidgetAoCanto(); };
             c.Controls.Add(canto);
 
             Label nota = MakeLabel(T.WidgetCardNote, 250, 280, Ui.FontSmall);
             nota.AutoSize = false;
-            nota.Size = new Size(480, 34);
+            nota.Size = new Size(Ui.S(480), Ui.S(34));
             nota.TextAlign = ContentAlignment.MiddleLeft;
             nota.ForeColor = Ui.Muted;
             c.Controls.Add(nota);
@@ -1468,10 +1468,10 @@ namespace MhiagosControl
             // janela estreita: o que fica a direita encolhe em vez de passar da borda
             c.Resize += delegate
             {
-                int livre = c.Width - 16;
-                _sgWidgetVidro.Width = Math.Max(180, Math.Min(300, livre - 260));
-                _tgWidgetTrava.Width = Math.Max(140, Math.Min(240, livre - 330));
-                nota.Width = Math.Max(120, Math.Min(480, livre - 250));
+                int livre = c.Width - Ui.S(16);
+                _sgWidgetVidro.Width = Math.Max(Ui.S(180), Math.Min(Ui.S(300), livre - Ui.S(260)));
+                _tgWidgetTrava.Width = Math.Max(Ui.S(140), Math.Min(Ui.S(240), livre - Ui.S(330)));
+                nota.Width = Math.Max(Ui.S(120), Math.Min(Ui.S(480), livre - Ui.S(250)));
             };
 
             // preenche antes de ligar os eventos: cada controle avisa toda mudanca
@@ -1578,19 +1578,19 @@ namespace MhiagosControl
         private void ArranjarBaterias()
         {
             if (_pgBaterias == null) return;
-            const int Esp = 12;
+            int Esp = Ui.S(12);
 
-            int disp = _pgBaterias.Width - 4 - Pagina.LarguraDaBarra;
+            int disp = _pgBaterias.Width - Ui.S(4) - Pagina.LarguraDaBarra;
             int larg = disp > LarguraMaxDaPagina ? LarguraMaxDaPagina : disp;
-            if (larg < 460) larg = 460;
-            int x = 2 + Math.Max(0, (disp - larg) / 2);
+            if (larg < Ui.S(460)) larg = Ui.S(460);
+            int x = Ui.S(2) + Math.Max(0, (disp - larg) / 2);
 
-            int y = 2;
+            int y = Ui.S(2);
             if (_btWidget != null)
             {
                 int lb = _btWidget.LarguraDesejada();
                 _btWidget.SetBounds(x + larg - lb, y, lb, AlturaDoBotaoDoWidget);
-                y += AlturaDoBotaoDoWidget + 8;
+                y += AlturaDoBotaoDoWidget + Ui.S(8);
             }
             if (_cardWidget != null)
             {
@@ -1605,7 +1605,7 @@ namespace MhiagosControl
             }
 
             _lbBateriasVazio.Visible = _cartoesDeBateria.Count == 0;
-            _lbBateriasVazio.SetBounds(x, y + 2, larg, 40);
+            _lbBateriasVazio.SetBounds(x, y + Ui.S(2), larg, Ui.S(40));
 
             foreach (CartaoDeBateria c in _cartoesDeBateria)
             {
@@ -1647,19 +1647,28 @@ namespace MhiagosControl
             // divide a linha com o botao e some sem levar altura junto.
             _btCopiarSpecs = new FlatBtn();
             _btCopiarSpecs.Text = T.SpecsCopy;
-            _btCopiarSpecs.SetBounds(2, 2, 150, 30);
+            _btCopiarSpecs.SetBounds(Ui.S(2), Ui.S(2), Ui.S(150), Ui.S(30));
             _btCopiarSpecs.Enabled = false;
-            _btCopiarSpecs.Click += delegate { CopiarSpecs(); };
+            _btCopiarSpecs.Click += delegate
+            {
+                // Depois de uma coleta que falhou, o mesmo botao tenta de novo.
+                if (SpecSheet.Folha != null) { CopiarSpecs(); return; }
+                _btCopiarSpecs.Text = T.SpecsCopy;
+                _btCopiarSpecs.Enabled = false;
+                _lbSpecsEstado.Text = T.SpecsLoading;
+                _lbSpecsEstado.ForeColor = Ui.Muted;
+                GarantirSpecs();
+            };
             _pgSpecs.Controls.Add(_btCopiarSpecs);
 
             _lbSpecsEstado = MakeLabel(T.SpecsLoading, 166, 4, Ui.FontBase);
-            _lbSpecsEstado.Size = new Size(300, 26);
+            _lbSpecsEstado.Size = new Size(Ui.S(560), Ui.S(26));
             _lbSpecsEstado.TextAlign = ContentAlignment.MiddleLeft;
             _lbSpecsEstado.ForeColor = Ui.Muted;
             _pgSpecs.Controls.Add(_lbSpecsEstado);
 
             _lbSpecsNota = MakeLabel(T.SpecsNote, 166, 4, Ui.FontSmall);
-            _lbSpecsNota.Size = new Size(600, 28);
+            _lbSpecsNota.Size = new Size(Ui.S(600), Ui.S(28));
             _lbSpecsNota.TextAlign = ContentAlignment.MiddleLeft;
             _lbSpecsNota.ForeColor = Ui.Faint;
             _lbSpecsNota.Visible = false;
@@ -1708,7 +1717,18 @@ namespace MhiagosControl
             _coletando = false;
 
             List<SpecGrupo> folha = SpecSheet.Folha;
-            if (_pgSpecs == null || folha == null) return;
+            if (_pgSpecs == null) return;
+            if (folha == null || folha.Count == 0)
+            {
+                // Estado de erro, e nao o "Consultando" parado para sempre.
+                _lbSpecsEstado.Text = T.SpecsFailed;
+                _lbSpecsEstado.ForeColor = Ui.Text;
+                _lbSpecsEstado.Visible = true;
+                _lbSpecsNota.Visible = false;
+                _btCopiarSpecs.Text = T.SpecsRetry;
+                _btCopiarSpecs.Enabled = true;
+                return;
+            }
 
             // Ja montada: a folha nao muda enquanto a maquina esta ligada.
             if (_specCards.Count > 0) return;
@@ -1718,6 +1738,7 @@ namespace MhiagosControl
             {
                 _lbSpecsEstado.Visible = false;
                 _lbSpecsNota.Visible = true;
+                _btCopiarSpecs.Text = T.SpecsCopy;
                 _btCopiarSpecs.Enabled = true;
 
                 foreach (SpecGrupo g in folha)
@@ -1747,7 +1768,7 @@ namespace MhiagosControl
 
                         y += 24;
                     }
-                    c.Height = y + 10;
+                    c.Height = Ui.S(y + 10);   // y em medida de projeto
                     c.Tag = vals;
                     _specFullHeights[c] = c.Height;
 
@@ -1783,7 +1804,7 @@ namespace MhiagosControl
                 b.Text = nomes[i];
                 b.Tag = i;
                 b.Primary = i == _specCategory;
-                b.Height = 30;
+                b.Height = Ui.S(30);
                 b.Click += delegate(object sender, EventArgs e)
                 {
                     FlatBtn clicked = sender as FlatBtn;
@@ -1820,25 +1841,25 @@ namespace MhiagosControl
         {
             if (_pgSpecs == null || _specCards.Count == 0) return;
 
-            const int Esp = 12;
+            int Esp = Ui.S(12);
 
-            int disp = _pgSpecs.Width - 4 - Pagina.LarguraDaBarra;
+            int disp = _pgSpecs.Width - Ui.S(4) - Pagina.LarguraDaBarra;
             if (disp > LarguraMaxDaPagina) disp = LarguraMaxDaPagina;
-            if (disp < 460) disp = 460;
+            if (disp < Ui.S(460)) disp = Ui.S(460);
 
             // Categorias em pastilhas que quebram de linha. Uma faixa dividida
             // em partes iguais esmagaria "Armazenamento" em janelas estreitas;
             // aqui cada uma ocupa o texto que realmente possui.
-            int catX = 2, catY = _btCopiarSpecs.Bottom + 10;
+            int catX = Ui.S(2), catY = _btCopiarSpecs.Bottom + Ui.S(10);
             foreach (FlatBtn b in _specCategoryButtons)
             {
-                int w = TextRenderer.MeasureText(b.Text, Ui.FontBase).Width + 30;
-                w = Math.Max(82, Math.Min(164, w));
-                if (catX > 2 && catX + w > disp) { catX = 2; catY += 36; }
-                b.SetBounds(catX, catY, w, 30);
-                catX += w + 6;
+                int w = TextRenderer.MeasureText(b.Text, Ui.FontBase).Width + Ui.S(30);
+                w = Math.Max(Ui.S(82), Math.Min(Ui.S(164), w));
+                if (catX > Ui.S(2) && catX + w > disp) { catX = Ui.S(2); catY += Ui.S(36); }
+                b.SetBounds(catX, catY, w, Ui.S(30));
+                catX += w + Ui.S(6);
             }
-            int topo = (_specCategoryButtons.Count > 0 ? catY + 30 : _btCopiarSpecs.Bottom) + 12;
+            int topo = (_specCategoryButtons.Count > 0 ? catY + Ui.S(30) : _btCopiarSpecs.Bottom) + Ui.S(12);
 
             if (_specCategory > 0)
             {
@@ -1850,8 +1871,8 @@ namespace MhiagosControl
                     c.Visible = i == escolhido;
                     if (!c.Visible) continue;
                     MostrarLinhasDeSpec(c, int.MaxValue);
-                    int detailWidth = Math.Min(820, disp);
-                    int detailX = 2 + (disp - detailWidth) / 2;
+                    int detailWidth = Math.Min(Ui.S(820), disp);
+                    int detailX = Ui.S(2) + (disp - detailWidth) / 2;
                     c.SetBounds(detailX, topo, detailWidth, _specFullHeights[c]);
                     ArranjarLinhasDeSpec(c);
                 }
@@ -1866,7 +1887,7 @@ namespace MhiagosControl
                 foreach (Card c in _specCards) c.Visible = false;
                 ArranjarMosaicoDeSpecs(topo, disp, Esp);
                 if (_lbSpecsNota != null)
-                    _lbSpecsNota.Width = Math.Max(160, disp - _lbSpecsNota.Left);
+                    _lbSpecsNota.Width = Math.Max(Ui.S(160), disp - _lbSpecsNota.Left);
                 _pgSpecs.Sincronizar();
                 return;
             }
@@ -1874,11 +1895,11 @@ namespace MhiagosControl
             foreach (Card c in _specCards)
             {
                 c.Visible = true;
-                c.Height = Math.Min(128, _specFullHeights[c]);
+                c.Height = Math.Min(Ui.S(128), _specFullHeights[c]);
                 MostrarLinhasDeSpec(c, 3);
             }
 
-            if (disp >= 620 && _specCards.Count >= 7)
+            if (disp >= Ui.S(620) && _specCards.Count >= 7)
             {
                 // Ordem visual estável: duas fileiras de componentes, discos
                 // usando a largura toda e, por fim, rede/sistema. O antigo
@@ -1886,21 +1907,21 @@ namespace MhiagosControl
                 // sozinho diante de dois cartões empilhados e um grande vazio.
                 int half = (disp - Esp) / 2;
                 int y = topo;
-                ArranjarParDeSpecs(0, 1, y, half, Esp); y += 128 + Esp;
-                ArranjarParDeSpecs(2, 3, y, half, Esp); y += 128 + Esp;
+                ArranjarParDeSpecs(0, 1, y, half, Esp); y += Ui.S(128) + Esp;
+                ArranjarParDeSpecs(2, 3, y, half, Esp); y += Ui.S(128) + Esp;
 
                 Card storage = _specCards[4];
-                storage.SetBounds(2, y, disp, 104);
+                storage.SetBounds(Ui.S(2), y, disp, Ui.S(104));
                 ArranjarLinhasDeSpecEmColunas(storage);
                 y += storage.Height + Esp;
 
-                ArranjarParDeSpecs(5, 6, y, half, Esp); y += 128 + Esp;
+                ArranjarParDeSpecs(5, 6, y, half, Esp); y += Ui.S(128) + Esp;
 
                 // Grupos futuros não somem: entram abaixo em largura inteira.
                 for (int i = 7; i < _specCards.Count; i++)
                 {
                     Card extra = _specCards[i];
-                    extra.SetBounds(2, y, disp, 128);
+                    extra.SetBounds(Ui.S(2), y, disp, Ui.S(128));
                     ArranjarLinhasDeSpec(extra);
                     y += extra.Height + Esp;
                 }
@@ -1910,7 +1931,7 @@ namespace MhiagosControl
                 int y = topo;
                 foreach (Card c in _specCards)
                 {
-                    c.SetBounds(2, y, disp, 128);
+                    c.SetBounds(Ui.S(2), y, disp, Ui.S(128));
                     ArranjarLinhasDeSpec(c);
                     y += c.Height + Esp;
                 }
@@ -1919,7 +1940,7 @@ namespace MhiagosControl
             // O aviso ao lado do botao acompanha a largura: fixo em 600 px, ele
             // saia cortado no meio de "nome da maquina" numa janela estreita.
             if (_lbSpecsNota != null)
-                _lbSpecsNota.Width = Math.Max(160, disp - _lbSpecsNota.Left);
+                _lbSpecsNota.Width = Math.Max(Ui.S(160), disp - _lbSpecsNota.Left);
 
             _pgSpecs.Sincronizar();
         }
@@ -1941,7 +1962,7 @@ namespace MhiagosControl
                     if (b.Grupo.Titulo == t && !fila.Contains(b)) fila.Add(b);
             foreach (BlocoDeSpec b in _specBlocos) if (!fila.Contains(b)) fila.Add(b);
 
-            bool duas = disp >= 620;
+            bool duas = disp >= Ui.S(620);
             int meia = (disp - esp) / 2;
             int y = topo;
             int i = 0;
@@ -1953,15 +1974,15 @@ namespace MhiagosControl
                 if (b == null)
                 {
                     int h = a.AlturaPara(disp);
-                    a.SetBounds(2, y, disp, h);
+                    a.SetBounds(Ui.S(2), y, disp, h);
                     y += h + esp;
                     i++;
                     continue;
                 }
                 b.Visible = true;
                 int alt = Math.Max(a.AlturaPara(meia), b.AlturaPara(meia));
-                a.SetBounds(2, y, meia, alt);
-                b.SetBounds(2 + meia + esp, y, disp - meia - esp, alt);
+                a.SetBounds(Ui.S(2), y, meia, alt);
+                b.SetBounds(Ui.S(2) + meia + esp, y, disp - meia - esp, alt);
                 y += alt + esp;
                 i += 2;
             }
@@ -1970,8 +1991,8 @@ namespace MhiagosControl
         private void ArranjarParDeSpecs(int left, int right, int y, int width, int gap)
         {
             Card a = _specCards[left], b = _specCards[right];
-            a.SetBounds(2, y, width, 128);
-            b.SetBounds(2 + width + gap, y, width, 128);
+            a.SetBounds(Ui.S(2), y, width, Ui.S(128));
+            b.SetBounds(Ui.S(2) + width + gap, y, width, Ui.S(128));
             ArranjarLinhasDeSpec(a);
             ArranjarLinhasDeSpec(b);
         }
@@ -1982,8 +2003,8 @@ namespace MhiagosControl
             List<Label> vals = card.Tag as List<Label>;
             if (vals == null || vals.Count == 0) return;
             int count = Math.Min(3, vals.Count);
-            int gap = 18;
-            int width = (card.Width - 32 - (count - 1) * gap) / count;
+            int gap = Ui.S(18);
+            int width = (card.Width - Ui.S(32) - (count - 1) * gap) / count;
             for (int i = 0; i < vals.Count; i++)
             {
                 bool visible = i < count;
@@ -1992,9 +2013,9 @@ namespace MhiagosControl
                 val.Visible = visible;
                 if (cap != null) cap.Visible = visible;
                 if (!visible) continue;
-                int x = 16 + i * (width + gap);
-                if (cap != null) cap.SetBounds(x, 46, width, 17);
-                val.SetBounds(x, 66, width, 20);
+                int x = Ui.S(16) + i * (width + gap);
+                if (cap != null) cap.SetBounds(x, Ui.S(46), width, Ui.S(17));
+                val.SetBounds(x, Ui.S(66), width, Ui.S(20));
             }
         }
 
@@ -2029,20 +2050,20 @@ namespace MhiagosControl
             if (vals == null) return;
 
             int rotulo = c.Width * 30 / 100;
-            if (rotulo < 88) rotulo = 88;
-            if (rotulo > 128) rotulo = 128;
+            if (rotulo < Ui.S(88)) rotulo = Ui.S(88);
+            if (rotulo > Ui.S(128)) rotulo = Ui.S(128);
 
-            int xVal = 16 + rotulo + 8;
-            int larg = c.Width - xVal - 14;
-            if (larg < 60) larg = 60;
+            int xVal = Ui.S(16) + rotulo + Ui.S(8);
+            int larg = c.Width - xVal - Ui.S(14);
+            if (larg < Ui.S(60)) larg = Ui.S(60);
 
             for (int i = 0; i < vals.Count; i++)
             {
                 Label val = vals[i];
                 Label cap = val.Tag as Label;
-                int y = 46 + i * 24;
-                if (cap != null) cap.SetBounds(16, y + 2, rotulo, 17);
-                val.SetBounds(xVal, y, larg, 19);
+                int y = Ui.S(46) + i * Ui.S(24);
+                if (cap != null) cap.SetBounds(Ui.S(16), y + Ui.S(2), rotulo, Ui.S(17));
+                val.SetBounds(xVal, y, larg, Ui.S(19));
             }
         }
 
@@ -2084,11 +2105,11 @@ namespace MhiagosControl
 
             Card c1 = new Card();
             c1.Title = T.Panel1;
-            c1.SetBounds(0, 0, 370, 282);
+            c1.SetBounds(0, 0, Ui.S(370), Ui.S(282));
             page.Controls.Add(c1);
 
             _slot1 = new SensorSlot();
-            _slot1.SetBounds(12, 48, 346, 80);
+            _slot1.SetBounds(Ui.S(12), Ui.S(48), Ui.S(346), Ui.S(80));
             // Ancorado nos dois lados: com o cartao esticado, o nome do sensor e
             // a leitura ganham a largura junto, em vez de deixar um degrau branco
             // dentro de um cartao maior.
@@ -2102,18 +2123,18 @@ namespace MhiagosControl
             c1.Controls.Add(MakeLabel(T.Unit, 14, 196, Ui.FontMed));
             _unit1 = new Segmented();
             _unit1.SetItems("°C", "°F");
-            _unit1.SetBounds(14, 216, 140, 30);
+            _unit1.SetBounds(Ui.S(14), Ui.S(216), Ui.S(140), Ui.S(30));
             _unit1.SelectedIndexChanged += delegate { OnChanged(); };
             c1.Controls.Add(_unit1);
             c1.Controls.Add(NotaDeUnidade(14, 249));
 
             Card c2 = new Card();
             c2.Title = T.Panel2;
-            c2.SetBounds(386, 0, 370, 282);
+            c2.SetBounds(Ui.S(386), 0, Ui.S(370), Ui.S(282));
             page.Controls.Add(c2);
 
             _slot2 = new SensorSlot();
-            _slot2.SetBounds(12, 48, 346, 80);
+            _slot2.SetBounds(Ui.S(12), Ui.S(48), Ui.S(346), Ui.S(80));
             _slot2.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _slot2.Button.Click += delegate { TrocarSensor(_pick2, T.PickSensor2); };
             c2.Controls.Add(_slot2);
@@ -2124,7 +2145,7 @@ namespace MhiagosControl
             c2.Controls.Add(MakeLabel(T.Unit, 14, 196, Ui.FontMed));
             _unit2 = new Segmented();
             _unit2.SetItems("%", "W");
-            _unit2.SetBounds(14, 216, 140, 30);
+            _unit2.SetBounds(Ui.S(14), Ui.S(216), Ui.S(140), Ui.S(30));
             _unit2.SelectedIndexChanged += delegate { OnChanged(); };
             c2.Controls.Add(_unit2);
             c2.Controls.Add(NotaDeUnidade(14, 249));
@@ -2132,11 +2153,11 @@ namespace MhiagosControl
 
             _panelPreviewCard = new Card();
             _panelPreviewCard.Title = T.Preview;
-            _panelPreviewCard.SetBounds(0, 294, 756, 532);
+            _panelPreviewCard.SetBounds(0, Ui.S(294), Ui.S(756), Ui.S(532));
             page.Controls.Add(_panelPreviewCard);
 
             _preview = new PanelPreview();
-            _preview.SetBounds(12, 44, 732, 476);
+            _preview.SetBounds(Ui.S(12), Ui.S(44), Ui.S(732), Ui.S(476));
             _preview.Anchor = AnchorStyles.Top | AnchorStyles.Bottom |
                               AnchorStyles.Left | AnchorStyles.Right;
             _panelPreviewCard.Controls.Add(_preview);
@@ -2181,7 +2202,7 @@ namespace MhiagosControl
                 FlatBtn b = new FlatBtn();
                 b.Text = DivLabels[i];
                 b.Font = Ui.FontSmall;
-                b.SetBounds(x + i * 68, y, 64, 26);
+                b.SetBounds(Ui.S(x + i * 68), Ui.S(y), Ui.S(64), Ui.S(26));   // x e y de projeto
                 b.Tag = DivValues[i];
                 int captured = DivValues[i];
                 int target = which;
@@ -2204,7 +2225,7 @@ namespace MhiagosControl
         private static Label NotaDeUnidade(int x, int y)
         {
             Label l = MakeLabel(T.UnitAlwaysOn, x, y, Ui.FontSmall);
-            l.SetBounds(x, y, 340, 15);
+            l.SetBounds(Ui.S(x), Ui.S(y), Ui.S(340), Ui.S(15));
             l.ForeColor = Ui.Muted;
             return l;
         }
@@ -2213,7 +2234,7 @@ namespace MhiagosControl
         {
             Label l = new Label();
             l.Text = text; l.Font = f; l.AutoSize = false;
-            l.SetBounds(x, y, 300, 18);
+            l.SetBounds(Ui.S(x), Ui.S(y), Ui.S(300), Ui.S(18));   // medidas de projeto, a 96 dpi
             l.BackColor = Color.Transparent;
             l.ForeColor = Ui.Text;
             return l;
@@ -2261,11 +2282,11 @@ namespace MhiagosControl
             Card c = new Card();
             c.Title = T.SavedProfiles;
             _profilesListCard = c;
-            c.SetBounds(0, 0, 330, 400);
+            c.SetBounds(0, 0, Ui.S(330), Ui.S(400));
             page.Controls.Add(c);
 
             _profileList = new ProfileList();
-            _profileList.SetBounds(12, 44, 306, 300);
+            _profileList.SetBounds(Ui.S(12), Ui.S(44), Ui.S(306), Ui.S(300));
             _profileList.Resolve = NomeDoSensor;
             _profileList.ActiveName = _cfg.ActiveName;
             _profileList.DefaultName = _cfg.DefaultProfile.Name;
@@ -2284,33 +2305,33 @@ namespace MhiagosControl
             Card cv = new Card();
             cv.Title = T.ProfilePreview;
             _profilesPreviewCard = cv;
-            cv.SetBounds(346, 0, 410, 400);
+            cv.SetBounds(Ui.S(346), 0, Ui.S(410), Ui.S(400));
             page.Controls.Add(cv);
 
             _profilePreview = new PanelPreview();
-            _profilePreview.SetBounds(12, 44, 386, 250);
+            _profilePreview.SetBounds(Ui.S(12), Ui.S(44), Ui.S(386), Ui.S(250));
             cv.Controls.Add(_profilePreview);
 
             _profileSensor1 = new FlatBtn();
-            _profileSensor1.SetBounds(12, 306, 189, 34);
+            _profileSensor1.SetBounds(Ui.S(12), Ui.S(306), Ui.S(189), Ui.S(34));
             _profileSensor1.Click += delegate { TrocarSensorDoPerfil(1); };
             cv.Controls.Add(_profileSensor1);
 
             _profileSensor2 = new FlatBtn();
-            _profileSensor2.SetBounds(209, 306, 189, 34);
+            _profileSensor2.SetBounds(Ui.S(209), Ui.S(306), Ui.S(189), Ui.S(34));
             _profileSensor2.Click += delegate { TrocarSensorDoPerfil(2); };
             cv.Controls.Add(_profileSensor2);
 
             _btnDefault = new FlatBtn();
             _btnDefault.Text = T.SetAsDefault;
-            _btnDefault.Size = new Size(160, 34);
+            _btnDefault.Size = new Size(Ui.S(160), Ui.S(34));
             _btnDefault.Click += delegate { DefinirPerfilPadrao(); };
             cv.Controls.Add(_btnDefault);
 
             _btnApply = new FlatBtn();
             _btnApply.Text = T.ApplyProfile;
             _btnApply.Primary = true;
-            _btnApply.Size = new Size(160, 34);
+            _btnApply.Size = new Size(Ui.S(160), Ui.S(34));
             _btnApply.Click += delegate { AplicarPerfil(); };
             cv.Controls.Add(_btnApply);
 
@@ -2320,12 +2341,12 @@ namespace MhiagosControl
             // escondia a acao principal atras de uma frase com apenas a contagem.
             _cardGame = new Card();
             _cardGame.Title = T.GameProfilesCard;
-            _cardGame.SetBounds(0, 512, 756, 400);
+            _cardGame.SetBounds(0, Ui.S(512), Ui.S(756), Ui.S(400));
             page.Controls.Add(_cardGame);
 
             _tgJogo = new Toggle();
             _tgJogo.Label = T.GameProfilesOn;
-            _tgJogo.SetBounds(16, 48, 560, 26);
+            _tgJogo.SetBounds(Ui.S(16), Ui.S(48), Ui.S(560), Ui.S(26));
             _tgJogo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _tgJogo.CheckedChanged += new EventHandler(OnToggleJogo);
             _cardGame.Controls.Add(_tgJogo);
@@ -2336,37 +2357,37 @@ namespace MhiagosControl
 
             _gameIcon = new GameIconView();
             // O centro coincide com o ícone das linhas de vínculos abaixo.
-            _gameIcon.SetBounds(24, 108, 52, 52);
+            _gameIcon.SetBounds(Ui.S(24), Ui.S(108), Ui.S(52), Ui.S(52));
             _cardGame.Controls.Add(_gameIcon);
 
             _lbJogoNome = MakeLabel(T.NoGameToBind, 82, 106, Ui.FontMed);
-            _lbJogoNome.Size = new Size(400, 26);
+            _lbJogoNome.Size = new Size(Ui.S(400), Ui.S(26));
             _lbJogoNome.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _cardGame.Controls.Add(_lbJogoNome);
 
             _lbJogoAtual = MakeLabel("", 82, 132, Ui.FontSmall);
-            _lbJogoAtual.Size = new Size(400, 22);
+            _lbJogoAtual.Size = new Size(Ui.S(400), Ui.S(22));
             _lbJogoAtual.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            _lbJogoAtual.ForeColor = Ui.Accent;
+            _lbJogoAtual.ForeColor = Ui.AccentText;
             _cardGame.Controls.Add(_lbJogoAtual);
 
             _btVincular = new FlatBtn();
             _btVincular.Text = T.BindGame;
             _btVincular.Primary = true;
-            _btVincular.SetBounds(510, 106, 230, 34);
+            _btVincular.SetBounds(Ui.S(510), Ui.S(106), Ui.S(230), Ui.S(34));
             _btVincular.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _btVincular.Click += delegate { VincularJogo(); };
             _cardGame.Controls.Add(_btVincular);
 
             _btDesvincular = new FlatBtn();
             _btDesvincular.Text = T.UnbindGame;
-            _btDesvincular.SetBounds(510, 146, 230, 30);
+            _btDesvincular.SetBounds(Ui.S(510), Ui.S(146), Ui.S(230), Ui.S(30));
             _btDesvincular.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _btDesvincular.Click += delegate { DesvincularJogo(); };
             _cardGame.Controls.Add(_btDesvincular);
 
             _lbJogoNota = MakeLabel(T.GameProfilesNote, 16, 177, Ui.FontSmall);
-            _lbJogoNota.Size = new Size(724, 38);
+            _lbJogoNota.Size = new Size(Ui.S(724), Ui.S(38));
             _lbJogoNota.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _lbJogoNota.ForeColor = Ui.Faint;
             _cardGame.Controls.Add(_lbJogoNota);
@@ -2376,7 +2397,7 @@ namespace MhiagosControl
             _cardGame.Controls.Add(browseGame);
             Label browseNote = MakeLabel(T.GameFileNote, 16, 260, Ui.FontSmall);
             _gameFileNote = browseNote;
-            browseNote.Size = new Size(724, 50);
+            browseNote.Size = new Size(Ui.S(724), Ui.S(50));
             browseNote.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             browseNote.ForeColor = Ui.Muted;
             _cardGame.Controls.Add(browseNote);
@@ -2387,7 +2408,7 @@ namespace MhiagosControl
 
             _gameBindings = new GameBindingList();
             _gameBindings.EmptyText = T.NoGameBindings;
-            _gameBindings.SetBounds(16, 346, 724, 138);
+            _gameBindings.SetBounds(Ui.S(16), Ui.S(346), Ui.S(724), Ui.S(138));
             _gameBindings.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _gameBindings.RemoveRequested += delegate(string key) { RemoverVinculo(key); };
             _cardGame.Controls.Add(_gameBindings);
@@ -2396,30 +2417,30 @@ namespace MhiagosControl
             // frequente e visualmente mais rica.
             _cardRotation = new Card();
             _cardRotation.Title = T.Rotation;
-            _cardRotation.SetBounds(0, 924, 756, 150);
+            _cardRotation.SetBounds(0, Ui.S(924), Ui.S(756), Ui.S(150));
             page.Controls.Add(_cardRotation);
 
             _tgRotate = new Toggle();
             _tgRotate.Label = T.IncludeInRotation;
-            _tgRotate.SetBounds(16, 48, 460, 26);
+            _tgRotate.SetBounds(Ui.S(16), Ui.S(48), Ui.S(460), Ui.S(26));
             _tgRotate.CheckedChanged += new EventHandler(OnToggleRotate);
             _cardRotation.Controls.Add(_tgRotate);
 
             _rotSecs = new NumberBox();
             _rotSecs.Minimum = 2; _rotSecs.Maximum = 999;
             _rotSecs.Value = _cfg.RotateSeconds > 0 ? _cfg.RotateSeconds : 20;
-            _rotSecs.SetBounds(16, 84, 110, 32);
+            _rotSecs.SetBounds(Ui.S(16), Ui.S(84), Ui.S(110), Ui.S(32));
             _rotSecs.ValueChanged += new EventHandler(OnRotateSeconds);
             _cardRotation.Controls.Add(_rotSecs);
 
             _rotNote = MakeLabel("", 134, 84, Ui.FontSmall);
-            _rotNote.Size = new Size(600, 32);
+            _rotNote.Size = new Size(Ui.S(600), Ui.S(32));
             _rotNote.TextAlign = ContentAlignment.MiddleLeft;
             _rotNote.ForeColor = Ui.Muted;
             _cardRotation.Controls.Add(_rotNote);
 
             _profilesNote = MakeLabel(T.ProfilesNote, 2, 1086, Ui.FontSmall);
-            _profilesNote.Size = new Size(750, 40);
+            _profilesNote.Size = new Size(Ui.S(750), Ui.S(40));
             _profilesNote.ForeColor = Ui.Muted;
             page.Controls.Add(_profilesNote);
 
@@ -2435,7 +2456,7 @@ namespace MhiagosControl
         {
             FlatBtn b = new FlatBtn();
             b.Text = texto;
-            b.Size = new Size(100, 32);
+            b.Size = new Size(Ui.S(100), Ui.S(32));
             b.Click += h;
             _profilesListCard.Controls.Add(b);
             _botoesDePerfil.Add(b);
@@ -2547,7 +2568,7 @@ namespace MhiagosControl
                                : (!string.IsNullOrEmpty(casado)
                                   ? T.BoundProfile(casado)
                                   : T.SelectedProfile(selecionado != null ? selecionado.Name : "—"));
-            _lbJogoAtual.ForeColor = !string.IsNullOrEmpty(casado) ? Ui.Accent : Ui.Muted;
+            _lbJogoAtual.ForeColor = !string.IsNullOrEmpty(casado) ? Ui.AccentText : Ui.Muted;
             _gameIcon.GameIcon = identity != null ? identity.Icon : null;
 
             _btVincular.Enabled = _cfg.GameProfiles && temJogo;
@@ -2620,10 +2641,10 @@ namespace MhiagosControl
         {
             if (_cardGame == null || _gameBindings == null || _cardRotation == null) return;
             _gameBindings.Height = GameBindingList.PreferredHeight(quantidade);
-            _cardGame.Height = _gameBindings.Bottom + 16;
+            _cardGame.Height = _gameBindings.Bottom + Ui.S(16);
             if (_pgPerfis != null && _pgPerfis.Visible) { ArrangeProfiles(); return; }
-            _cardRotation.Top = _cardGame.Bottom + 12;
-            if (_profilesNote != null) _profilesNote.Top = _cardRotation.Bottom + 12;
+            _cardRotation.Top = _cardGame.Bottom + Ui.S(12);
+            if (_profilesNote != null) _profilesNote.Top = _cardRotation.Bottom + Ui.S(12);
             Pagina pagina = _pgPerfis as Pagina;
             if (pagina != null) pagina.Sincronizar();
         }
@@ -2761,7 +2782,7 @@ namespace MhiagosControl
         {
             FlatBtn b = new FlatBtn();
             b.Text = text;
-            b.SetBounds(x, y, w, 32);
+            b.SetBounds(Ui.S(x), Ui.S(y), Ui.S(w), Ui.S(32));   // medidas de projeto
             b.Click += h;
             return b;
         }
@@ -3015,8 +3036,8 @@ namespace MhiagosControl
         {
             if (_footerNote == null) return;
             _footerNote.Text = texto;
-            _footerNote.ForeColor = Ui.Accent;
-            _footerNote.Visible = _nav == null || _nav.Width >= 120;
+            _footerNote.ForeColor = Ui.AccentText;
+            _footerNote.Visible = _nav == null || _nav.Width >= Ui.S(120);
 
             if (_noteTimer == null)
             {
@@ -3055,7 +3076,7 @@ namespace MhiagosControl
             string readingNote = status != null && sensorPage ? ReadingStateText(status.CurrentReadingState(null)) : "";
             _footerNote.Text = _dirty ? T.UnsavedTitle : readingNote;
             _footerNote.ForeColor = Ui.Warn;
-            _footerNote.Visible = (_dirty || readingNote.Length > 0) && _nav != null && _nav.Width >= 120;
+            _footerNote.Visible = (_dirty || readingNote.Length > 0) && _nav != null && _nav.Width >= Ui.S(120);
         }
 
         // ---------------- pagina: Configuracoes ----------------
@@ -3083,7 +3104,7 @@ namespace MhiagosControl
 
             _lang = new Segmented();
             _lang.SetItems("Português (BR)", "English (US)");
-            _lang.Size = new Size(300, 30);
+            _lang.Size = new Size(Ui.S(300), Ui.S(30));
             _lang.SelectedIndex = T.Pt ? 0 : 1;
             // depois de fixar a posicao: o seletor avisa toda mudanca, e a
             // primeira seria a nossa - reabriria a janela ao abrir a janela
@@ -3112,7 +3133,7 @@ namespace MhiagosControl
             _idleMin = new NumberBox();
             _idleMin.Minimum = 1; _idleMin.Maximum = 999;
             _idleMin.Value = _cfg.IdleBlankMinutes > 0 ? _cfg.IdleBlankMinutes : 15;
-            _idleMin.Size = new Size(110, 32);
+            _idleMin.Size = new Size(Ui.S(110), Ui.S(32));
             _idleMin.Enabled = _tgIdle.Checked;
             _idleMin.ValueChanged += new EventHandler(OnIdleMinutes);
 
@@ -3120,7 +3141,7 @@ namespace MhiagosControl
             // linha e este rotulo, entao o interruptor dela vai sem o seu.
             _idleNote = MakeLabel("", 0, 0, Ui.FontSmall);
             _idleNote.Size = new Size(Math.Max(TextRenderer.MeasureText(T.MinutesIdle, Ui.FontSmall).Width,
-                                               TextRenderer.MeasureText(T.Off, Ui.FontSmall).Width) + 6, 32);
+                                               TextRenderer.MeasureText(T.Off, Ui.FontSmall).Width) + Ui.S(6), Ui.S(32));
             _idleNote.TextAlign = ContentAlignment.MiddleLeft;
             _idleNote.ForeColor = Ui.Muted;
 
@@ -3175,7 +3196,7 @@ namespace MhiagosControl
         {
             Label l = MakeLabel(titulo, 0, 0, Ui.FontSection);
             l.Tag = "grupo";
-            l.Height = 24;
+            l.Height = Ui.S(24);
             page.Controls.Add(l);
             _itensDaConfig.Add(l);
         }
@@ -3192,7 +3213,7 @@ namespace MhiagosControl
         {
             FlatBtn b = new FlatBtn();
             b.Text = texto;
-            b.Size = new Size(TextRenderer.MeasureText(texto, Ui.FontBase).Width + 32, 32);
+            b.Size = new Size(TextRenderer.MeasureText(texto, Ui.FontBase).Width + Ui.S(32), Ui.S(32));
             b.Click += h;
             return b;
         }
@@ -3207,7 +3228,7 @@ namespace MhiagosControl
             _lastRtssCheckUtc = DateTime.UtcNow;
             bool ok = Rtss.Presente();
             _rtssEstado.Text = ok ? T.RtssActive : T.RtssAbsent;
-            _rtssEstado.ForeColor = ok ? Ui.Accent : Ui.Warn;
+            _rtssEstado.ForeColor = ok ? Ui.AccentText : Ui.Warn;
 
             // Instalado, nao ha o que instalar. Sem winget, o caminho e a pagina.
             if (_btRtss != null) _btRtss.Enabled = !ok && Rtss.Winget() != null;
@@ -3791,48 +3812,48 @@ namespace MhiagosControl
             _pgMetricas.SuspendLayout();
             try
             {
-                const int Esp = 12;
+                int Esp = Ui.S(12);
 
                 // A largura da barra de rolagem sai da conta SEMPRE, apareca ela
                 // ou nao. Medir a area de cliente faria a grade encolher quando
                 // a barra surge e alargar quando ela some, e cada troca dispara
                 // um novo arranjo - dois estados que se chamam em circulo.
-                int disp = _pgMetricas.Width - Pagina.LarguraDaBarra - 4;
-                if (disp < 320) disp = 320;
+                int disp = _pgMetricas.Width - Pagina.LarguraDaBarra - Ui.S(4);
+                if (disp < Ui.S(320)) disp = Ui.S(320);
 
-                int porLinha = disp / 200;
+                int porLinha = disp / Ui.S(200);
                 if (porLinha < 4) porLinha = 4;
                 if (porLinha > 12) porLinha = 12;
                 porLinha -= porLinha % 4;
 
                 // Mantem a distribuicao anterior quando cabe; reduz colunas
                 // apenas quando os 140 px minimos ultrapassariam a pagina.
-                porLinha = Math.Min(porLinha, Math.Max(1, (disp - 4 + Esp) / (140 + Esp)));
-                int larg = (disp - 4 - (porLinha - 1) * Esp) / porLinha;
-                int x = 2, y = 0;
+                porLinha = Math.Min(porLinha, Math.Max(1, (disp - Ui.S(4) + Esp) / (Ui.S(140) + Esp)));
+                int larg = (disp - Ui.S(4) - (porLinha - 1) * Esp) / porLinha;
+                int x = Ui.S(2), y = 0;
                 foreach (Control button in new Control[] { _btAddMetrica, _btPadraoMetrica, _btPerfisMetrica })
                 {
                     if (button == null) continue;
-                    int width = 150;
-                    if (x + width > disp) { x = 2; y += 40; }
-                    button.SetBounds(x, y, width, 32);
-                    x += width + 6;
+                    int width = Ui.S(150);
+                    if (x + width > disp) { x = Ui.S(2); y += Ui.S(40); }
+                    button.SetBounds(x, y, width, Ui.S(32));
+                    x += width + Ui.S(6);
                 }
                 if (_lbDicaMetricas != null)
                 {
-                    int w = disp - x - 6;
-                    _lbDicaMetricas.Visible = w >= 150;
-                    _lbDicaMetricas.SetBounds(w >= 150 ? x + 6 : 2, y + 4, w >= 150 ? w : 1, w >= 150 ? 30 : 1);
+                    int w = disp - x - Ui.S(6);
+                    _lbDicaMetricas.Visible = w >= Ui.S(150);
+                    _lbDicaMetricas.SetBounds(w >= Ui.S(150) ? x + Ui.S(6) : Ui.S(2), y + Ui.S(4), w >= Ui.S(150) ? w : 1, w >= Ui.S(150) ? Ui.S(30) : 1);
                 }
-                y += 44;
+                y += Ui.S(44);
 
                 if (_navJanela != null)
                 {
-                    _navJanela.SetBounds(2, y, disp - 4, 72);
-                    y += 72 + Esp;
+                    _navJanela.SetBounds(Ui.S(2), y, disp - Ui.S(4), Ui.S(72));
+                    y += Ui.S(72) + Esp;
                 }
 
-                if (_lbSemMetricas != null) _lbSemMetricas.SetBounds(4, y + 8, disp - 8, 40);
+                if (_lbSemMetricas != null) _lbSemMetricas.SetBounds(Ui.S(4), y + Ui.S(8), disp - Ui.S(8), Ui.S(40));
 
                 int col = 0, alturaDaLinha = 0;
                 for (int i = 0; i < _cards.Count; i++)
@@ -3852,7 +3873,7 @@ namespace MhiagosControl
                     // Sem esta excecao ele voltaria para a grade a cada
                     // movimento, e o arraste viraria um piscar.
                     if (_cards[i] != _arrastado)
-                        _cards[i].SetBounds(2 + col * (larg + Esp), y,
+                        _cards[i].SetBounds(Ui.S(2) + col * (larg + Esp), y,
                                             cols * larg + (cols - 1) * Esp, alt);
                     else
                         _cards[i].Size = new Size(cols * larg + (cols - 1) * Esp, alt);
@@ -4080,7 +4101,7 @@ namespace MhiagosControl
             _sobreGitHub = new FlatBtn();
             _sobreGitHub.Text = T.OpenOnGitHub;
             _sobreGitHub.Primary = true;
-            _sobreGitHub.Size = new Size(TextRenderer.MeasureText(T.OpenOnGitHub, Ui.FontBase).Width + 36, 32);
+            _sobreGitHub.Size = new Size(TextRenderer.MeasureText(T.OpenOnGitHub, Ui.FontBase).Width + Ui.S(36), Ui.S(32));
             _sobreGitHub.Click += delegate { Abrir(Repositorio); };
             _cartaoIdentidade.Controls.Add(_sobreGitHub);
 
@@ -4184,51 +4205,51 @@ namespace MhiagosControl
         {
             if (_pgSobre == null || !_pgSobre.Visible) return;
             AtualizarSituacaoDoSobre();
-            int disp = _pgSobre.Width - Pagina.LarguraDaBarra - 4;
-            int width = Math.Max(300, Math.Min(LarguraMaxDaPagina, disp));
+            int disp = _pgSobre.Width - Pagina.LarguraDaBarra - Ui.S(4);
+            int width = Math.Max(Ui.S(300), Math.Min(LarguraMaxDaPagina, disp));
             int x = Math.Max(0, (disp - width) / 2);
 
             // identidade
             int col = CartaoDeIdentidade.ColunaDoTexto;
-            int texto = Math.Max(120, width - col - CartaoDeIdentidade.Pad);
-            int y = CartaoDeIdentidade.Pad + 38;
+            int texto = Math.Max(Ui.S(120), width - col - CartaoDeIdentidade.Pad);
+            int y = CartaoDeIdentidade.Pad + Ui.S(38);
             int hFrase = _sobreFrase.GetPreferredSize(new Size(texto, 0)).Height;
             _sobreFrase.SetBounds(col, y, texto, hFrase);
-            y = _sobreFrase.Bottom + 14;
+            y = _sobreFrase.Bottom + Ui.S(14);
             _sobreGitHub.Location = new Point(col, y);
-            _sobreAutor.SetBounds(_sobreGitHub.Right + 14, y, Math.Max(40, width - _sobreGitHub.Right - 14 - CartaoDeIdentidade.Pad), 32);
+            _sobreAutor.SetBounds(_sobreGitHub.Right + Ui.S(14), y, Math.Max(Ui.S(40), width - _sobreGitHub.Right - Ui.S(14) - CartaoDeIdentidade.Pad), Ui.S(32));
             int alturaId = Math.Max(CartaoDeIdentidade.Pad * 2 + CartaoDeIdentidade.LadoDoIcone, _sobreGitHub.Bottom + CartaoDeIdentidade.Pad);
             _cartaoIdentidade.SetBounds(x, 0, width, alturaId);
-            y = _cartaoIdentidade.Bottom + 12;
+            y = _cartaoIdentidade.Bottom + Ui.S(12);
 
             // blocos
             BlocoDeStatus[] blocos = { _blocoPainel, _blocoFontes, _blocoBibliotecas };
-            if (width >= 600)
+            if (width >= Ui.S(600))
             {
-                int larg = (width - 2 * 12) / 3;
+                int larg = (width - 2 * Ui.S(12)) / 3;
                 int alto = 0;
                 foreach (BlocoDeStatus b in blocos) alto = Math.Max(alto, b.AlturaPara(larg));
                 for (int i = 0; i < 3; i++)
-                    blocos[i].SetBounds(x + i * (larg + 12), y, i == 2 ? width - 2 * (larg + 12) : larg, alto);
-                y += alto + 12;
+                    blocos[i].SetBounds(x + i * (larg + Ui.S(12)), y, i == 2 ? width - 2 * (larg + Ui.S(12)) : larg, alto);
+                y += alto + Ui.S(12);
             }
             else
                 foreach (BlocoDeStatus b in blocos)
                 {
                     b.SetBounds(x, y, width, b.AlturaPara(width));
-                    y = b.Bottom + 12;
+                    y = b.Bottom + Ui.S(12);
                 }
 
             if (_sobreAvisoMotor.Visible)
             {
-                _sobreAvisoMotor.SetBounds(x + 2, y - 4, width - 4, _sobreAvisoMotor.GetPreferredSize(new Size(width - 4, 0)).Height);
-                y = _sobreAvisoMotor.Bottom + 12;
+                _sobreAvisoMotor.SetBounds(x + Ui.S(2), y - Ui.S(4), width - Ui.S(4), _sobreAvisoMotor.GetPreferredSize(new Size(width - Ui.S(4), 0)).Height);
+                y = _sobreAvisoMotor.Bottom + Ui.S(12);
             }
 
             // isencao
-            int w = width - 32;
-            _sobreIsencao.SetBounds(16, 46, w, _sobreIsencao.GetPreferredSize(new Size(w, 0)).Height);
-            _cartaoIsencao.SetBounds(x, y, width, _sobreIsencao.Bottom + 16);
+            int w = width - Ui.S(32);
+            _sobreIsencao.SetBounds(Ui.S(16), Ui.S(46), w, _sobreIsencao.GetPreferredSize(new Size(w, 0)).Height);
+            _cartaoIsencao.SetBounds(x, y, width, _sobreIsencao.Bottom + Ui.S(16));
 
             _pgSobre.Sincronizar();
         }
@@ -4352,7 +4373,7 @@ namespace MhiagosControl
             if (_idleNote == null) return;
             _idleNote.Text = _tgIdle.Checked ? T.MinutesIdle : T.Off;
             // na largura do texto de agora, para o interruptor ficar colado nele
-            _idleNote.Width = TextRenderer.MeasureText(_idleNote.Text, _idleNote.Font).Width + 8;
+            _idleNote.Width = TextRenderer.MeasureText(_idleNote.Text, _idleNote.Font).Width + Ui.S(8);
             ArrangeSettings();
         }
 
@@ -4517,27 +4538,27 @@ namespace MhiagosControl
                 f.FormBorderStyle = FormBorderStyle.FixedDialog;
                 f.MaximizeBox = false; f.MinimizeBox = false; f.ShowInTaskbar = false;
                 f.StartPosition = FormStartPosition.CenterParent;
-                f.ClientSize = new Size(380, 130);
+                f.ClientSize = new Size(Ui.S(380), Ui.S(130));
                 f.BackColor = Ui.Window;
                 f.Font = Ui.FontBase;
 
                 Label l = MakeLabel(message, 16, 18, Ui.FontBase);
-                l.Size = new Size(348, 18);
+                l.Size = new Size(Ui.S(348), Ui.S(18));
 
                 TextBox t = new TextBox();
                 t.Text = initial;
-                t.SetBounds(16, 44, 348, 24);
+                t.SetBounds(Ui.S(16), Ui.S(44), Ui.S(348), Ui.S(24));
                 t.BorderStyle = BorderStyle.FixedSingle;
                 t.BackColor = Ui.SurfaceAlt; t.ForeColor = Ui.Text;
 
                 FlatBtn ok = new FlatBtn();
                 ok.Text = T.Ok; ok.Primary = true;
-                ok.SetBounds(172, 86, 90, 30);
+                ok.SetBounds(Ui.S(172), Ui.S(86), Ui.S(90), Ui.S(30));
                 ok.Click += delegate { f.DialogResult = DialogResult.OK; f.Close(); };
 
                 FlatBtn ca = new FlatBtn();
                 ca.Text = T.Cancel;
-                ca.SetBounds(272, 86, 92, 30);
+                ca.SetBounds(Ui.S(272), Ui.S(86), Ui.S(92), Ui.S(30));
                 ca.Click += delegate { f.DialogResult = DialogResult.Cancel; f.Close(); };
 
                 f.Controls.AddRange(new Control[] { l, t, ok, ca });

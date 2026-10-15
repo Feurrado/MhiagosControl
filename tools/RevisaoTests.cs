@@ -22,6 +22,46 @@ namespace MhiagosControl
             RevisaoAvisosDepoisDoMostrador(root);
             RevisaoSplashFechadoCedo();
             RevisaoTrocaDeTema();
+            RevisaoEscalaEEstados(root);
+        }
+
+        private static void RevisaoEscalaEEstados(string root)
+        {
+            Secao("revisao V1, V5 e V7: escala, desabilitado e erro das Especificacoes");
+            if (Ui.Escala == 1f)
+                Verdade(Ui.S(15) == 15 && Ui.S(330) == 330 && Ui.S(0) == 0, "V1: a 100% as medidas de projeto ficam como estavam");
+            Verdade(Ui.S(15) >= (int)(15 * Ui.Escala), "V1: a escala arredonda para cima, sem cortar texto");
+
+            using (Toggle t = new Toggle())
+            using (Bitmap ligado = new Bitmap(120, 26))
+            using (Bitmap desligado = new Bitmap(120, 26))
+            {
+                t.Size = new Size(120, 26); t.Checked = true; t.Label = "x";
+                t.DrawToBitmap(ligado, new Rectangle(0, 0, 120, 26));
+                t.Enabled = false;
+                t.DrawToBitmap(desligado, new Rectangle(0, 0, 120, 26));
+                Verdade(ligado.GetPixel(4, 13).ToArgb() != desligado.GetPixel(4, 13).ToArgb(),
+                        "V5: interruptor desabilitado tem outra cor no trilho");
+            }
+
+            FieldInfo folha = typeof(SpecSheet).GetField("_folha", AuditFlags);
+            object antes = folha.GetValue(null);
+            try
+            {
+                folha.SetValue(null, null);
+                Config config = AuditConfig(root, "specs-falha");
+                List<SensorEntry> nenhum = new List<SensorEntry>();
+                using (SettingsForm form = new SettingsForm(config, nenhum, new AuditData(nenhum)))
+                {
+                    InvokePrivate(form, "MostrarSpecs");
+                    FlatBtn botao = (FlatBtn)Field(form, "_btCopiarSpecs");
+                    Label estado = (Label)Field(form, "_lbSpecsEstado");
+                    Igual(T.SpecsRetry, botao.Text, "V7: coleta sem resultado oferece tentar de novo");
+                    Verdade(botao.Enabled, "V7: e o botao fica habilitado");
+                    Igual(T.SpecsFailed, estado.Text, "V7: o estado diz que falhou, e nao 'consultando' para sempre");
+                }
+            }
+            finally { folha.SetValue(null, antes); }
         }
 
         private static void RevisaoSairComJanelaAberta(string root)
@@ -208,7 +248,7 @@ namespace MhiagosControl
 
         private static void RevisaoTrocaDeTema()
         {
-            Secao("revisao B7: troca de tema com a janela aberta");
+            Secao("revisao B7 e V3: troca de tema e contraste");
             Color textoEscuro = Color.FromArgb(unchecked((int)0xFFF0F0F3));
             Color textoClaro = Color.FromArgb(unchecked((int)0xFF1B1D21));
             Igual(textoClaro.ToArgb(), Ui.NoOutroTema(textoEscuro, true).ToArgb(), "B7: texto do tema escuro vira texto do claro");
@@ -231,8 +271,21 @@ namespace MhiagosControl
                 Igual(textoClaro.ToArgb(), rotulo.ForeColor.ToArgb(), "B7: rotulo montado no escuro passa a ler no claro");
                 Igual(Color.Transparent.ToArgb(), rotulo.BackColor.ToArgb(), "B7: fundo transparente fica transparente");
                 Igual(PeripheralStrip.Verde.ToArgb(), verde.ForeColor.ToArgb(), "B7: cor fora da paleta nao muda");
-                Igual(unchecked((int)0xFF6B707B), fundo.ForeColor.ToArgb(), "B7: controles aninhados tambem mudam");
+                Igual(unchecked((int)0xFF5F646E), fundo.ForeColor.ToArgb(), "B7: controles aninhados tambem mudam");
             }
+
+            Color janelaClara = Color.FromArgb(unchecked((int)0xFFF4F5F7));
+            Color superficieClara = Color.White;
+            Color superficieEscura = Color.FromArgb(unchecked((int)0xFF26262A));
+            Color faintClaro = Ui.NoOutroTema(Color.FromArgb(unchecked((int)0xFF8A8E99)), true);
+            Color mutedClaro = Ui.NoOutroTema(Color.FromArgb(unchecked((int)0xFF9699A3)), true);
+            Color azulClaro = Ui.NoOutroTema(Color.FromArgb(unchecked((int)0xFF6AA6FF)), true);
+            Verdade(Contraste(faintClaro, janelaClara) >= 4.5, "V3: Faint claro legivel sobre a janela (" + Contraste(faintClaro, janelaClara).ToString("0.00") + ":1)");
+            Verdade(Contraste(mutedClaro, janelaClara) > Contraste(faintClaro, janelaClara), "V3: Muted continua um degrau acima de Faint");
+            Verdade(Contraste(azulClaro, superficieClara) >= 4.5 && Contraste(azulClaro, janelaClara) >= 4.5,
+                    "V3: azul de texto legivel no tema claro");
+            Verdade(Contraste(Color.FromArgb(unchecked((int)0xFF6AA6FF)), superficieEscura) >= 4.5,
+                    "V3: azul de texto legivel no tema escuro");
         }
     }
 }

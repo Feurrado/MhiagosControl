@@ -19,11 +19,11 @@ namespace MhiagosControl
     /// </summary>
     public class PeripheralStrip : Card
     {
-        internal static readonly Font FontPct = new Font("Segoe UI", 12f, FontStyle.Bold);
+        internal static readonly Font FontPct = new Font("Segoe UI", Ui.Pt(12f), FontStyle.Bold);
 
-        private const int Icone = 40;
-        private const int Vao = 36;
-        private const int Barra = 32;   // TamanhoDaPilha.Width, com o polo
+        private static readonly int Icone = Ui.S(40);
+        private static readonly int Vao = Ui.S(36);
+        private static readonly int Barra = Ui.S(32);   // TamanhoDaPilha.Width, com o polo
 
         private Periferico[] _itens = new Periferico[0];
 
@@ -190,17 +190,17 @@ namespace MhiagosControl
             int total = (_itens.Length - 1) * Vao;
             for (int i = 0; i < _itens.Length; i++)
             {
-                larg[i] = Icone + 10 + LarguraDoTexto(g, _itens[i], _previsoes[i]);
+                larg[i] = Icone + Ui.S(10) + LarguraDoTexto(g, _itens[i], _previsoes[i]);
                 total += larg[i];
             }
 
             int x = (Width - total) / 2;
-            if (x < 16) x = 16;
+            if (x < Ui.S(16)) x = Ui.S(16);
             for (int i = 0; i < _itens.Length; i++)
             {
                 Desenhar(g, _itens[i], x, _previsoes[i]);
                 _zonas.Add(new KeyValuePair<Rectangle, Periferico>(
-                    new Rectangle(x - 6, 4, larg[i] + 12, Height - 8), _itens[i]));
+                    new Rectangle(x - Ui.S(6), Ui.S(4), larg[i] + Ui.S(12), Height - Ui.S(8)), _itens[i]));
                 x += larg[i] + Vao;
             }
         }
@@ -242,7 +242,7 @@ namespace MhiagosControl
                 return Math.Max(nome, TextRenderer.MeasureText(g, nota, Ui.FontSmall).Width);
 
             int linha = TextRenderer.MeasureText(g, Valor(p), FontPct).Width;
-            if (p.Bateria.HasValue) linha += 8 + Barra;
+            if (p.Bateria.HasValue) linha += Ui.S(8) + Barra;
             int baixo = nota != null ? TextRenderer.MeasureText(g, nota, Ui.FontSmall).Width : 0;
             return Math.Max(nome, Math.Max(linha, baixo));
         }
@@ -275,14 +275,14 @@ namespace MhiagosControl
             float carga = TransicaoDeCarga.Valor(HistoricoDeBateria.Chave(p), p.Carregando && p.Bateria.HasValue, out animando);
             if (animando) _animador.Transicao();
 
-            int tx = x + Icone + 10;
-            int yNome = Height / 2 - 27;
+            int tx = x + Icone + Ui.S(10);
+            int yNome = Height / 2 - Ui.S(27);
             TextRenderer.DrawText(g, p.Nome, Ui.FontSmall, new Point(tx, yNome), Ui.Faint, TextFormatFlags.NoPadding);
 
-            int yVal = Height / 2 - 10;
+            int yVal = Height / 2 - Ui.S(10);
             if (SemNumero(p))
             {
-                TextRenderer.DrawText(g, Nota(p, null), Ui.FontSmall, new Point(tx, yVal + 3), Ui.Muted, TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(g, Nota(p, null), Ui.FontSmall, new Point(tx, yVal + Ui.S(3)), Ui.Muted, TextFormatFlags.NoPadding);
                 return;
             }
 
@@ -292,8 +292,8 @@ namespace MhiagosControl
 
             if (p.Bateria.HasValue)
             {
-                fim += 8;
-                Rectangle pilha = new Rectangle(fim, yVal + 4, Barra, TamanhoDaPilha.Height);
+                fim += Ui.S(8);
+                Rectangle pilha = new Rectangle(fim, yVal + Ui.S(4), Barra, TamanhoDaPilha.Height);
                 DesenharPilha(g, pilha, p.Bateria.Value, CorFora(p), carga);
                 if (p.Carregando) _animador.Registrar(pilha);
                 fim += Barra;
@@ -301,7 +301,7 @@ namespace MhiagosControl
 
             string nota = Nota(p, previsao);
             if (nota != null)
-                TextRenderer.DrawText(g, nota, Ui.FontSmall, new Point(tx, yVal + 23), Ui.Muted, TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(g, nota, Ui.FontSmall, new Point(tx, yVal + Ui.S(23)), Ui.Muted, TextFormatFlags.NoPadding);
         }
 
         /// <summary>O icone esmaecido, para o radio desligado se ler de longe.</summary>
@@ -326,7 +326,7 @@ namespace MhiagosControl
         internal static readonly Color Verde = Color.FromArgb(0x2F, 0xBF, 0x5A);
 
         /// <summary>Tamanho da pilha, com o polo: larga o bastante para o raio caber dentro.</summary>
-        internal static readonly Size TamanhoDaPilha = new Size(32, 14);
+        internal static readonly Size TamanhoDaPilha = new Size(Ui.S(32), Ui.S(14));
 
         /// <summary>
         /// A pilha: corpo arredondado, polo a direita e o nivel por dentro.
@@ -358,24 +358,25 @@ namespace MhiagosControl
                 bool carregando = carga > 0.01f;
                 Color traco = Misturar(Ui.Muted, Verde, carga);
                 Color nivel = Misturar(cor, Verde, carga);
+                float u = Ui.Escala;   // tracos e folgas na escala da tela
 
-                RectangleF corpo = new RectangleF(r.X + 0.75f, r.Y + 0.75f, r.Width - 5f, r.Height - 1.5f);
-                using (GraphicsPath p = Arredondado(corpo, 3.5f))
-                using (Pen pen = new Pen(traco, 1.5f))
+                RectangleF corpo = new RectangleF(r.X + 0.75f * u, r.Y + 0.75f * u, r.Width - 5f * u, r.Height - 1.5f * u);
+                using (GraphicsPath p = Arredondado(corpo, 3.5f * u))
+                using (Pen pen = new Pen(traco, 1.5f * u))
                     g.DrawPath(pen, p);
 
-                RectangleF polo = new RectangleF(corpo.Right + 1.25f, r.Y + r.Height * 0.32f, 2.25f, r.Height * 0.36f);
-                using (GraphicsPath p = Arredondado(polo, 1f))
+                RectangleF polo = new RectangleF(corpo.Right + 1.25f * u, r.Y + r.Height * 0.32f, 2.25f * u, r.Height * 0.36f);
+                using (GraphicsPath p = Arredondado(polo, u))
                 using (SolidBrush b = new SolidBrush(traco))
                     g.FillPath(b, p);
 
-                RectangleF dentro = RectangleF.Inflate(corpo, -2.5f, -2.5f);
+                RectangleF dentro = RectangleF.Inflate(corpo, -2.5f * u, -2.5f * u);
                 float w = dentro.Width * pct / 100f;
-                if (pct > 0 && w < 2f) w = 2f;
+                if (pct > 0 && w < 2f * u) w = 2f * u;
                 if (w > 0)
                 {
                     RectangleF cheio = new RectangleF(dentro.X, dentro.Y, w, dentro.Height);
-                    using (GraphicsPath p = Arredondado(cheio, 1.5f))
+                    using (GraphicsPath p = Arredondado(cheio, 1.5f * u))
                     {
                         using (SolidBrush b = new SolidBrush(nivel)) g.FillPath(b, p);
                         if (carregando) Brilho(g, p, dentro, carga);
@@ -530,7 +531,7 @@ namespace MhiagosControl
         public static float Valor(string chave, bool carregando)
         {
             bool animando;
-            return Valor(chave, carregando, out animando, Environment.TickCount);
+            return Valor(chave, carregando, out animando);
         }
 
         /// <summary>
@@ -539,7 +540,9 @@ namespace MhiagosControl
         /// </summary>
         public static float Valor(string chave, bool carregando, out bool animando)
         {
-            return Valor(chave, carregando, out animando, Environment.TickCount);
+            // Sem animacoes no Windows, a cor ja esta no fim da transicao.
+            int agora = Environment.TickCount;
+            return Valor(chave, carregando, out animando, Ui.Animacoes ? agora : agora + 2 * DuracaoMs);
         }
 
         /// <summary>O valor em <paramref name="agora"/> (TickCount); separado para os testes.</summary>
@@ -606,7 +609,8 @@ namespace MhiagosControl
         /// <summary>De 0 a 1 ao longo do ciclo; o mesmo para todas as pilhas da tela.</summary>
         public static float Fase
         {
-            get { return (Environment.TickCount & int.MaxValue) % CicloMs / (float)CicloMs; }
+            // Sem animacoes no Windows, a faixa fica parada fora da pilha.
+            get { return Ui.Animacoes ? (Environment.TickCount & int.MaxValue) % CicloMs / (float)CicloMs : 0f; }
         }
 
         public AnimadorDePilhas(Control dono)
@@ -632,7 +636,7 @@ namespace MhiagosControl
         /// <summary>Liga o relogio se algo carrega na tela, desliga se nada carrega.</summary>
         public void Ajustar()
         {
-            bool ligar = (_pilhas.Count > 0 || _transicao) && _dono.Visible;
+            bool ligar = (_pilhas.Count > 0 || _transicao) && _dono.Visible && Ui.Animacoes;
             if (ligar && !_relogio.Enabled) _relogio.Start();
             else if (!ligar && _relogio.Enabled) _relogio.Stop();
         }

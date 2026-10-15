@@ -19,14 +19,14 @@ namespace MhiagosControl
     /// </summary>
     public class CartaoDeBateria : Card
     {
-        private const int Margem = 18;
-        private const int Icone = 48;
-        private const int AlturaDoCabecalho = 88;
-        private const int AlturaDoBloco = 68;
-        private const int EspacoEntreBlocos = 10;
-        private const int AlturaDaCurva = 132;
-        private const int AlturaDaBarraDeDetalhes = 40;
-        private const int AlturaDaLinhaDeDetalhe = 54;
+        private static readonly int Margem = Ui.S(18);
+        private static readonly int Icone = Ui.S(48);
+        private static readonly int AlturaDoCabecalho = Ui.S(88);
+        private static readonly int AlturaDoBloco = Ui.S(68);
+        private static readonly int EspacoEntreBlocos = Ui.S(10);
+        private static readonly int AlturaDaCurva = Ui.S(132);
+        private static readonly int AlturaDaBarraDeDetalhes = Ui.S(40);
+        private static readonly int AlturaDaLinhaDeDetalhe = Ui.S(54);
         private static readonly TimeSpan JanelaDoGrafico = TimeSpan.FromHours(48);
 
         private AnaliseDeBateria _a;
@@ -55,7 +55,7 @@ namespace MhiagosControl
         /// <summary>Quatro blocos lado a lado quando cabem; senao, dois por linha.</summary>
         private static int ColunasDeBlocos(int largura)
         {
-            return largura - 2 * Margem >= 600 ? 4 : 2;
+            return largura - 2 * Margem >= Ui.S(600) ? 4 : 2;
         }
 
         private static int AlturaDosBlocos(int largura)
@@ -66,13 +66,13 @@ namespace MhiagosControl
 
         private static int ColunasDeDetalhe(int largura)
         {
-            return largura - 2 * Margem >= 440 ? 2 : 1;
+            return largura - 2 * Margem >= Ui.S(440) ? 2 : 1;
         }
 
         public static int AlturaPara(int largura, bool detalhes)
         {
-            int h = AlturaDoCabecalho + AlturaDosBlocos(largura) + 14 + AlturaDaCurva + 8 + AlturaDaBarraDeDetalhes;
-            if (detalhes) h += (4 / ColunasDeDetalhe(largura)) * AlturaDaLinhaDeDetalhe + 8;
+            int h = AlturaDoCabecalho + AlturaDosBlocos(largura) + Ui.S(14) + AlturaDaCurva + Ui.S(8) + AlturaDaBarraDeDetalhes;
+            if (detalhes) h += (4 / ColunasDeDetalhe(largura)) * AlturaDaLinhaDeDetalhe + Ui.S(8);
             return h;
         }
 
@@ -83,7 +83,7 @@ namespace MhiagosControl
         // ---------------- clique no icone e nos detalhes ----------------
 
         /// <summary>A imagem do aparelho, com folga: e ela que abre o app dele.</summary>
-        private static readonly Rectangle ZonaDoIcone = new Rectangle(10, 10, Icone + 16, Icone + 16);
+        private static readonly Rectangle ZonaDoIcone = new Rectangle(Ui.S(10), Ui.S(10), Icone + Ui.S(16), Icone + Ui.S(16));
         private readonly ToolTip _dica = new ToolTip();
         private bool _sobreIcone = false;
         private bool _sobreDetalhes = false;
@@ -102,7 +102,7 @@ namespace MhiagosControl
             if (detalhes != _sobreDetalhes)
             {
                 _sobreDetalhes = detalhes;
-                Invalidate(Rectangle.Inflate(_zonaDosDetalhes, 4, 4));
+                Invalidate(Rectangle.Inflate(_zonaDosDetalhes, Ui.S(4), Ui.S(4)));
             }
             Cursor = icone || detalhes ? Cursors.Hand : Cursors.Default;
             if (icone == _sobreIcone) return;
@@ -117,7 +117,7 @@ namespace MhiagosControl
         {
             base.OnMouseLeave(e);
             _sobreIcone = false;
-            if (_sobreDetalhes) { _sobreDetalhes = false; Invalidate(Rectangle.Inflate(_zonaDosDetalhes, 4, 4)); }
+            if (_sobreDetalhes) { _sobreDetalhes = false; Invalidate(Rectangle.Inflate(_zonaDosDetalhes, Ui.S(4), Ui.S(4))); }
             Cursor = Cursors.Default;
             _dica.SetToolTip(this, null);
         }
@@ -199,14 +199,14 @@ namespace MhiagosControl
 
             int y = AlturaDoCabecalho;
             DesenharBlocos(g, new Rectangle(Margem, y, Width - 2 * Margem, AlturaDosBlocos(Width)));
-            y += AlturaDosBlocos(Width) + 14;
+            y += AlturaDosBlocos(Width) + Ui.S(14);
 
             DesenharCurva(g, new Rectangle(Margem, y, Width - 2 * Margem, AlturaDaCurva), cor);
-            y += AlturaDaCurva + 8;
+            y += AlturaDaCurva + Ui.S(8);
 
             DesenharBarraDeDetalhes(g, y);
             y += AlturaDaBarraDeDetalhes;
-            if (DetalhesAbertos) DesenharDetalhes(g, new Rectangle(Margem, y, Width - 2 * Margem, Height - y - 8));
+            if (DetalhesAbertos) DesenharDetalhes(g, new Rectangle(Margem, y, Width - 2 * Margem, Height - y - Ui.S(8)));
         }
 
         // ---------------- cabecalho: imagem, nome, carga e selo ----------------
@@ -214,16 +214,16 @@ namespace MhiagosControl
         private void DesenharCabecalho(Graphics g, Periferico p, Color cor, float carga)
         {
             Image img = PeripheralStrip.Imagem(p);
-            if (img != null) g.DrawImage(img, new Rectangle(Margem, 18, Icone, Icone));
+            if (img != null) g.DrawImage(img, new Rectangle(Margem, Ui.S(18), Icone, Icone));
 
             // O nome completo tem linha propria, acima da porcentagem: em janela
             // estreita ele ganha reticencias e nunca empurra o numero.
-            int tx = Margem + Icone + 14;
+            int tx = Margem + Icone + Ui.S(14);
             TextRenderer.DrawText(g, Perifericos.NomeCompleto(_a.Nome, _a.Fonte), Ui.FontSection,
-                new Rectangle(tx, 14, Math.Max(0, Width - Margem - tx), 20), Ui.Text,
+                new Rectangle(tx, Ui.S(14), Math.Max(0, Width - Margem - tx), Ui.S(20)), Ui.Text,
                 TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
 
-            const int yVal = 36;
+            int yVal = Ui.S(36);
             string valor = _a.PctAtual.HasValue ? _a.PctAtual.Value + "%" : "--";
             Size tam = TextRenderer.MeasureText(g, valor, Ui.FontBigPct, Size.Empty, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, valor, Ui.FontBigPct, new Point(tx, yVal), cor, TextFormatFlags.NoPadding);
@@ -233,13 +233,13 @@ namespace MhiagosControl
             if (_a.PctAtual.HasValue)
             {
                 Size ps = PeripheralStrip.TamanhoDaPilha;
-                Rectangle pilha = new Rectangle(new Point(fim + 10, meio - ps.Height / 2), ps);
+                Rectangle pilha = new Rectangle(new Point(fim + Ui.S(10), meio - ps.Height / 2), ps);
                 PeripheralStrip.DesenharPilha(g, pilha, _a.PctAtual.Value, PeripheralStrip.CorFora(p), carga);
                 if (_a.Carregando) _animador.Registrar(pilha);
-                fim += 10 + ps.Width;
+                fim += Ui.S(10) + ps.Width;
             }
 
-            DesenharSelo(g, Selo(), new Point(fim + 14, meio), cor, carga);
+            DesenharSelo(g, Selo(), new Point(fim + Ui.S(14), meio), cor, carga);
         }
 
         /// <summary>Uma frase com o estado: carregando, na bateria ou desligado.</summary>
@@ -264,9 +264,9 @@ namespace MhiagosControl
         {
             Size t = TextRenderer.MeasureText(g, texto, Ui.FontSmall, Size.Empty, TextFormatFlags.NoPadding);
             int maxLargura = Width - Margem - esquerdaMeio.X;
-            int larg = Math.Min(t.Width + 34, maxLargura);
-            if (larg < 60) return;
-            Rectangle r = new Rectangle(esquerdaMeio.X, esquerdaMeio.Y - 12, larg, 24);
+            int larg = Math.Min(t.Width + Ui.S(34), maxLargura);
+            if (larg < Ui.S(60)) return;
+            Rectangle r = new Rectangle(esquerdaMeio.X, esquerdaMeio.Y - Ui.S(12), larg, Ui.S(24));
 
             bool ligado = _a.PctAtual.HasValue;
             Color fundo = PeripheralStrip.Misturar(Ui.SurfaceAlt, Color.FromArgb(Ui.Dark ? 40 : 34, PeripheralStrip.Verde), carga);
@@ -279,8 +279,8 @@ namespace MhiagosControl
                 using (SolidBrush b = new SolidBrush(fundo)) g.FillPath(b, gp);
             }
             using (SolidBrush b = new SolidBrush(bolinha))
-                g.FillEllipse(b, r.X + 11, r.Y + r.Height / 2 - 3.5f, 7, 7);
-            TextRenderer.DrawText(g, texto, Ui.FontSmall, new Rectangle(r.X + 24, r.Y, r.Width - 32, r.Height), letra,
+                g.FillEllipse(b, r.X + Ui.S(11), r.Y + r.Height / 2 - 3.5f * Ui.Escala, Ui.S(7), Ui.S(7));
+            TextRenderer.DrawText(g, texto, Ui.FontSmall, new Rectangle(r.X + Ui.S(24), r.Y, r.Width - Ui.S(32), r.Height), letra,
                 TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
         }
 
@@ -296,18 +296,18 @@ namespace MhiagosControl
                 int col = i % colunas, lin = i / colunas;
                 Rectangle b = new Rectangle(r.X + col * (larg + EspacoEntreBlocos), r.Y + lin * (AlturaDoBloco + EspacoEntreBlocos),
                                             larg, AlturaDoBloco);
-                using (GraphicsPath gp = Ui.RoundRect(b, 6))
+                using (GraphicsPath gp = Ui.RoundRect(b, Ui.S(6)))
                 {
                     using (SolidBrush br = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(br, gp);
                     // no claro o fundo do bloco quase some no branco do cartao
                     if (!Ui.Dark) using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, gp);
                 }
-                int x = b.X + 12, w = b.Width - 24;
+                int x = b.X + Ui.S(12), w = b.Width - Ui.S(24);
                 const TextFormatFlags Uma = TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine;
-                TextRenderer.DrawText(g, blocos[i][0], Ui.FontSmall, new Rectangle(x, b.Y + 9, w, 16), Ui.Muted, Uma);
-                TextRenderer.DrawText(g, blocos[i][1], Ui.FontTileValue, new Rectangle(x, b.Y + 25, w, 22), Ui.Text, Uma);
+                TextRenderer.DrawText(g, blocos[i][0], Ui.FontSmall, new Rectangle(x, b.Y + Ui.S(9), w, Ui.S(16)), Ui.Muted, Uma);
+                TextRenderer.DrawText(g, blocos[i][1], Ui.FontTileValue, new Rectangle(x, b.Y + Ui.S(25), w, Ui.S(22)), Ui.Text, Uma);
                 if (!string.IsNullOrEmpty(blocos[i][2]))
-                    TextRenderer.DrawText(g, blocos[i][2], Ui.FontSmall, new Rectangle(x, b.Y + 47, w, 16), Ui.Muted, Uma);
+                    TextRenderer.DrawText(g, blocos[i][2], Ui.FontSmall, new Rectangle(x, b.Y + Ui.S(47), w, Ui.S(16)), Ui.Muted, Uma);
             }
         }
 
@@ -395,23 +395,23 @@ namespace MhiagosControl
 
             bool aberto = DetalhesAbertos;
             string texto = aberto ? T.LessDetails : T.MoreDetails;
-            Color cor = _sobreDetalhes ? Ui.AccentHover : Ui.Accent;
+            Color cor = _sobreDetalhes ? Ui.AccentHover : Ui.AccentText;
             Size t = TextRenderer.MeasureText(g, texto, Ui.FontMed, Size.Empty, TextFormatFlags.NoPadding);
             int meio = y + AlturaDaBarraDeDetalhes / 2;
 
             // seta desenhada: aponta para a direita fechado, para baixo aberto
-            using (Pen seta = new Pen(cor, 1.6f))
+            using (Pen seta = new Pen(cor, 1.6f * Ui.Escala))
             {
                 seta.StartCap = LineCap.Round; seta.EndCap = LineCap.Round; seta.LineJoin = LineJoin.Round;
-                float cx = Margem + 4, cy = meio;
+                float cx = Margem + Ui.S(4), cy = meio, u = Ui.Escala;
                 PointF[] pts = aberto
-                    ? new PointF[] { new PointF(cx - 4, cy - 2), new PointF(cx, cy + 2), new PointF(cx + 4, cy - 2) }
-                    : new PointF[] { new PointF(cx - 2, cy - 4), new PointF(cx + 2, cy), new PointF(cx - 2, cy + 4) };
+                    ? new PointF[] { new PointF(cx - 4 * u, cy - 2 * u), new PointF(cx, cy + 2 * u), new PointF(cx + 4 * u, cy - 2 * u) }
+                    : new PointF[] { new PointF(cx - 2 * u, cy - 4 * u), new PointF(cx + 2 * u, cy), new PointF(cx - 2 * u, cy + 4 * u) };
                 g.DrawLines(seta, pts);
             }
-            int tx = Margem + 14;
+            int tx = Margem + Ui.S(14);
             TextRenderer.DrawText(g, texto, Ui.FontMed, new Point(tx, meio - t.Height / 2), cor, TextFormatFlags.NoPadding);
-            _zonaDosDetalhes = new Rectangle(Margem - 6, y + 4, tx + t.Width + 8 - (Margem - 6), AlturaDaBarraDeDetalhes - 8);
+            _zonaDosDetalhes = new Rectangle(Margem - Ui.S(6), y + Ui.S(4), tx + t.Width + Ui.S(8) - (Margem - Ui.S(6)), AlturaDaBarraDeDetalhes - Ui.S(8));
         }
 
         /// <summary>O que nao cabe nos blocos, em pares rotulo e valor.</summary>
@@ -434,17 +434,17 @@ namespace MhiagosControl
         {
             string[][] itens = Detalhes();
             int colunas = ColunasDeDetalhe(Width);
-            const int Vao = 28;
+            int Vao = Ui.S(28);
             int larg = (r.Width - (colunas - 1) * Vao) / colunas;
             const TextFormatFlags Uma = TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine;
             for (int i = 0; i < itens.Length; i++)
             {
                 int col = i % colunas, lin = i / colunas;
                 int x = r.X + col * (larg + Vao), y = r.Y + lin * AlturaDaLinhaDeDetalhe;
-                TextRenderer.DrawText(g, itens[i][0], Ui.FontSmall, new Rectangle(x, y, larg, 16), Ui.Muted, Uma);
-                TextRenderer.DrawText(g, itens[i][1], Ui.FontSemi, new Rectangle(x, y + 17, larg, 18), Ui.Text, Uma);
+                TextRenderer.DrawText(g, itens[i][0], Ui.FontSmall, new Rectangle(x, y, larg, Ui.S(16)), Ui.Muted, Uma);
+                TextRenderer.DrawText(g, itens[i][1], Ui.FontSemi, new Rectangle(x, y + Ui.S(17), larg, Ui.S(18)), Ui.Text, Uma);
                 if (!string.IsNullOrEmpty(itens[i][2]))
-                    TextRenderer.DrawText(g, itens[i][2], Ui.FontSmall, new Rectangle(x, y + 35, larg, 16), Ui.Muted, Uma);
+                    TextRenderer.DrawText(g, itens[i][2], Ui.FontSmall, new Rectangle(x, y + Ui.S(35), larg, Ui.S(16)), Ui.Muted, Uma);
             }
         }
 
@@ -499,7 +499,7 @@ namespace MhiagosControl
         private void DesenharCurva(Graphics g, Rectangle r, Color cor)
         {
             DateTime agora = DateTime.Now, inicio = agora - JanelaDoGrafico;
-            Rectangle area = new Rectangle(r.X + 34, r.Y + 6, r.Width - 34 - 6, r.Height - 6 - 20);
+            Rectangle area = new Rectangle(r.X + Ui.S(34), r.Y + Ui.S(6), r.Width - Ui.S(34 + 6), r.Height - Ui.S(6 + 20));
 
             using (Pen solida = new Pen(Ui.Border))
             using (Pen tracejada = new Pen(Ui.Border))
@@ -510,15 +510,15 @@ namespace MhiagosControl
                 {
                     int y = area.Bottom - area.Height * nivel / 100;
                     g.DrawLine(nivel == 50 ? tracejada : solida, area.X, y, area.Right, y);
-                    TextRenderer.DrawText(g, nivel + "%", Ui.FontSmall, new Rectangle(r.X - 4, y - 8, 32, 16), Ui.Faint,
+                    TextRenderer.DrawText(g, nivel + "%", Ui.FontSmall, new Rectangle(r.X - Ui.S(4), y - Ui.S(8), Ui.S(32), Ui.S(16)), Ui.Faint,
                         TextFormatFlags.Right | TextFormatFlags.NoPadding);
                 }
             }
-            int yEixo = area.Bottom + 5;
+            int yEixo = area.Bottom + Ui.S(5);
             TextRenderer.DrawText(g, T.HoursAgo(48), Ui.FontSmall, new Point(area.X, yEixo), Ui.Faint, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, T.HoursAgo(24), Ui.FontSmall, new Rectangle(area.X, yEixo, area.Width, 16), Ui.Faint,
+            TextRenderer.DrawText(g, T.HoursAgo(24), Ui.FontSmall, new Rectangle(area.X, yEixo, area.Width, Ui.S(16)), Ui.Faint,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, T.Now, Ui.FontSmall, new Rectangle(area.X, yEixo, area.Width, 16), Ui.Faint,
+            TextRenderer.DrawText(g, T.Now, Ui.FontSmall, new Rectangle(area.X, yEixo, area.Width, Ui.S(16)), Ui.Faint,
                 TextFormatFlags.Right | TextFormatFlags.NoPadding);
 
             AmostraDeBateria[] am = _a.Amostras ?? new AmostraDeBateria[0];
@@ -587,8 +587,8 @@ namespace MhiagosControl
             if (chegaAgora)
             {
                 PointF ponta = pts[pts.Count - 1];
-                using (SolidBrush aro = new SolidBrush(Ui.Surface)) g.FillEllipse(aro, ponta.X - 6, ponta.Y - 6, 12, 12);
-                using (SolidBrush b = new SolidBrush(cor)) g.FillEllipse(b, ponta.X - 4, ponta.Y - 4, 8, 8);
+                using (SolidBrush aro = new SolidBrush(Ui.Surface)) g.FillEllipse(aro, ponta.X - Ui.S(6), ponta.Y - Ui.S(6), Ui.S(12), Ui.S(12));
+                using (SolidBrush b = new SolidBrush(cor)) g.FillEllipse(b, ponta.X - Ui.S(4), ponta.Y - Ui.S(4), Ui.S(8), Ui.S(8));
             }
 
             if (am.Length == 0)
@@ -602,7 +602,7 @@ namespace MhiagosControl
             if (pts.Count == 1)
             {
                 using (SolidBrush b = new SolidBrush(pen.Color))
-                    g.FillEllipse(b, pts[0].X - 2.5f, pts[0].Y - 2.5f, 5, 5);
+                    g.FillEllipse(b, pts[0].X - 2.5f * Ui.Escala, pts[0].Y - 2.5f * Ui.Escala, 5 * Ui.Escala, 5 * Ui.Escala);
                 return;
             }
             if (pts.Count < 2) return;
@@ -663,7 +663,7 @@ namespace MhiagosControl
         /// <summary>Engrenagem, texto e seta, com folga dos dois lados.</summary>
         public int LarguraDesejada()
         {
-            return 10 + 16 + 6 + TextRenderer.MeasureText(Text ?? "", Font, Size.Empty, TextFormatFlags.NoPadding).Width + 8 + 12 + 10;
+            return Ui.S(10 + 16 + 6) + TextRenderer.MeasureText(Text ?? "", Font, Size.Empty, TextFormatFlags.NoPadding).Width + Ui.S(8 + 12 + 10);
         }
 
         protected override void OnTextChanged(EventArgs e) { AccessibleName = Text; Invalidate(); base.OnTextChanged(e); }
@@ -688,19 +688,19 @@ namespace MhiagosControl
             Ui.Smooth(g);
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
             if (_hover || _aberto)
-                using (GraphicsPath p = Ui.RoundRect(r, 6))
+                using (GraphicsPath p = Ui.RoundRect(r, Ui.S(6)))
                 using (SolidBrush b = new SolidBrush(_aberto && !_hover ? Ui.AccentSoft : Ui.Hover))
                     g.FillPath(b, p);
 
-            Color cor = _aberto ? Ui.Accent : (_hover ? Ui.Text : Ui.Muted);
+            Color cor = _aberto ? Ui.AccentText : (_hover ? Ui.Text : Ui.Muted);
             const TextFormatFlags Meio = TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
-            int x = 10;
-            TextRenderer.DrawText(g, Engrenagem, Ui.FontGlyph10, new Rectangle(x, 0, 16, Height), cor, Meio | TextFormatFlags.HorizontalCenter);
-            x += 16 + 6;
+            int x = Ui.S(10);
+            TextRenderer.DrawText(g, Engrenagem, Ui.FontGlyph10, new Rectangle(x, 0, Ui.S(16), Height), cor, Meio | TextFormatFlags.HorizontalCenter);
+            x += Ui.S(16 + 6);
             int lt = TextRenderer.MeasureText(g, Text ?? "", Font, Size.Empty, TextFormatFlags.NoPadding).Width;
-            TextRenderer.DrawText(g, Text ?? "", Font, new Rectangle(x, 0, lt + 2, Height), cor, Meio);
-            x += lt + 8;
-            TextRenderer.DrawText(g, _aberto ? Fechar : Abrir, Ui.FontGlyph8, new Rectangle(x, 1, 12, Height), cor, Meio | TextFormatFlags.HorizontalCenter);
+            TextRenderer.DrawText(g, Text ?? "", Font, new Rectangle(x, 0, lt + Ui.S(2), Height), cor, Meio);
+            x += lt + Ui.S(8);
+            TextRenderer.DrawText(g, _aberto ? Fechar : Abrir, Ui.FontGlyph8, new Rectangle(x, 1, Ui.S(12), Height), cor, Meio | TextFormatFlags.HorizontalCenter);
 
             if (Focused && ShowFocusCues)
                 ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(r, -3, -3), cor, Color.Transparent);

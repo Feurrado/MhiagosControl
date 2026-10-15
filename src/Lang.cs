@@ -136,6 +136,8 @@ namespace MhiagosControl
         }
 
         public static string SpecsCopy { get { return P("Copiar tudo", "Copy all"); } }
+        public static string SpecsFailed { get { return P("Não foi possível consultar o sistema. Os detalhes estão no log.", "Couldn't query the system. Details are in the log."); } }
+        public static string SpecsRetry { get { return P("Tentar de novo", "Try again"); } }
         public static string SpecsCopied { get { return P("Especificações copiadas", "Specs copied"); } }
         public static string SpecsOverview { get { return P("Resumo", "Overview"); } }
         public static string SpecSeeAll { get { return P("Ver tudo ›", "See all ›"); } }

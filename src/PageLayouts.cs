@@ -35,7 +35,7 @@ namespace MhiagosControl
         private readonly List<Control> _direita = new List<Control>();
         private bool _umaLinha = true;
 
-        private const int Margem = 16, ColunaDoTexto = 52, Espaco = 8, AlturaMinima = 62, TextoMinimo = 220;
+        private static readonly int Margem = Ui.S(16), ColunaDoTexto = Ui.S(52), Espaco = Ui.S(8), AlturaMinima = Ui.S(62), TextoMinimo = Ui.S(220);
 
         public LinhaDeOpcao(string glyph, string titulo, string descricao)
             : this(glyph, titulo, Rotulo(descricao, Ui.FontSmall, Ui.Muted)) { }
@@ -80,15 +80,15 @@ namespace MhiagosControl
         public Toggle Interruptor(Toggle t, bool comEstado)
         {
             t.Label = "";
-            t.Size = new Size(40, 26);
+            t.Size = new Size(Ui.S(40), Ui.S(26));
             t.AccessibleName = Titulo.Text;
             if (comEstado)
             {
                 Label estado = Rotulo("", Ui.FontBase, Ui.Muted);
                 estado.TextAlign = ContentAlignment.MiddleRight;
                 int larg = Math.Max(TextRenderer.MeasureText(T.StateOn, Ui.FontBase).Width,
-                                    TextRenderer.MeasureText(T.StateOff, Ui.FontBase).Width) + 6;
-                estado.Size = new Size(larg, 26);
+                                    TextRenderer.MeasureText(T.StateOff, Ui.FontBase).Width) + Ui.S(6);
+                estado.Size = new Size(larg, Ui.S(26));
                 estado.Text = t.Checked ? T.StateOn : T.StateOff;
                 t.CheckedChanged += delegate { estado.Text = t.Checked ? T.StateOn : T.StateOff; };
                 Direita(estado);
@@ -110,24 +110,24 @@ namespace MhiagosControl
             }
             if (direita > 0) direita -= Espaco;
 
-            _umaLinha = _direita.Count == 0 || ColunaDoTexto + TextoMinimo + 16 + direita + Margem <= largura;
-            int larguraDoTexto = Math.Max(60, (_umaLinha && direita > 0 ? largura - ColunaDoTexto - 16 - direita - Margem
+            _umaLinha = _direita.Count == 0 || ColunaDoTexto + TextoMinimo + Ui.S(16) + direita + Margem <= largura;
+            int larguraDoTexto = Math.Max(Ui.S(60), (_umaLinha && direita > 0 ? largura - ColunaDoTexto - Ui.S(16) - direita - Margem
                                                                           : largura - ColunaDoTexto - Margem));
 
-            int hTitulo = Math.Max(18, Titulo.GetPreferredSize(new Size(larguraDoTexto, 0)).Height);
+            int hTitulo = Math.Max(Ui.S(18), Titulo.GetPreferredSize(new Size(larguraDoTexto, 0)).Height);
             bool temDescricao = !string.IsNullOrEmpty(Descricao.Text);
             int hDescricao = !temDescricao ? 0
-                           : Descricao.AutoEllipsis ? 18
-                           : Math.Max(16, Descricao.GetPreferredSize(new Size(larguraDoTexto, 0)).Height);
-            int alturaDoTexto = hTitulo + (temDescricao ? 2 + hDescricao : 0);
+                           : Descricao.AutoEllipsis ? Ui.S(18)
+                           : Math.Max(Ui.S(16), Descricao.GetPreferredSize(new Size(larguraDoTexto, 0)).Height);
+            int alturaDoTexto = hTitulo + (temDescricao ? Ui.S(2) + hDescricao : 0);
 
             int altura;
             if (_umaLinha)
             {
-                altura = Math.Max(AlturaMinima, Math.Max(alturaDoTexto, alturaDosControles) + 24);
+                altura = Math.Max(AlturaMinima, Math.Max(alturaDoTexto, alturaDosControles) + Ui.S(24));
                 int yTexto = (altura - alturaDoTexto) / 2;
                 Titulo.SetBounds(ColunaDoTexto, yTexto, larguraDoTexto, hTitulo);
-                Descricao.SetBounds(ColunaDoTexto, Titulo.Bottom + 2, larguraDoTexto, hDescricao);
+                Descricao.SetBounds(ColunaDoTexto, Titulo.Bottom + Ui.S(2), larguraDoTexto, hDescricao);
                 int x = largura - Margem - direita;
                 foreach (Control c in _direita)
                 {
@@ -137,19 +137,19 @@ namespace MhiagosControl
             }
             else
             {
-                Titulo.SetBounds(ColunaDoTexto, 14, larguraDoTexto, hTitulo);
-                Descricao.SetBounds(ColunaDoTexto, Titulo.Bottom + 2, larguraDoTexto, hDescricao);
-                int x = ColunaDoTexto, y = 14 + alturaDoTexto + 10, linha = 0;
+                Titulo.SetBounds(ColunaDoTexto, Ui.S(14), larguraDoTexto, hTitulo);
+                Descricao.SetBounds(ColunaDoTexto, Titulo.Bottom + Ui.S(2), larguraDoTexto, hDescricao);
+                int x = ColunaDoTexto, y = Ui.S(14) + alturaDoTexto + Ui.S(10), linha = 0;
                 foreach (Control c in _direita)
                 {
                     if (x > ColunaDoTexto && x + c.Width > largura - Margem) { x = ColunaDoTexto; y += linha + Espaco; linha = 0; }
                     c.Location = new Point(x, y);
                     // um controle mais largo que a linha inteira encolhe para caber
-                    if (c.Right > largura - Margem) c.Width = Math.Max(40, largura - Margem - c.Left);
+                    if (c.Right > largura - Margem) c.Width = Math.Max(Ui.S(40), largura - Margem - c.Left);
                     x += c.Width + Espaco;
                     linha = Math.Max(linha, c.Height);
                 }
-                altura = y + linha + 14;
+                altura = y + linha + Ui.S(14);
             }
             Size = new Size(largura, altura);
             Invalidate();
@@ -161,8 +161,8 @@ namespace MhiagosControl
             base.OnPaint(e);
             if (string.IsNullOrEmpty(Glyph)) return;
             // em uma linha o icone fica no meio da faixa; em duas, alinhado ao nome
-            Rectangle r = _umaLinha ? new Rectangle(Margem, 0, 24, Height)
-                                    : new Rectangle(Margem, Titulo.Top - 2, 24, Titulo.Height + 4);
+            Rectangle r = _umaLinha ? new Rectangle(Margem, 0, Ui.S(24), Height)
+                                    : new Rectangle(Margem, Titulo.Top - Ui.S(2), Ui.S(24), Titulo.Height + Ui.S(4));
             TextRenderer.DrawText(e.Graphics, Glyph, Ui.FontGlyph11, r, Ui.Muted,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
@@ -178,8 +178,8 @@ namespace MhiagosControl
         public string Nome = T.AppName;
         public string Versao = T.VersionLabel(AppInfo.Versao);
 
-        public const int Pad = 22, LadoDoIcone = 88;
-        public static int ColunaDoTexto { get { return Pad + LadoDoIcone + 22; } }
+        public static readonly int Pad = Ui.S(22), LadoDoIcone = Ui.S(88);
+        public static int ColunaDoTexto { get { return Pad + LadoDoIcone + Ui.S(22); } }
 
         public CartaoDeIdentidade() { Title = null; }
 
@@ -199,16 +199,16 @@ namespace MhiagosControl
 
             int x = ColunaDoTexto;
             Size nome = TextRenderer.MeasureText(g, Nome, Ui.FontAppName, Size.Empty, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, Nome, Ui.FontAppName, new Point(x, Pad - 2), Ui.Text, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, Nome, Ui.FontAppName, new Point(x, Pad - Ui.S(2)), Ui.Text, TextFormatFlags.NoPadding);
 
             Size v = TextRenderer.MeasureText(g, Versao, Ui.FontSemi, Size.Empty, TextFormatFlags.NoPadding);
-            Rectangle pilula = new Rectangle(x + nome.Width + 12, Pad - 2 + (nome.Height - 22) / 2, v.Width + 20, 22);
+            Rectangle pilula = new Rectangle(x + nome.Width + Ui.S(12), Pad - Ui.S(2) + (nome.Height - Ui.S(22)) / 2, v.Width + Ui.S(20), Ui.S(22));
             if (pilula.Right > Width - Pad) pilula.X = Math.Max(x, Width - Pad - pilula.Width);
             AreaDaVersao = pilula;
-            using (GraphicsPath p = Ui.RoundRect(pilula, 11))
+            using (GraphicsPath p = Ui.RoundRect(pilula, Ui.S(11)))
             using (SolidBrush b = new SolidBrush(Ui.AccentSoft))
                 g.FillPath(b, p);
-            TextRenderer.DrawText(g, Versao, Ui.FontSemi, pilula, Ui.Accent,
+            TextRenderer.DrawText(g, Versao, Ui.FontSemi, pilula, Ui.AccentText,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
@@ -225,7 +225,7 @@ namespace MhiagosControl
         public Color? CorDoValor;
         public Color? CorDoApoio;
 
-        private const int Pad = 16;
+        private static readonly int Pad = Ui.S(16);
         private const TextFormatFlags Quebra = TextFormatFlags.WordBreak | TextFormatFlags.NoPadding;
 
         public BlocoDeStatus()
@@ -236,16 +236,16 @@ namespace MhiagosControl
             Font = Ui.FontBase;
         }
 
-        private int LarguraDoValor(int largura) { return Math.Max(40, largura - 2 * Pad - (Ponto.HasValue ? 16 : 0)); }
+        private int LarguraDoValor(int largura) { return Math.Max(Ui.S(40), largura - 2 * Pad - (Ponto.HasValue ? Ui.S(16) : 0)); }
 
         public int AlturaPara(int largura)
         {
-            int w = Math.Max(40, largura - 2 * Pad);
-            int h = Pad + 16 + 6;
-            h += Math.Max(20, TextRenderer.MeasureText(Valor ?? "", Ui.FontTileValue, new Size(LarguraDoValor(largura), 0), Quebra).Height);
+            int w = Math.Max(Ui.S(40), largura - 2 * Pad);
+            int h = Pad + Ui.S(16 + 6);
+            h += Math.Max(Ui.S(20), TextRenderer.MeasureText(Valor ?? "", Ui.FontTileValue, new Size(LarguraDoValor(largura), 0), Quebra).Height);
             if (!string.IsNullOrEmpty(Apoio))
-                h += 4 + TextRenderer.MeasureText(Apoio, Ui.FontSmall, new Size(w, 0), Quebra).Height;
-            return h + Pad - 2;
+                h += Ui.S(4) + TextRenderer.MeasureText(Apoio, Ui.FontSmall, new Size(w, 0), Quebra).Height;
+            return h + Pad - Ui.S(2);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -260,25 +260,25 @@ namespace MhiagosControl
                 using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, p);
             }
 
-            int w = Math.Max(40, Width - 2 * Pad);
-            int y = Pad - 2;
-            TextRenderer.DrawText(g, (Rotulo ?? "").ToUpperInvariant(), Ui.FontSmall, new Rectangle(Pad, y, w, 16), Ui.Muted,
+            int w = Math.Max(Ui.S(40), Width - 2 * Pad);
+            int y = Pad - Ui.S(2);
+            TextRenderer.DrawText(g, (Rotulo ?? "").ToUpperInvariant(), Ui.FontSmall, new Rectangle(Pad, y, w, Ui.S(16)), Ui.Muted,
                 TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-            y += 16 + 6;
+            y += Ui.S(16 + 6);
 
             int x = Pad;
             if (Ponto.HasValue)
             {
-                using (SolidBrush b = new SolidBrush(Ponto.Value)) g.FillEllipse(b, x, y + 6, 8, 8);
-                x += 16;
+                using (SolidBrush b = new SolidBrush(Ponto.Value)) g.FillEllipse(b, x, y + Ui.S(6), Ui.S(8), Ui.S(8));
+                x += Ui.S(16);
             }
-            int hValor = Math.Max(20, TextRenderer.MeasureText(g, Valor ?? "", Ui.FontTileValue, new Size(LarguraDoValor(Width), 0), Quebra).Height);
+            int hValor = Math.Max(Ui.S(20), TextRenderer.MeasureText(g, Valor ?? "", Ui.FontTileValue, new Size(LarguraDoValor(Width), 0), Quebra).Height);
             TextRenderer.DrawText(g, Valor ?? "", Ui.FontTileValue, new Rectangle(x, y, LarguraDoValor(Width), hValor),
                 CorDoValor ?? Ui.Text, Quebra);
-            y += hValor + 4;
+            y += hValor + Ui.S(4);
 
             if (!string.IsNullOrEmpty(Apoio))
-                TextRenderer.DrawText(g, Apoio, Ui.FontSmall, new Rectangle(Pad, y, w, Height - y - 4),
+                TextRenderer.DrawText(g, Apoio, Ui.FontSmall, new Rectangle(Pad, y, w, Height - y - Ui.S(4)),
                     CorDoApoio ?? Ui.Muted, Quebra);
         }
     }

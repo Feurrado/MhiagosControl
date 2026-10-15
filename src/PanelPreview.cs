@@ -79,7 +79,7 @@ namespace MhiagosControl
             // suavizacao restrita a curva - que e onde ela e desejada.
             g.SmoothingMode = SmoothingMode.AntiAlias;
             using (SolidBrush b = new SolidBrush(Parent != null ? Parent.BackColor : Ui.Surface))
-            using (GraphicsPath gp = CornerWedges(Width, Height, 8))
+            using (GraphicsPath gp = CornerWedges(Width, Height, Ui.S(8)))
                 g.FillPath(b, gp);
         }
 

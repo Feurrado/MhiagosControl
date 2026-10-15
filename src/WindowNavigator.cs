@@ -36,7 +36,7 @@ namespace MhiagosControl
         /// <summary>O arraste terminou: hora de gravar o tamanho escolhido.</summary>
         public event EventHandler Confirmado;
 
-        private const int Topo = 22, Rodape = 16, Pega = 7;
+        private static readonly int Topo = Ui.S(22), Rodape = Ui.S(16), Pega = Ui.S(7);
 
         private enum Arraste { Nada, Esquerda, Direita, Meio }
         private Arraste _arraste = Arraste.Nada;
@@ -53,14 +53,14 @@ namespace MhiagosControl
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             BackColor = Ui.Window;
             Font = Ui.FontSmall;
-            Size = new Size(400, 70);
+            Size = new Size(Ui.S(400), Ui.S(70));
         }
 
         public bool AoVivo { get { return FimBalde == 0; } }
 
         private Rectangle Faixa
         {
-            get { return new Rectangle(1, Topo, Math.Max(10, Width - 2), Math.Max(10, Height - Topo - Rodape)); }
+            get { return new Rectangle(1, Topo, Math.Max(Ui.S(10), Width - Ui.S(2)), Math.Max(Ui.S(10), Height - Topo - Rodape)); }
         }
 
         /// <summary>Baldes entre o fim da selecao e o agora.</summary>
@@ -101,13 +101,13 @@ namespace MhiagosControl
             string fmt = Janela <= 600 ? "HH:mm:ss" : "HH:mm";
             string titulo = tIni.ToString(fmt) + " – " + (AoVivo ? T.NavNow : tFim.ToString(fmt)) +
                             "  ·  " + MetricHistory.NomeDaJanela(Janela);
-            TextRenderer.DrawText(g, titulo, Ui.FontSemi, new Point(0, 2), Ui.Text, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, titulo, Ui.FontSemi, new Point(0, Ui.S(2)), Ui.Text, TextFormatFlags.NoPadding);
 
             // a direita: o estado, que vira botao quando ha para onde voltar
             string vivo = AoVivo ? T.NavLive : T.NavBackToLive;
             Size tv = TextRenderer.MeasureText(g, vivo, Ui.FontSmall);
-            _btVivo = new Rectangle(Width - tv.Width - 18, 0, tv.Width + 16, 18);
-            using (GraphicsPath gp = Ui.RoundRect(_btVivo, 9))
+            _btVivo = new Rectangle(Width - tv.Width - Ui.S(18), 0, tv.Width + Ui.S(16), Ui.S(18));
+            using (GraphicsPath gp = Ui.RoundRect(_btVivo, Ui.S(9)))
             {
                 Color fundo = AoVivo ? Ui.AccentSoft : (_sobreVivo ? Ui.Hover : Ui.Surface);
                 using (SolidBrush b = new SolidBrush(fundo)) g.FillPath(b, gp);
@@ -115,13 +115,13 @@ namespace MhiagosControl
             }
             if (AoVivo)
                 using (SolidBrush b = new SolidBrush(Ui.Accent))
-                    g.FillEllipse(b, _btVivo.X + 6, _btVivo.Y + 7, 5, 5);
+                    g.FillEllipse(b, _btVivo.X + Ui.S(6), _btVivo.Y + Ui.S(7), Ui.S(5), Ui.S(5));
             TextRenderer.DrawText(g, vivo, Ui.FontSmall,
-                new Rectangle(_btVivo.X + (AoVivo ? 6 : 0), _btVivo.Y, _btVivo.Width, _btVivo.Height),
-                AoVivo ? Ui.Accent : Ui.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                new Rectangle(_btVivo.X + (AoVivo ? Ui.S(6) : 0), _btVivo.Y, _btVivo.Width, _btVivo.Height),
+                AoVivo ? Ui.AccentText : Ui.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
             // faixa com as seis horas
-            using (GraphicsPath gp = Ui.RoundRect(f, 4))
+            using (GraphicsPath gp = Ui.RoundRect(f, Ui.S(4)))
             {
                 using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillPath(b, gp);
                 using (Pen p = new Pen(Ui.Border)) g.DrawPath(p, gp);
@@ -130,7 +130,7 @@ namespace MhiagosControl
 
             // o que esta fora da selecao fica esmaecido
             float x0 = Math.Max(f.X, XIni), x1 = Math.Min(f.Right, XFim);
-            if (x1 - x0 < 4) { float m = (x0 + x1) / 2; x0 = m - 2; x1 = m + 2; }
+            if (x1 - x0 < Ui.S(4)) { float m = (x0 + x1) / 2; x0 = m - Ui.S(2); x1 = m + Ui.S(2); }
             using (SolidBrush veu = new SolidBrush(Color.FromArgb(Ui.Dark ? 150 : 140, Ui.Window)))
             {
                 if (x0 > f.X) g.FillRectangle(veu, f.X, f.Y + 1, x0 - f.X, f.Height - 1);
@@ -140,17 +140,17 @@ namespace MhiagosControl
             using (Pen p = new Pen(Ui.Accent, 1.6f)) g.DrawRectangle(p, sel.X, sel.Y, sel.Width, sel.Height);
             using (SolidBrush b = new SolidBrush(Ui.Text))
                 foreach (float x in new float[] { x0, x1 })
-                    using (GraphicsPath gp = Ui.RoundRect(new Rectangle((int)Math.Round(x) - 3, f.Y + f.Height / 2 - 8, 6, 16), 2))
+                    using (GraphicsPath gp = Ui.RoundRect(new Rectangle((int)Math.Round(x) - Ui.S(3), f.Y + f.Height / 2 - Ui.S(8), Ui.S(6), Ui.S(16)), Ui.S(2)))
                         g.FillPath(b, gp);
 
             // eixo: as pontas e as horas cheias de duas em duas
-            int yEixo = f.Bottom + 2;
+            int yEixo = f.Bottom + Ui.S(2);
             TextRenderer.DrawText(g, T.HoursAgo(6), Ui.FontSmall, new Point(f.X, yEixo), Ui.Faint, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, T.Now, Ui.FontSmall, new Rectangle(f.X, yEixo, f.Width, 14), Ui.Faint,
+            TextRenderer.DrawText(g, T.Now, Ui.FontSmall, new Rectangle(f.X, yEixo, f.Width, Ui.S(14)), Ui.Faint,
                 TextFormatFlags.Right | TextFormatFlags.NoPadding);
             foreach (int h in new int[] { 4, 2 })
                 TextRenderer.DrawText(g, T.HoursAgo(h), Ui.FontSmall,
-                    new Rectangle((int)XDoIndice(MetricHistory.Baldes - 1 - h * 3600 / MetricHistory.PassoSeg) - 40, yEixo, 80, 14),
+                    new Rectangle((int)XDoIndice(MetricHistory.Baldes - 1 - h * 3600 / MetricHistory.PassoSeg) - Ui.S(40), yEixo, Ui.S(80), Ui.S(14)),
                     Ui.Faint, TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
         }
 
@@ -174,11 +174,11 @@ namespace MhiagosControl
             }
             if (min > max) return;
             float faixa = Math.Max(0.001f, max - min);
-            float alto = f.Y + 4, alt = f.Height - 8;
+            float alto = f.Y + Ui.S(4), alt = f.Height - Ui.S(8);
 
             using (Pen p = new Pen(Color.FromArgb(150, CorDaLinha ?? Ui.Accent)))
             {
-                int colunas = Math.Max(1, f.Width - 2);
+                int colunas = Math.Max(1, f.Width - Ui.S(2));
                 for (int c = 0; c < colunas; c++)
                 {
                     int a = (int)((long)c * n / colunas), b = (int)((long)(c + 1) * n / colunas);
@@ -205,7 +205,7 @@ namespace MhiagosControl
         private Arraste Onde(int x, int y)
         {
             Rectangle f = Faixa;
-            if (y < f.Y - 2 || y > f.Bottom + 2) return Arraste.Nada;
+            if (y < f.Y - Ui.S(2) || y > f.Bottom + Ui.S(2)) return Arraste.Nada;
             if (Math.Abs(x - XIni) <= Pega) return Arraste.Esquerda;
             if (Math.Abs(x - XFim) <= Pega) return Arraste.Direita;
             if (x > XIni && x < XFim) return Arraste.Meio;
