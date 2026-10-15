@@ -67,11 +67,7 @@ namespace MhiagosControl
             try
             {
                 string arquivo = Caminho;
-                string temp = arquivo + ".tmp";
-                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(arquivo)));
-                File.WriteAllText(temp, ParaTexto(), Encoding.UTF8);
-                if (File.Exists(arquivo)) File.Replace(temp, arquivo, null);
-                else File.Move(temp, arquivo);
+                GravacaoAtomica.Escrever(arquivo, ParaTexto(), Encoding.UTF8);
                 return true;
             }
             catch (Exception ex)
@@ -725,6 +721,9 @@ namespace MhiagosControl
 
         private readonly AvisosDoSistema _preferencias;
 
+        /// <summary>O quadro desenhado, reaproveitado enquanto o tamanho nao muda.</summary>
+        private Bitmap _quadro;
+
         /// <summary>Clique no widget: a bandeja abre a configuracao na pagina Baterias.</summary>
         public event Action BateriasPedidas;
 
@@ -802,6 +801,7 @@ namespace MhiagosControl
                 _leitura.Stop(); _leitura.Dispose();
                 _animacao.Stop(); _animacao.Dispose();
                 _conferirDesktop.Stop(); _conferirDesktop.Dispose();
+                if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
                 _dica.Dispose();
                 if (_menu != null) { _menu.Dispose(); _menu = null; }
                 if (_preferencias != null) _preferencias.Dispose();
@@ -896,15 +896,20 @@ namespace MhiagosControl
                 }
                 _transicao = transicao;
 
-                using (Bitmap bmp = new Bitmap(tam.Width, tam.Height, PixelFormat.Format32bppArgb))
+                // O mesmo bitmap enquanto o tamanho nao muda: carregando, o
+                // widget pinta 25 quadros por segundo, e alocar uma imagem
+                // ARGB inteira em cada um so dava trabalho ao coletor.
+                if (_quadro == null || _quadro.Size != tam)
                 {
-                    using (Graphics g = Graphics.FromImage(bmp))
-                    {
-                        g.Clear(Color.Transparent);
-                        PintorDoWidget.Pintar(g, tam, q);
-                    }
-                    AplicarBitmap(bmp);
+                    if (_quadro != null) _quadro.Dispose();
+                    _quadro = new Bitmap(tam.Width, tam.Height, PixelFormat.Format32bppArgb);
                 }
+                using (Graphics g = Graphics.FromImage(_quadro))
+                {
+                    g.Clear(Color.Transparent);
+                    PintorDoWidget.Pintar(g, tam, q);
+                }
+                AplicarBitmap(_quadro);
                 // o ultimo quadro da transicao desliga o relogio se nada mais carrega
                 AjustarAnimacao();
             }

@@ -719,7 +719,7 @@ namespace MhiagosControl
             {
                 if (!members.Contains(e.Id)) continue;
                 type = e.Type; hardware = e.Hardware; source = e.Source; category = e.Category; unit = e.Unit;
-                if (!e.Value.HasValue || float.IsNaN(e.Value.Value)) continue;
+                if (!e.Value.HasValue || float.IsNaN(e.Value.Value) || float.IsInfinity(e.Value.Value)) continue;
                 sum += e.Value.Value; n++;
             }
 

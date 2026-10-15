@@ -270,19 +270,21 @@ namespace MhiagosControl
             long faltando = agora - _balde;
             if (faltando > Baldes) faltando = Baldes;   // ficou desligado mais que a janela inteira
 
-            for (long k = 0; k < faltando; k++)
+            // Um deslocamento so, de todos os baldes que passaram. Antes era um
+            // Array.Copy da serie inteira por balde vencido: depois de uma noite
+            // desligado, milhoes de copias por serie no arranque, na thread da
+            // interface.
+            int n = (int)faltando;
+            foreach (KeyValuePair<string, Serie> kv in _series)
             {
-                bool primeiro = (k == 0);
-                foreach (KeyValuePair<string, Serie> kv in _series)
-                {
-                    Serie s = kv.Value;
-                    Array.Copy(s.V, 1, s.V, 0, Baldes - 1);
+                Serie s = kv.Value;
+                if (n < Baldes) Array.Copy(s.V, n, s.V, 0, Baldes - n);
+                for (int i = Baldes - n; i < Baldes; i++) s.V[i] = float.NaN;
 
-                    // Só o primeiro balde recebe o que foi acumulado; os
-                    // seguintes sao tempo em que ninguem leu nada.
-                    s.V[Baldes - 1] = (primeiro && s.Cont > 0) ? (float)(s.Soma / s.Cont) : float.NaN;
-                    s.Soma = 0; s.Cont = 0;
-                }
+                // Só o primeiro balde fechado recebe o que foi acumulado; os
+                // seguintes sao tempo em que ninguem leu nada.
+                if (s.Cont > 0) s.V[Baldes - n] = (float)(s.Soma / s.Cont);
+                s.Soma = 0; s.Cont = 0;
             }
 
             _balde = agora;
@@ -528,12 +530,12 @@ namespace MhiagosControl
             }
 
             string caminho = Arquivo;
-            string temp = caminho + ".tmp";
             try
             {
-                using (FileStream fs = File.Create(temp))
-                using (BinaryWriter w = new BinaryWriter(fs))
+                // Nunca apaga o arquivo anterior antes de o novo estar pronto.
+                GravacaoAtomica.Escrever(caminho, delegate(Stream fs)
                 {
+                    BinaryWriter w = new BinaryWriter(fs);
                     w.Write(Magica);
                     w.Write(PassoSeg);
                     w.Write(Baldes);
@@ -544,11 +546,8 @@ namespace MhiagosControl
                         w.Write(ids[i]);
                         for (int k = 0; k < Baldes; k++) w.Write(valores[i][k]);
                     }
-                }
-
-                // Nunca apaga o arquivo anterior antes de o novo estar pronto.
-                if (File.Exists(caminho)) File.Replace(temp, caminho, null);
-                else File.Move(temp, caminho);
+                    w.Flush();
+                });
 
                 lock (_trava)
                 {
@@ -566,10 +565,7 @@ namespace MhiagosControl
                     _proximaTentativa = DateTime.UtcNow.AddMinutes(1);
                     _sujo = true;
                     _gravando = false;
-                }
-                try { if (File.Exists(temp)) File.Delete(temp); }
-                catch (Exception ex2) { Log.Error("descarte do historico temporario", ex2); }
-            }
+                }            }
         }
     }
 }

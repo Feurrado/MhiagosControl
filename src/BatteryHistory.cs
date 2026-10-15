@@ -337,6 +337,10 @@ namespace MhiagosControl
         private static void Amostrar(Aparelho a, DateTime agora, int pct, bool carregando, bool forcar)
         {
             int n = a.Amostras.Count;
+            // Relogio que voltou (fim do horario de verao, ajuste manual): as
+            // amostras "do futuro" saem. Antes a diferenca negativa calava a
+            // amostragem ate a hora alcancar a ultima - uma hora sem curva.
+            while (n > 0 && a.Amostras[n - 1].Quando > agora) { a.Amostras.RemoveAt(n - 1); n--; }
             if (!forcar && n > 0 && agora - a.Amostras[n - 1].Quando < IntervaloDeAmostra) return;
             a.Amostras.Add(new AmostraDeBateria { Quando = agora, Pct = pct, Carregando = carregando });
             DateTime corte = agora - JanelaDeAmostras;
@@ -764,10 +768,7 @@ namespace MhiagosControl
             // o historico pela metade
             try
             {
-                string temp = Caminho + ".tmp";
-                File.WriteAllText(temp, texto, new UTF8Encoding(false));
-                if (File.Exists(Caminho)) File.Replace(temp, Caminho, null);
-                else File.Move(temp, Caminho);
+                GravacaoAtomica.Escrever(Caminho, texto, new UTF8Encoding(false));
             }
             catch (Exception ex)
             {

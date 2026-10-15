@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Windows.Forms;
 
 namespace MhiagosControl
@@ -929,9 +930,8 @@ namespace MhiagosControl
             if (!Abertos.Remove(chave)) Abertos.Add(chave);
             try
             {
-                string pasta = Path.GetDirectoryName(Caminho);
-                if (!string.IsNullOrEmpty(pasta)) Directory.CreateDirectory(pasta);
-                File.WriteAllLines(Caminho, new List<string>(Abertos).ToArray());
+                // atomico: uma queda no meio truncava a lista
+                GravacaoAtomica.Escrever(Caminho, string.Join(Environment.NewLine, new List<string>(Abertos).ToArray()) + Environment.NewLine, new UTF8Encoding(false));
             }
             catch (Exception ex) { Log.Write("detalhes da bateria: " + ex.Message); }
         }

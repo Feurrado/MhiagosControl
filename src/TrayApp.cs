@@ -1151,7 +1151,9 @@ namespace MhiagosControl
         private void SetTooltip(string text)
         {
             if (text.Length > 63) text = text.Substring(0, 60) + "...";
-            Marshal(delegate { try { _icon.Text = text; } catch { } });
+            // Uma dica enfileirada pelo worker antes da pausa nao pode apagar o
+            // "Pausado" que o menu acabou de escrever.
+            Marshal(delegate { try { if (!_paused) _icon.Text = text; } catch { } });
         }
 
         /// <summary>NotifyIcon so pode ser tocado na thread de UI.</summary>
@@ -1519,7 +1521,8 @@ namespace MhiagosControl
 
             FecharWidget();
             if (_icon != null) { _icon.Visible = false; _icon.Dispose(); }
-            if (_iconNormal != null) _iconNormal.Dispose();
+            // _iconNormal e o Assets.TrayIcon, guardado e compartilhado (pode ser o
+            // icone de reserva das janelas): nao e deste dono para descartar.
             if (_iconBaixa != null) _iconBaixa.Dispose();
             if (_hIconBaixa != IntPtr.Zero) { DestroyIcon(_hIconBaixa); _hIconBaixa = IntPtr.Zero; }
 
