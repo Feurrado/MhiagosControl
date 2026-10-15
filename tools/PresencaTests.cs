@@ -145,6 +145,34 @@ namespace MhiagosControl
                         layout + ": com meia presenca o item esta mais transparente que inteiro e mais opaco que ausente");
             }
 
+            Periferico longo = Periferico.Lido("WH-1000XM4 Wireless Headphones", TipoPeriferico.Outro, FontePeriferico.Bluetooth, 18, false);
+            Periferico curto = Periferico.Lido("BT", TipoPeriferico.Outro, FontePeriferico.Bluetooth, 18, false);
+            foreach (LayoutDoWidget layout in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
+            {
+                float nome = PintorDoWidget.LarguraDoNome(longo);
+                Verdade(nome > 100f, layout + ": o nome longo e medido (" + nome.ToString("0") + ")");
+                Igual(0f, PintorDoWidget.LarguraDoNome(g), layout + ": aparelho que se reconhece pelo desenho nao usa nome");
+                float[] larg = PintorDoWidget.Larguras(layout, new Periferico[] { longo, curto, g });
+                float[] um = new float[] { 1f, 1f, 1f };
+                Size cheio = PintorDoWidget.Medir(layout, um, larg, 1f, 1f);
+                RectangleF[] z = PintorDoWidget.Zonas(layout, um, larg, cheio, 1f);
+                if (layout == LayoutDoWidget.Aneis)
+                {
+                    Verdade(z[0].Width >= nome, layout + ": a coluna do nome longo comporta o nome inteiro");
+                    Verdade(z[0].Right <= z[1].Left && z[1].Right <= z[2].Left && z[2].Right <= cheio.Width, layout + ": colunas sem sobrepor e dentro do widget");
+                }
+                else Verdade(cheio.Width >= 16 * 2 + 40 + 12 + nome, layout + ": o widget da lista alarga para o nome caber");
+                Size entrando = PintorDoWidget.Medir(layout, new float[] { 1f, 0.5f, 1f }, larg, 1f, 1f);
+                Verdade(entrando.Width <= cheio.Width && entrando.Height <= cheio.Height, layout + ": entrando, o widget ainda nao tem o tamanho cheio");
+                Size semNome = PintorDoWidget.Medir(layout, new float[] { 1f }, new float[] { 78f }, 1f, 0f);
+                Size meioNome = PintorDoWidget.Medir(layout, new float[] { 1f }, new float[] { 78f }, 1f, 0.5f);
+                Size comNome = PintorDoWidget.Medir(layout, new float[] { 1f }, new float[] { 78f }, 1f, 1f);
+                if (layout == LayoutDoWidget.Aneis)
+                    Verdade(semNome.Height < meioNome.Height && meioNome.Height < comNome.Height, layout + ": a linha do nome entra aos poucos, sem pular de altura");
+            }
+            Igual(0.5f, PintorDoWidget.FracaoDeNome(new Periferico[] { g, longo }, new float[] { 1f, 0.5f }), "a fracao do nome acompanha a presenca de quem a usa");
+            Igual(0f, PintorDoWidget.FracaoDeNome(new Periferico[] { g }, new float[] { 1f }), "sem aparelho com nome, nenhuma linha extra");
+
             Rectangle tela = new Rectangle(0, 0, 1920, 1080);
             Point perto = WidgetDeBateria.AncorarCrescimento(new Rectangle(1600, 20, 200, 100), new Size(300, 100), tela);
             Igual(1500, perto.X, "na metade direita da tela a borda direita fica parada");
