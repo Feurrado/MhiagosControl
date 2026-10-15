@@ -157,7 +157,7 @@ namespace MhiagosControl
 
         /// <summary>
         /// O que vai para o widget: so o fone e o mouse (G HUB e Attack Shark) que
-        /// estao conectados, com leitura. Desligado, o icone some; Bluetooth nao entra.
+        /// estao conectados, com leitura, e do Bluetooth so quem deu leitura. Desligado, o icone some.
         /// O marcador vazio do Bluetooth faz sentido na Visao geral, mas
         /// num widget de bateria seria um anel sem bateria nenhuma.
         /// </summary>
@@ -166,7 +166,7 @@ namespace MhiagosControl
             List<Periferico> l = new List<Periferico>();
             if (todos != null)
                 foreach (Periferico p in todos)
-                    if (p != null && p.Bateria.HasValue && p.Fonte != FontePeriferico.Bluetooth) l.Add(p);
+                    if (p != null && p.Bateria.HasValue) l.Add(p);
             return l.ToArray();
         }
 
