@@ -44,8 +44,12 @@ namespace MhiagosControl
         {
             _duracao = Math.Max(1, duracaoMs);
             _de = _ate = _valor = aberto ? 1f : 0f;
-            // ~60 quadros por segundo; o valor vem do cronometro, nao daqui
-            _relogio.Interval = 16;
+            // 10, e nao 16. O relogio do Windows anda em passos de 15,6 ms, e um
+            // intervalo de 16 cai no segundo passo: 31 ms, ~32 quadros por
+            // segundo, e a animacao travava. Abaixo de um passo, o timer
+            // dispara a cada passo (~64 por segundo, medido com
+            // Tests.exe --medir-animacao). O valor vem do cronometro, nao daqui.
+            _relogio.Interval = 10;
             _relogio.Tick += delegate { Avancar(_cronometro.ElapsedMilliseconds); };
         }
 

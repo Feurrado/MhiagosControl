@@ -58,10 +58,62 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>
+        /// Quadros por segundo de verdade, com a janela na tela e o relogio
+        /// real: Tests.exe --medir-animacao 1.0 pasta
+        /// </summary>
+        private static void MedirAnimacoes(SettingsForm form, NavBar nav)
+        {
+            Ui.AnimacoesForcadas = true;
+            for (int i = 0; i < nav.Items.Count; i++)
+                if (nav.Items[i].Key == "baterias") nav.SelectedIndex = i;
+            Esperar(600);
+            BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
+            CollapsiblePanel painel = (CollapsiblePanel)Field(form, "_painelDoWidget");
+            List<CartaoDeBateria> cartoes = (List<CartaoDeBateria>)Field(form, "_cartoesDeBateria");
+            for (int r = 0; r < 3; r++)
+            {
+                Medir("widget", MotorDe(painel, "_animacao"), delegate { InvokePrivate(botao, "OnClick", EventArgs.Empty); });
+                if (cartoes.Count > 0)
+                    Medir("detalhes", MotorDe(cartoes[0], "_detalhes"), delegate { cartoes[0].AlternarDetalhes(); });
+                Medir("lateral", null, delegate { nav.Collapsed = !nav.Collapsed; }, nav);
+            }
+        }
+
+        private static void Esperar(int ms)
+        {
+            System.Diagnostics.Stopwatch w = System.Diagnostics.Stopwatch.StartNew();
+            while (w.ElapsedMilliseconds < ms) { Application.DoEvents(); System.Threading.Thread.Sleep(1); }
+        }
+
+        private static void Medir(string nome, AnimacaoDeRecolher motor, MethodInvoker acao, NavBar nav = null)
+        {
+            if (motor == null) motor = (AnimacaoDeRecolher)nav.GetType().GetField("_anim", AuditFlags).GetValue(nav);
+            List<long> marcas = new List<long>();
+            System.Diagnostics.Stopwatch w = System.Diagnostics.Stopwatch.StartNew();
+            EventHandler h = delegate { marcas.Add(w.ElapsedMilliseconds); };
+            if (motor != null) motor.Quadro += h;
+            acao();
+            if (motor == null)
+            {
+                motor = (AnimacaoDeRecolher)nav.GetType().GetField("_anim", AuditFlags).GetValue(nav);
+                motor.Quadro += h;
+            }
+            while (motor.Animando && w.ElapsedMilliseconds < 3000) { Application.DoEvents(); System.Threading.Thread.Sleep(0); }
+            long total = w.ElapsedMilliseconds;
+            motor.Quadro -= h;
+            long pior = 0;
+            for (int i = 1; i < marcas.Count; i++) pior = Math.Max(pior, marcas[i] - marcas[i - 1]);
+            Console.WriteLine(string.Format("{0,-9} {1,3} quadros em {2,4} ms  ~{3,3} fps  maior intervalo {4} ms",
+                nome, marcas.Count, total, total > 0 ? marcas.Count * 1000 / total : 0, pior));
+            Esperar(300);
+        }
+
         private static int CapturaDeEscala(string[] args)
         {
             float zoom = float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
             string pasta = args[2];
+            bool medir = args[0] == "--medir-animacao";
             // Antes de qualquer toque no Ui: as fontes nascem com esta escala.
             AppDomain.CurrentDomain.SetData("MhiagosControl.Zoom", zoom);
             Directory.CreateDirectory(pasta);
@@ -101,9 +153,10 @@ namespace MhiagosControl
             using (SettingsForm form = new SettingsForm(config, dados.Sensors, dados))
             {
                 form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual;
-                form.Location = new Point(-30000, -30000);
+                form.Location = medir ? new Point(20, 20) : new Point(-30000, -30000);
                 form.Show(); ((Timer)Field(form, "_tick")).Stop();
                 NavBar nav = (NavBar)Field(form, "_nav");
+                if (medir) { MedirAnimacoes(form, nav); form.Close(); return 0; }
                 foreach (Size tamanho in tamanhos)
                 {
                     form.Size = tamanho;

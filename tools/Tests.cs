@@ -34,6 +34,8 @@ namespace MhiagosControl
             System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
             if (args.Length > 0 && args[0] == "--regression-child")
                 return RegressionChild(args);
+            if (args.Length > 2 && args[0] == "--medir-animacao")
+                return CapturaDeEscala(args);
             if (args.Length > 2 && args[0] == "--captura-escala")
                 return CapturaDeEscala(args);
             // Sem animacao por padrao: a opcao do Windows muda de maquina para
