@@ -32,6 +32,7 @@ $srcs += (Join-Path $root 'tools\RevisaoTests.cs')
 $srcs += (Join-Path $root 'tools\CapturaDeEscala.cs')
 $srcs += (Join-Path $root 'tools\AnimacaoTests.cs')
 $srcs += (Join-Path $root 'tools\PresencaTests.cs')
+$srcs += (Join-Path $root 'tools\CapturaDePresenca.cs')
 $srcs += (Join-Path $root 'tools\PendenciasTests.cs')
 $srcs += (Join-Path $root 'tools\Installer.cs')
 

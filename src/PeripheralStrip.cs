@@ -28,6 +28,7 @@ namespace MhiagosControl
         /// <summary>O que a faixa desenha agora: a ultima leitura mais quem ainda esta saindo.</summary>
         private Periferico[] _itens = new Periferico[0];
         private float[] _presenca = new float[0];
+        private bool[] _saindo = new bool[0];
         private Periferico[] _reais = new Periferico[0];
         private string[] _previsoesReais = new string[0];
         private readonly PresencaAnimada _entradas = new PresencaAnimada();
@@ -83,6 +84,7 @@ namespace MhiagosControl
             List<Periferico> itens = new List<Periferico>();
             List<string> previsoes = new List<string>();
             List<float> pres = new List<float>();
+            List<bool> saindo = new List<bool>();
             for (int i = 0; i < _entradas.Quantidade; i++)
             {
                 string k = _entradas.Chave(i);
@@ -90,11 +92,12 @@ namespace MhiagosControl
                 if (!_ultimo.TryGetValue(k, out p)) continue;
                 string prev;
                 _ultimaPrevisao.TryGetValue(k, out prev);
-                itens.Add(p); previsoes.Add(prev); pres.Add(_entradas.Valor(i));
+                itens.Add(p); previsoes.Add(prev); pres.Add(_entradas.Valor(i)); saindo.Add(_entradas.Saindo(i));
             }
             _itens = itens.ToArray();
             _previsoes = previsoes.ToArray();
             _presenca = pres.ToArray();
+            _saindo = saindo.ToArray();
             Invalidate();
         }
 
@@ -231,37 +234,80 @@ namespace MhiagosControl
                 return;
             }
 
-            // Em duas fases, para o texto nunca ser cortado nem se sobrepor: a
-            // presenca de 0 a 0,5 abre (ou fecha) a vaga e os vizinhos deslizam;
-            // de 0,5 a 1 o aparelho esmaece dentro da vaga ja aberta. Saindo e
-            // o inverso: esmaece primeiro, depois a vaga fecha.
-            int[] larg = new int[_itens.Length];
-            float[] abertura = new float[_itens.Length];
-            float total = 0f, soma = 0f;
-            for (int i = 0; i < _itens.Length; i++)
-            {
+            // Cada aparelho que entra ou sai abre (ou fecha) a sua vaga e depois
+            // esmaece nela: de 0 a 0,5 da presenca a vaga, de 0,5 a 1 o fade, para
+            // o texto nunca ser cortado nem se sobrepor. Quando um sai e outro
+            // entra ao mesmo tempo (o marcador "nenhum conectado" cedendo lugar
+            // ao aparelho que conectou), os dois dividem a MESMA vaga: ela vai
+            // da largura de um a do outro, um esmaece e o outro aparece no lugar,
+            // sem abrir buraco nem varrer os vizinhos de um lado ao outro.
+            int n = _itens.Length;
+            int[] larg = new int[n];
+            for (int i = 0; i < n; i++)
                 larg[i] = Icone + Ui.S(10) + LarguraDoTexto(g, _itens[i], _previsoes[i]);
-                abertura[i] = Math.Min(1f, _presenca[i] / 0.5f);
-                total += abertura[i] * (larg[i] + Vao);
-                soma += abertura[i];
+
+            List<int[]> vagas = new List<int[]>();   // { quem sai (ou -1), quem entra ou fica (ou -1) }
+            for (int i = 0; i < n; i++)
+            {
+                if (i + 1 < n && _saindo[i] != _saindo[i + 1] && _presenca[i] < 1f && _presenca[i + 1] < 1f)
+                {
+                    vagas.Add(_saindo[i] ? new int[] { i, i + 1 } : new int[] { i + 1, i });
+                    i++;
+                }
+                else vagas.Add(_saindo[i] ? new int[] { i, -1 } : new int[] { -1, i });
+            }
+
+            float[] largura = new float[vagas.Count];
+            float total = 0f, soma = 0f;
+            for (int k = 0; k < vagas.Count; k++)
+            {
+                int sai = vagas[k][0], entra = vagas[k][1];
+                if (sai >= 0 && entra >= 0)
+                {
+                    float u = _presenca[entra];
+                    largura[k] = (1f - u) * (larg[sai] + Vao) + u * (larg[entra] + Vao);
+                    soma += 1f;
+                }
+                else
+                {
+                    int i = sai >= 0 ? sai : entra;
+                    float abertura = Math.Min(1f, _presenca[i] / 0.5f);
+                    largura[k] = abertura * (larg[i] + Vao);
+                    soma += abertura;
+                }
+                total += largura[k];
             }
             total -= Vao * Math.Min(1f, soma);
 
             int x = (int)Math.Round((Width - total) / 2f);
             if (x < Ui.S(16)) x = Ui.S(16);
-            for (int i = 0; i < _itens.Length; i++)
+            for (int k = 0; k < vagas.Count; k++)
             {
-                float alfa = Math.Max(0f, Math.Min(1f, (_presenca[i] - 0.5f) / 0.5f));
-                int vaga = (int)Math.Ceiling(abertura[i] * (larg[i] + Vao));
-                if (alfa >= 0.999f)
-                    Desenhar(g, _itens[i], x, _previsoes[i]);
-                else if (alfa > 0.001f)
-                    Esmaecido(g, x, vaga, alfa, delegate { Desenhar(g, _itens[i], x, _previsoes[i]); });
-                if (alfa > 0.5f)
-                    _zonas.Add(new KeyValuePair<Rectangle, Periferico>(
-                        new Rectangle(x - Ui.S(6), Ui.S(4), larg[i] + Ui.S(12), Height - Ui.S(8)), _itens[i]));
+                int vaga = (int)Math.Ceiling(largura[k]);
+                int sai = vagas[k][0], entra = vagas[k][1];
+                if (sai >= 0 && entra >= 0)
+                {
+                    float u = _presenca[entra];
+                    Item(g, sai, x, larg[sai], Math.Max(0f, 1f - u / 0.5f));
+                    Item(g, entra, x, larg[entra], Math.Max(0f, (u - 0.5f) / 0.5f));
+                }
+                else
+                {
+                    int i = sai >= 0 ? sai : entra;
+                    Item(g, i, x, larg[i], Math.Max(0f, Math.Min(1f, (_presenca[i] - 0.5f) / 0.5f)));
+                }
                 x += vaga;
             }
+        }
+
+        /// <summary>Um aparelho na posicao x com a opacidade pedida (a area de clique so vale daquele que se le).</summary>
+        private void Item(Graphics g, int i, int x, int largura, float alfa)
+        {
+            if (alfa >= 0.999f) Desenhar(g, _itens[i], x, _previsoes[i]);
+            else if (alfa > 0.001f) Esmaecido(g, x, largura, alfa, delegate { Desenhar(g, _itens[i], x, _previsoes[i]); });
+            if (alfa > 0.5f)
+                _zonas.Add(new KeyValuePair<Rectangle, Periferico>(
+                    new Rectangle(x - Ui.S(6), Ui.S(4), largura + Ui.S(12), Height - Ui.S(8)), _itens[i]));
         }
 
         /// <summary>
