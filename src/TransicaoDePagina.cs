@@ -1,24 +1,22 @@
 using System;
 using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
 using System.Windows.Forms;
 
 namespace MhiagosControl
 {
     /// <summary>
-    /// A entrada de pagina: a pagina nova, fotografada,
-    /// misturadas num veu por cima do anfitriao durante 167 ms. A entrada sobe
-    /// alguns pixels com a curva de desaceleracao. Acabou o tempo, o veu some e
-    /// a pagina de verdade, ja pronta por baixo, aparece no lugar - nenhuma
-    /// pagina e redesenhada quadro a quadro. Sem efeitos no Windows (reduzir
-    /// movimento), ou janela ainda nao exibida, nada disso acontece.
+    /// A entrada de pagina: uma cortina da cor da janela que se recolhe de cima
+    /// para baixo e deixa a pagina de verdade aparecer. Sem fotografia da
+    /// pagina, entao nada pula no fim - o que se ve e a propria pagina. A
+    /// cortina e um retangulo liso (barato de pintar) e transparente ao mouse.
+    /// Sem efeitos no Windows (reduzir movimento) ou janela ainda nao exibida,
+    /// a pagina troca na hora.
     /// </summary>
     internal sealed class VeuDePagina : Control
     {
-        private Bitmap _nova;
         private long _inicio;
         private float _t;
+        private Rectangle _area;
 
         public VeuDePagina()
         {
@@ -30,65 +28,42 @@ namespace MhiagosControl
 
         public bool Ativo { get { return Visible; } }
 
-        /// <summary>Retrato de um controle, ou nulo se nao der para fotografar.</summary>
-        public static Bitmap Fotografar(Control c)
-        {
-            try
-            {
-                if (c == null || c.Width <= 0 || c.Height <= 0) return null;
-                Bitmap b = new Bitmap(c.Width, c.Height, PixelFormat.Format32bppPArgb);
-                c.DrawToBitmap(b, new Rectangle(0, 0, c.Width, c.Height));
-                return b;
-            }
-            catch { return null; }
-        }
-
-        public void Iniciar(Bitmap nova)
+        public void Iniciar()
         {
             Encerrar();
-            if (nova == null) return;
-            _nova = nova;
+            if (Parent == null) return;
+            _area = new Rectangle(Point.Empty, Parent.ClientSize);
+            if (_area.Height <= 0) return;
             _t = 0f;
             _inicio = Motion.Agora;
-            Bounds = new Rectangle(Point.Empty, Parent.ClientSize);
+            Bounds = _area;
             Visible = true;
             BringToFront();
             Update();
             Motion.Assinar(Passo);
         }
 
-        /// <summary>Um quadro; separado para os testes. true enquanto a entrada corre.</summary>
+        /// <summary>Um quadro; separado para os testes. true enquanto a cortina corre.</summary>
         internal bool Passo(long agora)
         {
             if (IsDisposed || !Visible) return false;
             _t = Motion.Progresso(_inicio, agora, Motion.Media);
             if (_t >= 1f) { Encerrar(); return false; }
-            Invalidate();
-            Update();
+            int revelado = (int)Math.Round(_area.Height * Motion.Padrao(_t));
+            Rectangle r = new Rectangle(_area.X, _area.Y + revelado, _area.Width, _area.Height - revelado);
+            if (r.Height <= 0) { Encerrar(); return false; }
+            Bounds = r;
             return true;
         }
 
         public void Encerrar()
         {
             Visible = false;
-            if (_nova != null) { _nova.Dispose(); _nova = null; }
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            Graphics g = e.Graphics;
-            g.Clear(Ui.Window);
-            if (_nova == null) return;
-            float a = Motion.Padrao(_t);
-            int sobe = (int)Math.Round(Ui.S(12) * (1f - a));
-            using (ImageAttributes ia = new ImageAttributes())
-            {
-                ColorMatrix m = new ColorMatrix();
-                m.Matrix33 = a;
-                ia.SetColorMatrix(m);
-                g.DrawImage(_nova, new Rectangle(0, sobe, _nova.Width, _nova.Height),
-                            0, 0, _nova.Width, _nova.Height, GraphicsUnit.Pixel, ia);
-            }
+            e.Graphics.Clear(Ui.Window);
         }
 
         protected override void WndProc(ref Message m)
@@ -96,12 +71,6 @@ namespace MhiagosControl
             // Transparente ao mouse: o clique cai na pagina por baixo.
             if (m.Msg == 0x0084) { m.Result = (IntPtr)(-1); return; }
             base.WndProc(ref m);
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing) Encerrar();
-            base.Dispose(disposing);
         }
     }
 }

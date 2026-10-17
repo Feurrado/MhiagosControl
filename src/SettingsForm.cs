@@ -444,7 +444,7 @@ namespace MhiagosControl
                 if (animar)
                 {
                     if (_veu == null) { _veu = new VeuDePagina(); _host.Controls.Add(_veu); }
-                    _veu.Iniciar(VeuDePagina.Fotografar(sel.Page));
+                    _veu.Iniciar();
                 }
             }
             if (_profileList != null) RefreshProfileList();
