@@ -44,6 +44,9 @@ namespace MhiagosControl
             Verdade(Ui.FontBase.SizeInPoints >= 10f - 0.01f, "o corpo e de 10 pt");
             Igual(Ui.S(4), Ui.RaioControle, "raio de controle 4");
             Igual(Ui.S(8), Ui.RaioCartao, "raio de cartao 8");
+            Verdade(Mica.Compativel(22621, false), "Mica liga no Windows 11 22H2 em diante");
+            Verdade(!Mica.Compativel(19045, false), "Windows 10 fica sem Mica: fallback solido");
+            Verdade(!Mica.Compativel(26100, true), "alto contraste fica sem Mica");
             Ui.AnimacoesForcadas = false;
             using (FlatBtn botao = new FlatBtn())
             using (Toggle chave = new Toggle())

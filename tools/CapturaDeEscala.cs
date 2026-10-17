@@ -109,11 +109,42 @@ namespace MhiagosControl
             Esperar(300);
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr h);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern void keybd_event(byte vk, byte scan, int flags, int extra);
+        private static void Ativar(Form f)
+        {
+            keybd_event(0x12, 0, 0, 0); keybd_event(0x12, 0, 2, 0);   // um Alt solto libera o primeiro plano
+            SetForegroundWindow(f.Handle);
+            f.Activate();
+        }
+
+        /// <summary>
+        /// A janela de verdade, pelo que o DWM compoe (Mica, sombra): copia da
+        /// tela, e nao DrawToBitmap. Tests.exe --captura-tela 1.0 pasta
+        /// </summary>
+        private static void CapturaDaTela(SettingsForm form, NavBar nav, string pasta)
+        {
+            form.TopMost = true; Ativar(form); Esperar(300);
+            foreach (int i in new int[] { 0, 6 })
+            {
+                nav.SelectedIndex = i;
+                Esperar(700);
+                using (Bitmap bmp = new Bitmap(form.Width, form.Height))
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.CopyFromScreen(form.Location, Point.Empty, form.Size);
+                    bmp.Save(Path.Combine(pasta, "tela-" + i + ".png"), ImageFormat.Png);
+                }
+            }
+            Console.WriteLine("mica: " + Mica.Disponivel);
+        }
+
         private static int CapturaDeEscala(string[] args)
         {
             float zoom = float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
             string pasta = args[2];
             bool medir = args[0] == "--medir-animacao";
+            bool tela = args[0] == "--captura-tela";
             // Antes de qualquer toque no Ui: as fontes nascem com esta escala.
             AppDomain.CurrentDomain.SetData("MhiagosControl.Zoom", zoom);
             Directory.CreateDirectory(pasta);
@@ -153,10 +184,11 @@ namespace MhiagosControl
             using (SettingsForm form = new SettingsForm(config, dados.Sensors, dados))
             {
                 form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual;
-                form.Location = medir ? new Point(20, 20) : new Point(-30000, -30000);
+                form.Location = (medir || tela) ? new Point(20, 20) : new Point(-30000, -30000);
                 form.Show(); ((Timer)Field(form, "_tick")).Stop();
                 NavBar nav = (NavBar)Field(form, "_nav");
                 if (medir) { MedirAnimacoes(form, nav); form.Close(); return 0; }
+                if (tela) { CapturaDaTela(form, nav, pasta); form.Close(); return 0; }
                 foreach (Size tamanho in tamanhos)
                 {
                     form.Size = tamanho;

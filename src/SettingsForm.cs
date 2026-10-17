@@ -4714,6 +4714,13 @@ namespace MhiagosControl
             Close();
         }
 
+        /// <summary>Mica na barra de titulo; o handle recriado (ShowInTaskbar, por exemplo) perde o atributo, entao reaplica.</summary>
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Mica.Aplicar(this);
+        }
+
         /// <summary>
         /// O que so pode acontecer depois que a janela esta de fato na tela.
         ///
