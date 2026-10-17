@@ -20,7 +20,7 @@ namespace MhiagosControl
         internal static string Detalhes(Exception ex)
         {
             StringBuilder t = new StringBuilder();
-            t.AppendLine("Mhiagos Control " + Assembly.GetExecutingAssembly().GetName().Version);
+            t.AppendLine("Mhiagos Control " + AppInfo.Versao);
             t.AppendLine("Windows: " + Environment.OSVersion.Version);
             t.AppendLine("Registro: " + Log.Path);
             t.AppendLine();

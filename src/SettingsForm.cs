@@ -57,7 +57,7 @@ namespace MhiagosControl
         private DateTime _lastSlowUiTickUtc = DateTime.MinValue;
         private Label _footerNote;
         private Timer _noteTimer;
-        private FlatBtn _btDesfazer, _btClose;
+        private FlatBtn _btDesfazer;
 
         // pagina Paineis
         private Control _pgPaineis;
@@ -280,11 +280,6 @@ namespace MhiagosControl
             _btDesfazer.Click += delegate { Desfazer(); };
             _nav.Controls.Add(_btDesfazer);
 
-            _btClose = new FlatBtn();
-            _btClose.Text = T.Close;
-            _btClose.Glyph = "\uE711";         // o mesmo "x" ja usado nos cartoes
-            _btClose.Click += delegate { Close(); };
-            _nav.Controls.Add(_btClose);
 
             _footerNote = MakeLabel("", 0, 0, Ui.FontSmall);
             _footerNote.ForeColor = Ui.AccentText;
@@ -520,7 +515,7 @@ namespace MhiagosControl
         /// </summary>
         private void ArranjarAcoes()
         {
-            if (_nav == null || _btDesfazer == null || _btClose == null) return;
+            if (_nav == null || _btDesfazer == null) return;
 
             int Alt = Ui.S(32);
             int Esp = Ui.S(8);
@@ -537,15 +532,14 @@ namespace MhiagosControl
             int alturaNota = (int)Math.Round(Ui.S(32) * _nav.Abertura);
 
             int baixo = _nav.Height - Ui.S(18);
-            int y = baixo - alturaNota - Alt - Esp - Alt;
+            int y = baixo - alturaNota - Alt - Esp;
 
             _btDesfazer.SetBounds(margem, y, larg, Alt);
-            _btClose.SetBounds(margem, y + Alt + Esp, larg, Alt);
 
             if (_footerNote != null)
             {
                 _footerNote.Visible = _footerNote.Visible && cabeNota;
-                _footerNote.SetBounds(margem, y + (Alt + Esp) * 2 + Ui.S(4), larg, alturaNota);
+                _footerNote.SetBounds(margem, y + Alt + Esp + Ui.S(4), larg, alturaNota);
                 _footerNote.TextAlign = ContentAlignment.TopLeft;
             }
         }
