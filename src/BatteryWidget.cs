@@ -661,8 +661,8 @@ namespace MhiagosControl
 
             if (!string.IsNullOrEmpty(nota))
             {
-                RectangleF lNota = new RectangleF(x, barra.Bottom + 2f * s, w, 15f * s);
-                Texto(g, nota, f.Nota, Secundario(escuro), escuro, lNota, StringAlignment.Near, StringAlignment.Center);
+                RectangleF lNota = new RectangleF(x, barra.Bottom + 2f * s, w, 17f * s);
+                Texto(g, nota, f.Nota, escuro ? Color.White : Color.FromArgb(255, 22, 24, 30), escuro, lNota, StringAlignment.Near, StringAlignment.Center);
             }
         }
 
@@ -731,7 +731,7 @@ namespace MhiagosControl
                 sf.Trimming = StringTrimming.EllipsisCharacter;
                 // halo em volta das letras, na cor oposta: com o vidro nitido o
                 // fundo aparece inteiro, e sem isso o texto se perde nele
-                using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(140, 0, 0, 0) : Color.FromArgb(150, 255, 255, 255)))
+                using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(170, 0, 0, 0) : Color.FromArgb(170, 255, 255, 255)))
                 {
                     for (int dx = -1; dx <= 1; dx++)
                         for (int dy = -1; dy <= 1; dy++)
@@ -821,7 +821,7 @@ namespace MhiagosControl
                 // pesos mais grossos: sobre o vidro nitido o traco fino se perde
                 Pct = Criar("Segoe UI", 16f * s, FontStyle.Bold);
                 Nome = Criar("Segoe UI", 12.5f * s, FontStyle.Bold);
-                Nota = Criar("Segoe UI", 11.5f * s, FontStyle.Bold);
+                Nota = Criar("Segoe UI", 12.5f * s, FontStyle.Bold);
             }
 
             /// <summary>Sem o Semibold instalado, o GDI+ cairia numa fonte qualquer; o negrito comum chega perto.</summary>
