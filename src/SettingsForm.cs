@@ -57,7 +57,7 @@ namespace MhiagosControl
         private DateTime _lastSlowUiTickUtc = DateTime.MinValue;
         private Label _footerNote;
         private Timer _noteTimer;
-        private FlatBtn _btDesfazer, _btClose;
+        private FlatBtn _btDesfazer, _btPerfil;
 
         // pagina Paineis
         private Control _pgPaineis;
@@ -280,11 +280,10 @@ namespace MhiagosControl
             _btDesfazer.Click += delegate { Desfazer(); };
             _nav.Controls.Add(_btDesfazer);
 
-            _btClose = new FlatBtn();
-            _btClose.Text = T.Close;
-            _btClose.Glyph = "\uE711";         // o mesmo "x" ja usado nos cartoes
-            _btClose.Click += delegate { Close(); };
-            _nav.Controls.Add(_btClose);
+            _btPerfil = new FlatBtn();
+            _btPerfil.Click += delegate { AbrirMenuDePerfis(); };
+            _nav.Controls.Add(_btPerfil);
+            AtualizarBotaoDePerfil();
 
             _footerNote = MakeLabel("", 0, 0, Ui.FontSmall);
             _footerNote.ForeColor = Ui.AccentText;
@@ -520,7 +519,7 @@ namespace MhiagosControl
         /// </summary>
         private void ArranjarAcoes()
         {
-            if (_nav == null || _btDesfazer == null || _btClose == null) return;
+            if (_nav == null || _btDesfazer == null || _btPerfil == null) return;
 
             int Alt = Ui.S(32);
             int Esp = Ui.S(8);
@@ -540,7 +539,8 @@ namespace MhiagosControl
             int y = baixo - alturaNota - Alt - Esp - Alt;
 
             _btDesfazer.SetBounds(margem, y, larg, Alt);
-            _btClose.SetBounds(margem, y + Alt + Esp, larg, Alt);
+            _btPerfil.SetBounds(margem, y + Alt + Esp, larg, Alt);
+            AtualizarBotaoDePerfil();
 
             if (_footerNote != null)
             {
@@ -2922,9 +2922,10 @@ namespace MhiagosControl
         /// thread de atualizacao le o mesmo objeto de configuracao - o
         /// mostrador muda no ciclo seguinte.
         /// </summary>
-        private void AplicarPerfil()
+        private void AplicarPerfil() { AplicarPerfilEscolhido(_profileList != null ? _profileList.Selected : _current); }
+
+        private void AplicarPerfilEscolhido(Profile p)
         {
-            Profile p = _profileList != null ? _profileList.Selected : _current;
             if (p == null) return;
 
             SaveToProfile();
@@ -3288,6 +3289,37 @@ namespace MhiagosControl
             _footerNote.Text = naoGravou ? T.UnsavedTitle : readingNote;
             _footerNote.ForeColor = Ui.Warn;
             _footerNote.Visible = (naoGravou || readingNote.Length > 0) && _nav != null && _nav.Width >= Ui.S(120);
+        }
+
+        // ---------------- perfil ativo na barra lateral ----------------
+
+        private readonly ToolTip _dicaDoPerfil = new ToolTip();
+
+        /// <summary>Nome do perfil ativo no botao; recolhida a barra, so a inicial.</summary>
+        private void AtualizarBotaoDePerfil()
+        {
+            if (_btPerfil == null || _session == null) return;
+            string nome = _session.ActiveProfile.Name;
+            bool estreita = _nav != null && _nav.Width < Ui.S(120);
+            string texto = estreita && nome.Length > 0 ? nome.Substring(0, 1).ToUpper() : nome + "  " + "▾";
+            if (_btPerfil.Text != texto) _btPerfil.Text = texto;
+            _dicaDoPerfil.SetToolTip(_btPerfil, T.ActiveProfileTip(nome));
+        }
+
+        /// <summary>Lista os perfis; escolher um ja o ativa, como Aplicar na pagina Perfis.</summary>
+        private void AbrirMenuDePerfis()
+        {
+            ContextMenuStrip menu = MenuTema.Novo();
+            string ativo = _session.ActiveProfile.Name;
+            foreach (Profile p in _cfg.Profiles)
+            {
+                Profile alvo = p;
+                menu.Items.Add(MenuTema.Opcao(p.Name, p.Name == ativo, delegate { AplicarPerfilEscolhido(alvo); AtualizarBotaoDePerfil(); }));
+            }
+            menu.Closed += delegate { menu.Dispose(); };
+            bool estreita = _nav.Width < Ui.S(120);
+            Point onde = estreita ? new Point(_btPerfil.Width + Ui.S(8), 0) : new Point(0, -menu.GetPreferredSize(Size.Empty).Height - Ui.S(4));
+            menu.Show(_btPerfil, onde);
         }
 
         // ---------------- sensores sem resposta ----------------
@@ -4846,6 +4878,7 @@ namespace MhiagosControl
             if (_nav != null && _nav.Subtitle != activeName)
             {
                 _nav.Subtitle = activeName;
+                AtualizarBotaoDePerfil();
                 _nav.Invalidate();
             }
             Control ativa = _nav != null && _nav.Selected != null ? _nav.Selected.Page : null;
