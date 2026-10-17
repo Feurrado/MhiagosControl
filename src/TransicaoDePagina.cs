@@ -7,7 +7,7 @@ using System.Windows.Forms;
 namespace MhiagosControl
 {
     /// <summary>
-    /// O cross-fade entre paginas: a pagina que sai e a que entra, fotografadas,
+    /// A entrada de pagina: a pagina nova, fotografada,
     /// misturadas num veu por cima do anfitriao durante 167 ms. A entrada sobe
     /// alguns pixels com a curva de desaceleracao. Acabou o tempo, o veu some e
     /// a pagina de verdade, ja pronta por baixo, aparece no lugar - nenhuma
@@ -16,7 +16,7 @@ namespace MhiagosControl
     /// </summary>
     internal sealed class VeuDePagina : Control
     {
-        private Bitmap _velha, _nova;
+        private Bitmap _nova;
         private long _inicio;
         private float _t;
 
@@ -43,44 +43,44 @@ namespace MhiagosControl
             catch { return null; }
         }
 
-        public void Iniciar(Bitmap velha, Bitmap nova)
+        public void Iniciar(Bitmap nova)
         {
             Encerrar();
-            if (velha == null || nova == null) { if (velha != null) velha.Dispose(); if (nova != null) nova.Dispose(); return; }
-            _velha = velha; _nova = nova;
+            if (nova == null) return;
+            _nova = nova;
             _t = 0f;
             _inicio = Motion.Agora;
             Bounds = new Rectangle(Point.Empty, Parent.ClientSize);
             Visible = true;
             BringToFront();
+            Update();
             Motion.Assinar(Passo);
         }
 
-        /// <summary>Um quadro; separado para os testes. true enquanto o fade corre.</summary>
+        /// <summary>Um quadro; separado para os testes. true enquanto a entrada corre.</summary>
         internal bool Passo(long agora)
         {
             if (IsDisposed || !Visible) return false;
             _t = Motion.Progresso(_inicio, agora, Motion.Media);
             if (_t >= 1f) { Encerrar(); return false; }
             Invalidate();
+            Update();
             return true;
         }
 
         public void Encerrar()
         {
             Visible = false;
-            if (_velha != null) { _velha.Dispose(); _velha = null; }
             if (_nova != null) { _nova.Dispose(); _nova = null; }
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            if (_velha == null || _nova == null) { g.Clear(Ui.Window); return; }
             g.Clear(Ui.Window);
-            g.DrawImage(_velha, 0, 0);
-            float a = Motion.Entrada(_t);
-            int sobe = (int)Math.Round(Ui.S(8) * (1f - a));
+            if (_nova == null) return;
+            float a = Motion.Padrao(_t);
+            int sobe = (int)Math.Round(Ui.S(12) * (1f - a));
             using (ImageAttributes ia = new ImageAttributes())
             {
                 ColorMatrix m = new ColorMatrix();
