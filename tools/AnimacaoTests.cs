@@ -47,6 +47,12 @@ namespace MhiagosControl
             Verdade(Mica.Compativel(22621, false), "Mica liga no Windows 11 22H2 em diante");
             Verdade(!Mica.Compativel(19045, false), "Windows 10 fica sem Mica: fallback solido");
             Verdade(!Mica.Compativel(26100, true), "alto contraste fica sem Mica");
+            Igual(1, SettingsForm.IndiceDoAtalho(Keys.Control | Keys.Tab, 0, 8), "Ctrl+Tab avanca");
+            Igual(0, SettingsForm.IndiceDoAtalho(Keys.Control | Keys.Tab, 7, 8), "Ctrl+Tab volta ao inicio no fim");
+            Igual(7, SettingsForm.IndiceDoAtalho(Keys.Control | Keys.Shift | Keys.Tab, 0, 8), "Ctrl+Shift+Tab recua em volta");
+            Igual(2, SettingsForm.IndiceDoAtalho(Keys.Control | Keys.D3, 0, 8), "Ctrl+3 vai a terceira pagina");
+            Igual(-1, SettingsForm.IndiceDoAtalho(Keys.Control | Keys.D7, 0, 5), "Ctrl+7 sem sete paginas nao faz nada");
+            Igual(-1, SettingsForm.IndiceDoAtalho(Keys.Tab, 0, 8), "Tab sozinho nao e atalho de pagina");
             Ui.AnimacoesForcadas = false;
             using (FlatBtn botao = new FlatBtn())
             using (Toggle chave = new Toggle())

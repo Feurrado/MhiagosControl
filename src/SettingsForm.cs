@@ -4714,6 +4714,20 @@ namespace MhiagosControl
             Close();
         }
 
+        /// <summary>A pagina de destino do atalho, ou -1 se a tecla nao e de navegacao.</summary>
+        internal static int IndiceDoAtalho(Keys tecla, int atual, int total)
+        {
+            if (total <= 0) return -1;
+            if (tecla == (Keys.Control | Keys.Tab)) return (atual + 1) % total;
+            if (tecla == (Keys.Control | Keys.Shift | Keys.Tab)) return (atual - 1 + total) % total;
+            if (tecla >= (Keys.Control | Keys.D1) && tecla <= (Keys.Control | Keys.D8))
+            {
+                int i = (int)(tecla & Keys.KeyCode) - (int)Keys.D1;
+                return i < total ? i : -1;
+            }
+            return -1;
+        }
+
         /// <summary>Mica na barra de titulo; o handle recriado (ShowInTaskbar, por exemplo) perde o atributo, entao reaplica.</summary>
         protected override void OnHandleCreated(EventArgs e)
         {
