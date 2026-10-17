@@ -26,6 +26,7 @@
         public static string Undo { get { return P("Desfazer", "Undo"); } }
         public static string ProfileDeleted(string name) { return P("Perfil apagado: " + name, "Profile deleted: " + name); }
         public static string MetricProfileDeleted(string name) { return P("Perfil de métricas apagado: " + name, "Metric profile deleted: " + name); }
+        public static string OpenGHub { get { return P("Abrir G HUB", "Open G HUB"); } }
         public static string ClickToRetry { get { return P("Clique aqui para tentar de novo.", "Click here to try again."); } }
         public static string TryAgain { get { return P("Tentar de novo", "Try again"); } }
         public static string CopyDetails { get { return P("Copiar detalhes", "Copy details"); } }

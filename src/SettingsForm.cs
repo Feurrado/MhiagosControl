@@ -1462,6 +1462,8 @@ namespace MhiagosControl
 
         private Pagina _pgBaterias;
         private Label _lbBateriasVazio;
+        private FlatBtn _btGHub;
+        private bool? _temGHub;
         private readonly List<CartaoDeBateria> _cartoesDeBateria = new List<CartaoDeBateria>();
         private DateTime _bateriasLidas = DateTime.MinValue;
 
@@ -1480,6 +1482,12 @@ namespace MhiagosControl
             _lbBateriasVazio.AutoSize = false;
             _lbBateriasVazio.Visible = false;
             _pgBaterias.Controls.Add(_lbBateriasVazio);
+
+            _btGHub = new FlatBtn();
+            _btGHub.Text = T.OpenGHub;
+            _btGHub.Visible = false;
+            _btGHub.Click += delegate { Perifericos.AbrirGHub(); };
+            _pgBaterias.Controls.Add(_btGHub);
 
             // Os aparelhos vem primeiro. As opcoes do widget ficam atras de um
             // botao discreto no alto, fechado por padrao; se a pessoa deixar
@@ -1792,6 +1800,9 @@ namespace MhiagosControl
 
                 _lbBateriasVazio.Visible = _cartoesDeBateria.Count == 0;
                 _lbBateriasVazio.SetBounds(x, y + Ui.S(2), larg, Ui.S(40));
+                if (_temGHub == null) _temGHub = Perifericos.GHubInstalado();
+                _btGHub.Visible = _lbBateriasVazio.Visible && _temGHub.Value;
+                _btGHub.SetBounds(x, y + Ui.S(46), Ui.S(180), Ui.S(32));
 
                 foreach (CartaoDeBateria c in _cartoesDeBateria)
                 {
@@ -2596,6 +2607,8 @@ namespace MhiagosControl
 
             _gameBindings = new GameBindingList();
             _gameBindings.EmptyText = T.NoGameBindings;
+            _gameBindings.EmptyActionText = T.GameBrowse;
+            _gameBindings.EmptyActionRequested += delegate { BrowseGame(); };
             _gameBindings.SetBounds(Ui.S(16), Ui.S(346), Ui.S(724), Ui.S(138));
             _gameBindings.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _gameBindings.RemoveRequested += delegate(string key) { RemoverVinculo(key); };
@@ -3222,6 +3235,7 @@ namespace MhiagosControl
         private void Warn(string msg, string textoDaAcao, Action acao)
         {
             if (_faixa == null || IsDisposed) { Log.Write("aviso: " + msg); return; }
+            _faixaDeSensores = false;
             _faixa.Mostrar(msg, textoDaAcao, acao);
         }
 
@@ -3258,14 +3272,15 @@ namespace MhiagosControl
         private void AtualizarRodape()
         {
             if (_footerNote == null) return;
+            IReadingStatusData status = _data as IReadingStatusData;
+            Control page = _nav == null || _nav.Selected == null ? null : _nav.Selected.Page;
+            bool sensorPage = page == _pgVisao || page == _pgMetricas || page == _pgPaineis || page == _pgPerfis;
+            AtualizarFaixaDeSensores(status, sensorPage);
             if (_noteTimer != null && _noteTimer.Enabled) return;
 
             // Mesmo texto do dialogo de fechar, de proposito: a barra avisa e o
             // dialogo cobra a mesma coisa, e duas redacoes para o mesmo estado
             // fariam parecer dois estados.
-            IReadingStatusData status = _data as IReadingStatusData;
-            Control page = _nav == null || _nav.Selected == null ? null : _nav.Selected.Page;
-            bool sensorPage = page == _pgVisao || page == _pgMetricas || page == _pgPaineis || page == _pgPerfis;
             string readingNote = status != null && sensorPage ? ReadingStateText(status.CurrentReadingState(null)) : "";
             // So avisa quando a gravacao falhou: com gravacao automatica, edicao
             // pendente por 350 ms nao e um estado que mereca aviso.
@@ -3273,6 +3288,55 @@ namespace MhiagosControl
             _footerNote.Text = naoGravou ? T.UnsavedTitle : readingNote;
             _footerNote.ForeColor = Ui.Warn;
             _footerNote.Visible = (naoGravou || readingNote.Length > 0) && _nav != null && _nav.Width >= Ui.S(120);
+        }
+
+        // ---------------- sensores sem resposta ----------------
+
+        private bool _faixaDeSensores;
+        private ReadingState? _estadoAvisado;
+
+        /// <summary>
+        /// Sensores sem resposta viram faixa com "Tentar de novo", em vez de so
+        /// uma nota no rodape. Dispensada no X, nao volta enquanto o estado for
+        /// o mesmo; reaparece se a leitura voltar e cair de novo.
+        /// </summary>
+        private void AtualizarFaixaDeSensores(IReadingStatusData status, bool sensorPage)
+        {
+            if (_faixa == null || status == null) return;
+            ReadingState estado = status.CurrentReadingState(null);
+            bool caiu = estado == ReadingState.Failed || estado == ReadingState.Expired;
+            if (!caiu)
+            {
+                _estadoAvisado = null;
+                if (_faixaDeSensores) { _faixa.Ocultar(); _faixaDeSensores = false; }
+                return;
+            }
+            if (!sensorPage)
+            {
+                if (_faixaDeSensores) { _faixa.Ocultar(); _faixaDeSensores = false; _estadoAvisado = null; }
+                return;
+            }
+            if (_estadoAvisado == estado || (_faixa.Visible && !_faixaDeSensores)) return;
+            _estadoAvisado = estado;
+            _faixaDeSensores = true;
+            _faixa.Mostrar(ReadingStateText(estado), T.TryAgain, delegate { TentarSensoresDeNovo(); });
+        }
+
+        private void TentarSensoresDeNovo()
+        {
+            _faixaDeSensores = false;
+            _estadoAvisado = null;
+            if (_data == null) return;
+            try
+            {
+                _sensors = _data.RefreshSensorList();
+                _pick1.SetSensors(Clone(_sensors));
+                _pick2.SetSensors(Clone(_sensors));
+                _pick1.SelectedId = _current.Panel1Id;
+                _pick2.SelectedId = _current.Panel2Id;
+                Refresh0();
+            }
+            catch (Exception ex) { Log.Error("tentar sensores de novo", ex); }
         }
 
         // ---------------- desfazer ----------------

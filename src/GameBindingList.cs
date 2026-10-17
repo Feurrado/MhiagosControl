@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -128,11 +128,21 @@ namespace MhiagosControl
 
         internal static int PreferredHeight(int count)
         {
-            return count <= 0 ? Ui.S(82) : Math.Min(3, count) * RowH + Ui.S(8);
+            return count <= 0 ? Ui.S(100) : Math.Min(3, count) * RowH + Ui.S(8);
         }
 
         public string EmptyText = "";
         public event Action<string> RemoveRequested;
+
+        /// <summary>Botao do estado vazio: a acao que resolve o vazio, no meio da lista.</summary>
+        private readonly FlatBtn _btVazio = new FlatBtn();
+        public event EventHandler EmptyActionRequested;
+        public string EmptyActionText
+        {
+            get { return _btVazio.Text; }
+            set { _btVazio.Text = value ?? ""; AtualizarBotaoVazio(); }
+        }
+        internal bool BotaoVazioVisivel { get { return _btVazio.Visible; } }
 
         public GameBindingList()
         {
@@ -140,13 +150,33 @@ namespace MhiagosControl
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             BackColor = Ui.SurfaceAlt;
             Cursor = Cursors.Default;
+            _btVazio.Visible = false;
+            _btVazio.Click += delegate { if (EmptyActionRequested != null) EmptyActionRequested(this, EventArgs.Empty); };
+            Controls.Add(_btVazio);
         }
 
         public void SetItems(IEnumerable<GameBindingView> items)
         {
             _items.Clear();
             if (items != null) _items.AddRange(items);
-            Limitar(); Invalidate();
+            Limitar(); AtualizarBotaoVazio(); Invalidate();
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            AtualizarBotaoVazio();
+        }
+
+        private void AtualizarBotaoVazio()
+        {
+            bool mostra = _items.Count == 0 && !string.IsNullOrEmpty(_btVazio.Text);
+            if (mostra)
+            {
+                int w = Math.Min(Width - Ui.S(24), Ui.S(240));
+                _btVazio.SetBounds((Width - w) / 2, Height - Ui.S(40), w, Ui.S(30));
+            }
+            _btVazio.Visible = mostra;
         }
 
         private int PorTela { get { return Math.Max(1, (Height - Ui.S(8)) / RowH); } }
@@ -197,7 +227,9 @@ namespace MhiagosControl
 
             if (_items.Count == 0)
             {
-                TextRenderer.DrawText(g, EmptyText, Ui.FontBase, Rectangle.Inflate(outer, -Ui.S(16), -Ui.S(8)), Ui.Muted,
+                Rectangle areaTexto = Rectangle.Inflate(outer, -Ui.S(16), -Ui.S(8));
+                if (_btVazio.Visible) areaTexto.Height = Math.Max(Ui.S(20), _btVazio.Top - Ui.S(8) - areaTexto.Top);
+                TextRenderer.DrawText(g, EmptyText, Ui.FontBase, areaTexto, Ui.Muted,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
                     TextFormatFlags.WordBreak);
                 return;

@@ -1536,8 +1536,16 @@ namespace MhiagosControl
                         "texto novo do botao repinta sem esperar o ponteiro");
             }
 
-            Igual(82, GameBindingList.PreferredHeight(0),
+            Igual(100, GameBindingList.PreferredHeight(0),
                   "lista vazia conserva apenas a mensagem");
+            using (GameBindingList vazia = new GameBindingList())
+            {
+                vazia.Size = new Size(Ui.S(724), Ui.S(138));
+                vazia.EmptyActionText = "Adicionar";
+                Verdade(vazia.BotaoVazioVisivel, "lista vazia mostra o botao de acao");
+                vazia.SetItems(new GameBindingView[] { new GameBindingView() });
+                Verdade(!vazia.BotaoVazioVisivel, "com vinculo o botao some");
+            }
             Igual(70, GameBindingList.PreferredHeight(1),
                   "um vinculo ocupa exatamente uma linha");
             Igual(194, GameBindingList.PreferredHeight(4),
