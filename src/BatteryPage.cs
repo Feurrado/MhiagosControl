@@ -383,8 +383,8 @@ namespace MhiagosControl
 
             int yVal = Ui.S(36);
             string valor = _a.PctAtual.HasValue ? _a.PctAtual.Value + "%" : "--";
-            Size tam = TextRenderer.MeasureText(g, valor, Ui.FontBigPct, Size.Empty, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, valor, Ui.FontBigPct, new Point(tx, yVal), cor, TextFormatFlags.NoPadding);
+            Size tam = Ui.MedirNumero(g, valor, Ui.FontBigPct);
+            Ui.DesenharNumero(g, valor, Ui.FontBigPct, new Point(tx, yVal), cor);
             int meio = yVal + tam.Height / 2;
             int fim = tx + tam.Width;
 
@@ -454,7 +454,7 @@ namespace MhiagosControl
                 int col = i % colunas, lin = i / colunas;
                 Rectangle b = new Rectangle(r.X + col * (larg + EspacoEntreBlocos), r.Y + lin * (AlturaDoBloco + EspacoEntreBlocos),
                                             larg, AlturaDoBloco);
-                using (GraphicsPath gp = Ui.RoundRect(b, Ui.S(6)))
+                using (GraphicsPath gp = Ui.RoundRect(b, Ui.RaioControle))
                 {
                     using (SolidBrush br = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(br, gp);
                     // no claro o fundo do bloco quase some no branco do cartao
@@ -579,7 +579,7 @@ namespace MhiagosControl
             // Foco pelo teclado: o contorno vai no "Mais detalhes", que e o
             // que Enter e Espaco acionam.
             if (Focused && ShowFocusCues)
-                ControlPaint.DrawFocusRectangle(g, _zonaDosDetalhes, cor, Color.Transparent);
+                Ui.AnelDeFoco(g, _zonaDosDetalhes, Ui.RaioControle);
         }
 
         /// <summary>O que nao cabe nos blocos, em pares rotulo e valor.</summary>
@@ -876,7 +876,7 @@ namespace MhiagosControl
             Ui.Smooth(g);
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
             if (_hover || _aberto)
-                using (GraphicsPath p = Ui.RoundRect(r, Ui.S(6)))
+                using (GraphicsPath p = Ui.RoundRect(r, Ui.RaioControle))
                 using (SolidBrush b = new SolidBrush(_aberto && !_hover ? Ui.AccentSoft : Ui.Hover))
                     g.FillPath(b, p);
 
@@ -891,7 +891,7 @@ namespace MhiagosControl
             DesenharSeta(g, new RectangleF(x, 1, Ui.S(12), Height), cor);
 
             if (Focused && ShowFocusCues)
-                ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(r, -3, -3), cor, Color.Transparent);
+                Ui.AnelDeFoco(g, Rectangle.Inflate(r, 2, 2), Ui.RaioControle);
         }
 
         /// <summary>

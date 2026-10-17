@@ -75,7 +75,10 @@ namespace MhiagosControl
                 AuditSensor("load", "CPU", SensorType.Load, null, 20),
                 AuditSensor("gpu", "GPU", SensorType.Temperature, null, 50) };
             Igual(3, MetricPicker.Montar(null, sensors).Count, "F01: conjunto automatico aceita sensores Libre sem unidade explicita");
-            Igual("C", sensors[0].EffectiveUnit, "temperatura tem unidade de reserva");
+            Igual("°C", sensors[0].EffectiveUnit, "temperatura tem unidade de reserva, com o grau");
+            Verdade(LibreSensorSource.Dono("/amdcpu/0", new string[] { "/amdcpu/0/load/0" }), "o hardware e dono do sensor dele");
+            Verdade(!LibreSensorSource.Dono("/amdcpu/0", new string[] { "/amdcpu/01/load/0" }), "prefixo parcial nao conta (/amdcpu/0 x /amdcpu/01)");
+            Verdade(!LibreSensorSource.Dono("/amdcpu/0", new string[] { "hw:ACPI|1|TZ", null }), "sensor do HWiNFO nao pede o hardware da biblioteca");
             Igual("MB", new SensorEntry { Type = SensorType.SmallData }.EffectiveUnit, "VRAM Libre em MB");
             Igual("%", new SensorEntry { Type = SensorType.Control }.EffectiveUnit, "PWM em porcentagem");
             foreach (string unit in new string[] { "KB/s", "MB/s" })
@@ -273,7 +276,7 @@ namespace MhiagosControl
             TrayContext context = (TrayContext)FormatterServices.GetUninitializedObject(typeof(TrayContext));
             Field(context, "_cfg", config); Field(context, "_sensors", sensors);
             Field(context, "_sensorLock", new object()); Field(context, "_cache", new List<SensorEntry>());
-            Field(context, "_miProfiles", new MenuItem("Profiles"));
+            Field(context, "_miProfiles", new ToolStripMenuItem("Profiles"));
             Field(context, "_live", config.Active.Clone()); Field(context, "_sensorCycle", new SensorCycle(sensors));
             Field(context, "_fastSensors", sensors);
             Field(context, "_stop", new ManualResetEvent(false));
@@ -282,7 +285,7 @@ namespace MhiagosControl
 
         private static void DisposeAuditContext(TrayContext context)
         {
-            ((MenuItem)Field(context, "_miProfiles")).Dispose();
+            ((ToolStripMenuItem)Field(context, "_miProfiles")).Dispose();
             ((ManualResetEvent)Field(context, "_stop")).Dispose();
         }
 
@@ -304,7 +307,7 @@ namespace MhiagosControl
                 Igual("B", game.ActiveName, "aguarda terminar a edicao");
                 Field(context, "_janelaAberta", false); GameTick(context);
                 Igual("C", game.ActiveName, "F10: fechar a janela reavalia novo vinculo sem reabrir jogo");
-                using (MenuItem manual = new MenuItem("B"))
+                using (ToolStripMenuItem manual = new ToolStripMenuItem("B"))
                 {
                     manual.Tag = game.Profiles[1];
                     InvokePrivate(context, "OnPickProfile", manual, EventArgs.Empty);
@@ -326,7 +329,7 @@ namespace MhiagosControl
                 game.DesmapearJogo("regression-game.exe"); GameTick(context);
                 Igual("A", game.ActiveName, "remover vinculo devolve ao padrao");
                 game.MapearJogo("regression-game.exe", "B");
-                using (MenuItem manual = new MenuItem("C"))
+                using (ToolStripMenuItem manual = new ToolStripMenuItem("C"))
                 {
                     manual.Tag = game.Profiles[2];
                     InvokePrivate(context, "OnPickProfile", manual, EventArgs.Empty);

@@ -29,14 +29,14 @@ namespace MhiagosControl
 
             Button = new FlatBtn();
             Button.Text = T.Change;
-            Button.Size = new Size(Ui.S(78), Ui.S(30));
+            Button.Size = new Size(Ui.S(78), Ui.S(32));
             Controls.Add(Button);
         }
 
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
-            if (Button != null) Button.SetBounds(Width - Ui.S(92), (Height - Ui.S(30)) / 2, Ui.S(78), Ui.S(30));
+            if (Button != null) Button.SetBounds(Width - Ui.S(92), (Height - Ui.S(32)) / 2, Ui.S(78), Ui.S(32));
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -45,7 +45,7 @@ namespace MhiagosControl
             Ui.Smooth(g);
 
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(8)))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.RaioCartao))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -124,7 +124,7 @@ namespace MhiagosControl
 
             _pick = new SensorPicker();
             _pick.Categories = true;
-            _pick.RowHeight = Ui.S(30);
+            _pick.RowHeight = Ui.S(32);
             _pick.SetBounds(Ui.S(12), Ui.S(12), Ui.S(504), Ui.S(484));
             _pick.SetSensors(sensors);
             _pick.SelectedId = current;

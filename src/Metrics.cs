@@ -277,7 +277,7 @@ namespace MhiagosControl
                 {
                     bool ativo = (_sobre == i);
                     if (ativo)
-                        using (GraphicsPath p = Ui.RoundRect(areas[i], Ui.S(4)))
+                        using (GraphicsPath p = Ui.RoundRect(areas[i], Ui.RaioControle))
                         using (SolidBrush b = new SolidBrush(Ui.Hover))
                             g.FillPath(b, p);
 
@@ -332,9 +332,9 @@ namespace MhiagosControl
                     Ui.Faint, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
 
             string txt = Formatado();
-            Size ts = TextRenderer.MeasureText(g, txt, Ui.FontValue);
+            Size ts = Ui.MedirNumero(g, txt, Ui.FontValue);
             int y = Ui.S(28);
-            TextRenderer.DrawText(g, txt, Ui.FontValue, new Point(Ui.S(10), y), cor);
+            Ui.DesenharNumero(g, txt, Ui.FontValue, new Point(Ui.S(13), y), cor);
 
             if (!string.IsNullOrEmpty(Unidade))
                 TextRenderer.DrawText(g, Unidade, Ui.FontSmall,
@@ -496,7 +496,7 @@ namespace MhiagosControl
             if (bx + w > Width - Ui.S(2)) bx = Width - Ui.S(2) - w;
 
             Rectangle balao = new Rectangle(bx, by, w, h);
-            using (GraphicsPath gp = Ui.RoundRect(balao, Ui.S(4)))
+            using (GraphicsPath gp = Ui.RoundRect(balao, Ui.RaioControle))
             {
                 using (SolidBrush b = new SolidBrush(Ui.Window)) g.FillPath(b, gp);
                 using (Pen p = new Pen(Ui.Border)) g.DrawPath(p, gp);

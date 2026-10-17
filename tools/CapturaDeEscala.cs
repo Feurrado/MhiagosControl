@@ -109,11 +109,89 @@ namespace MhiagosControl
             Esperar(300);
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr h);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern void keybd_event(byte vk, byte scan, int flags, int extra);
+        private static void Ativar(Form f)
+        {
+            keybd_event(0x12, 0, 0, 0); keybd_event(0x12, 0, 2, 0);   // um Alt solto libera o primeiro plano
+            SetForegroundWindow(f.Handle);
+            f.Activate();
+        }
+
+        /// <summary>
+        /// A janela de verdade, pelo que o DWM compoe (Mica, sombra): copia da
+        /// tela, e nao DrawToBitmap. Tests.exe --captura-tela 1.0 pasta
+        /// </summary>
+        private static void CapturaDaTela(SettingsForm form, NavBar nav, string pasta)
+        {
+            form.TopMost = true; Ativar(form); Esperar(300);
+            foreach (int i in new int[] { 0, 1, 2, 3, 4, 5, 6, 7 })
+            {
+                nav.SelectedIndex = i;
+                Esperar(700);
+                using (Bitmap bmp = new Bitmap(form.Width, form.Height))
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.CopyFromScreen(form.Location, Point.Empty, form.Size);
+                    bmp.Save(Path.Combine(pasta, "tela-" + i + ".png"), ImageFormat.Png);
+                }
+            }
+            Console.WriteLine("mica: " + Mica.Disponivel);
+        }
+
+        private static void MaisCaros(Control raiz)
+        {
+            List<KeyValuePair<double, string>> r = new List<KeyValuePair<double, string>>();
+            Queue<Control> fila = new Queue<Control>();
+            fila.Enqueue(raiz);
+            while (fila.Count > 0)
+            {
+                Control c = fila.Dequeue();
+                foreach (Control f in c.Controls) fila.Enqueue(f);
+                if (c == raiz || c.Width < 4 || c.Height < 4 || !c.Visible) continue;
+                using (Bitmap b = new Bitmap(c.Width, c.Height))
+                {
+                    System.Diagnostics.Stopwatch w = System.Diagnostics.Stopwatch.StartNew();
+                    for (int k = 0; k < 20; k++) c.DrawToBitmap(b, new Rectangle(Point.Empty, b.Size));
+                    r.Add(new KeyValuePair<double, string>(w.Elapsed.TotalMilliseconds / 20, c.GetType().Name + " " + c.Width + "x" + c.Height));
+                }
+            }
+            r.Sort(delegate (KeyValuePair<double, string> a, KeyValuePair<double, string> b) { return b.Key.CompareTo(a.Key); });
+            for (int i = 0; i < Math.Min(5, r.Count); i++) Console.WriteLine(string.Format("    {0,6:0.00} ms  {1}", r[i].Key, r[i].Value));
+        }
+
+        /// <summary>
+        /// Custo de pintar cada pagina inteira: DrawToBitmap 40 vezes, mediana e
+        /// pior caso. Tests.exe --medir-pintura 1.0 pasta
+        /// </summary>
+        private static void MedirPintura(SettingsForm form, NavBar nav)
+        {
+            for (int i = 0; i < nav.Items.Count; i++)
+            {
+                nav.SelectedIndex = i;
+                InvokePrivate(form, "AtualizarPaginaAtiva", true);
+                Application.DoEvents();
+                List<double> t = new List<double>();
+                using (Bitmap bmp = new Bitmap(form.Width, form.Height))
+                    for (int k = 0; k < 40; k++)
+                    {
+                        System.Diagnostics.Stopwatch w = System.Diagnostics.Stopwatch.StartNew();
+                        form.DrawToBitmap(bmp, new Rectangle(Point.Empty, bmp.Size));
+                        t.Add(w.Elapsed.TotalMilliseconds);
+                    }
+                t.Sort();
+                Console.WriteLine(string.Format("{0,-16} mediana {1,6:0.0} ms  pior {2,6:0.0} ms", nav.Items[i].Text, t[t.Count / 2], t[t.Count - 1]));
+                if (i == 3) MaisCaros(form);
+            }
+        }
+
         private static int CapturaDeEscala(string[] args)
         {
             float zoom = float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
             string pasta = args[2];
             bool medir = args[0] == "--medir-animacao";
+            bool tela = args[0] == "--captura-tela";
+            bool pintura = args[0] == "--medir-pintura";
             // Antes de qualquer toque no Ui: as fontes nascem com esta escala.
             AppDomain.CurrentDomain.SetData("MhiagosControl.Zoom", zoom);
             Directory.CreateDirectory(pasta);
@@ -153,10 +231,12 @@ namespace MhiagosControl
             using (SettingsForm form = new SettingsForm(config, dados.Sensors, dados))
             {
                 form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual;
-                form.Location = medir ? new Point(20, 20) : new Point(-30000, -30000);
+                form.Location = (medir || tela) ? new Point(20, 20) : new Point(-30000, -30000);
                 form.Show(); ((Timer)Field(form, "_tick")).Stop();
                 NavBar nav = (NavBar)Field(form, "_nav");
                 if (medir) { MedirAnimacoes(form, nav); form.Close(); return 0; }
+                if (tela) { CapturaDaTela(form, nav, pasta); form.Close(); return 0; }
+                if (pintura) { MedirPintura(form, nav); form.Close(); return 0; }
                 foreach (Size tamanho in tamanhos)
                 {
                     form.Size = tamanho;

@@ -68,6 +68,9 @@ namespace MhiagosControl
                 Medir("  so Refresh (biblioteca + BuildRaw)", delegate { s.Refresh(); });
                 Medir("    so a varredura da biblioteca", delegate { Varrer(s); });
                 Medir("    so BuildRaw", delegate { BuildRaw(s); });
+                s.Focar(new string[] { id1, id2 });
+                Medir("  Refresh com foco nos dois mostradores (janela fechada)", delegate { s.Refresh(); });
+                s.Focar(null);
                 Medir("  so 2x ReadEntry", delegate { s.ReadEntry(id1); s.ReadEntry(id2); });
                 Medir("Snapshot (so com a janela aberta)", delegate { s.Snapshot(); });
                 Medir("List (so ao abrir a janela)", delegate { s.List(); });
@@ -420,10 +423,13 @@ namespace MhiagosControl
 
         private static void Varrer(Sensors s)
         {
-            LibreHardwareMonitor.Hardware.Computer c =
-                (LibreHardwareMonitor.Hardware.Computer)FiComputer.GetValue(s);
-            if (c == null) return;
-            c.Accept((LibreHardwareMonitor.Hardware.IVisitor)FiVisitor.GetValue(s));
+            foreach (string campo in new string[] { "_primary", "_fallback" })
+            {
+                LibreSensorSource libre = typeof(Sensors).GetField(campo, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(s) as LibreSensorSource;
+                if (libre == null) continue;
+                libre.Foco = null;
+                libre.Refresh();
+            }
         }
 
         private static bool Elevado()

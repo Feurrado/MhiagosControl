@@ -252,7 +252,7 @@ namespace MhiagosControl
             // Afasta o primeiro cartao da barra de titulo. Quatro pixels faziam
             // o conteudo parecer colado ao topo, sobretudo nas paginas sem
             // titulo proprio, como Visao geral e Metricas.
-            _host.Padding = new Padding(Ui.S(18), Ui.S(12), Ui.S(18), Ui.S(14));
+            _host.Padding = new Padding(Ui.S(16), Ui.S(16), Ui.S(16), Ui.S(16));
             Controls.Add(_host);
 
             // O Windows Forms encaixa os controles do fundo da ordem Z para a
@@ -1079,8 +1079,8 @@ namespace MhiagosControl
             if (_pgVisao == null || _cardCooler == null) return;
             if (_pgVisao.Width <= 0 || _pgVisao.Height <= 0) return;
 
-            int Esp = Ui.S(10);
-            int AlturaBloco = Ui.S(148);
+            int Esp = Ui.S(8);
+            int AlturaBloco = Ui.S(104);
             int AlturaSpecs = Ui.S(56);
             int AlturaPerif = Ui.S(80);
             int MeioMin = Ui.S(240);
@@ -1217,7 +1217,7 @@ namespace MhiagosControl
             {
                 int a = TextRenderer.MeasureText(_vgSpecCap[i].Text, Ui.FontSmall).Width;
                 int b = TextRenderer.MeasureText(_vgSpecVal[i].Text, Ui.FontSemi).Width;
-                larg[i] = Math.Max(a, b) + Ui.S(4);
+                larg[i] = Math.Max(a, b) + Ui.S(14);
                 soma += larg[i];
             }
 
@@ -1873,7 +1873,7 @@ namespace MhiagosControl
                 b.Text = nomes[i];
                 b.Tag = i;
                 b.Primary = i == _specCategory;
-                b.Height = Ui.S(30);
+                b.Height = Ui.S(32);
                 b.Click += delegate(object sender, EventArgs e)
                 {
                     FlatBtn clicked = sender as FlatBtn;
@@ -3173,7 +3173,7 @@ namespace MhiagosControl
 
             _lang = new Segmented();
             _lang.SetItems("Português (BR)", "English (US)");
-            _lang.Size = new Size(Ui.S(300), Ui.S(30));
+            _lang.Size = new Size(Ui.S(300), Ui.S(32));
             _lang.SelectedIndex = T.Pt ? 0 : 1;
             // depois de fixar a posicao: o seletor avisa toda mudanca, e a
             // primeira seria a nossa - reabriria a janela ao abrir a janela
@@ -3433,19 +3433,31 @@ namespace MhiagosControl
         /// </summary>
         private void MenuDeConjuntos()
         {
-            // ContextMenu, e nao ContextMenuStrip: e o mesmo tipo que o menu da
-            // bandeja ja usa. Um menu nativo nao aceita o tema desenhado do
-            // aplicativo, mas dois menus com aparencias diferentes no mesmo
-            // programa e pior do que um so, coerente com o sistema.
-            ContextMenu m = new ContextMenu();
+            // ContextMenuStrip com o renderizador do tema (MenuTema): o menu
+            // nativo nao aceitava cor, fonte nem raio.
+            ContextMenuStrip m = MenuTema.Novo();
 
             foreach (MetricPicker.Conjunto c in MetricPicker.Conjuntos)
             {
                 MetricPicker.Conjunto alvo = c;   // copia local para o delegate
-                m.MenuItems.Add(new MenuItem(c.Nome, delegate { AplicarConjunto(alvo); }));
+                m.Items.Add(MenuTema.Item(c.Nome, delegate { AplicarConjunto(alvo); }));
             }
 
-            m.Show(_btPadraoMetrica, new Point(0, _btPadraoMetrica.Height));
+            MostrarMenu(m, _btPadraoMetrica);
+        }
+
+        private ContextMenuStrip _menuAberto;
+
+        /// <summary>
+        /// Mostra o menu sob o botao. O anterior so e descartado agora: o
+        /// clique numa opcao chega depois do fechamento, e descartar o menu no
+        /// Closed perderia a acao.
+        /// </summary>
+        private void MostrarMenu(ContextMenuStrip m, Control ancora)
+        {
+            if (_menuAberto != null) _menuAberto.Dispose();
+            _menuAberto = m;
+            m.Show(ancora, new Point(0, ancora.Height));
         }
 
         /// <summary>
@@ -3455,27 +3467,27 @@ namespace MhiagosControl
         /// </summary>
         private void MenuDePerfisDeMetricas()
         {
-            ContextMenu menu = new ContextMenu();
-            menu.MenuItems.Add(new MenuItem(T.SaveMetricProfile,
+            ContextMenuStrip menu = MenuTema.Novo();
+            menu.Items.Add(MenuTema.Item(T.SaveMetricProfile,
                 delegate { SalvarPerfilDeMetricas(); }));
 
-            if (_cfg.MetricProfiles.Count > 0) menu.MenuItems.Add("-");
+            if (_cfg.MetricProfiles.Count > 0) MenuTema.Separador(menu.Items);
             foreach (MetricProfile item in _cfg.MetricProfiles)
             {
                 MetricProfile profile = item;
-                MenuItem group = new MenuItem(profile.Name);
-                group.MenuItems.Add(new MenuItem(T.Apply,
+                ToolStripMenuItem group = MenuTema.Submenu(profile.Name);
+                group.DropDownItems.Add(MenuTema.Item(T.Apply,
                     delegate { AplicarPerfilDeMetricas(profile); }));
-                group.MenuItems.Add(new MenuItem(T.UpdateMetricProfile,
+                group.DropDownItems.Add(MenuTema.Item(T.UpdateMetricProfile,
                     delegate { AtualizarPerfilDeMetricas(profile); }));
-                group.MenuItems.Add(new MenuItem(T.RenameMetricProfile,
+                group.DropDownItems.Add(MenuTema.Item(T.RenameMetricProfile,
                     delegate { RenomearPerfilDeMetricas(profile); }));
-                group.MenuItems.Add("-");
-                group.MenuItems.Add(new MenuItem(T.DeleteMetricProfile,
+                MenuTema.Separador(group.DropDownItems);
+                group.DropDownItems.Add(MenuTema.Item(T.DeleteMetricProfile,
                     delegate { ExcluirPerfilDeMetricas(profile); }));
-                menu.MenuItems.Add(group);
+                menu.Items.Add(group);
             }
-            menu.Show(_btPerfisMetrica, new Point(0, _btPerfisMetrica.Height));
+            MostrarMenu(menu, _btPerfisMetrica);
         }
 
         private MetricProfile CapturarPerfilDeMetricas(string nome)
@@ -4293,7 +4305,7 @@ namespace MhiagosControl
 
             // blocos
             BlocoDeStatus[] blocos = { _blocoPainel, _blocoFontes, _blocoBibliotecas };
-            if (width >= Ui.S(600))
+            if (width >= Ui.S(580))
             {
                 int larg = (width - 2 * Ui.S(12)) / 3;
                 int alto = 0;
@@ -4731,6 +4743,27 @@ namespace MhiagosControl
         {
             _semPerguntar = true;
             Close();
+        }
+
+        /// <summary>A pagina de destino do atalho, ou -1 se a tecla nao e de navegacao.</summary>
+        internal static int IndiceDoAtalho(Keys tecla, int atual, int total)
+        {
+            if (total <= 0) return -1;
+            if (tecla == (Keys.Control | Keys.Tab)) return (atual + 1) % total;
+            if (tecla == (Keys.Control | Keys.Shift | Keys.Tab)) return (atual - 1 + total) % total;
+            if (tecla >= (Keys.Control | Keys.D1) && tecla <= (Keys.Control | Keys.D8))
+            {
+                int i = (int)(tecla & Keys.KeyCode) - (int)Keys.D1;
+                return i < total ? i : -1;
+            }
+            return -1;
+        }
+
+        /// <summary>Mica na barra de titulo; o handle recriado (ShowInTaskbar, por exemplo) perde o atributo, entao reaplica.</summary>
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Mica.Aplicar(this);
         }
 
         /// <summary>

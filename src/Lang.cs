@@ -172,10 +172,10 @@ namespace MhiagosControl
         public static string AddMetric { get { return P("Adicionar métrica", "Add metric"); } }
         public static string DefaultMetrics { get { return P("Conjuntos", "Presets"); } }
         public static string MetricProfiles { get { return P("Perfis de métricas", "Metric profiles"); } }
-        public static string SaveMetricProfile { get { return P("Salvar perfil atual...", "Save current profile..."); } }
+        public static string SaveMetricProfile { get { return P("Salvar perfil atual…", "Save current profile…"); } }
         public static string MetricProfileName { get { return P("Nome do perfil de métricas", "Metric profile name"); } }
         public static string UpdateMetricProfile { get { return P("Atualizar com a grade atual", "Update with current grid"); } }
-        public static string RenameMetricProfile { get { return P("Renomear perfil...", "Rename profile..."); } }
+        public static string RenameMetricProfile { get { return P("Renomear perfil…", "Rename profile…"); } }
         public static string DeleteMetricProfile { get { return P("Excluir perfil", "Delete profile"); } }
         public static string DefaultMetricProfileName(int index)
         {
@@ -256,8 +256,8 @@ namespace MhiagosControl
         {
             get
             {
-                return P("Nenhuma leitura disponível — as fontes de sensores não responderam.",
-                         "No readings available — the sensor sources did not respond.");
+                return P("Nenhuma leitura disponível: as fontes de sensores não responderam.",
+                         "No readings available: the sensor sources did not respond.");
             }
         }
         public static string NavAbout { get { return P("Sobre", "About"); } }
@@ -376,8 +376,8 @@ namespace MhiagosControl
         {
             get
             {
-                return P("O cooler acende sempre um dos dois — não há como apagar.",
-                         "The cooler always lights one of the two — it cannot be blanked.");
+                return P("O cooler acende sempre um dos dois, não há como apagar.",
+                         "The cooler always lights one of the two, it cannot be blanked.");
             }
         }
         public static string Preview { get { return P("Prévia", "Preview"); } }
@@ -443,8 +443,8 @@ namespace MhiagosControl
         {
             get
             {
-                return P("RTSS ativo — as leituras de FPS estão disponíveis.",
-                         "RTSS is running — FPS readings are available.");
+                return P("RTSS ativo: as leituras de FPS estão disponíveis.",
+                         "RTSS is running: FPS readings are available.");
             }
         }
 
@@ -452,8 +452,8 @@ namespace MhiagosControl
         {
             get
             {
-                return P("RTSS não encontrado — sem ele não há como medir quadros.",
-                         "RTSS not found — without it there is no way to measure frames.");
+                return P("RTSS não encontrado: sem ele não há como medir quadros.",
+                         "RTSS not found: without it there is no way to measure frames.");
             }
         }
 
@@ -493,8 +493,8 @@ namespace MhiagosControl
         {
             get
             {
-                return P("O winget não existe nesta máquina — use a página de download.",
-                         "winget is not available on this machine — use the download page.");
+                return P("O winget não existe nesta máquina, use a página de download.",
+                         "winget is not available on this machine, use the download page.");
             }
         }
 
@@ -543,8 +543,8 @@ namespace MhiagosControl
         {
             get
             {
-                return P("Perfil importado, mas os sensores dele não existem nesta máquina — escolha os dois de novo.",
-                         "Profile imported, but its sensors do not exist on this machine — pick both again.");
+                return P("Perfil importado, mas os sensores dele não existem nesta máquina, escolha os dois de novo.",
+                         "Profile imported, but its sensors do not exist on this machine, pick both again.");
             }
         }
         public static string ActiveBadge { get { return P("ATIVO", "ACTIVE"); } }
@@ -695,7 +695,7 @@ namespace MhiagosControl
         "para identificar o equipamento com que o programa se comunica.\n" +
         "\n" +
         "O protocolo do painel foi levantado por engenharia reversa do próprio equipamento, com a\n" +
-        "finalidade exclusiva de interoperabilidade — o programa não contém, não copia e não\n" +
+        "finalidade exclusiva de interoperabilidade, o programa não contém, não copia e não\n" +
         "redistribui código do software original.\n" +
         "\n" +
         "O PROGRAMA É FORNECIDO \"COMO ESTÁ\", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU IMPLÍCITA,\n" +
@@ -712,7 +712,7 @@ namespace MhiagosControl
         "their respective owners and appear only to identify the equipment the program talks to.\n" +
         "\n" +
         "The panel protocol was recovered by reverse engineering the device itself, for the sole purpose\n" +
-        "of interoperability — the program contains no code from the original software, copies none and\n" +
+        "of interoperability, the program contains no code from the original software, copies none and\n" +
         "redistributes none.\n" +
         "\n" +
         "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING\n" +
@@ -766,9 +766,9 @@ namespace MhiagosControl
             get
             {
                 return P("Conta teclado e mouse da sessão inteira. Assistir vídeo ou esperar uma renderização longa " +
-                         "conta como ocioso — o mostrador volta ao primeiro toque.",
+                         "conta como ocioso, o mostrador volta ao primeiro toque.",
                          "Counts keyboard and mouse across the whole session. Watching a video or waiting on a long " +
-                         "render counts as idle — the display returns on the first input.");
+                         "render counts as idle, the display returns on the first input.");
             }
         }
 
@@ -833,7 +833,7 @@ namespace MhiagosControl
         // ---------------- bandeja ----------------
 
         public static string TrayProfiles { get { return P("Perfis", "Profiles"); } }
-        public static string TrayConfigure { get { return P("Configurar...", "Settings..."); } }
+        public static string TrayConfigure { get { return P("Configurar…", "Settings…"); } }
         public static string TrayPause { get { return P("Pausar", "Pause"); } }
         public static string TrayResume { get { return P("Retomar", "Resume"); } }
         public static string TrayAutostart { get { return P("Iniciar com o Windows", "Start with Windows"); } }
