@@ -42,7 +42,7 @@ namespace MhiagosControl
 
         public string EffectiveUnit
         {
-            get { return string.IsNullOrEmpty(Unit) ? UnitName(Type) : Unit; }
+            get { return Sensors.ComGrau(string.IsNullOrEmpty(Unit) ? UnitName(Type) : Unit); }
         }
 
         private static string UnitName(SensorType type)
@@ -58,7 +58,7 @@ namespace MhiagosControl
                 if (!Value.HasValue || float.IsNaN(Value.Value) || float.IsInfinity(Value.Value)) return "-";
                 string u = string.IsNullOrEmpty(Unit)
                     ? Sensors.UnitOf(Type).Replace(", ", " ")
-                    : " " + Unit;
+                    : " " + Sensors.ComGrau(Unit);
 
                 // Gigabyte sempre com uma casa: "12 GB" e "12.4 GB" lado a lado
                 // na mesma lista fazem a coluna dancar, e em GB a casa decimal
@@ -262,6 +262,18 @@ namespace MhiagosControl
         /// "?". O resto do aplicativo escreve temperatura so com a letra, e a
         /// unidade vazia devolve a decisao ao tipo do sensor.
         /// </summary>
+        /// <summary>
+        /// "C" vira "°C" na tela. A fonte pode entregar a unidade sem o grau, e
+        /// CleanUnit o tira de proposito (o simbolo chegava mastigado); quem
+        /// mostra recoloca. ESCAPADO: o caractere colado no fonte ja se perdeu.
+        /// </summary>
+        internal static string ComGrau(string u)
+        {
+            if (u == "C") return "°C";
+            if (u == "F") return "°F";
+            return u;
+        }
+
         internal static string CleanUnit(string u)
         {
             if (string.IsNullOrEmpty(u)) return null;
@@ -740,7 +752,7 @@ namespace MhiagosControl
         {
             switch (t)
             {
-                case SensorType.Temperature: return ", C";
+                case SensorType.Temperature: return ", °C";
                 case SensorType.Load: return ", %";
                 case SensorType.Control: return ", %";
                 case SensorType.Level: return ", %";

@@ -75,7 +75,7 @@ namespace MhiagosControl
                 AuditSensor("load", "CPU", SensorType.Load, null, 20),
                 AuditSensor("gpu", "GPU", SensorType.Temperature, null, 50) };
             Igual(3, MetricPicker.Montar(null, sensors).Count, "F01: conjunto automatico aceita sensores Libre sem unidade explicita");
-            Igual("C", sensors[0].EffectiveUnit, "temperatura tem unidade de reserva");
+            Igual("°C", sensors[0].EffectiveUnit, "temperatura tem unidade de reserva, com o grau");
             Igual("MB", new SensorEntry { Type = SensorType.SmallData }.EffectiveUnit, "VRAM Libre em MB");
             Igual("%", new SensorEntry { Type = SensorType.Control }.EffectiveUnit, "PWM em porcentagem");
             foreach (string unit in new string[] { "KB/s", "MB/s" })
