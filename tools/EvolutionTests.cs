@@ -170,6 +170,10 @@ namespace MhiagosControl
                         typeof(SettingsForm).GetProperty("_dirty", AuditFlags).SetValue(form, true, null);
                         InvokePrivate(form, "ProcessCmdKey", new Message(), Keys.Control | Keys.S);
                         Igual(23, Config.LoadFrom(screen.SavePath, false).IdleBlankMinutes, "Ctrl+S persiste a edicao isolada");
+                        edit.IdleBlankMinutes = 31;
+                        typeof(SettingsForm).GetProperty("_dirty", AuditFlags).SetValue(form, true, null);
+                        for (int i = 0; i < 40; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(20); }
+                        Igual(31, Config.LoadFrom(screen.SavePath, false).IdleBlankMinutes, "edicao grava sozinha, sem botao Salvar");
                         using (TextReviewDialog preview = new TextReviewDialog(T.RestorePreview,
                             T.RestoreNote + "\r\n\r\n" + T.SavedProfiles + ": 3\r\n" + T.GameBindings + ": 1", T.RestoreApply))
                         {

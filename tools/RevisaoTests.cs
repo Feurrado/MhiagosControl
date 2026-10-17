@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -78,18 +78,11 @@ namespace MhiagosControl
                 {
                     GC.KeepAlive(form.Handle);   // sem handle o Close descarta sem FormClosing
                     typeof(SettingsForm).GetProperty("_dirty", AuditFlags).SetValue(form, true, null);
-                    int perguntas = 0;
-                    form.PerguntaAoFechar = delegate { perguntas++; return DialogResult.Cancel; };
                     Field(context, "_settingsForm", form);
 
-                    Verdade(!context.Sair(true), "B1: Cancelar na pergunta cancela a saida");
-                    Igual(1, perguntas, "B1: a pergunta aparece uma vez");
-                    Igual(0, (int)Field(context, "_runtimeState"), "B1: saida cancelada nao desmonta threads, painel nem icone");
-                    Verdade(!form.IsDisposed, "B1: a janela continua aberta e utilizavel");
-
-                    Verdade(context.FecharConfiguracao(false), "B1: instalador e fim de sessao fecham sem depender de resposta");
-                    Igual(1, perguntas, "B1: fechar sem perguntar nao abre dialogo");
+                    Verdade(context.FecharConfiguracao(false), "B1: a edicao pendente grava sozinha e a janela fecha sem pergunta");
                     Verdade(form.IsDisposed, "B1: a janela fechou");
+                    Verdade(!(bool)typeof(SettingsForm).GetProperty("_dirty", AuditFlags).GetValue(form, null), "B1: nada ficou pendente");
                 }
                 Field(context, "_settingsForm", null);
                 Verdade(context.FecharConfiguracao(true), "B1: sem janela aberta nada impede a saida");
