@@ -76,6 +76,9 @@ namespace MhiagosControl
                 AuditSensor("gpu", "GPU", SensorType.Temperature, null, 50) };
             Igual(3, MetricPicker.Montar(null, sensors).Count, "F01: conjunto automatico aceita sensores Libre sem unidade explicita");
             Igual("°C", sensors[0].EffectiveUnit, "temperatura tem unidade de reserva, com o grau");
+            Verdade(LibreSensorSource.Dono("/amdcpu/0", new string[] { "/amdcpu/0/load/0" }), "o hardware e dono do sensor dele");
+            Verdade(!LibreSensorSource.Dono("/amdcpu/0", new string[] { "/amdcpu/01/load/0" }), "prefixo parcial nao conta (/amdcpu/0 x /amdcpu/01)");
+            Verdade(!LibreSensorSource.Dono("/amdcpu/0", new string[] { "hw:ACPI|1|TZ", null }), "sensor do HWiNFO nao pede o hardware da biblioteca");
             Igual("MB", new SensorEntry { Type = SensorType.SmallData }.EffectiveUnit, "VRAM Libre em MB");
             Igual("%", new SensorEntry { Type = SensorType.Control }.EffectiveUnit, "PWM em porcentagem");
             foreach (string unit in new string[] { "KB/s", "MB/s" })

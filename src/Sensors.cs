@@ -191,6 +191,8 @@ namespace MhiagosControl
         /// <summary>Atualiza as duas fontes e recompoe o instantaneo do ciclo.</summary>
         public void Refresh()
         {
+            LibreSensorSource libre = _fallback as LibreSensorSource; if (libre != null) libre.Foco = _foco;
+            libre = _primary as LibreSensorSource; if (libre != null) libre.Foco = _foco;
             if (_primary.Available) _primary.Refresh();
             if (_fallback.Available) _fallback.Refresh();
             if (_auxiliary.Available) _auxiliary.Refresh();

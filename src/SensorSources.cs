@@ -33,11 +33,42 @@ namespace MhiagosControl
             _computer = c;
         }
 
+        /// <summary>
+        /// Os sensores que o ciclo precisa (null: todos). Com a janela fechada so
+        /// o hardware dono desses sensores e atualizado: a varredura completa
+        /// (CPU, GPU, placa, memoria, discos) custava ~48 ms por segundo para
+        /// atualizar valores que ninguem le.
+        /// </summary>
+        public ICollection<string> Foco;
+
         public void Refresh()
         {
             if (_computer == null) return;
-            try { _computer.Accept(_visitor); }
+            try
+            {
+                ICollection<string> foco = Foco;
+                if (foco == null || foco.Count == 0) { _computer.Accept(_visitor); return; }
+                foreach (IHardware hw in _computer.Hardware)
+                    if (PrecisaDe(hw, foco)) hw.Accept(_visitor);
+            }
             catch (Exception ex) { Log.Error(Name + ": atualizacao", ex); }
+        }
+
+        /// <summary>O hardware, ou um dos sub-hardwares dele, e dono de algum sensor do foco.</summary>
+        internal static bool PrecisaDe(IHardware hw, ICollection<string> foco)
+        {
+            if (Dono(hw.Identifier.ToString(), foco)) return true;
+            foreach (IHardware sub in hw.SubHardware)
+                if (PrecisaDe(sub, foco)) return true;
+            return false;
+        }
+
+        internal static bool Dono(string identificador, ICollection<string> foco)
+        {
+            string prefixo = identificador + "/";
+            foreach (string id in foco)
+                if (id != null && id.StartsWith(prefixo, StringComparison.Ordinal)) return true;
+            return false;
         }
 
         public List<SensorEntry> Read(IEnumerable<string> focusedIds)
