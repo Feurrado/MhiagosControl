@@ -65,6 +65,9 @@ namespace MhiagosControl
         /// <summary>Todo o uso medido desde que o app comecou a acompanhar o aparelho.</summary>
         public double UsoTotalHoras;
 
+        /// <summary>Ciclos equivalentes: os pontos gastos em degraus medidos, somados, divididos por 100.</summary>
+        public double CiclosEquivalentes;
+
         /// <summary>Horas por carga cheia em cada mes com dado bastante, do mais antigo ao mais novo.</summary>
         public List<KeyValuePair<DateTime, double>> SaudePorMes = new List<KeyValuePair<DateTime, double>>();
 
@@ -122,6 +125,24 @@ namespace MhiagosControl
         private static readonly TimeSpan IntervaloDeGravacao = TimeSpan.FromMinutes(5);
         private const int DescargasGuardadas = 30;
 
+        /// <summary>
+        /// Esquecimento por ponto medido: o dado de 70 pontos atras vale a metade.
+        /// A bateria envelhece e o jeito de usar muda; a media de toda a historia
+        /// demora meses para acompanhar, e a previsao precisa seguir o presente.
+        /// </summary>
+        private const double Esquecimento = 0.99;
+
+        /// <summary>
+        /// Com pelo menos isto de pontos na faixa, um degrau que dure menos que
+        /// 1/4 ou mais que 3x a media dela entra limitado a esse intervalo: o
+        /// headset esquecido ligado a noite toda nao pode dobrar a previsao.
+        /// </summary>
+        private const double PontosParaLimitar = 15;
+        private const double LimiteInferior = 0.25, LimiteSuperior = 3;
+
+        /// <summary>Do degrau em andamento, no minimo esta fracao ainda por vir: passou do usual, mas nao acabou.</summary>
+        private const double FracaoMinimaDoDegrau = 0.25;
+
         private sealed class Aparelho
         {
             public string Chave, Nome;
@@ -147,7 +168,17 @@ namespace MhiagosControl
             // reta - costuma cair mais depressa perto do fim - e a media unica
             // erraria justamente quando a pessoa mais precisa da previsao.
             public readonly double[] FaixaSeg = new double[Faixas];
-            public readonly int[] FaixaPts = new int[Faixas];
+            public readonly double[] FaixaPts = new double[Faixas];
+
+            // O degrau em andamento. A leitura grossa (o G325 da a carga de 10
+            // em 10%) so diz quando o degrau MUDOU: o tempo entre duas mudancas
+            // e a unica duracao exata. O primeiro degrau de cada descarga (e o
+            // que atravessou uma lacuna) comeca num instante desconhecido e nao
+            // entra na conta; o tempo dele so serve para descontar da previsao.
+            public double PassoUso;
+            public bool PassoValido;
+            public double CargaPassoSeg;
+            public bool CargaPassoValido;
 
             // O mesmo para a carga: quanto tempo no cabo cada faixa levou para
             // subir. Perto de 100% a carga desacelera, e e a faixa que mais
@@ -239,16 +270,30 @@ namespace MhiagosControl
                     a.CargaInicio = agora;
                     a.CargaPctInicio = pct;
                     a.CargaTeto = pct;
+                    a.CargaPassoSeg = 0; a.CargaPassoValido = false;
                     Amostrar(a, agora, pct, true, true);
                     MarcarParaGravar(true);
                 }
-                else if (continuo && a.CargaTeto < 100)
+                else if (a.CargaTeto < 100)
                 {
-                    // tempo para a faixa do proximo ponto a ganhar; pontos so
-                    // acima do teto, para uma leitura que oscila nao contar duas vezes
-                    a.CargaSeg[Faixa(a.CargaTeto + 1)] += dt;
-                    for (int q = a.CargaTeto + 1; q <= pct; q++) a.CargaPts[Faixa(q)]++;
-                    if (pct > a.CargaTeto) { a.CargaTeto = pct; MarcarParaGravar(false); }
+                    // O tempo entre duas subidas da leitura e o que vale; so
+                    // pontos acima do teto, para uma leitura que oscila nao
+                    // contar duas vezes. Veja Aparelho.PassoUso.
+                    if (continuo) a.CargaPassoSeg += dt;
+                    else a.CargaPassoValido = false;
+                    if (pct > a.CargaTeto)
+                    {
+                        int n = pct - a.CargaTeto;
+                        if (continuo && a.CargaPassoValido)
+                            for (int q = a.CargaTeto + 1; q <= pct; q++)
+                            {
+                                a.CargaSeg[Faixa(q)] += a.CargaPassoSeg / n;
+                                a.CargaPts[Faixa(q)]++;
+                            }
+                        a.CargaTeto = pct;
+                        a.CargaPassoSeg = 0; a.CargaPassoValido = continuo;
+                        MarcarParaGravar(false);
+                    }
                 }
             }
             else
@@ -262,7 +307,7 @@ namespace MhiagosControl
                         Inicio = a.CargaInicio, Fim = agora,
                         PctInicio = a.CargaPctInicio, PctFim = Math.Max(pct, a.PctAtual ?? pct)
                     };
-                    a.Atual = NovaDescarga(agora, pct, false);
+                    a.Atual = NovaDescarga(agora, pct, false); a.PassoUso = 0; a.PassoValido = false;
                     Amostrar(a, agora, pct, false, true);
                     MarcarParaGravar(true);
                 }
@@ -275,12 +320,12 @@ namespace MhiagosControl
                         Inicio = a.UltimaLeitura, Fim = agora,
                         PctInicio = a.PctAtual.Value, PctFim = pct, Deduzida = true
                     };
-                    a.Atual = NovaDescarga(agora, pct, false);
+                    a.Atual = NovaDescarga(agora, pct, false); a.PassoUso = 0; a.PassoValido = false;
                     MarcarParaGravar(true);
                 }
                 else if (a.Atual == null)
                 {
-                    a.Atual = NovaDescarga(agora, pct, true);
+                    a.Atual = NovaDescarga(agora, pct, true); a.PassoUso = 0; a.PassoValido = false;
                     MarcarParaGravar(false);
                 }
                 else if (continuo)
@@ -289,22 +334,20 @@ namespace MhiagosControl
                     a.Atual.UsoSegundos += dt;
                     a.UsoTotalSeg += dt;
 
-                    // O tempo vai para a faixa do piso (a menor leitura desta
-                    // descarga) e cada ponto perdido abaixo dele para a faixa
-                    // dele. Pelo piso, e nao pela leitura: o G325 volta um degrau
-                    // sozinho em repouso, e contar a nova descida de novo cobraria
-                    // os mesmos dez pontos duas vezes.
-                    if (!assentando)
+                    // O piso e a menor leitura desta descarga: o G325 volta um
+                    // degrau sozinho em repouso, e contar a nova descida de novo
+                    // cobraria os mesmos dez pontos duas vezes. Cada queda abaixo
+                    // do piso fecha um degrau; veja Aparelho.PassoUso.
+                    int piso = a.Atual.PctFim;
+                    if (assentando) { a.PassoUso = 0; a.PassoValido = false; }
+                    else
                     {
-                        int piso = a.Atual.PctFim;
-                        a.FaixaSeg[Faixa(piso)] += dt;
-                        for (int q = pct + 1; q <= piso; q++) a.FaixaPts[Faixa(q)]++;
-
-                        double[] mes;
-                        string chaveMes = agora.ToString("yyyyMM", CultureInfo.InvariantCulture);
-                        if (!a.Meses.TryGetValue(chaveMes, out mes)) { mes = new double[2]; a.Meses[chaveMes] = mes; }
-                        mes[0] += dt;
-                        if (piso > pct) mes[1] += piso - pct;
+                        a.PassoUso += dt;
+                        if (pct < piso)
+                        {
+                            if (a.PassoValido) CreditarDescarga(a, agora, piso, pct, a.PassoUso);
+                            a.PassoUso = 0; a.PassoValido = true;
+                        }
                     }
 
                     a.Atual.Fim = agora;
@@ -312,11 +355,49 @@ namespace MhiagosControl
                     if (assentando) a.Atual.PctInicio = Math.Min(a.Atual.PctInicio, pct);
                     if (pct != a.PctAtual) MarcarParaGravar(false);
                 }
+                else if (dt > LacunaMaxSeg)
+                {
+                    // o aparelho sumiu por um tempo: o degrau em curso nao tem inicio nem fim conhecidos
+                    a.PassoValido = false;
+                    a.Atual.PctFim = Math.Min(a.Atual.PctFim, pct);
+                }
             }
 
             a.PctAtual = pct;
             a.UltimaLeitura = agora;
             Amostrar(a, agora, pct, p.Carregando, false);
+        }
+
+        /// <summary>
+        /// Um degrau completo: "seg" segundos de uso para ir de "de" a "ate".
+        /// Cada ponto leva a parte dele, na faixa dele, depois de a faixa
+        /// esquecer um pouco do que mediu antes e de o degrau fora do comum
+        /// ser limitado.
+        /// </summary>
+        private static void CreditarDescarga(Aparelho a, DateTime agora, int de, int ate, double seg)
+        {
+            int n = de - ate;
+            if (n <= 0 || seg <= 0) return;
+            double porPonto = seg / n, soma = 0;
+            for (int q = ate + 1; q <= de; q++)
+            {
+                int k = Faixa(q);
+                double x = porPonto;
+                if (a.FaixaPts[k] >= PontosParaLimitar)
+                {
+                    double media = a.FaixaSeg[k] / a.FaixaPts[k];
+                    x = Math.Max(media * LimiteInferior, Math.Min(media * LimiteSuperior, x));
+                }
+                a.FaixaSeg[k] = a.FaixaSeg[k] * Esquecimento + x;
+                a.FaixaPts[k] = a.FaixaPts[k] * Esquecimento + 1;
+                soma += x;
+            }
+
+            double[] mes;
+            string chaveMes = agora.ToString("yyyyMM", CultureInfo.InvariantCulture);
+            if (!a.Meses.TryGetValue(chaveMes, out mes)) { mes = new double[2]; a.Meses[chaveMes] = mes; }
+            mes[0] += soma;
+            mes[1] += n;
         }
 
         private static Descarga NovaDescarga(DateTime agora, int pct, bool parcial)
@@ -422,8 +503,11 @@ namespace MhiagosControl
             {
                 r.HorasPorCargaCheia = Somar(ritmo, 100) / 3600.0;
                 if (!r.Carregando && r.PctAtual.HasValue)
-                    r.HorasRestantes = Somar(ritmo, r.PctAtual.Value) / 3600.0;
+                    r.HorasRestantes = RestanteSeg(a, ritmo, r.PctAtual.Value) / 3600.0;
             }
+            double gastos = 0;
+            foreach (KeyValuePair<string, double[]> m in a.Meses) gastos += m.Value[1];
+            r.CiclosEquivalentes = gastos / 100.0;
             foreach (KeyValuePair<string, double[]> m in a.Meses)
             {
                 if (m.Value[1] < PontosPorMes) continue;
@@ -436,9 +520,7 @@ namespace MhiagosControl
                 if (r.PctAtual.Value >= 100) r.HorasAteEncher = 0;
                 else if (carga != null)
                 {
-                    double s = 0;
-                    for (int q = r.PctAtual.Value + 1; q <= 100; q++) s += carga[Faixa(q)];
-                    r.HorasAteEncher = s / 3600.0;
+                    r.HorasAteEncher = AteEncherSeg(a, carga, r.PctAtual.Value) / 3600.0;
                 }
             }
 
@@ -457,7 +539,7 @@ namespace MhiagosControl
         /// </summary>
         private static double[] RitmoPorPonto(Aparelho a)
         {
-            double seg = 0; int pts = 0;
+            double seg = 0; double pts = 0;
             for (int k = 0; k < Faixas; k++) { seg += a.FaixaSeg[k]; pts += a.FaixaPts[k]; }
 
             double media;
@@ -492,6 +574,58 @@ namespace MhiagosControl
         }
 
         /// <summary>
+        /// Tamanho do degrau da leitura: 10 quando as amostras recentes so caem
+        /// em multiplos de 10 (G325), 1 nas fontes que dao a porcentagem exata.
+        /// </summary>
+        private static int Granularidade(Aparelho a)
+        {
+            if (a.PctAtual.HasValue && a.PctAtual.Value % 10 != 0) return 1;
+            HashSet<int> vistos = new HashSet<int>();
+            foreach (AmostraDeBateria s in a.Amostras)
+            {
+                if (s.Pct % 10 != 0) return 1;
+                vistos.Add(s.Pct);
+            }
+            return vistos.Count >= 3 ? 10 : 1;
+        }
+
+        /// <summary>
+        /// Segundos de uso que restam a partir da leitura "pct". O degrau em
+        /// que a leitura esta (10 pontos no G325) ja gastou parte do tempo: o
+        /// que falta dele e o usual menos o decorrido, nunca menos que uma
+        /// fracao do usual - passar do tempo normal nao quer dizer que acabou.
+        /// </summary>
+        private static double RestanteSeg(Aparelho a, double[] ritmo, int pct)
+        {
+            int r = pct;
+            double decorrido = 0;
+            Descarga d = a.Atual;
+            if (d != null)
+            {
+                // leitura um degrau acima do piso e o aparelho descansando, e nao carga
+                if (d.PctFim < pct && pct - d.PctFim < SubidaDeCarga) r = d.PctFim;
+                if (r == d.PctFim) decorrido = a.PassoUso;
+            }
+            int topo = Math.Min(100, Math.Max(0, r));
+            int baixo = Math.Max(0, topo - Granularidade(a));
+            double degrau = Somar(ritmo, topo) - Somar(ritmo, baixo);
+            return Somar(ritmo, baixo) + Math.Max(degrau - decorrido, degrau * FracaoMinimaDoDegrau);
+        }
+
+        /// <summary>Segundos no cabo ate 100% a partir da leitura "pct", com o degrau atual descontado como em RestanteSeg.</summary>
+        private static double AteEncherSeg(Aparelho a, double[] carga, int pct)
+        {
+            int cima = Math.Min(100, pct + Granularidade(a));
+            double degrau = 0, resto = 0;
+            for (int q = pct + 1; q <= 100; q++)
+            {
+                if (q <= cima) degrau += carga[Faixa(q)]; else resto += carga[Faixa(q)];
+            }
+            double decorrido = pct == a.CargaTeto ? a.CargaPassoSeg : 0;
+            return resto + Math.Max(degrau - decorrido, degrau * FracaoMinimaDoDegrau);
+        }
+
+        /// <summary>
         /// Segundos no cabo por ponto ganho em cada faixa, como RitmoPorPonto
         /// faz para a descarga. Nulo ate o aparelho ter subido 5 pontos em 5
         /// minutos de carga observada.
@@ -520,9 +654,7 @@ namespace MhiagosControl
                 if (!_aparelhos.TryGetValue(Chave(p), out a)) return null;
                 double[] r = RitmoDeCarga(a);
                 if (r == null) return null;
-                double s = 0;
-                for (int q = p.Bateria.Value + 1; q <= 100; q++) s += r[Faixa(q)];
-                return s / 3600.0;
+                return AteEncherSeg(a, r, p.Bateria.Value) / 3600.0;
             }
         }
 
@@ -550,7 +682,7 @@ namespace MhiagosControl
                 Aparelho a;
                 if (!_aparelhos.TryGetValue(Chave(p), out a)) return null;
                 double[] ritmo = RitmoPorPonto(a);
-                return ritmo != null ? (double?)(Somar(ritmo, p.Bateria.Value) / 3600.0) : null;
+                return ritmo != null ? (double?)(RestanteSeg(a, ritmo, p.Bateria.Value) / 3600.0) : null;
             }
         }
 
@@ -692,7 +824,7 @@ namespace MhiagosControl
                     for (int k = 0; k < Faixas; k++)
                     {
                         a.FaixaSeg[k] = double.Parse(c[3 + k], CultureInfo.InvariantCulture);
-                        a.FaixaPts[k] = I(c[3 + Faixas + k]);
+                        a.FaixaPts[k] = double.Parse(c[3 + Faixas + k], CultureInfo.InvariantCulture);
                     }
                     break;
                 case "mes":
@@ -739,15 +871,15 @@ namespace MhiagosControl
                       .Append('\t').Append(S(a.UltimaLeitura)).Append('\t').Append(a.Carregando ? "1" : "0")
                       .Append('\t').Append(S(a.CargaInicio)).Append('\t').Append(S(a.CargaPctInicio)).Append('\n');
                     sb.Append("faixas\t").Append(a.Chave).Append('\t').Append(a.UsoTotalSeg.ToString("0", CultureInfo.InvariantCulture));
-                    for (int k = 0; k < Faixas; k++) sb.Append('\t').Append(a.FaixaSeg[k].ToString("0", CultureInfo.InvariantCulture));
-                    for (int k = 0; k < Faixas; k++) sb.Append('\t').Append(S(a.FaixaPts[k]));
+                    for (int k = 0; k < Faixas; k++) sb.Append('\t').Append(a.FaixaSeg[k].ToString("0.##", CultureInfo.InvariantCulture));
+                    for (int k = 0; k < Faixas; k++) sb.Append('\t').Append(a.FaixaPts[k].ToString("0.##", CultureInfo.InvariantCulture));
                     sb.Append('\n');
                     foreach (KeyValuePair<string, double[]> m in a.Meses)
                         sb.Append("mes\t").Append(a.Chave).Append('\t').Append(m.Key)
-                          .Append('\t').Append(m.Value[0].ToString("0", CultureInfo.InvariantCulture))
+                          .Append('\t').Append(m.Value[0].ToString("0.##", CultureInfo.InvariantCulture))
                           .Append('\t').Append(m.Value[1].ToString("0", CultureInfo.InvariantCulture)).Append('\n');
                     sb.Append("carga_faixas\t").Append(a.Chave).Append('\t').Append(S(a.CargaTeto));
-                    for (int k = 0; k < Faixas; k++) sb.Append('\t').Append(a.CargaSeg[k].ToString("0", CultureInfo.InvariantCulture));
+                    for (int k = 0; k < Faixas; k++) sb.Append('\t').Append(a.CargaSeg[k].ToString("0.##", CultureInfo.InvariantCulture));
                     for (int k = 0; k < Faixas; k++) sb.Append('\t').Append(S(a.CargaPts[k]));
                     sb.Append('\n');
                     if (a.Atual != null) Escrever(sb, "atual", a.Chave, a.Atual);
