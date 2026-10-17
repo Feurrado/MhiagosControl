@@ -530,7 +530,7 @@ namespace MhiagosControl
             // Foco pelo teclado: o contorno vai no "Mais detalhes", que e o
             // que Enter e Espaco acionam.
             if (Focused && ShowFocusCues)
-                ControlPaint.DrawFocusRectangle(g, _zonaDosDetalhes, cor, Color.Transparent);
+                Ui.AnelDeFoco(g, _zonaDosDetalhes, Ui.RaioControle);
         }
 
         /// <summary>O que nao cabe nos blocos, em pares rotulo e valor.</summary>
@@ -842,7 +842,7 @@ namespace MhiagosControl
             DesenharSeta(g, new RectangleF(x, 1, Ui.S(12), Height), cor);
 
             if (Focused && ShowFocusCues)
-                ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(r, -3, -3), cor, Color.Transparent);
+                Ui.AnelDeFoco(g, Rectangle.Inflate(r, 2, 2), Ui.RaioControle);
         }
 
         /// <summary>

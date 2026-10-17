@@ -1827,7 +1827,7 @@ namespace MhiagosControl
                 b.Text = nomes[i];
                 b.Tag = i;
                 b.Primary = i == _specCategory;
-                b.Height = Ui.S(30);
+                b.Height = Ui.S(32);
                 b.Click += delegate(object sender, EventArgs e)
                 {
                     FlatBtn clicked = sender as FlatBtn;
@@ -3127,7 +3127,7 @@ namespace MhiagosControl
 
             _lang = new Segmented();
             _lang.SetItems("Português (BR)", "English (US)");
-            _lang.Size = new Size(Ui.S(300), Ui.S(30));
+            _lang.Size = new Size(Ui.S(300), Ui.S(32));
             _lang.SelectedIndex = T.Pt ? 0 : 1;
             // depois de fixar a posicao: o seletor avisa toda mudanca, e a
             // primeira seria a nossa - reabriria a janela ao abrir a janela

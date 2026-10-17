@@ -245,6 +245,27 @@ namespace MhiagosControl
         public static int S(int px) { return (int)Math.Ceiling(px * Escala - 0.001f); }
 
         // Depois de Escala: campo estatico se inicializa na ordem do arquivo.
+        /// <summary>Mistura de duas cores (alfa incluido), t de 0 a 1.</summary>
+        public static Color Misturar(Color a, Color b, float t)
+        {
+            if (t <= 0f) return a;
+            if (t >= 1f) return b;
+            return Color.FromArgb((int)Math.Round(a.A + (b.A - a.A) * t), (int)Math.Round(a.R + (b.R - a.R) * t),
+                (int)Math.Round(a.G + (b.G - a.G) * t), (int)Math.Round(a.B + (b.B - a.B) * t));
+        }
+
+        /// <summary>
+        /// O anel de foco do teclado: 2 px no azul de enfase, por dentro do
+        /// retangulo, com o raio do controle. Um so desenho para todos, no lugar
+        /// do pontilhado do sistema.
+        /// </summary>
+        public static void AnelDeFoco(Graphics g, Rectangle r, int raio)
+        {
+            using (GraphicsPath p = RoundRect(Rectangle.Inflate(r, -1, -1), Math.Max(0, raio - 1)))
+            using (Pen pen = new Pen(Accent, 2f))
+                g.DrawPath(pen, p);
+        }
+
         public static readonly int Radius = Ui.S(8);
         /// <summary>Raios da escala: 4 para controle (botao, linha, campo), 8 para cartao e janela.</summary>
         public static readonly int RaioControle = Ui.S(4);
@@ -661,7 +682,10 @@ namespace MhiagosControl
         /// </summary>
         public string Glyph = null;
 
-        private bool _hover, _down;
+        private Transicao _tHover, _tDown;
+        private Transicao TH { get { return _tHover ?? (_tHover = new Transicao(this)); } }
+        private Transicao TD { get { return _tDown ?? (_tDown = new Transicao(this)); } }
+
 
         public FlatBtn()
         {
@@ -695,12 +719,12 @@ namespace MhiagosControl
             base.OnTextChanged(e);
         }
 
-        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { _hover = false; _down = false; Invalidate(); base.OnMouseLeave(e); }
-        protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
-        protected override void OnMouseUp(MouseEventArgs e) { _down = false; Invalidate(); base.OnMouseUp(e); }
+        protected override void OnMouseEnter(EventArgs e) { TH.Ir(1f); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { TH.Ir(0f); TD.Ir(0f); base.OnMouseLeave(e); }
+        protected override void OnMouseDown(MouseEventArgs e) { TD.Ir(1f); base.OnMouseDown(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { TD.Ir(0f); base.OnMouseUp(e); }
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
-        protected override void OnLostFocus(EventArgs e) { _down = false; Invalidate(); base.OnLostFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { TD.Ir(0f); base.OnLostFocus(e); }
         protected override void OnKeyDown(KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space)
@@ -729,19 +753,19 @@ namespace MhiagosControl
             }
             else if (Primary)
             {
-                fill = _down ? Ui.Accent : (_hover ? Ui.AccentHover : Ui.Accent);
+                fill = Ui.Misturar(Ui.Misturar(Ui.Accent, Ui.AccentHover, TH.Valor), Ui.Misturar(Ui.Accent, Color.Black, 0.18f), TD.Valor);
                 fore = Color.White;
                 border = fill;
             }
             else if (Danger)
             {
-                fill = _hover ? Color.FromArgb(60, Ui.Danger) : Color.Transparent;
+                fill = Ui.Misturar(Ui.Misturar(Color.FromArgb(0, Ui.Danger), Color.FromArgb(60, Ui.Danger), TH.Valor), Color.FromArgb(90, Ui.Danger), TD.Valor);
                 fore = Ui.Danger;
                 border = Ui.Danger;
             }
             else
             {
-                fill = _down ? Ui.SurfaceAlt : (_hover ? Ui.Hover : Ui.Surface);
+                fill = Ui.Misturar(Ui.Misturar(Ui.Surface, Ui.Hover, TH.Valor), Ui.SurfaceAlt, TD.Valor);
                 fore = Enabled ? Ui.Text : Ui.Muted;
                 border = Ui.Border;
             }
@@ -784,7 +808,7 @@ namespace MhiagosControl
         private void DrawFocus(Graphics g, Rectangle r, Color fore)
         {
             if (Focused && ShowFocusCues)
-                ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(r, -4, -4), fore, Color.Transparent);
+                Ui.AnelDeFoco(g, new Rectangle(0, 0, Width, Height), Ui.RaioControle);
         }
     }
 
@@ -792,7 +816,9 @@ namespace MhiagosControl
     public class Toggle : Control
     {
         private bool _on;
-        private bool _hover;
+        private Transicao _tHover, _tPos;
+        private Transicao TH { get { return _tHover ?? (_tHover = new Transicao(this)); } }
+        private Transicao TP { get { return _tPos ?? (_tPos = new Transicao(this, Motion.Media)); } }
         public event EventHandler CheckedChanged;
 
         public bool Checked
@@ -802,6 +828,7 @@ namespace MhiagosControl
             {
                 if (_on == value) return;
                 _on = value;
+                TP.Ir(value ? 1f : 0f);
                 Invalidate();
                 if (IsHandleCreated) AccessibilityNotifyClients(AccessibleEvents.StateChange, -1);
                 if (CheckedChanged != null) CheckedChanged(this, EventArgs.Empty);
@@ -821,14 +848,14 @@ namespace MhiagosControl
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
             Font = Ui.FontBase;
-            Size = new Size(Ui.S(240), Ui.S(26));
+            Size = new Size(Ui.S(240), Ui.S(32));
             Cursor = Cursors.Hand;
             TabStop = true;
             SetStyle(ControlStyles.Selectable, true);
         }
 
-        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseEnter(EventArgs e) { TH.Ir(1f); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { TH.Ir(0f); base.OnMouseLeave(e); }
         protected override void OnClick(EventArgs e) { Checked = !Checked; base.OnClick(e); }
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
@@ -872,9 +899,9 @@ namespace MhiagosControl
             int top = (Height - h) / 2;
             Rectangle track = new Rectangle(0, top, w, h);
 
-            bool hover = _hover && Enabled;
-            Color fill = _on ? (hover ? Ui.AccentHover : Ui.Accent)
-                             : (hover ? Ui.Border : (Ui.Dark ? Ui.SurfaceAlt : Color.FromArgb(0xCF, 0xD3, 0xDA)));
+            Color desl = Ui.Misturar(Ui.Dark ? Ui.SurfaceAlt : Color.FromArgb(0xCF, 0xD3, 0xDA), Ui.Border, Enabled ? TH.Valor : 0f);
+            Color lig = Ui.Misturar(Ui.Accent, Ui.AccentHover, Enabled ? TH.Valor : 0f);
+            Color fill = Ui.Misturar(desl, lig, TP.Valor);
             // Desabilitado parecia igual ao habilitado: o interruptor de perfil
             // por jogo, sem RTSS, era clicavel a vista e nao respondia.
             if (!Enabled) fill = _on ? Color.FromArgb(110, Ui.Accent) : Ui.SurfaceAlt;
@@ -890,12 +917,13 @@ namespace MhiagosControl
 
             if (Focused && ShowFocusCues)
                 using (GraphicsPath p = Ui.RoundRect(Rectangle.Inflate(track, 1, 1), h / 2 + 1))
-                using (Pen pen = new Pen(Ui.Accent, 1.5f))
+                using (Pen pen = new Pen(Ui.Accent, 2f))
                     g.DrawPath(pen, p);
 
             int folga = Ui.S(3);
             int knob = h - 2 * folga;
-            int kx = _on ? track.Right - knob - folga : track.X + folga;
+            int kOff = track.X + folga, kOn = track.Right - knob - folga;
+            int kx = kOff + (int)Math.Round((kOn - kOff) * TP.Valor);
             using (SolidBrush b = new SolidBrush(Enabled ? Color.White : (Ui.Dark ? Ui.Faint : Color.FromArgb(0xF0, 0xF1, 0xF4))))
                 g.FillEllipse(b, kx, top + folga, knob, knob);
 
@@ -946,7 +974,7 @@ namespace MhiagosControl
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
             Font = Ui.FontBase;
-            Size = new Size(Ui.S(160), Ui.S(30));
+            Size = new Size(Ui.S(160), Ui.S(32));
             Cursor = Cursors.Hand;
             TabStop = true;
             SetStyle(ControlStyles.Selectable, true);
@@ -1021,7 +1049,7 @@ namespace MhiagosControl
             using (GraphicsPath p = Ui.RoundRect(outer, radius))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Focused && ShowFocusCues ? Ui.Accent : Ui.Border,
-                                     Focused && ShowFocusCues ? 1.5f : 1f))
+                                     Focused && ShowFocusCues ? 2f : 1f))
             {
                 g.FillPath(b, p);
                 g.DrawPath(pen, p);
@@ -1275,6 +1303,9 @@ namespace MhiagosControl
     {
         private readonly System.Collections.Generic.List<NavItem> _items = new System.Collections.Generic.List<NavItem>();
         private int _selected = 0, _hover = -1;
+        private int _hoverVis = -1;
+        private Transicao _tNav;
+        private Transicao TNav { get { return _tNav ?? (_tNav = new Transicao(this)); } }
         public event EventHandler SelectionChanged;
 
         public Image Logo;
@@ -1634,6 +1665,8 @@ namespace MhiagosControl
             if (h != _hover || nb != _sobreBotao)
             {
                 _hover = h; _sobreBotao = nb;
+                if (h >= 0) { if (h != _hoverVis) TNav.Zerar(); _hoverVis = h; TNav.Ir(1f); }
+                else TNav.Ir(0f);
                 Cursor = (h >= 0 || nb) ? Cursors.Hand : Cursors.Default;
                 Invalidate();
             }
@@ -1642,7 +1675,7 @@ namespace MhiagosControl
 
         protected override void OnMouseLeave(EventArgs e)
         {
-            _hover = -1; _sobreBotao = false; Invalidate(); base.OnMouseLeave(e);
+            _hover = -1; _sobreBotao = false; TNav.Ir(0f); base.OnMouseLeave(e);
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -1679,12 +1712,14 @@ namespace MhiagosControl
                 it.Bounds = new Rectangle(margem, y, Width - 2 * margem, RowH);
 
                 bool sel = (i == _selected);
-                if (sel || i == _hover)
-                {
+                if (sel)
                     using (GraphicsPath p = Ui.RoundRect(it.Bounds, Ui.RaioControle))
-                    using (SolidBrush b = new SolidBrush(sel ? Ui.AccentSoft : Ui.Hover))
+                    using (SolidBrush b = new SolidBrush(Ui.AccentSoft))
                         g.FillPath(b, p);
-                }
+                else if (i == _hoverVis && TNav.Valor > 0f)
+                    using (GraphicsPath p = Ui.RoundRect(it.Bounds, Ui.RaioControle))
+                    using (SolidBrush b = new SolidBrush(Ui.Misturar(Color.FromArgb(0, Ui.Hover), Ui.Hover, TNav.Valor)))
+                        g.FillPath(b, p);
                 if (sel)
                 {
                     using (GraphicsPath p = Ui.RoundRect(new Rectangle(it.Bounds.X, it.Bounds.Y + Ui.S(9), Ui.S(3), RowH - Ui.S(18)), Ui.S(2)))

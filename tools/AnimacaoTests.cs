@@ -44,6 +44,25 @@ namespace MhiagosControl
             Verdade(Ui.FontBase.SizeInPoints >= 10f - 0.01f, "o corpo e de 10 pt");
             Igual(Ui.S(4), Ui.RaioControle, "raio de controle 4");
             Igual(Ui.S(8), Ui.RaioCartao, "raio de cartao 8");
+            Ui.AnimacoesForcadas = false;
+            using (FlatBtn botao = new FlatBtn())
+            using (Toggle chave = new Toggle())
+            {
+                Transicao t = new Transicao(botao);
+                t.Ir(1f);
+                Igual(1f, t.Valor, "sem animacoes (reduzir movimento) o estado chega no mesmo instante");
+                Verdade(botao.Height >= Ui.S(32), "botao com alvo de 32 px");
+                Verdade(chave.Height >= Ui.S(32), "interruptor com alvo de 32 px");
+                chave.Checked = true;
+                Verdade(chave.Checked, "interruptor liga sem janela");
+            }
+            Ui.AnimacoesForcadas = true;
+            using (FlatBtn botao = new FlatBtn())
+            {
+                Transicao t = new Transicao(botao);
+                t.Ir(1f);
+                Igual(1f, t.Valor, "controle sem janela nao anima: vai direto");
+            }
         }
 
         private static void AnimacaoCurva()

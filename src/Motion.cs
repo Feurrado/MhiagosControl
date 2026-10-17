@@ -131,4 +131,64 @@ namespace MhiagosControl
             return Math.Max(0f, Math.Min(1f, (agora - inicio) / (float)duracaoMs));
         }
     }
+
+    /// <summary>
+    /// Um valor de 0 a 1 que anda ate o alvo no relogio unico: o hover e o
+    /// pressionado de um controle desenhado a mao. Reaponta no meio do caminho
+    /// (sai do ponto em que esta); com "reduzir movimento" ou controle sem
+    /// janela, vai direto. O dono e repintado a cada quadro.
+    /// </summary>
+    internal sealed class Transicao
+    {
+        private readonly Control _dono;
+        private readonly int _duracao;
+        private float _de, _ate, _valor;
+        private long _inicio;
+        private bool _assinada;
+
+        public Transicao(Control dono) : this(dono, Motion.Rapida) { }
+
+        public Transicao(Control dono, int duracaoMs)
+        {
+            _dono = dono;
+            _duracao = duracaoMs;
+        }
+
+        public float Valor { get { return _valor; } }
+        public bool Animando { get { return _valor != _ate; } }
+
+        /// <summary>Volta a zero sem animar (para recomecar o fade em outro alvo).</summary>
+        public void Zerar()
+        {
+            _valor = _de = _ate = 0f;
+            _assinada = false;
+        }
+
+        public void Ir(float alvo)
+        {
+            if (alvo == _ate && (_assinada || _valor == alvo)) return;
+            _ate = alvo;
+            if (!Ui.Animacoes || _dono == null || !_dono.IsHandleCreated || !_dono.Visible)
+            {
+                _valor = alvo;
+                _assinada = false;
+                if (_dono != null) _dono.Invalidate();
+                return;
+            }
+            _de = _valor;
+            _inicio = Motion.Agora;
+            if (!_assinada) { _assinada = true; Motion.Assinar(Passo); }
+        }
+
+        /// <summary>Um quadro; true enquanto falta caminho. Separado para os testes.</summary>
+        internal bool Passo(long agora)
+        {
+            if (_dono == null || _dono.IsDisposed) { _assinada = false; return false; }
+            float t = Motion.Progresso(_inicio, agora, (int)Math.Max(1, _duracao * Math.Abs(_ate - _de)));
+            _valor = _de + (_ate - _de) * Motion.Padrao(t);
+            if (t >= 1f) { _valor = _ate; _assinada = false; }
+            _dono.Invalidate();
+            return _assinada;
+        }
+    }
 }

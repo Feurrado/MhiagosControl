@@ -29,7 +29,7 @@ namespace MhiagosControl
             _box.TextChanged += delegate { Invalidate(); if (QueryChanged != null) QueryChanged(this, EventArgs.Empty); };
             Controls.Add(_box);
 
-            Height = Ui.S(30);
+            Height = Ui.S(32);
             BackColor = Color.Transparent;
         }
 
@@ -37,7 +37,7 @@ namespace MhiagosControl
         {
             base.OnResize(e);
             if (_box == null) return;   // resize pode ocorrer durante a construcao
-            _box.SetBounds(Ui.S(30), (Height - _box.PreferredHeight) / 2 + 1, Math.Max(Ui.S(10), Width - Ui.S(40)), _box.PreferredHeight);
+            _box.SetBounds(Ui.S(32), (Height - _box.PreferredHeight) / 2 + 1, Math.Max(Ui.S(10), Width - Ui.S(40)), _box.PreferredHeight);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -61,7 +61,7 @@ namespace MhiagosControl
 
             if (_box.Text.Length == 0)
                 TextRenderer.DrawText(g, Placeholder, Ui.FontBase,
-                    new Rectangle(Ui.S(30), 0, Width - Ui.S(40), Height), Ui.Muted,
+                    new Rectangle(Ui.S(32), 0, Width - Ui.S(40), Height), Ui.Muted,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
         }
     }
@@ -86,7 +86,7 @@ namespace MhiagosControl
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
             Font = Ui.FontSmall;
-            Height = Ui.S(30);
+            Height = Ui.S(32);
             Cursor = Cursors.Hand;
         }
 
@@ -482,7 +482,7 @@ namespace MhiagosControl
             _list = new SmoothListBox();
             _list.Dock = DockStyle.Fill;
             _list.DrawMode = DrawMode.OwnerDrawFixed;
-            _list.ItemHeight = Ui.S(26);
+            _list.ItemHeight = Ui.S(32);
             _list.BorderStyle = BorderStyle.None;
             _list.IntegralHeight = false;
             _list.Font = Ui.FontBase;
