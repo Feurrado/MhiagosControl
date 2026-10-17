@@ -270,7 +270,7 @@ namespace MhiagosControl
         /// <summary>Raios da escala: 4 para controle (botao, linha, campo), 8 para cartao e janela.</summary>
         public static readonly int RaioControle = Ui.S(4);
         public static readonly int RaioCartao = Ui.S(8);
-        public static readonly int Gap = Ui.S(12);
+        public static readonly int Gap = Ui.S(16);
 
         /// <summary>
         /// Animacoes ligadas no Windows (Acessibilidade > Efeitos visuais).

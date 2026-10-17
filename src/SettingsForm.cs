@@ -252,7 +252,7 @@ namespace MhiagosControl
             // Afasta o primeiro cartao da barra de titulo. Quatro pixels faziam
             // o conteudo parecer colado ao topo, sobretudo nas paginas sem
             // titulo proprio, como Visao geral e Metricas.
-            _host.Padding = new Padding(Ui.S(18), Ui.S(12), Ui.S(18), Ui.S(14));
+            _host.Padding = new Padding(Ui.S(16), Ui.S(16), Ui.S(16), Ui.S(16));
             Controls.Add(_host);
 
             // O Windows Forms encaixa os controles do fundo da ordem Z para a
@@ -1079,8 +1079,8 @@ namespace MhiagosControl
             if (_pgVisao == null || _cardCooler == null) return;
             if (_pgVisao.Width <= 0 || _pgVisao.Height <= 0) return;
 
-            int Esp = Ui.S(10);
-            int AlturaBloco = Ui.S(148);
+            int Esp = Ui.S(8);
+            int AlturaBloco = Ui.S(104);
             int AlturaSpecs = Ui.S(56);
             int AlturaPerif = Ui.S(80);
             int MeioMin = Ui.S(240);
