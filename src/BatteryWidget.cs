@@ -461,7 +461,7 @@ namespace MhiagosControl
             {
                 if (q.Itens.Length == 0)
                 {
-                    Texto(g, T.WidgetNoDevices, f.Nota, Secundario(q.Escuro), q.Escuro,
+                    Texto(g, T.WidgetNoDevices, f.Nota, q.Escuro ? Color.White : Color.FromArgb(255, 22, 24, 30), q.Escuro,
                           new RectangleF(0, 0, tamanho.Width, tamanho.Height), StringAlignment.Center, StringAlignment.Center);
                     return;
                 }
