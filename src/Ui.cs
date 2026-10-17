@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
@@ -196,12 +197,17 @@ namespace MhiagosControl
 
         private const TextFormatFlags SemMargem = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
 
-        /// <summary>Largura da celula de um algarismo: a do mais largo, para todos caberem igual.</summary>
+        private static readonly Dictionary<Font, int> _celulas = new Dictionary<Font, int>();
+
+        /// <summary>Largura da celula de um algarismo: a do mais largo, para todos caberem igual. Guardada por fonte (as fontes do Ui duram o processo).</summary>
         private static int CelulaDeDigito(Graphics g, Font f)
         {
-            int w = 0;
+            int w;
+            if (_celulas.TryGetValue(f, out w)) return w;
+            w = 0;
             for (char c = '0'; c <= '9'; c++)
                 w = Math.Max(w, TextRenderer.MeasureText(g, c.ToString(), f, Size.Empty, SemMargem).Width);
+            _celulas[f] = w;
             return w;
         }
 
