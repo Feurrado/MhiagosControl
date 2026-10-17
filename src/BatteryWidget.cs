@@ -594,7 +594,7 @@ namespace MhiagosControl
             if (MostraNome(p))
             {
                 RectangleF lNome = new RectangleF(z.X, y + 20f * s, z.Width, 17f * s);
-                Texto(g, p.Nome, f.Nome, Secundario(escuro), escuro, lNome, StringAlignment.Center, StringAlignment.Center);
+                Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Center, StringAlignment.Center);
             }
         }
 
@@ -653,7 +653,7 @@ namespace MhiagosControl
             if (nome)
             {
                 RectangleF lNome = new RectangleF(x, z.Y, Math.Max(0f, lValor.X - x - 6f * s), 21f * s);
-                Texto(g, p.Nome, f.Nome, Secundario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
+                Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
             }
 
             // mesma espessura do traco dos aneis
@@ -730,13 +730,18 @@ namespace MhiagosControl
                 sf.Alignment = h;
                 sf.LineAlignment = v;
                 sf.Trimming = StringTrimming.EllipsisCharacter;
-                // sombra suave de um pixel embaixo, como o texto sobre vidro da Apple:
-                // o halo em volta das letras deixava o contorno sujo
-                using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(110, 0, 0, 0) : Color.FromArgb(120, 255, 255, 255)))
+                // halo em volta das letras, na cor oposta: com o vidro nitido o
+                // fundo aparece inteiro, e sem isso o texto se perde nele
+                using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(140, 0, 0, 0) : Color.FromArgb(150, 255, 255, 255)))
                 {
-                    RectangleF sombra = r;
-                    sombra.Offset(0, 1f);
-                    g.DrawString(texto, fonte, b, sombra, sf);
+                    for (int dx = -1; dx <= 1; dx++)
+                        for (int dy = -1; dy <= 1; dy++)
+                        {
+                            if (dx == 0 && dy == 0) continue;
+                            RectangleF halo = r;
+                            halo.Offset(dx, dy);
+                            g.DrawString(texto, fonte, b, halo, sf);
+                        }
                 }
                 using (SolidBrush b = new SolidBrush(cor)) g.DrawString(texto, fonte, b, r, sf);
             }
@@ -815,9 +820,9 @@ namespace MhiagosControl
             public Fontes(float s)
             {
                 // pesos mais grossos: sobre o vidro nitido o traco fino se perde
-                Pct = Criar("Segoe UI Semibold", 16f * s, FontStyle.Regular);
-                Nome = Criar("Segoe UI Semibold", 12.5f * s, FontStyle.Regular);
-                Nota = Criar("Segoe UI", 11.5f * s, FontStyle.Regular);
+                Pct = Criar("Segoe UI", 16f * s, FontStyle.Bold);
+                Nome = Criar("Segoe UI", 12.5f * s, FontStyle.Bold);
+                Nota = Criar("Segoe UI", 11.5f * s, FontStyle.Bold);
             }
 
             /// <summary>Sem o Semibold instalado, o GDI+ cairia numa fonte qualquer; o negrito comum chega perto.</summary>
