@@ -403,7 +403,7 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
 
-            using (GraphicsPath p = Ui.RoundRect(new Rectangle(Ui.S(4), Ui.S(4), Width - Ui.S(8), Height - Ui.S(8)), (Width - Ui.S(8)) / 2))
+            using (GraphicsPath p = Ui.RoundRect(new Rectangle(Ui.S(4), Ui.S(4), Width - Ui.S(8), Height - Ui.RaioCartao), (Width - Ui.S(8)) / 2))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
                 g.FillPath(b, p);
 

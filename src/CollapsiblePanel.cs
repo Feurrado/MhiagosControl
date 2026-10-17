@@ -23,7 +23,7 @@ namespace MhiagosControl
     internal sealed class AnimacaoDeRecolher : IDisposable
     {
         /// <summary>Entre os 200 e 300 ms combinados: rapido sem virar salto.</summary>
-        public const int DuracaoMs = 250;
+        public const int DuracaoMs = Motion.Lenta;
 
         private readonly int _duracao;
         private readonly Timer _relogio = new Timer();
@@ -117,53 +117,8 @@ namespace MhiagosControl
             if (fim && Terminou != null) Terminou(this, EventArgs.Empty);
         }
 
-        /// <summary>
-        /// cubic-bezier(0.4, 0, 0.2, 1): sai rapido e assenta devagar.
-        ///
-        /// A curva e dada por x(s) e y(s); o tempo entra como x e precisa
-        /// virar s antes de y sair. Newton com bissecao de reserva - x(s) e
-        /// crescente nestes pontos de controle, entao a raiz e unica.
-        /// </summary>
-        internal static float Suavizar(float t)
-        {
-            if (t <= 0f) return 0f;
-            if (t >= 1f) return 1f;
-            const double x1 = 0.4, y1 = 0.0, x2 = 0.2, y2 = 1.0;
-            double s = t;
-            for (int i = 0; i < 8; i++)
-            {
-                double x = Bezier(s, x1, x2) - t;
-                if (Math.Abs(x) < 1e-6) break;
-                double d = DerivadaBezier(s, x1, x2);
-                if (Math.Abs(d) < 1e-6) break;
-                s -= x / d;
-            }
-            if (s < 0 || s > 1 || Math.Abs(Bezier(s, x1, x2) - t) > 1e-4)
-            {
-                double baixo = 0, alto = 1;
-                s = t;
-                for (int i = 0; i < 40; i++)
-                {
-                    double x = Bezier(s, x1, x2);
-                    if (Math.Abs(x - t) < 1e-6) break;
-                    if (x < t) baixo = s; else alto = s;
-                    s = (baixo + alto) / 2;
-                }
-            }
-            return (float)Bezier(s, y1, y2);
-        }
-
-        private static double Bezier(double s, double p1, double p2)
-        {
-            double u = 1 - s;
-            return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
-        }
-
-        private static double DerivadaBezier(double s, double p1, double p2)
-        {
-            double u = 1 - s;
-            return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
-        }
+        /// <summary>cubic-bezier(0.4, 0, 0.2, 1): sai rapido e assenta devagar (ver Motion).</summary>
+        internal static float Suavizar(float t) { return Motion.Padrao(t); }
 
         public void Dispose()
         {

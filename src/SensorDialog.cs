@@ -45,7 +45,7 @@ namespace MhiagosControl
             Ui.Smooth(g);
 
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(8)))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.RaioCartao))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             {

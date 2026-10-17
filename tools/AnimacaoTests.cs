@@ -20,6 +20,7 @@ namespace MhiagosControl
             bool? antes = Ui.AnimacoesForcadas;
             try
             {
+                AnimacaoTokens();
                 AnimacaoCurva();
                 AnimacaoMotor();
                 AnimacaoPainel();
@@ -27,6 +28,22 @@ namespace MhiagosControl
                 AnimacaoPaginaBaterias(root);
             }
             finally { Ui.AnimacoesForcadas = antes; }
+        }
+
+        private static void AnimacaoTokens()
+        {
+            Secao("movimento e tokens: duracoes, curvas, tipografia");
+            Igual(83, Motion.Rapida, "duracao rapida 83 ms");
+            Igual(167, Motion.Media, "duracao media 167 ms");
+            Igual(250, Motion.Lenta, "duracao lenta 250 ms");
+            Igual(0f, Motion.Entrada(0f), "entrada comeca em zero");
+            Igual(1f, Motion.Saida(1f), "saida termina em um");
+            Verdade(Motion.Entrada(0.3f) > 0.3f, "a curva de entrada sai na frente (desacelera)");
+            Verdade(Motion.Saida(0.3f) < 0.3f, "a curva de saida fica atras (acelera)");
+            Verdade(Ui.FontBadge.SizeInPoints >= 9f - 0.01f, "o selo nunca fica abaixo de 9 pt");
+            Verdade(Ui.FontBase.SizeInPoints >= 10f - 0.01f, "o corpo e de 10 pt");
+            Igual(Ui.S(4), Ui.RaioControle, "raio de controle 4");
+            Igual(Ui.S(8), Ui.RaioCartao, "raio de cartao 8");
         }
 
         private static void AnimacaoCurva()

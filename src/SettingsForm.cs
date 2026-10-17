@@ -4247,7 +4247,7 @@ namespace MhiagosControl
 
             // blocos
             BlocoDeStatus[] blocos = { _blocoPainel, _blocoFontes, _blocoBibliotecas };
-            if (width >= Ui.S(600))
+            if (width >= Ui.S(580))
             {
                 int larg = (width - 2 * Ui.S(12)) / 3;
                 int alto = 0;

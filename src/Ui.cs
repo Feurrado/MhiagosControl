@@ -127,10 +127,42 @@ namespace MhiagosControl
         public static Color Danger { get { return C(0xEB, 0x5A, 0x4B); } }
         public static Color Hover { get { return De(Papel.Hover, Dark); } }
 
-        public static readonly Font FontBase = new Font("Segoe UI", Pt(9f));
-        public static readonly Font FontMed = new Font("Segoe UI", Pt(9f), FontStyle.Bold);
-        public static readonly Font FontTitle = new Font("Segoe UI", Pt(14f), FontStyle.Regular);
-        public static readonly Font FontSection = new Font("Segoe UI", Pt(10.5f), FontStyle.Bold);
+        // ---- tipografia ----
+        // Rampa nomeada: os tamanhos moram aqui, e cada Font* so escolhe um
+        // degrau. Familias com reserva: a Segoe UI Variable (Windows 11) se
+        // houver, senao a Segoe UI; os icones pela Segoe Fluent Icons, senao a
+        // Segoe MDL2 Assets (os pontos de codigo usados sao os mesmos).
+        internal static class Tipo
+        {
+            public const float Legenda = 9f;     // nota, rotulo de apoio
+            public const float Corpo = 10f;      // texto corrente
+            public const float Subtitulo = 11f;  // secao, valor de bloco
+            public const float Titulo = 14f;
+            public const float Destaque = 16f;   // leitura em destaque
+            public const float Nome = 18f;       // nome do aplicativo
+            public const float Numero = 20f;     // porcentagem grande
+            public const float MinimoDoSelo = 9f;
+
+            public static readonly string Texto = Achar(new[] { "Segoe UI Variable Text", "Segoe UI" }, "Segoe UI");
+            public static readonly string Icones = Achar(new[] { "Segoe Fluent Icons", "Segoe MDL2 Assets" }, "Segoe MDL2 Assets");
+
+            internal static string Achar(string[] candidatas, string reserva)
+            {
+                try
+                {
+                    foreach (string c in candidatas)
+                        foreach (FontFamily f in FontFamily.Families)
+                            if (string.Equals(f.Name, c, StringComparison.OrdinalIgnoreCase)) return c;
+                }
+                catch { }
+                return reserva;
+            }
+        }
+
+        public static readonly Font FontBase = new Font(Tipo.Texto, Pt(Tipo.Corpo));
+        public static readonly Font FontMed = new Font(Tipo.Texto, Pt(Tipo.Corpo), FontStyle.Bold);
+        public static readonly Font FontTitle = new Font(Tipo.Texto, Pt(Tipo.Titulo), FontStyle.Regular);
+        public static readonly Font FontSection = new Font(Tipo.Texto, Pt(Tipo.Subtitulo), FontStyle.Bold);
         /// <summary>
         /// O corpo pequeno, usado em rotulo de apoio e nota.
         ///
@@ -139,7 +171,7 @@ namespace MhiagosControl
         /// cheio e o antisserrilhado apaga o que sobra. Um ponto a mais devolve
         /// peso sem tirar a hierarquia, que continua vindo da COR.
         /// </summary>
-        public static readonly Font FontSmall = new Font("Segoe UI", Pt(9f));
+        public static readonly Font FontSmall = new Font(Tipo.Texto, Pt(Tipo.Legenda));
 
         /// <summary>
         /// Seminegrito, para o valor que precisa ter presenca sem virar titulo.
@@ -148,37 +180,40 @@ namespace MhiagosControl
         /// da "Segoe UI": pedir FontStyle.Bold daria o negrito cheio, que num
         /// rotulo de tres palavras pesa demais.
         /// </summary>
-        public static readonly Font FontSemi = Semi(Pt(9f));
+        public static readonly Font FontSemi = Semi(Pt(Tipo.Corpo));
         /// <summary>Valor dos blocos de resumo da pagina Baterias.</summary>
-        public static readonly Font FontTileValue = Semi(Pt(11f));
+        public static readonly Font FontTileValue = Semi(Pt(Tipo.Subtitulo));
 
         /// <summary>O nome do aplicativo no alto do Sobre.</summary>
-        public static readonly Font FontAppName = Semi(Pt(18f));
+        public static readonly Font FontAppName = Semi(Pt(Tipo.Nome));
         /// <summary>A porcentagem grande do cartao de bateria.</summary>
-        public static readonly Font FontBigPct = new Font("Segoe UI", Pt(20f), FontStyle.Bold);
+        public static readonly Font FontBigPct = new Font(Tipo.Texto, Pt(Tipo.Numero), FontStyle.Bold);
 
         private static Font Semi(float tamanho)
         {
-            try
+            foreach (string nome in new[] { Tipo.Texto + " Semibold", "Segoe UI Semibold" })
             {
-                Font f = new Font("Segoe UI Semibold", tamanho);
-                // Quando a familia nao existe, o GDI+ devolve a substituta e o
-                // nome nao bate: melhor cair no negrito do que num tipo alheio.
-                if (f.Name.IndexOf("Semibold", StringComparison.OrdinalIgnoreCase) >= 0) return f;
-                f.Dispose();
+                try
+                {
+                    Font f = new Font(nome, tamanho);
+                    // Quando a familia nao existe, o GDI+ devolve a substituta e o
+                    // nome nao bate: melhor cair no negrito do que num tipo alheio.
+                    if (f.Name.IndexOf("Semibold", StringComparison.OrdinalIgnoreCase) >= 0) return f;
+                    f.Dispose();
+                }
+                catch { }
             }
-            catch { }
-            return new Font("Segoe UI", tamanho, FontStyle.Bold);
+            return new Font(Tipo.Texto, tamanho, FontStyle.Bold);
         }
 
         /// <summary>Leitura em destaque - o numero e o assunto do cartao.</summary>
-        public static readonly Font FontValue = new Font("Segoe UI", Pt(16f), FontStyle.Bold);
-        public static readonly Font FontGlyph8 = new Font("Segoe MDL2 Assets", Pt(8f));
-        public static readonly Font FontGlyph9 = new Font("Segoe MDL2 Assets", Pt(9f));
-        public static readonly Font FontGlyph10 = new Font("Segoe MDL2 Assets", Pt(10f));
-        public static readonly Font FontGlyph11 = new Font("Segoe MDL2 Assets", Pt(11f));
-        public static readonly Font FontGlyph18 = new Font("Segoe MDL2 Assets", Pt(18f));
-        public static readonly Font FontBadge = new Font("Segoe UI", Pt(7.5f), FontStyle.Bold);
+        public static readonly Font FontValue = new Font(Tipo.Texto, Pt(Tipo.Destaque), FontStyle.Bold);
+        public static readonly Font FontGlyph8 = new Font(Tipo.Icones, Pt(8f));
+        public static readonly Font FontGlyph9 = new Font(Tipo.Icones, Pt(9f));
+        public static readonly Font FontGlyph10 = new Font(Tipo.Icones, Pt(10f));
+        public static readonly Font FontGlyph11 = new Font(Tipo.Icones, Pt(11f));
+        public static readonly Font FontGlyph18 = new Font(Tipo.Icones, Pt(18f));
+        public static readonly Font FontBadge = new Font(Tipo.Texto, Pt(Tipo.MinimoDoSelo), FontStyle.Bold);
 
 
         /// <summary>
@@ -211,6 +246,9 @@ namespace MhiagosControl
 
         // Depois de Escala: campo estatico se inicializa na ordem do arquivo.
         public static readonly int Radius = Ui.S(8);
+        /// <summary>Raios da escala: 4 para controle (botao, linha, campo), 8 para cartao e janela.</summary>
+        public static readonly int RaioControle = Ui.S(4);
+        public static readonly int RaioCartao = Ui.S(8);
         public static readonly int Gap = Ui.S(12);
 
         /// <summary>
@@ -708,7 +746,7 @@ namespace MhiagosControl
                 border = Ui.Border;
             }
 
-            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(6)))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.RaioControle))
             {
                 if (fill != Color.Transparent)
                     using (SolidBrush b = new SolidBrush(fill)) g.FillPath(b, p);
@@ -1166,7 +1204,7 @@ namespace MhiagosControl
             _box.ForeColor = Enabled ? Ui.Text : Ui.Faint;
 
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(8)))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.RaioCartao))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -1203,7 +1241,7 @@ namespace MhiagosControl
         private static void DrawSign(Graphics g, Rectangle area, string sign, bool hover, bool enabled)
         {
             if (hover && enabled)
-                using (GraphicsPath p = Ui.RoundRect(new Rectangle(area.X + Ui.S(3), Ui.S(3), area.Width - Ui.S(6), area.Height - Ui.S(7)), Ui.S(6)))
+                using (GraphicsPath p = Ui.RoundRect(new Rectangle(area.X + Ui.S(3), Ui.S(3), area.Width - Ui.S(6), area.Height - Ui.S(7)), Ui.RaioControle))
                 using (SolidBrush b = new SolidBrush(Ui.Hover))
                     g.FillPath(b, p);
 
@@ -1643,7 +1681,7 @@ namespace MhiagosControl
                 bool sel = (i == _selected);
                 if (sel || i == _hover)
                 {
-                    using (GraphicsPath p = Ui.RoundRect(it.Bounds, Ui.S(6)))
+                    using (GraphicsPath p = Ui.RoundRect(it.Bounds, Ui.RaioControle))
                     using (SolidBrush b = new SolidBrush(sel ? Ui.AccentSoft : Ui.Hover))
                         g.FillPath(b, p);
                 }
@@ -1751,7 +1789,7 @@ namespace MhiagosControl
 
             if (_sobreBotao)
             {
-                using (GraphicsPath p = Ui.RoundRect(_botao, Ui.S(6)))
+                using (GraphicsPath p = Ui.RoundRect(_botao, Ui.RaioControle))
                 using (SolidBrush b = new SolidBrush(Ui.Hover))
                     g.FillPath(b, p);
             }

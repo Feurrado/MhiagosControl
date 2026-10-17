@@ -405,7 +405,7 @@ namespace MhiagosControl
                 int col = i % colunas, lin = i / colunas;
                 Rectangle b = new Rectangle(r.X + col * (larg + EspacoEntreBlocos), r.Y + lin * (AlturaDoBloco + EspacoEntreBlocos),
                                             larg, AlturaDoBloco);
-                using (GraphicsPath gp = Ui.RoundRect(b, Ui.S(6)))
+                using (GraphicsPath gp = Ui.RoundRect(b, Ui.RaioControle))
                 {
                     using (SolidBrush br = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(br, gp);
                     // no claro o fundo do bloco quase some no branco do cartao
@@ -827,7 +827,7 @@ namespace MhiagosControl
             Ui.Smooth(g);
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
             if (_hover || _aberto)
-                using (GraphicsPath p = Ui.RoundRect(r, Ui.S(6)))
+                using (GraphicsPath p = Ui.RoundRect(r, Ui.RaioControle))
                 using (SolidBrush b = new SolidBrush(_aberto && !_hover ? Ui.AccentSoft : Ui.Hover))
                     g.FillPath(b, p);
 
