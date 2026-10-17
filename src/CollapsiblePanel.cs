@@ -100,7 +100,8 @@ namespace MhiagosControl
             float t = _msDoTrecho <= 0 ? 1f : Math.Min(1f, ms / (float)_msDoTrecho);
             // A curva vale para o trecho, e nao para o valor: de 0,3 a 1 a
             // saida suave acontece entre 0,3 e 1, sem degrau no comeco.
-            _valor = _de + (_ate - _de) * Suavizar(t);
+            // O que abre chega desacelerando (Entrada); o que fecha ganha velocidade (Saida).
+            _valor = _de + (_ate - _de) * (_ate >= _de ? Motion.Entrada(t) : Motion.Saida(t));
             bool fim = t >= 1f;
             if (fim)
             {

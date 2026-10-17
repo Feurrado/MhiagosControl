@@ -49,6 +49,7 @@ namespace MhiagosControl
 
         private NavBar _nav;
         private Panel _host;
+        private VeuDePagina _veu;
         private Profile _current;
         private Profile _selectionAtLastSave;
         private bool _loading = false;
@@ -404,6 +405,14 @@ namespace MhiagosControl
         private void ShowPage()
         {
             NavItem sel = _nav.Selected;
+            // Cross-fade: a pagina que sai e fotografada antes de ser escondida.
+            if (_veu != null) _veu.Encerrar();
+            Control saindo = null;
+            foreach (Control c in _host.Controls) if (c.Visible && c != _veu) saindo = c;
+            Bitmap retratoVelho = null;
+            if (saindo != null && sel != null && sel.Page != saindo && Ui.Animacoes && Visible
+                && IsHandleCreated && WindowState != FormWindowState.Minimized)
+                retratoVelho = VeuDePagina.Fotografar(saindo);
             foreach (Control c in _host.Controls) c.Visible = false;
             if (sel != null && sel.Page != null)
             {
@@ -431,6 +440,12 @@ namespace MhiagosControl
                 // Paginas ocultas nao recebem trabalho de desenho a cada segundo;
                 // quem acaba de aparecer recebe um retrato novo imediatamente.
                 AtualizarPaginaAtiva(true);
+
+                if (retratoVelho != null)
+                {
+                    if (_veu == null) { _veu = new VeuDePagina(); _host.Controls.Add(_veu); }
+                    _veu.Iniciar(retratoVelho, VeuDePagina.Fotografar(sel.Page));
+                }
             }
             if (_profileList != null) RefreshProfileList();
         }
