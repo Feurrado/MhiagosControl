@@ -384,6 +384,12 @@ namespace MhiagosControl
                 string extra;
                 tipos.TryGetValue(modelo.Trim(), out extra);
 
+                // so HDD e SSD: pendrive e leitor de cartao ("Generic Mass-Storage
+                // USB Device") nao tem tipo de midia e ficam de fora. Sem o
+                // espaco de armazenamento legivel nao ha como filtrar, e vale tudo.
+                if (tipos.Count > 0 && (extra == null || (extra.IndexOf("HDD", StringComparison.Ordinal) < 0
+                    && extra.IndexOf("SSD", StringComparison.Ordinal) < 0))) continue;
+
                 g.Por(tam, modelo.Trim() + (string.IsNullOrEmpty(extra) ? "" : "  ·  " + extra));
                 g.Usados.Add(tam == null ? -1 : GigabytesOcupados(d));
             }
