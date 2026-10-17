@@ -51,15 +51,15 @@ namespace MhiagosControl
             Secao("visual 2: Visao geral, colunas do meio nas divisas da fileira de cima");
             Config config = AuditConfig(root, "alinhada");
             config.MetricIds.Clear(); config.MetricSizes.Clear();
-            config.MetricIds.AddRange(new string[] { "cpu", "load", "gpu" });
-            config.MetricSizes.AddRange(new int[] { 1, 1, 1 });
+            config.MetricIds.AddRange(new string[] { "cpu", "load", "gpu", "fan", "cpu" });
+            config.MetricSizes.AddRange(new int[] { 1, 1, 1, 1, 1 });
             DadosDeCaptura dados = new DadosDeCaptura();
             using (SettingsForm form = new SettingsForm(config, dados.Sensors, dados))
             {
                 form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual;
                 form.Location = new Point(-30000, -30000);
                 form.Show();
-                form.Size = new Size(Ui.S(1010), Ui.S(820));
+                form.Size = new Size(Ui.S(1290), Ui.S(990));
                 NavBar nav = (NavBar)Field(form, "_nav");
                 nav.SelectedIndex = 0;
                 InvokePrivate(form, "ArranjarVisaoGeral");
