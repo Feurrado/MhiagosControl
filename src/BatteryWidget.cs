@@ -269,7 +269,6 @@ namespace MhiagosControl
             for (int i = 0; i < l.Length; i++)
             {
                 float nome = LarguraDoNome(itens[i], layout == LayoutDoWidget.Lista);
-                if (layout == LayoutDoWidget.Lista) nome = Math.Min(nome, 150f);
                 l[i] = layout == LayoutDoWidget.Lista
                     ? Math.Max(LarguraDaLista, 2 * Margem + BolhaDaLista + 12f + nome + 6f + 70f)
                     : Math.Max(Coluna, nome);
