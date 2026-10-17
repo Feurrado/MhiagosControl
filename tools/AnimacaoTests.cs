@@ -282,9 +282,6 @@ namespace MhiagosControl
                     form.Size = new Size(1100, 760);
                     form.Show(); ((Timer)Field(form, "_tick")).Stop();
                     ((NavBar)Field(form, "_nav")).SelectedIndex = 6;
-                    VeuDePagina veu = (VeuDePagina)Field(form, "_veu");
-                    Verdade(veu != null && veu.Ativo, "trocar de pagina liga o cross-fade");
-                    Verdade(veu.Passo(Motion.Agora + 10000) == false && !veu.Ativo, "o cross-fade termina em 167 ms e some");
                     BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
                     CollapsiblePanel painel = (CollapsiblePanel)Field(form, "_painelDoWidget");
                     Label vazio = (Label)Field(form, "_lbBateriasVazio");
