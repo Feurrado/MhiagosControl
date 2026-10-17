@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -153,7 +153,7 @@ namespace MhiagosControl
         private const float LarguraDaLista = 300f;
         private const float Linha = 50f;
         private const float VaoDeLinha = 10f;
-        private const float BolhaDaLista = 40f;
+        private const float BolhaDaLista = Anel - 2f * Traco - 6f; // a mesma bolha dos aneis
 
         /// <summary>
         /// O que vai para o widget: so o fone e o mouse (G HUB e Attack Shark) que
@@ -244,9 +244,9 @@ namespace MhiagosControl
         /// formato do desenho (que conta a folga dos lados). Zero onde a imagem
         /// ja diz quem e o aparelho.
         /// </summary>
-        internal static float LarguraDoNome(Periferico p)
+        internal static float LarguraDoNome(Periferico p, bool todos)
         {
-            if (!MostraNome(p) || string.IsNullOrEmpty(p.Nome)) return 0f;
+            if (p == null || string.IsNullOrEmpty(p.Nome) || (!todos && !MostraNome(p))) return 0f;
             float w;
             if (_nomes.TryGetValue(p.Nome, out w)) return w;
             using (Bitmap b = new Bitmap(1, 1))
@@ -268,7 +268,7 @@ namespace MhiagosControl
             float[] l = new float[itens.Length];
             for (int i = 0; i < l.Length; i++)
             {
-                float nome = LarguraDoNome(itens[i]);
+                float nome = LarguraDoNome(itens[i], layout == LayoutDoWidget.Lista);
                 l[i] = layout == LayoutDoWidget.Lista
                     ? Math.Max(LarguraDaLista, 2 * Margem + BolhaDaLista + 12f + nome + 6f + 70f)
                     : Math.Max(Coluna, nome);
@@ -461,7 +461,7 @@ namespace MhiagosControl
             {
                 if (q.Itens.Length == 0)
                 {
-                    Texto(g, T.WidgetNoDevices, f.Nota, Secundario(q.Escuro), q.Escuro,
+                    Texto(g, T.WidgetNoDevices, f.Nota, q.Escuro ? Color.White : Color.FromArgb(255, 22, 24, 30), q.Escuro,
                           new RectangleF(0, 0, tamanho.Width, tamanho.Height), StringAlignment.Center, StringAlignment.Center);
                     return;
                 }
@@ -582,15 +582,8 @@ namespace MhiagosControl
             {
                 // selo com o raio, no canto de baixo a direita do anel; entra
                 // crescendo e acendendo, e sai encolhendo e apagando
-                float ds = 19f * s * (0.5f + 0.5f * carga);
                 float r = anel.Width / 2f;
-                PointF c = new PointF(cx + r * 0.72f, anel.Y + anel.Height / 2f + r * 0.72f);
-                RectangleF selo = new RectangleF(c.X - ds / 2f, c.Y - ds / 2f, ds, ds);
-                using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(255 * carga), PeripheralStrip.Verde))) g.FillEllipse(b, selo);
-                using (Pen pen = new Pen(escuro ? Color.FromArgb((int)(200 * carga), 20, 22, 28) : Color.FromArgb((int)(230 * carga), 255, 255, 255), 1.6f * s))
-                    g.DrawEllipse(pen, selo);
-                float folga = 4.5f * s * (0.5f + 0.5f * carga);
-                PeripheralStrip.Raio(g, RectangleF.Inflate(selo, -folga, -folga), carga);
+                Selo(g, new PointF(cx + r * 0.72f, anel.Y + anel.Height / 2f + r * 0.72f), s, escuro, carga);
             }
 
             float y = z.Y + d + 7f * s;
@@ -602,6 +595,18 @@ namespace MhiagosControl
                 RectangleF lNome = new RectangleF(z.X, y + 20f * s, z.Width, 17f * s);
                 Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Center, StringAlignment.Center);
             }
+        }
+
+        /// <summary>Selo verde com o raio; o mesmo nos aneis e na lista.</summary>
+        private static void Selo(Graphics g, PointF c, float s, bool escuro, float carga)
+        {
+            float ds = 19f * s * (0.5f + 0.5f * carga);
+            RectangleF selo = new RectangleF(c.X - ds / 2f, c.Y - ds / 2f, ds, ds);
+            using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(255 * carga), PeripheralStrip.Verde))) g.FillEllipse(b, selo);
+            using (Pen pen = new Pen(escuro ? Color.FromArgb((int)(200 * carga), 20, 22, 28) : Color.FromArgb((int)(230 * carga), 255, 255, 255), 1.6f * s))
+                g.DrawEllipse(pen, selo);
+            float folga = 4.5f * s * (0.5f + 0.5f * carga);
+            PeripheralStrip.Raio(g, RectangleF.Inflate(selo, -folga, -folga), carga);
         }
 
         // ---------------- lista ----------------
@@ -616,7 +621,7 @@ namespace MhiagosControl
             Image img = PeripheralStrip.Imagem(p);
             if (img != null)
             {
-                float di = db * 0.66f;
+                float di = Anel * s * 0.44f;
                 Rectangle ri = Rectangle.Round(new RectangleF(bolha.X + (db - di) / 2f, bolha.Y + (db - di) / 2f, di, di));
                 if (Apagado(p)) PeripheralStrip.Apagado(g, img, ri);
                 else g.DrawImage(img, ri);
@@ -631,29 +636,17 @@ namespace MhiagosControl
                 largValor = g.MeasureString(valor, f.Pct, PointF.Empty, sf).Width + 2f * s;
             // sem o nome, a porcentagem vai para o lugar dele, a esquerda, e o
             // raio da carga logo depois dela
-            bool nome = MostraNome(p);
+            bool nome = !string.IsNullOrEmpty(p.Nome); // na lista todo aparelho mostra o nome
             RectangleF lValor = nome ? new RectangleF(z.Right - largValor, z.Y, largValor, 21f * s)
                                      : new RectangleF(x, z.Y, largValor, 21f * s);
             Texto(g, valor, f.Pct, Apagado(p) ? Secundario(escuro) : Primario(escuro), escuro, lValor,
                   nome ? StringAlignment.Far : StringAlignment.Near, StringAlignment.Center);
 
-            if (!nome)
+            // carregando, o selo com o raio fica no canto da bolha, como nos aneis
+            if (carga > 0.01f)
             {
-                if (carga > 0.01f)
-                {
-                    float hr = 13f * s;
-                    RectangleF raio = new RectangleF(lValor.Right + 2f * s, lValor.Y + (lValor.Height - hr) / 2f, hr * 0.7f, hr);
-                    PeripheralStrip.Raio(g, raio, carga);
-                }
-            }
-            else if (carga > 0.01f)
-            {
-                // o raio acende aos poucos e o nome cede o lugar dele junto,
-                // sem pular de uma vez
-                float hr = 13f * s;
-                RectangleF raio = new RectangleF(lValor.X - hr * 0.9f, lValor.Y + (lValor.Height - hr) / 2f, hr * 0.7f, hr);
-                PeripheralStrip.Raio(g, raio, carga);
-                lValor = RectangleF.FromLTRB(lValor.X - hr * 0.9f * carga, lValor.Y, lValor.Right, lValor.Bottom);
+                float re = (Anel - Traco) * s / 2f;
+                Selo(g, new PointF(bolha.X + db / 2f + re * 0.72f, bolha.Y + db / 2f + re * 0.72f), s, escuro, carga);
             }
 
             if (nome)
@@ -662,50 +655,35 @@ namespace MhiagosControl
                 Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
             }
 
-            RectangleF barra = new RectangleF(x, z.Y + 25f * s, w, 8f * s);
+            // mesma espessura do traco dos aneis
+            RectangleF barra = new RectangleF(x, z.Y + 29f * s - Traco * s / 2f, w, Traco * s);
             Capsula(g, barra, p, escuro, q.Fase, carga);
 
             if (!string.IsNullOrEmpty(nota))
             {
-                RectangleF lNota = new RectangleF(x, barra.Bottom + 2f * s, w, 15f * s);
-                Texto(g, nota, f.Nota, Secundario(escuro), escuro, lNota, StringAlignment.Near, StringAlignment.Center);
+                RectangleF lNota = new RectangleF(x, barra.Bottom + 2f * s, w, 17f * s);
+                Texto(g, nota, f.Nota, escuro ? Color.White : Color.FromArgb(255, 22, 24, 30), escuro, lNota, StringAlignment.Near, StringAlignment.Center);
             }
         }
 
-        /// <summary>A barra de carga: trilho em capsula e o nivel com um reflexo em cima.</summary>
+        /// <summary>
+        /// A barra de carga, no mesmo desenho dos aneis: trilho na cor do nivel,
+        /// apagada, nivel chapado de ponta redonda e brilho suave por baixo.
+        /// </summary>
         private static void Capsula(Graphics g, RectangleF r, Periferico p, bool escuro, float fase, float carga)
         {
-            float raio = r.Height / 2f;
-            using (GraphicsPath trilho = Arredondado(r, raio))
-            using (SolidBrush b = new SolidBrush(Trilho(escuro)))
-                g.FillPath(b, trilho);
+            float h = r.Height, cy = r.Y + h / 2f;
+            Color cor = CorDoNivel(p, carga);
+            Color trilho = p.Bateria.HasValue ? Color.FromArgb(escuro ? 70 : 60, cor) : Trilho(escuro);
+            using (Pen pen = Redonda(trilho, h)) g.DrawLine(pen, r.X + h / 2f, cy, r.Right - h / 2f, cy);
 
             if (!p.Bateria.HasValue || p.Bateria.Value <= 0) return;
-            float w = Math.Max(r.Height, r.Width * Math.Min(100, p.Bateria.Value) / 100f);
-            RectangleF cheio = new RectangleF(r.X, r.Y, w, r.Height);
-            Color cor = CorDoNivel(p, carga);
-            using (GraphicsPath nivel = Arredondado(cheio, raio))
-            {
-                using (LinearGradientBrush b = new LinearGradientBrush(RectangleF.Inflate(cheio, 0, 1f),
-                    Misturar(cor, Color.White, 0.35f), cor, LinearGradientMode.Vertical))
-                    g.FillPath(b, nivel);
-
-                RectangleF reflexo = new RectangleF(cheio.X + raio * 0.6f, cheio.Y + cheio.Height * 0.14f,
-                                                    Math.Max(0f, cheio.Width - raio * 1.2f), cheio.Height * 0.3f);
-                if (reflexo.Width > 1f)
-                    using (GraphicsPath rp = Arredondado(reflexo, reflexo.Height / 2f))
-                    using (SolidBrush b = new SolidBrush(Color.FromArgb(110, 255, 255, 255)))
-                        g.FillPath(b, rp);
-
-                if (carga > 0.01f)
-                {
-                    // a barra inteira clareia e volta, no mesmo ritmo dos aneis
-                    int a = (int)(90 * Pulso(fase) * carga);
-                    if (a > 0)
-                        using (SolidBrush b = new SolidBrush(Color.FromArgb(a, 255, 255, 255)))
-                            g.FillPath(b, nivel);
-                }
-            }
+            float w = Math.Max(h, r.Width * Math.Min(100, p.Bateria.Value) / 100f);
+            float x0 = r.X + h / 2f, x1 = r.X + w - h / 2f;
+            float pulso = Pulso(fase) * carga;
+            using (Pen luz = Redonda(Color.FromArgb(55 + (int)(120 * pulso), cor), h * (2f + 0.7f * pulso)))
+                g.DrawLine(luz, x0, cy, x1, cy);
+            using (Pen pen = Redonda(cor, h)) g.DrawLine(pen, x0, cy, x1, cy);
         }
 
         /// <summary>De 0 a 1 e de volta, suave nas pontas, ao longo de um ciclo.</summary>
@@ -753,7 +731,7 @@ namespace MhiagosControl
                 sf.Trimming = StringTrimming.EllipsisCharacter;
                 // halo em volta das letras, na cor oposta: com o vidro nitido o
                 // fundo aparece inteiro, e sem isso o texto se perde nele
-                using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(90, 0, 0, 0) : Color.FromArgb(110, 255, 255, 255)))
+                using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(170, 0, 0, 0) : Color.FromArgb(170, 255, 255, 255)))
                 {
                     for (int dx = -1; dx <= 1; dx++)
                         for (int dy = -1; dy <= 1; dy++)
@@ -841,9 +819,9 @@ namespace MhiagosControl
             public Fontes(float s)
             {
                 // pesos mais grossos: sobre o vidro nitido o traco fino se perde
-                Pct = Criar("Segoe UI", 15f * s, FontStyle.Bold);
+                Pct = Criar("Segoe UI", 16f * s, FontStyle.Bold);
                 Nome = Criar("Segoe UI", 12.5f * s, FontStyle.Bold);
-                Nota = Criar("Segoe UI", 11.5f * s, FontStyle.Bold);
+                Nota = Criar("Segoe UI", 12.5f * s, FontStyle.Bold);
             }
 
             /// <summary>Sem o Semibold instalado, o GDI+ cairia numa fonte qualquer; o negrito comum chega perto.</summary>
