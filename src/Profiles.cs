@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -167,6 +167,8 @@ namespace MhiagosControl
         /// de uma janela redimensionavel.
         /// </summary>
         public int WindowW = 0, WindowH = 0;
+        public int WindowX = int.MinValue, WindowY = int.MinValue;   // posicao da janela; MinValue = nunca guardada
+        public string LastPage = "";
 
         /// <summary>
         /// Trocar de perfil sozinho quando um jogo abre.
@@ -221,6 +223,9 @@ namespace MhiagosControl
             MetricNavId = other.MetricNavId;
             WindowW = other.WindowW;
             WindowH = other.WindowH;
+            WindowX = other.WindowX;
+            WindowY = other.WindowY;
+            LastPage = other.LastPage;
             GameProfiles = other.GameProfiles;
 
             MetricIds.Clear();
@@ -562,6 +567,9 @@ namespace MhiagosControl
                         else if (k == "metricnav") c.MetricNavId = v;
                         else if (k == "windoww") c.WindowW = ParseInt(v);
                         else if (k == "windowh") c.WindowH = ParseInt(v);
+                        else if (k == "windowx") c.WindowX = ParseInt(v);
+                        else if (k == "windowy") c.WindowY = ParseInt(v);
+                        else if (k == "lastpage") c.LastPage = v;
                         else if (k == "gameprofiles") c.GameProfiles = (v == "1");
                         else if (k == "gamemap")
                         {
@@ -771,6 +779,12 @@ namespace MhiagosControl
                 if (!string.IsNullOrEmpty(MetricNavId)) sb.AppendLine("metricnav=" + MetricNavId);
                 sb.AppendLine("windoww=" + WindowW.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("windowh=" + WindowH.ToString(CultureInfo.InvariantCulture));
+                if (WindowX != int.MinValue && WindowY != int.MinValue)
+                {
+                    sb.AppendLine("windowx=" + WindowX.ToString(CultureInfo.InvariantCulture));
+                    sb.AppendLine("windowy=" + WindowY.ToString(CultureInfo.InvariantCulture));
+                }
+                if (!string.IsNullOrEmpty(LastPage)) sb.AppendLine("lastpage=" + LastPage);
                 sb.AppendLine("gameprofiles=" + (GameProfiles ? "1" : "0"));
                 for (int i = 0; i < GameKeys.Count && i < GameProfileNames.Count; i++)
                     if (!string.IsNullOrEmpty(GameKeys[i]) && !string.IsNullOrEmpty(GameProfileNames[i]))

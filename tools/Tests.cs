@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -1251,6 +1251,7 @@ namespace MhiagosControl
                 metricas.Ids.Add("rtss:frametime"); metricas.Sizes.Add(1);
                 c.MetricProfiles.Add(metricas);
                 c.WindowW = 1280; c.WindowH = 940;
+                c.WindowX = -1920; c.WindowY = 36; c.LastPage = "baterias";
                 c.GameProfiles = true;
                 c.MapearJogo("cyberpunk2077.exe", "CPU = GPU");
                 c.MapearJogo("LeagueClientUxRender.exe", "Padrão");
@@ -1310,6 +1311,9 @@ namespace MhiagosControl
 
                 Igual(1280, lido.WindowW, "largura da janela");
                 Igual(940, lido.WindowH, "altura da janela");
+                Igual(-1920, lido.WindowX, "posicao X da janela (monitor a esquerda)");
+                Igual(36, lido.WindowY, "posicao Y da janela");
+                Igual("baterias", lido.LastPage, "ultima pagina");
 
                 // O mapa de jogos: e o unico ajuste que faz o aplicativo AGIR
                 // sozinho, entao perde-lo em silencio na gravacao seria trocar o

@@ -46,6 +46,14 @@ namespace MhiagosControl
             Igual(1.5f, Ui.FatorDoTexto(150), "Tamanho do texto 150% cresce a rampa em 1,5");
             Igual(2.25f, Ui.FatorDoTexto(400), "Tamanho do texto limita em 225%");
             Igual(1f, Ui.FatorDoTexto(0), "valor invalido volta a 100%");
+            Rectangle[] monitores = { new Rectangle(0, 0, 1920, 1040), new Rectangle(1920, 0, 1280, 984) };
+            Point? dentro = SettingsForm.PosicaoValida(new Point(100, 80), new Size(1000, 900), monitores);
+            Verdade(dentro.HasValue && dentro.Value == new Point(100, 80), "posicao dentro do monitor volta igual");
+            Point? segundo = SettingsForm.PosicaoValida(new Point(2000, 50), new Size(1000, 900), monitores);
+            Verdade(segundo.HasValue && segundo.Value.X == 2000, "janela no segundo monitor fica la");
+            Verdade(!SettingsForm.PosicaoValida(new Point(4000, 100), new Size(1000, 900), monitores).HasValue, "monitor desligado: sem posicao, abre centralizada");
+            Point? puxada = SettingsForm.PosicaoValida(new Point(1500, 400), new Size(1000, 900), new Rectangle[] { monitores[0] });
+            Verdade(puxada.HasValue && puxada.Value.X == 920 && puxada.Value.Y == 140, "janela que sai pela borda e puxada para dentro");
             Verdade(Ui.FontBase.SizeInPoints >= 10f - 0.01f, "o corpo e de 10 pt");
             Igual(Ui.S(4), Ui.RaioControle, "raio de controle 4");
             Igual(Ui.S(8), Ui.RaioCartao, "raio de cartao 8");

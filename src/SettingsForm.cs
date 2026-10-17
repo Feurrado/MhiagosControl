@@ -203,6 +203,12 @@ namespace MhiagosControl
             Size guardado = TamanhoGuardado();
             ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(Ui.S(1010), Ui.S(900)),
                 Screen.FromPoint(Cursor.Position).WorkingArea.Size);
+            Point? posicao = PosicaoGuardada();
+            if (posicao.HasValue)
+            {
+                StartPosition = FormStartPosition.Manual;
+                Location = posicao.Value;
+            }
             BackColor = Ui.Window;
             Font = Ui.FontBase;
 
@@ -251,7 +257,7 @@ namespace MhiagosControl
                 }
                 catch (Exception ex) { Log.Error("gravar estado da barra lateral", ex); }
             };
-            _nav.SelectionChanged += delegate { ShowPage(); };
+            _nav.SelectionChanged += delegate { ShowPage(); GuardarPagina(); };
             Controls.Add(_nav);
 
             // Salvar e Fechar moram na BARRA LATERAL.
@@ -431,6 +437,29 @@ namespace MhiagosControl
                 if (itens[i].Key == chave) { _nav.SelectedIndex = i; return; }
         }
 
+        private bool _paginaPronta;
+
+        /// <summary>
+        /// Lembra a pagina em que a janela estava, para reabrir nela. So depois
+        /// de exibida: as trocas de montagem nao sao escolha de ninguem.
+        /// </summary>
+        private void GuardarPagina()
+        {
+            if (!_paginaPronta || _nav == null || _nav.Selected == null) return;
+            string chave = _nav.Selected.Key;
+            if (string.IsNullOrEmpty(chave) || chave == _cfg.LastPage) return;
+            try
+            {
+                _cfg.LastPage = chave;
+                string erro;
+                if (!_session.TrySavePreferences(delegate(Config draft, Config target)
+                {
+                    target.LastPage = draft.LastPage;
+                }, out erro)) Log.Write("ultima pagina nao persistiu: " + erro);
+            }
+            catch (Exception ex) { Log.Error("gravar ultima pagina", ex); }
+        }
+
         /// <summary>Grava na hora, como a barra recolhida: e arrumacao da tela, nao edicao de perfil.</summary>
         private void GravarOrdemDaBarra()
         {
@@ -543,6 +572,43 @@ namespace MhiagosControl
         }
 
         /// <summary>
+        /// Onde a janela estava da ultima vez, se ainda cabe em algum monitor.
+        ///
+        /// Monitor desligado ou resolucao menor deixaria a janela fora da tela,
+        /// sem como alcancar a barra de titulo. Por isso a posicao so vale se
+        /// uma faixa da barra de titulo (largura minima de 120 px) cai dentro
+        /// da area de trabalho de algum monitor; vale entao a janela puxada
+        /// para dentro dela. Do contrario, nulo: abre centralizada.
+        /// </summary>
+        private Point? PosicaoGuardada()
+        {
+            if (_cfg.WindowX == int.MinValue || _cfg.WindowY == int.MinValue) return null;
+            Rectangle[] todas = new Rectangle[Screen.AllScreens.Length];
+            for (int i = 0; i < todas.Length; i++) todas[i] = Screen.AllScreens[i].WorkingArea;
+            return PosicaoValida(new Point(_cfg.WindowX, _cfg.WindowY), Size, todas);
+        }
+
+        /// <summary>A posicao puxada para dentro do monitor que a contem, ou nulo se nenhum a alcanca.</summary>
+        internal static Point? PosicaoValida(Point p, Size tamanho, Rectangle[] areasDeTrabalho)
+        {
+            int faixaMin = 120, altBarra = 40;
+            Rectangle barra = new Rectangle(p.X, p.Y, tamanho.Width, altBarra);
+            foreach (Rectangle wa in areasDeTrabalho)
+            {
+                Rectangle comum = Rectangle.Intersect(barra, wa);
+                if (comum.Width < Math.Min(faixaMin, tamanho.Width) || comum.Height < altBarra / 2) continue;
+
+                int x = p.X, y = p.Y;
+                if (x + tamanho.Width > wa.Right) x = wa.Right - tamanho.Width;
+                if (x < wa.Left) x = wa.Left;
+                if (y + tamanho.Height > wa.Bottom) y = wa.Bottom - tamanho.Height;
+                if (y < wa.Top) y = wa.Top;
+                return new Point(x, y);
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Grava o tamanho ao terminar o arraste, e nao a cada pixel.
         ///
         /// O Resize dispara dezenas de vezes durante um arraste de borda, e cada
@@ -557,16 +623,22 @@ namespace MhiagosControl
         private void GuardarTamanho()
         {
             if (WindowState != FormWindowState.Normal) return;
-            if (_cfg.WindowW == ClientSize.Width && _cfg.WindowH == ClientSize.Height) return;
+            if (!IsHandleCreated) return;
+            if (_cfg.WindowW == ClientSize.Width && _cfg.WindowH == ClientSize.Height
+                && _cfg.WindowX == Location.X && _cfg.WindowY == Location.Y) return;
             try
             {
                 _cfg.WindowW = ClientSize.Width;
                 _cfg.WindowH = ClientSize.Height;
+                _cfg.WindowX = Location.X;
+                _cfg.WindowY = Location.Y;
                 string erro;
                 if (!_session.TrySavePreferences(delegate(Config draft, Config target)
                 {
                     target.WindowW = draft.WindowW;
                     target.WindowH = draft.WindowH;
+                    target.WindowX = draft.WindowX;
+                    target.WindowY = draft.WindowY;
                 }, out erro)) Log.Write("tamanho da janela nao persistiu: " + erro);
             }
             catch (Exception ex) { Log.Error("gravar tamanho da janela", ex); }
@@ -4846,6 +4918,8 @@ namespace MhiagosControl
                 if (_dirty) { e.Cancel = true; base.OnFormClosing(e); return; }
             }
 
+            GuardarTamanho();
+
             // OK significa "ha gravacao valida no disco"; quem abriu usa isso
             // para decidir se recarrega a configuracao e descarta a memoria
             if (DialogResult != DialogResult.Retry)
@@ -4916,7 +4990,10 @@ namespace MhiagosControl
         {
             base.OnShown(e);
             Theme.ApplyScrollbars(this);
-            MostrarPagina(PaginaInicial);
+            // A pedida de fora (clique no widget) vence; senao, a da ultima vez.
+            MostrarPagina(string.IsNullOrEmpty(PaginaInicial) ? _cfg.LastPage : PaginaInicial);
+            _paginaPronta = true;
+            GuardarPagina();
             ArranjarPaginaVisivel();
 
             if (_roda == null)
