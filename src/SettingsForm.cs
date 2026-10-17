@@ -3294,7 +3294,6 @@ namespace MhiagosControl
         // ---------------- perfil ativo na barra lateral ----------------
 
         private readonly ToolTip _dicaDoPerfil = new ToolTip();
-        private ContextMenuStrip _menuPerfis;
 
         /// <summary>Nome do perfil ativo no botao; recolhida a barra, so a inicial.</summary>
         private void AtualizarBotaoDePerfil()
@@ -3317,8 +3316,7 @@ namespace MhiagosControl
                 Profile alvo = p;
                 menu.Items.Add(MenuTema.Opcao(p.Name, p.Name == ativo, delegate { AplicarPerfilEscolhido(alvo); AtualizarBotaoDePerfil(); }));
             }
-            if (_menuPerfis != null) _menuPerfis.Dispose();   // o anterior, ja fechado; nunca dentro do proprio Closed
-            _menuPerfis = menu;
+            menu.Closed += delegate { menu.Dispose(); };
             bool estreita = _nav.Width < Ui.S(120);
             Point onde = estreita ? new Point(_btPerfil.Width + Ui.S(8), 0) : new Point(0, -menu.GetPreferredSize(Size.Empty).Height - Ui.S(4));
             menu.Show(_btPerfil, onde);
@@ -5107,7 +5105,6 @@ namespace MhiagosControl
             if (_tick != null) { _tick.Stop(); _tick.Dispose(); }
             if (_noteTimer != null) { _noteTimer.Stop(); _noteTimer.Dispose(); }
             _dicaDoWidget.Dispose();
-            if (_menuPerfis != null) _menuPerfis.Dispose();
             _dicaDaConfig.Dispose();
 
             // Filtro de mensagens e do Application, e nao da janela: esquecer de
