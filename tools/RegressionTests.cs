@@ -273,7 +273,7 @@ namespace MhiagosControl
             TrayContext context = (TrayContext)FormatterServices.GetUninitializedObject(typeof(TrayContext));
             Field(context, "_cfg", config); Field(context, "_sensors", sensors);
             Field(context, "_sensorLock", new object()); Field(context, "_cache", new List<SensorEntry>());
-            Field(context, "_miProfiles", new MenuItem("Profiles"));
+            Field(context, "_miProfiles", new ToolStripMenuItem("Profiles"));
             Field(context, "_live", config.Active.Clone()); Field(context, "_sensorCycle", new SensorCycle(sensors));
             Field(context, "_fastSensors", sensors);
             Field(context, "_stop", new ManualResetEvent(false));
@@ -282,7 +282,7 @@ namespace MhiagosControl
 
         private static void DisposeAuditContext(TrayContext context)
         {
-            ((MenuItem)Field(context, "_miProfiles")).Dispose();
+            ((ToolStripMenuItem)Field(context, "_miProfiles")).Dispose();
             ((ManualResetEvent)Field(context, "_stop")).Dispose();
         }
 
@@ -304,7 +304,7 @@ namespace MhiagosControl
                 Igual("B", game.ActiveName, "aguarda terminar a edicao");
                 Field(context, "_janelaAberta", false); GameTick(context);
                 Igual("C", game.ActiveName, "F10: fechar a janela reavalia novo vinculo sem reabrir jogo");
-                using (MenuItem manual = new MenuItem("B"))
+                using (ToolStripMenuItem manual = new ToolStripMenuItem("B"))
                 {
                     manual.Tag = game.Profiles[1];
                     InvokePrivate(context, "OnPickProfile", manual, EventArgs.Empty);
@@ -326,7 +326,7 @@ namespace MhiagosControl
                 game.DesmapearJogo("regression-game.exe"); GameTick(context);
                 Igual("A", game.ActiveName, "remover vinculo devolve ao padrao");
                 game.MapearJogo("regression-game.exe", "B");
-                using (MenuItem manual = new MenuItem("C"))
+                using (ToolStripMenuItem manual = new ToolStripMenuItem("C"))
                 {
                     manual.Tag = game.Profiles[2];
                     InvokePrivate(context, "OnPickProfile", manual, EventArgs.Empty);

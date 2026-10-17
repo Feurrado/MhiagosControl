@@ -3402,19 +3402,31 @@ namespace MhiagosControl
         /// </summary>
         private void MenuDeConjuntos()
         {
-            // ContextMenu, e nao ContextMenuStrip: e o mesmo tipo que o menu da
-            // bandeja ja usa. Um menu nativo nao aceita o tema desenhado do
-            // aplicativo, mas dois menus com aparencias diferentes no mesmo
-            // programa e pior do que um so, coerente com o sistema.
-            ContextMenu m = new ContextMenu();
+            // ContextMenuStrip com o renderizador do tema (MenuTema): o menu
+            // nativo nao aceitava cor, fonte nem raio.
+            ContextMenuStrip m = MenuTema.Novo();
 
             foreach (MetricPicker.Conjunto c in MetricPicker.Conjuntos)
             {
                 MetricPicker.Conjunto alvo = c;   // copia local para o delegate
-                m.MenuItems.Add(new MenuItem(c.Nome, delegate { AplicarConjunto(alvo); }));
+                m.Items.Add(MenuTema.Item(c.Nome, delegate { AplicarConjunto(alvo); }));
             }
 
-            m.Show(_btPadraoMetrica, new Point(0, _btPadraoMetrica.Height));
+            MostrarMenu(m, _btPadraoMetrica);
+        }
+
+        private ContextMenuStrip _menuAberto;
+
+        /// <summary>
+        /// Mostra o menu sob o botao. O anterior so e descartado agora: o
+        /// clique numa opcao chega depois do fechamento, e descartar o menu no
+        /// Closed perderia a acao.
+        /// </summary>
+        private void MostrarMenu(ContextMenuStrip m, Control ancora)
+        {
+            if (_menuAberto != null) _menuAberto.Dispose();
+            _menuAberto = m;
+            m.Show(ancora, new Point(0, ancora.Height));
         }
 
         /// <summary>
@@ -3424,27 +3436,27 @@ namespace MhiagosControl
         /// </summary>
         private void MenuDePerfisDeMetricas()
         {
-            ContextMenu menu = new ContextMenu();
-            menu.MenuItems.Add(new MenuItem(T.SaveMetricProfile,
+            ContextMenuStrip menu = MenuTema.Novo();
+            menu.Items.Add(MenuTema.Item(T.SaveMetricProfile,
                 delegate { SalvarPerfilDeMetricas(); }));
 
-            if (_cfg.MetricProfiles.Count > 0) menu.MenuItems.Add("-");
+            if (_cfg.MetricProfiles.Count > 0) MenuTema.Separador(menu.Items);
             foreach (MetricProfile item in _cfg.MetricProfiles)
             {
                 MetricProfile profile = item;
-                MenuItem group = new MenuItem(profile.Name);
-                group.MenuItems.Add(new MenuItem(T.Apply,
+                ToolStripMenuItem group = MenuTema.Submenu(profile.Name);
+                group.DropDownItems.Add(MenuTema.Item(T.Apply,
                     delegate { AplicarPerfilDeMetricas(profile); }));
-                group.MenuItems.Add(new MenuItem(T.UpdateMetricProfile,
+                group.DropDownItems.Add(MenuTema.Item(T.UpdateMetricProfile,
                     delegate { AtualizarPerfilDeMetricas(profile); }));
-                group.MenuItems.Add(new MenuItem(T.RenameMetricProfile,
+                group.DropDownItems.Add(MenuTema.Item(T.RenameMetricProfile,
                     delegate { RenomearPerfilDeMetricas(profile); }));
-                group.MenuItems.Add("-");
-                group.MenuItems.Add(new MenuItem(T.DeleteMetricProfile,
+                MenuTema.Separador(group.DropDownItems);
+                group.DropDownItems.Add(MenuTema.Item(T.DeleteMetricProfile,
                     delegate { ExcluirPerfilDeMetricas(profile); }));
-                menu.MenuItems.Add(group);
+                menu.Items.Add(group);
             }
-            menu.Show(_btPerfisMetrica, new Point(0, _btPerfisMetrica.Height));
+            MostrarMenu(menu, _btPerfisMetrica);
         }
 
         private MetricProfile CapturarPerfilDeMetricas(string nome)
