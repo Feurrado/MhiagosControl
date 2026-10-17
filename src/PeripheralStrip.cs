@@ -19,7 +19,7 @@ namespace MhiagosControl
     /// </summary>
     public class PeripheralStrip : Card
     {
-        internal static readonly Font FontPct = new Font(Ui.Tipo.Texto, Ui.Pt(12f), FontStyle.Bold);
+        internal static readonly Font FontPct = Ui.Semi(Ui.Pt(12f), Ui.Tipo.Numeros);
 
         private static readonly int Icone = Ui.S(40);
         private static readonly int Vao = Ui.S(36);

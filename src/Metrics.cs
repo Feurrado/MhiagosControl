@@ -332,9 +332,9 @@ namespace MhiagosControl
                     Ui.Faint, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
 
             string txt = Formatado();
-            Size ts = TextRenderer.MeasureText(g, txt, Ui.FontValue);
+            Size ts = Ui.MedirNumero(g, txt, Ui.FontValue);
             int y = Ui.S(28);
-            TextRenderer.DrawText(g, txt, Ui.FontValue, new Point(Ui.S(10), y), cor);
+            Ui.DesenharNumero(g, txt, Ui.FontValue, new Point(Ui.S(13), y), cor);
 
             if (!string.IsNullOrEmpty(Unidade))
                 TextRenderer.DrawText(g, Unidade, Ui.FontSmall,

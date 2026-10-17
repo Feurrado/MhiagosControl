@@ -334,8 +334,8 @@ namespace MhiagosControl
 
             int yVal = Ui.S(36);
             string valor = _a.PctAtual.HasValue ? _a.PctAtual.Value + "%" : "--";
-            Size tam = TextRenderer.MeasureText(g, valor, Ui.FontBigPct, Size.Empty, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, valor, Ui.FontBigPct, new Point(tx, yVal), cor, TextFormatFlags.NoPadding);
+            Size tam = Ui.MedirNumero(g, valor, Ui.FontBigPct);
+            Ui.DesenharNumero(g, valor, Ui.FontBigPct, new Point(tx, yVal), cor);
             int meio = yVal + tam.Height / 2;
             int fim = tx + tam.Width;
 

@@ -145,6 +145,11 @@ namespace MhiagosControl
 
             public static readonly string Texto = Achar(new[] { "Segoe UI Variable Text", "Segoe UI" }, "Segoe UI");
             public static readonly string Icones = Achar(new[] { "Segoe Fluent Icons", "Segoe MDL2 Assets" }, "Segoe MDL2 Assets");
+            /// <summary>Corte optico: Small para legenda de 9 pt ou menos, Display de 16 pt para cima, Text no resto.</summary>
+            public static readonly string Pequena = Achar(new[] { "Segoe UI Variable Small" }, Texto);
+            public static readonly string Exibicao = Achar(new[] { "Segoe UI Variable Display" }, Texto);
+            /// <summary>Valores ao vivo: a Segoe UI classica tem algarismos de largura fixa no GDI; o numero nao dança quando muda.</summary>
+            public static readonly string Numeros = Achar(new[] { "Segoe UI" }, Texto);
 
             internal static string Achar(string[] candidatas, string reserva)
             {
@@ -160,9 +165,9 @@ namespace MhiagosControl
         }
 
         public static readonly Font FontBase = new Font(Tipo.Texto, Pt(Tipo.Corpo));
-        public static readonly Font FontMed = new Font(Tipo.Texto, Pt(Tipo.Corpo), FontStyle.Bold);
+        public static readonly Font FontMed = Semi(Pt(Tipo.Corpo));
         public static readonly Font FontTitle = new Font(Tipo.Texto, Pt(Tipo.Titulo), FontStyle.Regular);
-        public static readonly Font FontSection = new Font(Tipo.Texto, Pt(Tipo.Subtitulo), FontStyle.Bold);
+        public static readonly Font FontSection = Semi(Pt(Tipo.Subtitulo));
         /// <summary>
         /// O corpo pequeno, usado em rotulo de apoio e nota.
         ///
@@ -171,7 +176,7 @@ namespace MhiagosControl
         /// cheio e o antisserrilhado apaga o que sobra. Um ponto a mais devolve
         /// peso sem tirar a hierarquia, que continua vindo da COR.
         /// </summary>
-        public static readonly Font FontSmall = new Font(Tipo.Texto, Pt(Tipo.Legenda));
+        public static readonly Font FontSmall = new Font(Tipo.Pequena, Pt(Tipo.Legenda));
 
         /// <summary>
         /// Seminegrito, para o valor que precisa ter presenca sem virar titulo.
@@ -182,16 +187,54 @@ namespace MhiagosControl
         /// </summary>
         public static readonly Font FontSemi = Semi(Pt(Tipo.Corpo));
         /// <summary>Valor dos blocos de resumo da pagina Baterias.</summary>
-        public static readonly Font FontTileValue = Semi(Pt(Tipo.Subtitulo));
+        public static readonly Font FontTileValue = Semi(Pt(Tipo.Subtitulo), Tipo.Numeros);
 
         /// <summary>O nome do aplicativo no alto do Sobre.</summary>
-        public static readonly Font FontAppName = Semi(Pt(Tipo.Nome));
+        public static readonly Font FontAppName = Semi(Pt(Tipo.Nome), Tipo.Exibicao);
         /// <summary>A porcentagem grande do cartao de bateria.</summary>
-        public static readonly Font FontBigPct = new Font(Tipo.Texto, Pt(Tipo.Numero), FontStyle.Bold);
+        public static readonly Font FontBigPct = Semi(Pt(Tipo.Numero), Tipo.Numeros);
 
-        private static Font Semi(float tamanho)
+        private const TextFormatFlags SemMargem = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+
+        /// <summary>Largura da celula de um algarismo: a do mais largo, para todos caberem igual.</summary>
+        private static int CelulaDeDigito(Graphics g, Font f)
         {
-            foreach (string nome in new[] { Tipo.Texto + " Semibold", "Segoe UI Semibold" })
+            int w = 0;
+            for (char c = '0'; c <= '9'; c++)
+                w = Math.Max(w, TextRenderer.MeasureText(g, c.ToString(), f, Size.Empty, SemMargem).Width);
+            return w;
+        }
+
+        /// <summary>
+        /// Valor ao vivo com algarismos de largura fixa. A Segoe UI no GDI tem
+        /// o "1" mais estreito que o "0", e um numero que muda a cada segundo
+        /// dancava de largura; aqui cada algarismo ocupa a mesma celula.
+        /// </summary>
+        public static Size MedirNumero(Graphics g, string s, Font f)
+        {
+            int cel = CelulaDeDigito(g, f), w = 0;
+            foreach (char c in s)
+                w += char.IsDigit(c) ? cel : TextRenderer.MeasureText(g, c.ToString(), f, Size.Empty, SemMargem).Width;
+            return new Size(w, TextRenderer.MeasureText(g, "0", f, Size.Empty, SemMargem).Height);
+        }
+
+        public static void DesenharNumero(Graphics g, string s, Font f, Point p, Color cor)
+        {
+            int cel = CelulaDeDigito(g, f), x = p.X;
+            foreach (char c in s)
+            {
+                string t = c.ToString();
+                int w = TextRenderer.MeasureText(g, t, f, Size.Empty, SemMargem).Width;
+                if (char.IsDigit(c)) { TextRenderer.DrawText(g, t, f, new Point(x + (cel - w) / 2, p.Y), cor, SemMargem); x += cel; }
+                else { TextRenderer.DrawText(g, t, f, new Point(x, p.Y), cor, SemMargem); x += w; }
+            }
+        }
+
+        internal static Font Semi(float tamanho) { return Semi(tamanho, Tipo.Texto); }
+
+        internal static Font Semi(float tamanho, string familia)
+        {
+            foreach (string nome in new[] { familia + " Semibold", "Segoe UI Semibold" })
             {
                 try
                 {
@@ -203,17 +246,17 @@ namespace MhiagosControl
                 }
                 catch { }
             }
-            return new Font(Tipo.Texto, tamanho, FontStyle.Bold);
+            return new Font(familia, tamanho, FontStyle.Bold);
         }
 
         /// <summary>Leitura em destaque - o numero e o assunto do cartao.</summary>
-        public static readonly Font FontValue = new Font(Tipo.Texto, Pt(Tipo.Destaque), FontStyle.Bold);
+        public static readonly Font FontValue = Semi(Pt(Tipo.Destaque), Tipo.Numeros);
         public static readonly Font FontGlyph8 = new Font(Tipo.Icones, Pt(8f));
         public static readonly Font FontGlyph9 = new Font(Tipo.Icones, Pt(9f));
         public static readonly Font FontGlyph10 = new Font(Tipo.Icones, Pt(10f));
         public static readonly Font FontGlyph11 = new Font(Tipo.Icones, Pt(11f));
         public static readonly Font FontGlyph18 = new Font(Tipo.Icones, Pt(18f));
-        public static readonly Font FontBadge = new Font(Tipo.Texto, Pt(Tipo.MinimoDoSelo), FontStyle.Bold);
+        public static readonly Font FontBadge = Semi(Pt(Tipo.MinimoDoSelo), Tipo.Pequena);
 
 
         /// <summary>
