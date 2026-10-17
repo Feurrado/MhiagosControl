@@ -25,6 +25,7 @@ namespace MhiagosControl
             RevisaoEscalaEEstados(root);
             RegressionAnimacoes(root);
             RegressionPendencias(root);
+            RegressionRevisaoVisual(root);
         }
 
         private static void RevisaoEscalaEEstados(string root)

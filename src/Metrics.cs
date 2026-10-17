@@ -391,6 +391,7 @@ namespace MhiagosControl
             // onde houve leitura.
             List<PointF> seg = new List<PointF>(n);
             List<PointF> pontes = new List<PointF>();
+            List<PointF> todos = new List<PointF>(n);
             int ultimo = -1;
             PointF anterior = PointF.Empty;
             for (int i = 0; i < n; i++)
@@ -408,8 +409,21 @@ namespace MhiagosControl
                     pontes.Add(p);
                 }
                 seg.Add(p);
+                todos.Add(p);
                 ultimo = i;
                 anterior = p;
+            }
+            // A area e uma so, por cima das pontes tambem: preenchida por trecho,
+            // cada falha deixava uma parede vertical e a curva parecia partida
+            // ao meio. A linha continua cheia so onde houve leitura.
+            if (todos.Count >= 2)
+            {
+                PointF[] area = new PointF[todos.Count + 2];
+                todos.CopyTo(area);
+                area[todos.Count] = new PointF(todos[todos.Count - 1].X, Height);
+                area[todos.Count + 1] = new PointF(todos[0].X, Height);
+                using (SolidBrush b = new SolidBrush(Color.FromArgb(38, cor)))
+                    g.FillPolygon(b, area);
             }
             Traco(g, seg, cor);
             if (pontes.Count > 0)
@@ -520,15 +534,12 @@ namespace MhiagosControl
             if (seg.Count < 2) return;
             PointF[] pts = seg.ToArray();
 
-            PointF[] area = new PointF[pts.Length + 2];
-            Array.Copy(pts, area, pts.Length);
-            area[pts.Length] = new PointF(pts[pts.Length - 1].X, Height);
-            area[pts.Length + 1] = new PointF(pts[0].X, Height);
-
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(38, cor)))
-                g.FillPolygon(b, area);
             using (Pen p = new Pen(Color.FromArgb(150, cor), 1.5f))
+            {
+                // juncao redonda: numa leitura que oscila, a ponta em bico saltava para fora da curva
+                p.LineJoin = LineJoin.Round;
                 g.DrawLines(p, pts);
+            }
         }
 
         /// <summary>Tres linhas de apoio, para ler altura sem contar pixels.</summary>

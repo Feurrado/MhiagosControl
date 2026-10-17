@@ -115,6 +115,16 @@ namespace MhiagosControl
         public static string SpecInstalled { get { return P("Instalado em", "Installed on"); } }
         public static string SpecSecureBoot { get { return P("Inicialização segura", "Secure Boot"); } }
         public static string SpecTpm { get { return P("TPM", "TPM"); } }
+        public static string SpecInstructions { get { return P("Instruções", "Instructions"); } }
+        public static string SpecFirmwareMode { get { return P("Modo da BIOS", "Firmware mode"); } }
+        public static string SpecSmbios { get { return P("Versão do SMBIOS", "SMBIOS version"); } }
+        public static string SpecFormFactor { get { return P("Formato", "Form factor"); } }
+        public static string SpecVoltage { get { return P("Tensão", "Voltage"); } }
+        public static string SpecMachine { get { return P("Computador", "Computer"); } }
+        public static string SpecLanguage { get { return P("Idioma", "Language"); } }
+        public static string SpecPowerPlan { get { return P("Plano de energia", "Power plan"); } }
+        public static string SpecVbs { get { return P("Isolamento de núcleo", "Core isolation"); } }
+        public static string SpecHags { get { return P("Agendamento de GPU", "GPU scheduling"); } }
 
         /// <summary>"3 d 4 h" ou "4 h 12 min" - a maior unidade e a seguinte.</summary>
         public static string Duracao(TimeSpan t)

@@ -66,6 +66,7 @@ namespace MhiagosControl
         private FlatBtn[] _div1, _div2;
         private PanelPreview _preview;
         private Card _panelPreviewCard;
+        private Card _cardPainel1, _cardPainel2;
         private SensorSlot _slot1, _slot2;
 
         // pagina Perfis
@@ -781,6 +782,20 @@ namespace MhiagosControl
             {
                 if (_panelPreviewCard == null) return;
 
+                // Pagina mais estreita que os dois cartoes lado a lado (janela no
+                // tamanho minimo, ou barra lateral aberta): o segundo cartao e a
+                // previa saiam cortados na borda direita, sem como rolar ate eles.
+                // Empilha, e a rolagem vertical que a pagina ja tem cuida do resto.
+                int disp = _pgPaineis.Width - Ui.S(4) - Pagina.LarguraDaBarra;
+                if (_cardPainel1 != null && _cardPainel2 != null && disp < Ui.S(756))
+                {
+                    int w = Math.Max(Ui.S(370), disp);
+                    int gap = Ui.S(12);
+                    _cardPainel1.Bounds = new Rectangle(0, 0, w, _cardPainel1.Height);
+                    _cardPainel2.Bounds = new Rectangle(0, _cardPainel1.Height + gap, w, _cardPainel2.Height);
+                    _panelPreviewCard.Bounds = new Rectangle(0, _cardPainel2.Bottom + gap, w, _panelPreviewCard.Height);
+                }
+
                 // O cartao de previa ocupa o restante da pagina. Com a altura
                 // fixa de projeto ele ultrapassava a area por poucos pixels e
                 // exibia uma barra de rolagem para praticamente nenhum conteudo.
@@ -1239,6 +1254,18 @@ namespace MhiagosControl
                 int wEsq = alvo * 42 / 100;
                 if (wEsq < Ui.S(300)) wEsq = Ui.S(300);
                 if (wEsq > alvo - Ui.S(260)) wEsq = alvo - Ui.S(260);
+                // A divisoria das duas colunas cai na divisa entre dois blocos da
+                // fileira de cima: com o corte solto (42%) as bordas dos cartoes
+                // de cima e as do meio nunca se encontravam. Vale a divisa mais
+                // proxima do ideal que deixe as duas colunas com largura util.
+                int melhor = -1;
+                for (int i = 0; i < n - 1; i++)
+                {
+                    int fim = _vgTiles[i].Right - x0;
+                    if (fim < Ui.S(280) || alvo - fim - Esp < Ui.S(170)) continue;
+                    if (melhor < 0 || Math.Abs(fim - wEsq) < Math.Abs(melhor - wEsq)) melhor = fim;
+                }
+                if (melhor >= 0) wEsq = melhor;
                 int wDir = alvo - wEsq - Esp;
 
                 _cardCooler.SetBounds(x0, yMeio, wEsq, hMeio);
@@ -2297,6 +2324,7 @@ namespace MhiagosControl
             _pick2.SetSensors(Clone(_sensors));
 
             Card c1 = new Card();
+            _cardPainel1 = c1;
             c1.Title = T.Panel1;
             c1.SetBounds(0, 0, Ui.S(370), Ui.S(282));
             page.Controls.Add(c1);
@@ -2322,6 +2350,7 @@ namespace MhiagosControl
             c1.Controls.Add(NotaDeUnidade(14, 249));
 
             Card c2 = new Card();
+            _cardPainel2 = c2;
             c2.Title = T.Panel2;
             c2.SetBounds(Ui.S(386), 0, Ui.S(370), Ui.S(282));
             page.Controls.Add(c2);
@@ -5020,6 +5049,22 @@ namespace MhiagosControl
                 return i < total ? i : -1;
             }
             return -1;
+        }
+
+        /// <summary>
+        /// A pagina certa e o primeiro arranjo ANTES do primeiro quadro.
+        ///
+        /// Deixar isso para o Shown mostrava a janela aberta na Visao geral, com os
+        /// cartoes empilhados no canto, e so depois a pagina de verdade aparecia
+        /// (o botao do Widget, os aparelhos): a pessoa via a tela se montar. O Load
+        /// roda com a janela ja marcada como visivel e ainda sem pintar.
+        /// </summary>
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            MostrarPagina(string.IsNullOrEmpty(PaginaInicial) ? _cfg.LastPage : PaginaInicial);
+            AtualizarPaginaAtiva(true);   // o conteudo ja vem no primeiro quadro, e nao no primeiro tique
+            ArranjarPaginaVisivel();
         }
 
         /// <summary>Mica na barra de titulo; o handle recriado (ShowInTaskbar, por exemplo) perde o atributo, entao reaplica.</summary>

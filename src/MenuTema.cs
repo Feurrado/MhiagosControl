@@ -57,7 +57,7 @@ namespace MhiagosControl
         public static ToolStripMenuItem Opcao(string texto, bool marcado, EventHandler acao)
         {
             ToolStripMenuItem i = Item(texto, acao);
-            i.Tag = Radio;
+            i.Name = Radio;   // no Name, para o Tag ficar livre (o menu de perfis guarda o perfil nele)
             i.Checked = marcado;
             return i;
         }
@@ -130,7 +130,12 @@ namespace MhiagosControl
             Ui.Smooth(g);
             Rectangle r = e.ImageRectangle;
             float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f;
-            if ((e.Item.Tag as string) == MenuTema.Radio)
+            // O texto do item fica um pouco acima do centro da caixa (o espaco do
+            // corpo da letra e maior embaixo); medido numa captura, a marca
+            // centrada na caixa caia ~1 px abaixo do eixo das letras, e mais
+            // em tela de DPI alto. O ajuste cresce com a fonte.
+            cy -= Ui.FontBase.Height * 0.07f;
+            if (e.Item.Name == MenuTema.Radio)
             {
                 float d = Ui.S(7);
                 using (SolidBrush b = new SolidBrush(Ui.AccentText))
