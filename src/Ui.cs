@@ -1356,7 +1356,24 @@ namespace MhiagosControl
         private int _selected = 0, _hover = -1;
         private int _hoverVis = -1;
         private Transicao _tNav;
-        private Transicao TNav { get { return _tNav ?? (_tNav = new Transicao(this)); } }
+        private Transicao TNav { get { return _tNav ?? (_tNav = new Transicao(this, Motion.Rapida, AreaDoHover)); } }
+        private Rectangle AreaDoHover() { return _hoverVis >= 0 && _hoverVis < _items.Count ? Rectangle.Inflate(_items[_hoverVis].Bounds, 1, 1) : Rectangle.Empty; }
+        private readonly Dictionary<int, Bitmap> _logos = new Dictionary<int, Bitmap>();
+
+        /// <summary>O logotipo ja no tamanho de tela: reduzir a imagem grande a cada pintura era o que mais pesava na barra.</summary>
+        private Bitmap LogoEm(int lado)
+        {
+            Bitmap b;
+            if (_logos.TryGetValue(lado, out b)) return b;
+            b = new Bitmap(lado, lado, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using (Graphics gb = Graphics.FromImage(b))
+            {
+                gb.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                gb.DrawImage(Logo, 0, 0, lado, lado);
+            }
+            _logos[lado] = b;
+            return b;
+        }
         public event EventHandler SelectionChanged;
 
         public Image Logo;
@@ -1843,7 +1860,7 @@ namespace MhiagosControl
             float t = Abertura;
             int lado = Entre(Ui.S(30), Ui.S(34), t);
             int lx = Entre((LarguraRecolhida - Ui.S(30)) / 2, Ui.S(18), t);
-            if (Logo != null) g.DrawImage(Logo, lx, Ui.S(18), lado, lado);
+            if (Logo != null) g.DrawImageUnscaled(LogoEm(lado), lx, Ui.S(18));
 
             if (t > 0.45f)
             {

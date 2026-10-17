@@ -36,7 +36,7 @@ namespace MhiagosControl
                 return RegressionChild(args);
             if (args.Length > 2 && args[0] == "--medir-animacao")
                 return CapturaDeEscala(args);
-            if (args.Length > 2 && (args[0] == "--captura-escala" || args[0] == "--captura-tela"))
+            if (args.Length > 2 && (args[0] == "--captura-escala" || args[0] == "--captura-tela" || args[0] == "--medir-pintura"))
                 return CapturaDeEscala(args);
             // Sem animacao por padrao: a opcao do Windows muda de maquina para
             // maquina, e as conferencias olham o estado final. Os testes das

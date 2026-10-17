@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace MhiagosControl
@@ -142,16 +143,21 @@ namespace MhiagosControl
     {
         private readonly Control _dono;
         private readonly int _duracao;
+        private readonly Func<Rectangle> _area;
         private float _de, _ate, _valor;
         private long _inicio;
         private bool _assinada;
 
         public Transicao(Control dono) : this(dono, Motion.Rapida) { }
 
-        public Transicao(Control dono, int duracaoMs)
+        public Transicao(Control dono, int duracaoMs) : this(dono, duracaoMs, null) { }
+
+        /// <summary>area: so este retangulo e repintado a cada quadro (nulo: o controle todo).</summary>
+        public Transicao(Control dono, int duracaoMs, Func<Rectangle> area)
         {
             _dono = dono;
             _duracao = duracaoMs;
+            _area = area;
         }
 
         public float Valor { get { return _valor; } }
@@ -180,6 +186,12 @@ namespace MhiagosControl
             if (!_assinada) { _assinada = true; Motion.Assinar(Passo); }
         }
 
+        private void Repintar()
+        {
+            Rectangle r = _area != null ? _area() : Rectangle.Empty;
+            if (r.Width > 0 && r.Height > 0) _dono.Invalidate(r); else _dono.Invalidate();
+        }
+
         /// <summary>Um quadro; true enquanto falta caminho. Separado para os testes.</summary>
         internal bool Passo(long agora)
         {
@@ -187,7 +199,7 @@ namespace MhiagosControl
             float t = Motion.Progresso(_inicio, agora, (int)Math.Max(1, _duracao * Math.Abs(_ate - _de)));
             _valor = _de + (_ate - _de) * Motion.Padrao(t);
             if (t >= 1f) { _valor = _ate; _assinada = false; }
-            _dono.Invalidate();
+            Repintar();
             return _assinada;
         }
     }
