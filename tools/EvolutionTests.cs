@@ -170,6 +170,16 @@ namespace MhiagosControl
                         typeof(SettingsForm).GetProperty("_dirty", AuditFlags).SetValue(form, true, null);
                         InvokePrivate(form, "ProcessCmdKey", new Message(), Keys.Control | Keys.S);
                         Igual(23, Config.LoadFrom(screen.SavePath, false).IdleBlankMinutes, "Ctrl+S persiste a edicao isolada");
+                        edit.IdleBlankMinutes = 31;
+                        typeof(SettingsForm).GetProperty("_dirty", AuditFlags).SetValue(form, true, null);
+                        for (int i = 0; i < 40; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(20); }
+                        Igual(31, Config.LoadFrom(screen.SavePath, false).IdleBlankMinutes, "edicao grava sozinha, sem botao Salvar");
+                        FaixaDeAviso faixa = (FaixaDeAviso)Field(form, "_faixa");
+                        faixa.Mostrar("falha simulada", T.TryAgain, delegate { });
+                        Verdade(faixa.Visible && faixa.TextoDaAcao == T.TryAgain, "falha recuperavel vira faixa com acao, sem MessageBox");
+                        faixa.Ocultar();
+                        Verdade(!faixa.Visible, "a faixa fecha");
+                        Verdade(ErroInesperado.Detalhes(new InvalidOperationException("xyz")).Contains("xyz"), "Copiar detalhes leva a excecao");
                         using (TextReviewDialog preview = new TextReviewDialog(T.RestorePreview,
                             T.RestoreNote + "\r\n\r\n" + T.SavedProfiles + ": 3\r\n" + T.GameBindings + ": 1", T.RestoreApply))
                         {

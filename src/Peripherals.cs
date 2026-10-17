@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -246,6 +246,20 @@ namespace MhiagosControl
                 case FontePeriferico.AttackShark: return "Attack Shark";
                 default: return null;
             }
+        }
+
+        public static bool GHubInstalado() { return CaminhoDoGHub() != null; }
+
+        /// <summary>Abre o G HUB como o usuario (pelo explorer), igual a um clique no menu Iniciar.</summary>
+        public static void AbrirGHub()
+        {
+            try
+            {
+                string alvo = CaminhoDoGHub();
+                if (alvo == null) { Log.Write("G HUB nao encontrado"); return; }
+                Process.Start("explorer.exe", "\"" + alvo + "\"");
+            }
+            catch (Exception ex) { Log.Error("abertura do G HUB", ex); }
         }
 
         private static string CaminhoDoGHub()

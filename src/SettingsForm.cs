@@ -49,6 +49,7 @@ namespace MhiagosControl
 
         private NavBar _nav;
         private Panel _host;
+        private FaixaDeAviso _faixa;
         private Profile _current;
         private Profile _selectionAtLastSave;
         private bool _loading = false;
@@ -56,7 +57,7 @@ namespace MhiagosControl
         private DateTime _lastSlowUiTickUtc = DateTime.MinValue;
         private Label _footerNote;
         private Timer _noteTimer;
-        private FlatBtn _btSave, _btClose;
+        private FlatBtn _btDesfazer;
 
         // pagina Paineis
         private Control _pgPaineis;
@@ -97,12 +98,54 @@ namespace MhiagosControl
             get { return _temEdicao; }
             set
             {
+                if (value && !_salvando) ArmarSalvamento();
                 if (_temEdicao == value) return;
                 _temEdicao = value;
                 AtualizarRodape();
             }
         }
         private bool _temEdicao = false;
+        private bool _salvando;
+        private bool _autoPausado;
+        private Timer _autoSalvar;
+
+        /// <summary>
+        /// Falha de disco: avisa e pausa a gravacao automatica, para nao repetir
+        /// o aviso a cada 350 ms. Fechar a janela tenta de novo.
+        /// </summary>
+        private void FalhaAoGravar(string erro)
+        {
+            _autoPausado = true;
+            Warn(T.SaveFailed(erro), T.TryAgain, delegate { _autoPausado = false; GravarPendente(); });
+        }
+
+        /// <summary>
+        /// Toda edicao vale na hora: um instante depois do ultimo gesto a
+        /// janela grava sozinha. O atraso curto junta o arrasto de um controle
+        /// numa gravacao so, em vez de uma por pixel.
+        /// </summary>
+        private void ArmarSalvamento()
+        {
+            if (_autoSalvar == null)
+            {
+                _autoSalvar = new Timer();
+                _autoSalvar.Interval = 350;
+                _autoSalvar.Tick += delegate
+                {
+                    _autoSalvar.Stop();
+                    if (_temEdicao && !_autoPausado && !IsDisposed) OnSave(this, EventArgs.Empty);
+                };
+            }
+            _autoSalvar.Stop();
+            _autoSalvar.Start();
+        }
+
+        /// <summary>Grava agora o que estiver pendente (fechar, Ctrl+S).</summary>
+        internal void GravarPendente()
+        {
+            if (_autoSalvar != null) _autoSalvar.Stop();
+            if (_temEdicao) OnSave(this, EventArgs.Empty);
+        }
 
         /// <summary>
         /// Alguma gravacao ja aconteceu nesta sessao da janela.
@@ -160,6 +203,12 @@ namespace MhiagosControl
             Size guardado = TamanhoGuardado();
             ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(Ui.S(1010), Ui.S(900)),
                 Screen.FromPoint(Cursor.Position).WorkingArea.Size);
+            Point? posicao = PosicaoGuardada();
+            if (posicao.HasValue)
+            {
+                StartPosition = FormStartPosition.Manual;
+                Location = posicao.Value;
+            }
             BackColor = Ui.Window;
             Font = Ui.FontBase;
 
@@ -208,7 +257,7 @@ namespace MhiagosControl
                 }
                 catch (Exception ex) { Log.Error("gravar estado da barra lateral", ex); }
             };
-            _nav.SelectionChanged += delegate { ShowPage(); };
+            _nav.SelectionChanged += delegate { ShowPage(); GuardarPagina(); };
             Controls.Add(_nav);
 
             // Salvar e Fechar moram na BARRA LATERAL.
@@ -223,19 +272,14 @@ namespace MhiagosControl
             //
             // Recolhida, os dois viram icone. O glifo so entra quando o texto
             // nao cabe, entao expandida a barra continua mostrando as palavras.
-            _btSave = new FlatBtn();
-            _btSave.Text = T.Save;
-            _btSave.Glyph = "\uE74E";          // disquete, Segoe MDL2
-            _btSave.Primary = true;
-            _btSave.Enabled = false;
-            _btSave.Click += new EventHandler(OnSave);
-            _nav.Controls.Add(_btSave);
+            _btDesfazer = new FlatBtn();
+            _btDesfazer.Text = T.Undo;
+            _btDesfazer.Glyph = "";        // seta de desfazer, Segoe MDL2
+            _btDesfazer.Primary = true;
+            _btDesfazer.Visible = false;
+            _btDesfazer.Click += delegate { Desfazer(); };
+            _nav.Controls.Add(_btDesfazer);
 
-            _btClose = new FlatBtn();
-            _btClose.Text = T.Close;
-            _btClose.Glyph = "\uE711";         // o mesmo "x" ja usado nos cartoes
-            _btClose.Click += delegate { Close(); };
-            _nav.Controls.Add(_btClose);
 
             _footerNote = MakeLabel("", 0, 0, Ui.FontSmall);
             _footerNote.ForeColor = Ui.AccentText;
@@ -255,6 +299,9 @@ namespace MhiagosControl
             _host.Padding = new Padding(Ui.S(16), Ui.S(16), Ui.S(16), Ui.S(16));
             Controls.Add(_host);
 
+            _faixa = new FaixaDeAviso();
+            Controls.Add(_faixa);
+
             // O Windows Forms encaixa os controles do fundo da ordem Z para a
             // frente: quem esta atras reivindica a borda inteira primeiro. Com
             // a lateral adicionada ANTES do rodape, era o rodape que atravessava
@@ -265,6 +312,7 @@ namespace MhiagosControl
             // esquerda de cima a baixo, e o rodape se encaixa no que sobra. O
             // Fill vem na frente de todos, senao nao ganha o espaco restante.
             _host.BringToFront();
+            _faixa.SendToBack();
             _nav.SendToBack();
         }
 
@@ -384,6 +432,29 @@ namespace MhiagosControl
                 if (itens[i].Key == chave) { _nav.SelectedIndex = i; return; }
         }
 
+        private bool _paginaPronta;
+
+        /// <summary>
+        /// Lembra a pagina em que a janela estava, para reabrir nela. So depois
+        /// de exibida: as trocas de montagem nao sao escolha de ninguem.
+        /// </summary>
+        private void GuardarPagina()
+        {
+            if (!_paginaPronta || _nav == null || _nav.Selected == null) return;
+            string chave = _nav.Selected.Key;
+            if (string.IsNullOrEmpty(chave) || chave == _cfg.LastPage) return;
+            try
+            {
+                _cfg.LastPage = chave;
+                string erro;
+                if (!_session.TrySavePreferences(delegate(Config draft, Config target)
+                {
+                    target.LastPage = draft.LastPage;
+                }, out erro)) Log.Write("ultima pagina nao persistiu: " + erro);
+            }
+            catch (Exception ex) { Log.Error("gravar ultima pagina", ex); }
+        }
+
         /// <summary>Grava na hora, como a barra recolhida: e arrumacao da tela, nao edicao de perfil.</summary>
         private void GravarOrdemDaBarra()
         {
@@ -444,7 +515,7 @@ namespace MhiagosControl
         /// </summary>
         private void ArranjarAcoes()
         {
-            if (_nav == null || _btSave == null || _btClose == null) return;
+            if (_nav == null || _btDesfazer == null) return;
 
             int Alt = Ui.S(32);
             int Esp = Ui.S(8);
@@ -461,15 +532,14 @@ namespace MhiagosControl
             int alturaNota = (int)Math.Round(Ui.S(32) * _nav.Abertura);
 
             int baixo = _nav.Height - Ui.S(18);
-            int y = baixo - alturaNota - Alt - Esp - Alt;
+            int y = baixo - alturaNota - Alt - Esp;
 
-            _btSave.SetBounds(margem, y, larg, Alt);
-            _btClose.SetBounds(margem, y + Alt + Esp, larg, Alt);
+            _btDesfazer.SetBounds(margem, y, larg, Alt);
 
             if (_footerNote != null)
             {
                 _footerNote.Visible = _footerNote.Visible && cabeNota;
-                _footerNote.SetBounds(margem, y + (Alt + Esp) * 2 + Ui.S(4), larg, alturaNota);
+                _footerNote.SetBounds(margem, y + Alt + Esp + Ui.S(4), larg, alturaNota);
                 _footerNote.TextAlign = ContentAlignment.TopLeft;
             }
         }
@@ -496,6 +566,43 @@ namespace MhiagosControl
         }
 
         /// <summary>
+        /// Onde a janela estava da ultima vez, se ainda cabe em algum monitor.
+        ///
+        /// Monitor desligado ou resolucao menor deixaria a janela fora da tela,
+        /// sem como alcancar a barra de titulo. Por isso a posicao so vale se
+        /// uma faixa da barra de titulo (largura minima de 120 px) cai dentro
+        /// da area de trabalho de algum monitor; vale entao a janela puxada
+        /// para dentro dela. Do contrario, nulo: abre centralizada.
+        /// </summary>
+        private Point? PosicaoGuardada()
+        {
+            if (_cfg.WindowX == int.MinValue || _cfg.WindowY == int.MinValue) return null;
+            Rectangle[] todas = new Rectangle[Screen.AllScreens.Length];
+            for (int i = 0; i < todas.Length; i++) todas[i] = Screen.AllScreens[i].WorkingArea;
+            return PosicaoValida(new Point(_cfg.WindowX, _cfg.WindowY), Size, todas);
+        }
+
+        /// <summary>A posicao puxada para dentro do monitor que a contem, ou nulo se nenhum a alcanca.</summary>
+        internal static Point? PosicaoValida(Point p, Size tamanho, Rectangle[] areasDeTrabalho)
+        {
+            int faixaMin = 120, altBarra = 40;
+            Rectangle barra = new Rectangle(p.X, p.Y, tamanho.Width, altBarra);
+            foreach (Rectangle wa in areasDeTrabalho)
+            {
+                Rectangle comum = Rectangle.Intersect(barra, wa);
+                if (comum.Width < Math.Min(faixaMin, tamanho.Width) || comum.Height < altBarra / 2) continue;
+
+                int x = p.X, y = p.Y;
+                if (x + tamanho.Width > wa.Right) x = wa.Right - tamanho.Width;
+                if (x < wa.Left) x = wa.Left;
+                if (y + tamanho.Height > wa.Bottom) y = wa.Bottom - tamanho.Height;
+                if (y < wa.Top) y = wa.Top;
+                return new Point(x, y);
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Grava o tamanho ao terminar o arraste, e nao a cada pixel.
         ///
         /// O Resize dispara dezenas de vezes durante um arraste de borda, e cada
@@ -510,16 +617,22 @@ namespace MhiagosControl
         private void GuardarTamanho()
         {
             if (WindowState != FormWindowState.Normal) return;
-            if (_cfg.WindowW == ClientSize.Width && _cfg.WindowH == ClientSize.Height) return;
+            if (!IsHandleCreated) return;
+            if (_cfg.WindowW == ClientSize.Width && _cfg.WindowH == ClientSize.Height
+                && _cfg.WindowX == Location.X && _cfg.WindowY == Location.Y) return;
             try
             {
                 _cfg.WindowW = ClientSize.Width;
                 _cfg.WindowH = ClientSize.Height;
+                _cfg.WindowX = Location.X;
+                _cfg.WindowY = Location.Y;
                 string erro;
                 if (!_session.TrySavePreferences(delegate(Config draft, Config target)
                 {
                     target.WindowW = draft.WindowW;
                     target.WindowH = draft.WindowH;
+                    target.WindowX = draft.WindowX;
+                    target.WindowY = draft.WindowY;
                 }, out erro)) Log.Write("tamanho da janela nao persistiu: " + erro);
             }
             catch (Exception ex) { Log.Error("gravar tamanho da janela", ex); }
@@ -1343,6 +1456,8 @@ namespace MhiagosControl
 
         private Pagina _pgBaterias;
         private Label _lbBateriasVazio;
+        private FlatBtn _btGHub;
+        private bool? _temGHub;
         private readonly List<CartaoDeBateria> _cartoesDeBateria = new List<CartaoDeBateria>();
         private DateTime _bateriasLidas = DateTime.MinValue;
 
@@ -1361,6 +1476,12 @@ namespace MhiagosControl
             _lbBateriasVazio.AutoSize = false;
             _lbBateriasVazio.Visible = false;
             _pgBaterias.Controls.Add(_lbBateriasVazio);
+
+            _btGHub = new FlatBtn();
+            _btGHub.Text = T.OpenGHub;
+            _btGHub.Visible = false;
+            _btGHub.Click += delegate { Perifericos.AbrirGHub(); };
+            _pgBaterias.Controls.Add(_btGHub);
 
             // Os aparelhos vem primeiro. As opcoes do widget ficam atras de um
             // botao discreto no alto, fechado por padrao; se a pessoa deixar
@@ -1673,6 +1794,9 @@ namespace MhiagosControl
 
                 _lbBateriasVazio.Visible = _cartoesDeBateria.Count == 0;
                 _lbBateriasVazio.SetBounds(x, y + Ui.S(2), larg, Ui.S(40));
+                if (_temGHub == null) _temGHub = Perifericos.GHubInstalado();
+                _btGHub.Visible = _lbBateriasVazio.Visible && _temGHub.Value;
+                _btGHub.SetBounds(x, y + Ui.S(46), Ui.S(180), Ui.S(32));
 
                 foreach (CartaoDeBateria c in _cartoesDeBateria)
                 {
@@ -2477,6 +2601,8 @@ namespace MhiagosControl
 
             _gameBindings = new GameBindingList();
             _gameBindings.EmptyText = T.NoGameBindings;
+            _gameBindings.EmptyActionText = T.GameBrowse;
+            _gameBindings.EmptyActionRequested += delegate { BrowseGame(); };
             _gameBindings.SetBounds(Ui.S(16), Ui.S(346), Ui.S(724), Ui.S(138));
             _gameBindings.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _gameBindings.RemoveRequested += delegate(string key) { RemoverVinculo(key); };
@@ -2807,7 +2933,7 @@ namespace MhiagosControl
                 // no proximo arranque e contradiz o proprio botao.
                 _cfg.ActiveName = anterior;
                 _saved = false; _dirty = true;
-                Warn(T.SaveFailed(erro));
+                FalhaAoGravar(erro);
                 return;
             }
             _saved = true; _dirty = false;
@@ -2834,7 +2960,7 @@ namespace MhiagosControl
             {
                 _cfg.DefaultProfileName = anterior;
                 _saved = false; _dirty = true;
-                Warn(T.SaveFailed(erro));
+                FalhaAoGravar(erro);
                 return;
             }
 
@@ -3001,7 +3127,7 @@ namespace MhiagosControl
 
                 string erro;
                 if (Config.ExportProfile(p, d.FileName, _cfg.SavePath, out erro)) Aviso(T.Exported(p.Name));
-                else Warn(T.ExportFailed(erro));
+                else Warn(T.ExportFailed(erro), T.TryAgain, delegate { OnExportProfile(null, EventArgs.Empty); });
             }
         }
 
@@ -3016,7 +3142,7 @@ namespace MhiagosControl
 
                 string erro;
                 Profile p = Config.ImportProfile(d.FileName, out erro);
-                if (p == null) { Warn(T.ImportFailed(erro)); return; }
+                if (p == null) { Warn(T.ImportFailed(erro), T.TryAgain, delegate { OnImportProfile(null, EventArgs.Empty); }); return; }
 
                 SaveToProfile();
                 p.Name = _cfg.UniqueName(p.Name);
@@ -3076,8 +3202,9 @@ namespace MhiagosControl
         {
             if (_cfg.Profiles.Count <= 1) { Warn(T.KeepOneProfile); return; }
             Profile alvo = _profileList != null && _profileList.Selected != null ? _profileList.Selected : _current;
-            if (MessageBox.Show(T.DeleteProfileQ(alvo.Name), T.AppName,
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            SaveToProfile();
+            Config antes = _cfg.Clone();
+            string nomeAlvo = alvo.Name;
 
             _cfg.RemoverPerfilDosJogos(alvo.Name);
             _cfg.Profiles.Remove(alvo);
@@ -3093,11 +3220,17 @@ namespace MhiagosControl
             _nav.Invalidate();
             _dirty = true;
             RefreshProfileList(); LoadFromProfile();
+            OferecerDesfazer(T.ProfileDeleted(nomeAlvo), delegate { RestaurarPerfis(antes, nomeAlvo); });
         }
 
-        private static void Warn(string msg)
+        /// <summary>Falha recuperavel: faixa no alto da janela, com a acao que resolve quando ha.</summary>
+        private void Warn(string msg) { Warn(msg, null, null); }
+
+        private void Warn(string msg, string textoDaAcao, Action acao)
         {
-            MessageBox.Show(msg, T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (_faixa == null || IsDisposed) { Log.Write("aviso: " + msg); return; }
+            _faixaDeSensores = false;
+            _faixa.Mostrar(msg, textoDaAcao, acao);
         }
 
         /// <summary>Confirmacao discreta no rodape, que se apaga sozinha.</summary>
@@ -3132,20 +3265,148 @@ namespace MhiagosControl
         /// </summary>
         private void AtualizarRodape()
         {
-            if (_btSave != null) _btSave.Enabled = _dirty;
             if (_footerNote == null) return;
+            IReadingStatusData status = _data as IReadingStatusData;
+            Control page = _nav == null || _nav.Selected == null ? null : _nav.Selected.Page;
+            bool sensorPage = page == _pgVisao || page == _pgMetricas || page == _pgPaineis || page == _pgPerfis;
+            AtualizarFaixaDeSensores(status, sensorPage);
             if (_noteTimer != null && _noteTimer.Enabled) return;
 
             // Mesmo texto do dialogo de fechar, de proposito: a barra avisa e o
             // dialogo cobra a mesma coisa, e duas redacoes para o mesmo estado
             // fariam parecer dois estados.
-            IReadingStatusData status = _data as IReadingStatusData;
-            Control page = _nav == null || _nav.Selected == null ? null : _nav.Selected.Page;
-            bool sensorPage = page == _pgVisao || page == _pgMetricas || page == _pgPaineis || page == _pgPerfis;
             string readingNote = status != null && sensorPage ? ReadingStateText(status.CurrentReadingState(null)) : "";
-            _footerNote.Text = _dirty ? T.UnsavedTitle : readingNote;
+            // So avisa quando a gravacao falhou: com gravacao automatica, edicao
+            // pendente por 350 ms nao e um estado que mereca aviso.
+            bool naoGravou = _dirty && _autoPausado;
+            _footerNote.Text = naoGravou ? T.UnsavedTitle : readingNote;
             _footerNote.ForeColor = Ui.Warn;
-            _footerNote.Visible = (_dirty || readingNote.Length > 0) && _nav != null && _nav.Width >= Ui.S(120);
+            _footerNote.Visible = (naoGravou || readingNote.Length > 0) && _nav != null && _nav.Width >= Ui.S(120);
+        }
+
+        // ---------------- sensores sem resposta ----------------
+
+        private bool _faixaDeSensores;
+        private ReadingState? _estadoAvisado;
+
+        /// <summary>
+        /// Sensores sem resposta viram faixa com "Tentar de novo", em vez de so
+        /// uma nota no rodape. Dispensada no X, nao volta enquanto o estado for
+        /// o mesmo; reaparece se a leitura voltar e cair de novo.
+        /// </summary>
+        private void AtualizarFaixaDeSensores(IReadingStatusData status, bool sensorPage)
+        {
+            if (_faixa == null || status == null) return;
+            ReadingState estado = status.CurrentReadingState(null);
+            bool caiu = estado == ReadingState.Failed || estado == ReadingState.Expired;
+            if (!caiu)
+            {
+                _estadoAvisado = null;
+                if (_faixaDeSensores) { _faixa.Ocultar(); _faixaDeSensores = false; }
+                return;
+            }
+            if (!sensorPage)
+            {
+                if (_faixaDeSensores) { _faixa.Ocultar(); _faixaDeSensores = false; _estadoAvisado = null; }
+                return;
+            }
+            if (_estadoAvisado == estado || (_faixa.Visible && !_faixaDeSensores)) return;
+            _estadoAvisado = estado;
+            _faixaDeSensores = true;
+            _faixa.Mostrar(ReadingStateText(estado), T.TryAgain, delegate { TentarSensoresDeNovo(); });
+        }
+
+        private void TentarSensoresDeNovo()
+        {
+            _faixaDeSensores = false;
+            _estadoAvisado = null;
+            if (_data == null) return;
+            try
+            {
+                _sensors = _data.RefreshSensorList();
+                _pick1.SetSensors(Clone(_sensors));
+                _pick2.SetSensors(Clone(_sensors));
+                _pick1.SelectedId = _current.Panel1Id;
+                _pick2.SelectedId = _current.Panel2Id;
+                Refresh0();
+            }
+            catch (Exception ex) { Log.Error("tentar sensores de novo", ex); }
+        }
+
+        // ---------------- desfazer ----------------
+
+        private Action _desfazer;
+        private Timer _desfazerTimer;
+
+        /// <summary>
+        /// Oferece "Desfazer" por 6 s no rodape depois de um gesto destrutivo.
+        /// Como tudo vale na hora, sem este recurso um clique errado em apagar
+        /// seria definitivo.
+        /// </summary>
+        private void OferecerDesfazer(string texto, Action desfazer)
+        {
+            _desfazer = desfazer;
+            Aviso(texto);
+            if (_btDesfazer != null) { _btDesfazer.Visible = true; _btDesfazer.BringToFront(); }
+            if (_desfazerTimer == null)
+            {
+                _desfazerTimer = new Timer();
+                _desfazerTimer.Interval = 6000;
+                _desfazerTimer.Tick += delegate { EncerrarDesfazer(); };
+            }
+            _desfazerTimer.Stop();
+            _desfazerTimer.Start();
+        }
+
+        private void EncerrarDesfazer()
+        {
+            if (_desfazerTimer != null) _desfazerTimer.Stop();
+            _desfazer = null;
+            if (_btDesfazer != null) _btDesfazer.Visible = false;
+        }
+
+        private void Desfazer()
+        {
+            Action a = _desfazer;
+            EncerrarDesfazer();
+            if (a == null) return;
+            a();
+            Aviso(T.Undone);
+        }
+
+        /// <summary>Devolve os perfis e vinculos de jogo de uma copia anterior, sem tocar no resto.</summary>
+        private void RestaurarPerfis(Config antes, string selecionado)
+        {
+            _cfg.Profiles.Clear();
+            foreach (Profile p in antes.Profiles) _cfg.Profiles.Add(p.Clone());
+            _cfg.ActiveName = antes.ActiveName;
+            _cfg.DefaultProfileName = antes.DefaultProfileName;
+            _cfg.GameKeys.Clear(); _cfg.GameKeys.AddRange(antes.GameKeys);
+            _cfg.GameProfileNames.Clear(); _cfg.GameProfileNames.AddRange(antes.GameProfileNames);
+            _cfg.GameDisplayNames.Clear(); _cfg.GameDisplayNames.AddRange(antes.GameDisplayNames);
+            _cfg.GamePaths.Clear(); _cfg.GamePaths.AddRange(antes.GamePaths);
+            Profile alvo = null;
+            foreach (Profile p in _cfg.Profiles) if (p.Name == selecionado) alvo = p;
+            _current = alvo ?? _cfg.Profiles[0];
+            if (antes.ActiveName == selecionado) _selectionAtLastSave = null;   // o proximo gravar reativa
+            _nav.Subtitle = _session.ActiveProfile.Name;
+            _nav.Invalidate();
+            _dirty = true;
+            RefreshProfileList(); LoadFromProfile();
+            AtualizarJogo();
+        }
+
+        private void RestaurarMetricas(Config antes)
+        {
+            _cfg.MetricIds.Clear(); _cfg.MetricIds.AddRange(antes.MetricIds);
+            _cfg.MetricSizes.Clear(); _cfg.MetricSizes.AddRange(antes.MetricSizes);
+            _cfg.MetricRange = antes.MetricRange;
+            _cfg.MetricsChosen = antes.MetricsChosen;
+            _cfg.MetricProfiles.Clear();
+            foreach (MetricProfile p in antes.MetricProfiles) _cfg.MetricProfiles.Add(p.Clone());
+            if (!GravarMetricas()) return;
+            MontarMetricas();
+            if (Applied != null) Applied(this, EventArgs.Empty);
         }
 
         // ---------------- pagina: Configuracoes ----------------
@@ -3523,6 +3784,7 @@ namespace MhiagosControl
         private void AplicarPerfilDeMetricas(MetricProfile profile)
         {
             if (profile == null) return;
+            Config antes = _cfg.Clone();
             List<string> oldIds = new List<string>(_cfg.MetricIds);
             List<int> oldSizes = new List<int>(_cfg.MetricSizes);
             int oldRange = _cfg.MetricRange;
@@ -3540,7 +3802,7 @@ namespace MhiagosControl
             }
             MontarMetricas();
             if (Applied != null) Applied(this, EventArgs.Empty);
-            Aviso(T.MetricProfileApplied(profile.Name));
+            OferecerDesfazer(T.MetricProfileApplied(profile.Name), delegate { RestaurarMetricas(antes); });
         }
 
         private void AtualizarPerfilDeMetricas(MetricProfile profile)
@@ -3567,12 +3829,13 @@ namespace MhiagosControl
         private void ExcluirPerfilDeMetricas(MetricProfile profile)
         {
             if (profile == null) return;
-            if (MessageBox.Show(T.DeleteMetricProfileQ(profile.Name), T.AppName,
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            Config antes = _cfg.Clone();
+            string nome = profile.Name;
             int index = _cfg.MetricProfiles.IndexOf(profile);
             if (index < 0) return;
             _cfg.MetricProfiles.RemoveAt(index);
-            if (!GravarMetricas()) _cfg.MetricProfiles.Insert(index, profile);
+            if (!GravarMetricas()) { _cfg.MetricProfiles.Insert(index, profile); return; }
+            OferecerDesfazer(T.MetricProfileDeleted(nome), delegate { RestaurarMetricas(antes); });
         }
 
         /// <summary>
@@ -3588,6 +3851,7 @@ namespace MhiagosControl
             List<SensorEntry> escolhidos = MetricPicker.Montar(c, _sensors);
             if (escolhidos.Count == 0) { Aviso(T.PresetEmpty); return; }
 
+            Config antes = _cfg.Clone();
             _cfg.MetricIds.Clear();
             _cfg.MetricSizes.Clear();
             foreach (SensorEntry s in escolhidos)
@@ -3604,7 +3868,7 @@ namespace MhiagosControl
             // aplicativo.
             if (Applied != null) Applied(this, EventArgs.Empty);
 
-            if (c != null) Aviso(T.PresetApplied(c.Nome, escolhidos.Count));
+            OferecerDesfazer(c != null ? T.PresetApplied(c.Nome, escolhidos.Count) : (T.Pt ? "Grade automática aplicada" : "Automatic grid applied"), delegate { RestaurarMetricas(antes); });
         }
 
         private bool GravarMetricas()
@@ -3623,7 +3887,7 @@ namespace MhiagosControl
                     foreach (MetricProfile profile in draft.MetricProfiles)
                         target.MetricProfiles.Add(profile.Clone());
                 }, out erro);
-                if (!salvo) { _dirty = true; Warn(T.SaveFailed(erro)); }
+                if (!salvo) { _dirty = true; FalhaAoGravar(erro); }
                 return salvo;
             }
             catch (Exception ex) { Log.Error("gravar cartoes de metricas", ex); return false; }
@@ -4361,7 +4625,7 @@ namespace MhiagosControl
                 _lang.SelectedIndex = T.Pt ? 0 : 1;
                 _loading = false;
                 _saved = false; _dirty = true;
-                Warn(T.SaveFailed(erro));
+                FalhaAoGravar(erro);
                 return;
             }
             _saved = true; _dirty = false;
@@ -4409,7 +4673,7 @@ namespace MhiagosControl
             {
                 _cfg.ShowAllSensors = anterior;
                 _loading = true; t.Checked = anterior; _loading = false;
-                Warn(T.SaveFailed(erro));
+                FalhaAoGravar(erro);
                 return;
             }
             _data.SetShowAllSensors(t.Checked);
@@ -4465,7 +4729,7 @@ namespace MhiagosControl
             bool ok = target ? Autostart.Enable() : Autostart.Disable();
             if (!ok)
             {
-                Warn(Autostart.UltimaRecusa ?? T.AutostartFailed + Log.Path);
+                Warn(Autostart.UltimaRecusa ?? T.AutostartFailed + Log.Path, T.TryAgain, delegate { _tgAutostart.Checked = target; });
                 _loading = true; _tgAutostart.Checked = !target; _loading = false;
             }
         }
@@ -4668,14 +4932,20 @@ namespace MhiagosControl
             bool activateSelection = !ReferenceEquals(_current, _selectionAtLastSave);
             if (activateSelection) _cfg.ActiveName = _current.Name;
             string erro;
-            if (!_session.TrySaveAll(activateSelection, out erro))
+            _salvando = true;
+            try
             {
-                _dirty = true;
-                Warn(T.SaveFailed(erro));
-                return;
+                if (!_session.TrySaveAll(activateSelection, out erro))
+                {
+                    _dirty = true;
+                    FalhaAoGravar(erro);
+                    return;
+                }
+                _saved = true;
+                _autoPausado = false;
+                _dirty = false;
             }
-            _saved = true;
-            _dirty = false;
+            finally { _salvando = false; }
             _selectionAtLastSave = _current;
 
             if (_profileList != null)
@@ -4685,7 +4955,6 @@ namespace MhiagosControl
                 AtualizarPreviaDoPerfil();
             }
             if (Applied != null) Applied(this, EventArgs.Empty);
-            Aviso(T.Saved);
         }
 
         /// <summary>
@@ -4699,19 +4968,15 @@ namespace MhiagosControl
         {
             if (_dirty && DialogResult != DialogResult.Retry && !_semPerguntar && !_fechamentoDecidido)
             {
-                DialogResult r = PerguntaAoFechar != null ? PerguntaAoFechar()
-                    : MessageBox.Show(T.UnsavedQuestion, T.UnsavedTitle,
-                        MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-
-                if (r == DialogResult.Cancel) { e.Cancel = true; base.OnFormClosing(e); return; }
-                if (r == DialogResult.Yes)
-                {
-                    OnSave(this, EventArgs.Empty);
-                    // Falha de disco mantem a janela aberta. Fechar logo depois
-                    // do aviso descartaria exatamente a edicao que nao gravou.
-                    if (_dirty) { e.Cancel = true; base.OnFormClosing(e); return; }
-                }
+                // Sem pergunta: a edicao ja vale sozinha, so resta o que ainda
+                // esperava o atraso de gravacao. Falha de disco mantem a janela
+                // aberta, porque fechar descartaria exatamente o que nao gravou.
+                _autoPausado = false;
+                GravarPendente();
+                if (_dirty) { e.Cancel = true; base.OnFormClosing(e); return; }
             }
+
+            GuardarTamanho();
 
             // OK significa "ha gravacao valida no disco"; quem abriu usa isso
             // para decidir se recarrega a configuracao e descarta a memoria
@@ -4731,9 +4996,6 @@ namespace MhiagosControl
         private bool _semPerguntar;
         private bool _fechamentoDecidido;
 
-        /// <summary>Substitui a pergunta de edicao pendente; os testes respondem por aqui.</summary>
-        internal Func<DialogResult> PerguntaAoFechar;
-
         /// <summary>
         /// Fecha descartando a edicao pendente, sem dialogo. Para quando o
         /// aplicativo sai por motivo que ninguem pode cancelar - o instalador
@@ -4741,6 +5003,7 @@ namespace MhiagosControl
         /// </summary>
         internal void FecharSemPerguntar()
         {
+            GravarPendente();
             _semPerguntar = true;
             Close();
         }
@@ -4785,7 +5048,10 @@ namespace MhiagosControl
         {
             base.OnShown(e);
             Theme.ApplyScrollbars(this);
-            MostrarPagina(PaginaInicial);
+            // A pedida de fora (clique no widget) vence; senao, a da ultima vez.
+            MostrarPagina(string.IsNullOrEmpty(PaginaInicial) ? _cfg.LastPage : PaginaInicial);
+            _paginaPronta = true;
+            GuardarPagina();
             ArranjarPaginaVisivel();
 
             if (_roda == null)

@@ -641,8 +641,8 @@ namespace MhiagosControl
         public static string DataFolderTitle { get { return P("Configuração e registro", "Settings and log"); } }
         public static string BackupShort
         {
-            get { return P("Perfis, jogos, métricas e preferências já salvos. Edições pendentes e histórico ficam fora.",
-                           "Saved profiles, games, metrics and preferences. Unsaved edits and history are left out."); }
+            get { return P("Perfis, jogos, métricas e preferências já salvos. O histórico fica fora.",
+                           "Saved profiles, games, metrics and preferences. History is left out."); }
         }
         public static string DiagnosticShort
         {
