@@ -1217,7 +1217,7 @@ namespace MhiagosControl
             {
                 int a = TextRenderer.MeasureText(_vgSpecCap[i].Text, Ui.FontSmall).Width;
                 int b = TextRenderer.MeasureText(_vgSpecVal[i].Text, Ui.FontSemi).Width;
-                larg[i] = Math.Max(a, b) + Ui.S(4);
+                larg[i] = Math.Max(a, b) + Ui.S(14);
                 soma += larg[i];
             }
 

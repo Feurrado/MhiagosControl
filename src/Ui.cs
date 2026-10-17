@@ -215,7 +215,9 @@ namespace MhiagosControl
             int cel = CelulaDeDigito(g, f), w = 0;
             foreach (char c in s)
                 w += char.IsDigit(c) ? cel : TextRenderer.MeasureText(g, c.ToString(), f, Size.Empty, SemMargem).Width;
-            return new Size(w, TextRenderer.MeasureText(g, "0", f, Size.Empty, SemMargem).Height);
+            int h = TextRenderer.MeasureText(g, "0", f, Size.Empty, SemMargem).Height;
+            // O GDI mede o glifo sem o que ele passa da celula (o "0" e o "%"): sobra uma folga
+            return new Size(w + Math.Max(Ui.S(2), h / 6), h);
         }
 
         public static void DesenharNumero(Graphics g, string s, Font f, Point p, Color cor)

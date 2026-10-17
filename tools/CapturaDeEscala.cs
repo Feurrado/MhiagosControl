@@ -125,7 +125,7 @@ namespace MhiagosControl
         private static void CapturaDaTela(SettingsForm form, NavBar nav, string pasta)
         {
             form.TopMost = true; Ativar(form); Esperar(300);
-            foreach (int i in new int[] { 0, 6 })
+            foreach (int i in new int[] { 0, 1, 2, 3, 4, 5, 6, 7 })
             {
                 nav.SelectedIndex = i;
                 Esperar(700);
