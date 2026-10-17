@@ -22,6 +22,9 @@ namespace MhiagosControl
         /// <summary>Slots de memoria com nome e lugar, ou nulo quando a BIOS nao disse.</summary>
         public List<SlotDeMemoria> Slots;
 
+        /// <summary>Gigabytes ocupados de cada linha do grupo Armazenamento (-1 quando nao se sabe).</summary>
+        public readonly List<double> Usados = new List<double>();
+
         public SpecGrupo(string titulo) { Titulo = titulo; }
 
         /// <summary>Acrescenta a linha. Valor vazio nao entra.</summary>
@@ -379,8 +382,32 @@ namespace MhiagosControl
                 tipos.TryGetValue(modelo.Trim(), out extra);
 
                 g.Por(tam, modelo.Trim() + (string.IsNullOrEmpty(extra) ? "" : "  ·  " + extra));
+                g.Usados.Add(tam == null ? -1 : GigabytesOcupados(d));
             }
             return g;
+        }
+
+        /// <summary>
+        /// Espaco ocupado nos volumes do disco (particao -> letra), em GB, ou -1
+        /// quando nenhum volume com letra e legivel. Quem decide a barra do cartao
+        /// e o uso, nao o tamanho do disco.
+        /// </summary>
+        private static double GigabytesOcupados(ManagementObject disco)
+        {
+            double usado = 0; bool achou = false;
+            try
+            {
+                foreach (ManagementObject part in disco.GetRelated("Win32_DiskPartition"))
+                foreach (ManagementObject vol in part.GetRelated("Win32_LogicalDisk"))
+                {
+                    ulong total = Longo(vol, "Size"), livre = Longo(vol, "FreeSpace");
+                    if (total == 0) continue;
+                    usado += (total - Math.Min(total, livre)) / 1073741824.0;
+                    achou = true;
+                }
+            }
+            catch (Exception ex) { Log.Error("uso do disco", ex); }
+            return achou ? usado : -1;
         }
 
         /// <summary>Modelo -> "SSD - NVMe", pelo espaco de nomes de armazenamento.</summary>
