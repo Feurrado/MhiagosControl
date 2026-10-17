@@ -103,7 +103,7 @@ namespace MhiagosControl
         private ReadingSnapshot _snapshot = ReadingSnapshot.Empty;
 
         private List<SensorEntry> _cache = new List<SensorEntry>();
-        private MenuItem _miPause, _miAutostart, _miProfiles, _miWidget;
+        private ToolStripMenuItem _miPause, _miAutostart, _miProfiles, _miWidget;
         private bool _sensorsOk = false;
         private bool _openWhenReady = false;
         private SettingsForm _settingsForm;
@@ -405,51 +405,51 @@ namespace MhiagosControl
 
         private void BuildMenu()
         {
-            ContextMenu menu = new ContextMenu();
+            ContextMenuStrip menu = MenuTema.Novo();
 
-            _miProfiles = new MenuItem(T.TrayProfiles);
-            menu.MenuItems.Add(_miProfiles);
+            _miProfiles = MenuTema.Submenu(T.TrayProfiles);
+            menu.Items.Add(_miProfiles);
             RebuildProfileMenu();
 
-            menu.MenuItems.Add(new MenuItem(T.TrayConfigure, new EventHandler(OnConfig)));
+            menu.Items.Add(MenuTema.Item(T.TrayConfigure, new EventHandler(OnConfig)));
 
-            _miWidget = new MenuItem(T.TrayBatteryWidget, new EventHandler(OnToggleWidget));
+            _miWidget = MenuTema.Item(T.TrayBatteryWidget, new EventHandler(OnToggleWidget));
             _miWidget.Checked = _cfgWidget.Ativo;
-            menu.MenuItems.Add(_miWidget);
-            menu.MenuItems.Add("-");
+            menu.Items.Add(_miWidget);
+            MenuTema.Separador(menu.Items);
 
-            _miPause = new MenuItem(T.TrayPause, new EventHandler(OnPause));
-            menu.MenuItems.Add(_miPause);
+            _miPause = MenuTema.Item(T.TrayPause, new EventHandler(OnPause));
+            menu.Items.Add(_miPause);
 
-            _miAutostart = new MenuItem(T.TrayAutostart, new EventHandler(OnToggleAutostart));
+            _miAutostart = MenuTema.Item(T.TrayAutostart, new EventHandler(OnToggleAutostart));
             _miAutostart.Checked = Autostart.IsEnabled();
-            menu.MenuItems.Add(_miAutostart);
+            menu.Items.Add(_miAutostart);
 
-            menu.MenuItems.Add(new MenuItem(T.TrayOpenData, new EventHandler(OnOpenData)));
-            menu.MenuItems.Add("-");
-            menu.MenuItems.Add(new MenuItem(T.TrayExit, new EventHandler(OnExit)));
+            menu.Items.Add(MenuTema.Item(T.TrayOpenData, new EventHandler(OnOpenData)));
+            MenuTema.Separador(menu.Items);
+            menu.Items.Add(MenuTema.Item(T.TrayExit, new EventHandler(OnExit)));
 
-            _icon.ContextMenu = menu;
+            _icon.ContextMenuStrip = menu;
         }
 
         private void RebuildProfileMenu()
         {
-            _miProfiles.MenuItems.Clear();
+            _miProfiles.DropDownItems.Clear();
             string padrao = _cfg.DefaultProfile.Name;
             foreach (Profile p in _cfg.Profiles)
             {
                 string texto = p.Name + (string.Equals(p.Name, padrao, StringComparison.Ordinal)
                     ? "  ·  " + T.DefaultBadge : "");
-                MenuItem mi = new MenuItem(texto, new EventHandler(OnPickProfile));
+                ToolStripMenuItem mi = MenuTema.Opcao(texto, false, new EventHandler(OnPickProfile));
                 mi.Tag = p;
                 mi.Checked = (p.Name == _cfg.ActiveName);
-                _miProfiles.MenuItems.Add(mi);
+                _miProfiles.DropDownItems.Add(mi);
             }
         }
 
         private void OnPickProfile(object sender, EventArgs e)
         {
-            MenuItem mi = sender as MenuItem;
+            ToolStripMenuItem mi = sender as ToolStripMenuItem;
             if (mi == null) return;
             Profile p = mi.Tag as Profile;
             if (p == null) return;

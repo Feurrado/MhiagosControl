@@ -47,7 +47,7 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(10)))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.RaioCartao))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -190,7 +190,7 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
             Rectangle outer = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(outer, Ui.S(8)))
+            using (GraphicsPath p = Ui.RoundRect(outer, Ui.RaioCartao))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             { g.FillPath(b, p); g.DrawPath(pen, p); }
@@ -222,12 +222,12 @@ namespace MhiagosControl
         {
             bool hover = index == _hover;
             if (item.Current || hover)
-                using (GraphicsPath p = Ui.RoundRect(row, Ui.S(6)))
+                using (GraphicsPath p = Ui.RoundRect(row, Ui.RaioControle))
                 using (SolidBrush b = new SolidBrush(item.Current ? Ui.AccentSoft : Ui.Hover))
                     g.FillPath(b, p);
 
             Rectangle icon = new Rectangle(row.X + Ui.S(10), row.Y + Ui.S(10), Ui.S(40), Ui.S(40));
-            using (GraphicsPath p = Ui.RoundRect(icon, Ui.S(8)))
+            using (GraphicsPath p = Ui.RoundRect(icon, Ui.RaioCartao))
             using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillPath(b, p);
             if (item.Icon != null)
             {
@@ -247,7 +247,7 @@ namespace MhiagosControl
 
             Rectangle remove = new Rectangle(row.Right - Ui.S(40), row.Y + Ui.S(12), Ui.S(30), Ui.S(30));
             if (hover)
-                using (GraphicsPath p = Ui.RoundRect(remove, Ui.S(6)))
+                using (GraphicsPath p = Ui.RoundRect(remove, Ui.RaioControle))
                 using (SolidBrush b = new SolidBrush(Ui.Hover)) g.FillPath(b, p);
             TextRenderer.DrawText(g, "\uE711", Ui.FontGlyph9, remove, hover ? Ui.Danger : Ui.Faint,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);

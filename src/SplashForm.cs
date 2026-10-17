@@ -147,7 +147,7 @@ namespace MhiagosControl
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
                      ControlStyles.OptimizedDoubleBuffer, true);
 
-            using (GraphicsPath p = Ui.RoundRect(new Rectangle(0, 0, ClientSize.Width, ClientSize.Height), Ui.S(10)))
+            using (GraphicsPath p = Ui.RoundRect(new Rectangle(0, 0, ClientSize.Width, ClientSize.Height), Ui.RaioCartao))
                 Region = new Region(p);
 
             _anim = new System.Windows.Forms.Timer();
@@ -208,7 +208,7 @@ namespace MhiagosControl
             Ui.Smooth(g);
 
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(10)))
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.RaioCartao))
             using (SolidBrush b = new SolidBrush(Ui.Surface))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -234,7 +234,7 @@ namespace MhiagosControl
 
             Rectangle fechar = BotaoFechar;
             if (_hoverFechar)
-                using (GraphicsPath p = Ui.RoundRect(fechar, Ui.S(6)))
+                using (GraphicsPath p = Ui.RoundRect(fechar, Ui.RaioControle))
                 using (SolidBrush b = new SolidBrush(Ui.Hover))
                     g.FillPath(b, p);
             // U+E8BB (ChromeClose) escrito por codigo: o caractere literal no

@@ -131,6 +131,10 @@ namespace MhiagosControl
         {
             if (keyData == (Keys.Control | Keys.S)) { if (_dirty) OnSave(this, EventArgs.Empty); return true; }
             if (keyData == (Keys.Control | Keys.B)) { _nav.Collapsed = !_nav.Collapsed; return true; }
+            // Ctrl+Tab / Ctrl+Shift+Tab percorrem as paginas; Ctrl+1 a Ctrl+8 vao
+            // a pagina daquela posicao na barra (a que a pessoa deixou).
+            int destino = IndiceDoAtalho(keyData, _nav.SelectedIndex, _nav.Items.Count);
+            if (destino >= 0) { _nav.SelectedIndex = destino; return true; }
             if ((keyData & Keys.Modifiers) == Keys.Alt)
             {
                 int index = (int)(keyData & Keys.KeyCode) - (int)Keys.D1;

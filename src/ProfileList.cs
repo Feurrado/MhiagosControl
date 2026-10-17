@@ -170,7 +170,7 @@ namespace MhiagosControl
             // último pixel do highlight, parecendo cortar o perfil selecionado.
             int limiteDireito = Width - (temRolagem ? Ui.S(14) : Ui.S(4));
 
-            using (GraphicsPath p = Ui.RoundRect(new Rectangle(0, 0, Width - 1, Height - 1), Ui.S(8)))
+            using (GraphicsPath p = Ui.RoundRect(new Rectangle(0, 0, Width - 1, Height - 1), Ui.RaioCartao))
             using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt))
             using (Pen pen = new Pen(Ui.Border))
             {
@@ -187,11 +187,11 @@ namespace MhiagosControl
                 bool sel = i == _sel;
                 if (sel || i == _hover)
                 {
-                    using (GraphicsPath gp = Ui.RoundRect(r, Ui.S(6)))
+                    using (GraphicsPath gp = Ui.RoundRect(r, Ui.RaioControle))
                     using (SolidBrush b = new SolidBrush(sel ? Ui.AccentSoft : Ui.Hover))
                         g.FillPath(b, gp);
                     if (sel)
-                        using (GraphicsPath gp = Ui.RoundRect(r, Ui.S(6)))
+                        using (GraphicsPath gp = Ui.RoundRect(r, Ui.RaioControle))
                         using (Pen pen = new Pen(Ui.Accent))
                             g.DrawPath(pen, gp);
                 }

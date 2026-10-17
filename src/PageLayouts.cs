@@ -12,7 +12,7 @@ namespace MhiagosControl
     /// os fontes do app; um teste confere que as duas andam juntas.
     public static class AppInfo
     {
-        public const string Versao = "2.23.0";
+        public const string Versao = "2.24.0";
     }
 
     /// <summary>
@@ -80,7 +80,7 @@ namespace MhiagosControl
         public Toggle Interruptor(Toggle t, bool comEstado)
         {
             t.Label = "";
-            t.Size = new Size(Ui.S(40), Ui.S(26));
+            t.Size = new Size(Ui.S(40), Ui.S(32));
             t.AccessibleName = Titulo.Text;
             if (comEstado)
             {
@@ -88,7 +88,7 @@ namespace MhiagosControl
                 estado.TextAlign = ContentAlignment.MiddleRight;
                 int larg = Math.Max(TextRenderer.MeasureText(T.StateOn, Ui.FontBase).Width,
                                     TextRenderer.MeasureText(T.StateOff, Ui.FontBase).Width) + Ui.S(6);
-                estado.Size = new Size(larg, Ui.S(26));
+                estado.Size = new Size(larg, Ui.S(32));
                 estado.Text = t.Checked ? T.StateOn : T.StateOff;
                 t.CheckedChanged += delegate { estado.Text = t.Checked ? T.StateOn : T.StateOff; };
                 Direita(estado);

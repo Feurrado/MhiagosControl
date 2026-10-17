@@ -36,7 +36,7 @@ namespace MhiagosControl
                 return RegressionChild(args);
             if (args.Length > 2 && args[0] == "--medir-animacao")
                 return CapturaDeEscala(args);
-            if (args.Length > 2 && args[0] == "--captura-escala")
+            if (args.Length > 2 && (args[0] == "--captura-escala" || args[0] == "--captura-tela" || args[0] == "--medir-pintura"))
                 return CapturaDeEscala(args);
             // Sem animacao por padrao: a opcao do Windows muda de maquina para
             // maquina, e as conferencias olham o estado final. Os testes das
@@ -378,7 +378,7 @@ namespace MhiagosControl
             // mesma lista fazem a coluna dancar
             Igual("11.6 GB", Formatar(SensorType.Data, 11.64f, "GB"), "GB com uma casa");
             Igual("12.0 GB", Formatar(SensorType.Data, 12f, "GB"), "GB inteiro mantem a casa");
-            Igual("51.3 C", Formatar(SensorType.Temperature, 51.3f, "C"), "temperatura");
+            Igual("51.3 °C", Formatar(SensorType.Temperature, 51.3f, "C"), "temperatura, com o grau");
             Igual("1600 MHz", Formatar(SensorType.Clock, 1600f, "MHz"), "clock sem casa desnecessaria");
 
             // Sem unidade da fonte, o tipo decide

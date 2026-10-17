@@ -121,7 +121,7 @@ namespace MhiagosControl
                 AoVivo ? Ui.AccentText : Ui.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
             // faixa com as seis horas
-            using (GraphicsPath gp = Ui.RoundRect(f, Ui.S(4)))
+            using (GraphicsPath gp = Ui.RoundRect(f, Ui.RaioControle))
             {
                 using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillPath(b, gp);
                 using (Pen p = new Pen(Ui.Border)) g.DrawPath(p, gp);

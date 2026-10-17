@@ -288,9 +288,9 @@ namespace MhiagosControl
                     int w = TextRenderer.MeasureText(et, Ui.FontSmall).Width + Ui.S(14);
                     if (x > Pad && x + w > Width - Pad) { x = Pad; y += Ui.S(26); }
                     Rectangle c = new Rectangle(x, y, Math.Min(w, Width - 2 * Pad), Ui.S(20));
-                    using (GraphicsPath p = Ui.RoundRect(c, Ui.S(10)))
+                    using (GraphicsPath p = Ui.RoundRect(c, Ui.RaioCartao))
                     using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(b, p);
-                    using (GraphicsPath p = Ui.RoundRect(c, Ui.S(10)))
+                    using (GraphicsPath p = Ui.RoundRect(c, Ui.RaioCartao))
                     using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, p);
                     TextRenderer.DrawText(g, et, Ui.FontSmall, c, Ui.Text,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
@@ -345,7 +345,7 @@ namespace MhiagosControl
                     using (GraphicsPath p = Ui.RoundRect(trilho, Ui.S(3)))
                     using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(b, p);
                     int cheio = Math.Max(Ui.S(6), (int)(w * Math.Min(1.0, _discosGb[i] / maior)));
-                    using (GraphicsPath p = Ui.RoundRect(new Rectangle(Pad, y + Ui.S(19), cheio, Ui.S(6)), Ui.S(3)))
+                    using (GraphicsPath p = Ui.RoundRect(new Rectangle(Pad, y + Ui.S(19), cheio, Ui.RaioControle), Ui.S(3)))
                     using (SolidBrush b = new SolidBrush(Ui.Accent)) g.FillPath(b, p);
                     y += Ui.S(34);
                 }
