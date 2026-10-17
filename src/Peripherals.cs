@@ -434,7 +434,7 @@ namespace MhiagosControl
         private ClientWebSocket _ws;
         private bool _falhaAvisada = false;
 
-        private sealed class Aparelho
+        internal sealed class Aparelho
         {
             public string Id, Nome;
             public TipoPeriferico Tipo;
@@ -443,6 +443,20 @@ namespace MhiagosControl
         private List<Aparelho> _aparelhos = new List<Aparelho>();
 
         public LeitorGHub(WaitHandle parar) { _parar = parar; }
+
+        /// <summary>
+        /// A lista e a unica coisa que diz que um aparelho inativo voltou
+        /// (a bateria so e lida dos ativos). Com algum aparelho relevante
+        /// desligado ela vem a cada ciclo; antes, so a cada 30 s, e era esse
+        /// o atraso para reconhecer o headset ligado de volta.
+        /// </summary>
+        internal static bool PrecisaListar(int ciclo, List<Aparelho> aparelhos)
+        {
+            if (ciclo % ListaACadaCiclos == 0) return true;
+            foreach (Aparelho a in aparelhos)
+                if (!a.Ativo && (a.Tipo != TipoPeriferico.Outro || a.TemBateria)) return true;
+            return false;
+        }
 
         public void Rodar()
         {
@@ -457,7 +471,7 @@ namespace MhiagosControl
                         Conectar();
                         ciclo = 0;
                     }
-                    if (ciclo % ListaACadaCiclos == 0) Listar();
+                    if (PrecisaListar(ciclo, _aparelhos)) Listar();
                     ciclo++;
 
                     bool mudouAlgo = false;
@@ -639,8 +653,8 @@ namespace MhiagosControl
         private const ushort Vid = 0x1D57;
         private const ushort Pid = 0xFA60;
         private const ushort UsagePage = 0x000A;
-        private const int SilencioMs = 6500;
-        private const int ProcuraMs = 5000;
+        private const int SilencioMs = 4500;
+        private const int ProcuraMs = 2000;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct SP_DEVICE_INTERFACE_DATA { public int cbSize; public Guid g; public int flags; public IntPtr r; }
@@ -694,7 +708,7 @@ namespace MhiagosControl
                 catch (Exception ex) { Log.Error("leitura do receptor Attack Shark", ex); }
                 finally { h.Dispose(); }
                 Perifericos.PublicarShark(null);
-                if (_parar.WaitOne(2000)) break;
+                if (_parar.WaitOne(1000)) break;
             }
         }
 

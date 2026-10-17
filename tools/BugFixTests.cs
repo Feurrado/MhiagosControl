@@ -48,6 +48,7 @@ namespace MhiagosControl
             RegressionPeripheralIcons();
             RegressionBatteryHistory();
             RegressionBatteryCoarseSteps();
+            RegressionLeitoresReconhecemRapido();
             RegressionNavOrder(root);
             RegressionBatteryWidget(root);
             RegressionWidgetCard(root);
@@ -486,6 +487,21 @@ namespace MhiagosControl
                 HistoricoDeBateria.Recarregar();
                 try { Directory.Delete(pasta, true); } catch { }
             }
+        }
+
+        private static void RegressionLeitoresReconhecemRapido()
+        {
+            Secao("perifericos: reconhecer o aparelho ligado de volta sem esperar 30 s");
+            List<LeitorGHub.Aparelho> todosAtivos = new List<LeitorGHub.Aparelho> {
+                new LeitorGHub.Aparelho { Id = "dev1", Tipo = TipoPeriferico.Headset, Ativo = true } };
+            Verdade(!LeitorGHub.PrecisaListar(3, todosAtivos), "tudo ativo: a lista segue a cada 15 ciclos");
+            Verdade(LeitorGHub.PrecisaListar(15, todosAtivos), "e no ciclo 15 ela vem");
+            List<LeitorGHub.Aparelho> umInativo = new List<LeitorGHub.Aparelho> {
+                new LeitorGHub.Aparelho { Id = "dev1", Tipo = TipoPeriferico.Headset, Ativo = false } };
+            Verdade(LeitorGHub.PrecisaListar(3, umInativo), "headset desligado: a lista vem a cada ciclo");
+            List<LeitorGHub.Aparelho> irrelevante = new List<LeitorGHub.Aparelho> {
+                new LeitorGHub.Aparelho { Id = "dev2", Tipo = TipoPeriferico.Outro, Ativo = false } };
+            Verdade(!LeitorGHub.PrecisaListar(3, irrelevante), "aparelho sem bateria desligado nao acelera a lista");
         }
 
         private static void RegressionBatteryCoarseSteps()
