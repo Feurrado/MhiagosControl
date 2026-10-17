@@ -186,8 +186,8 @@ namespace MhiagosControl
                 Periferico.Sem("Fone BT", TipoPeriferico.Outro, FontePeriferico.Bluetooth, EstadoPeriferico.SemLeitura),
                 Periferico.Lido("WH-1000XM4", TipoPeriferico.Outro, FontePeriferico.Bluetooth, 18, true) };
             Periferico[] vis = PintorDoWidget.Visiveis(todos);
-            Igual(3, vis.Length, "Bluetooth sem leitura fica fora do widget");
-            Igual("X11", vis[1].Nome, "mouse desligado continua no widget, com --");
+            Igual(2, vis.Length, "ficam o fone e o Bluetooth com leitura: mouse desligado e Bluetooth sem leitura saem");
+            Igual("WH-1000XM4", vis[1].Nome, "o Bluetooth com leitura continua no widget");
             Igual(0, PintorDoWidget.Visiveis(null).Length, "sem lista o widget fica vazio");
 
             // nomes: o G325 e o X11 se reconhecem pelo desenho; Bluetooth tem simbolo generico

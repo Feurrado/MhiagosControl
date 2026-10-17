@@ -26,6 +26,7 @@ namespace MhiagosControl
                 AnimacaoPainel();
                 AnimacaoCartaoDeBateria();
                 AnimacaoPaginaBaterias(root);
+                PresencaDosAparelhos();
             }
             finally { Ui.AnimacoesForcadas = antes; }
         }

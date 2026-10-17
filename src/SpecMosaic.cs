@@ -31,6 +31,7 @@ namespace MhiagosControl
         private int _slotSobMouse = -1;
         private readonly List<string[]> _discos = new List<string[]>();   // tamanho, nome
         private readonly List<double> _discosGb = new List<double>();
+        private readonly List<double> _discosUsados = new List<double>();   // GB ocupados, -1 se desconhecido
         private bool _sobre;
 
         private static readonly int Pad = Ui.S(16);
@@ -125,8 +126,10 @@ namespace MhiagosControl
             }
             else if (t == T.SpecStorage)
             {
+                int ix = 0;
                 foreach (string[] l in _g.Linhas)
                 {
+                    _discosUsados.Add(ix < _g.Usados.Count ? _g.Usados[ix] : -1); ix++;
                     _discos.Add(new string[] { l[0], l[1].Replace("  ·  ", " · ") });
                     _discosGb.Add(Gigabytes(l[0]));
                 }
@@ -331,20 +334,20 @@ namespace MhiagosControl
             if (_discos.Count > 0)
             {
                 y += Ui.S(6);
-                double maior = 1;
-                foreach (double v in _discosGb) if (v > maior) maior = v;
                 for (int i = 0; i < _discos.Count; i++)
                 {
                     int w = Width - 2 * Pad;
-                    TextRenderer.DrawText(g, _discos[i][1], Ui.FontSemi, new Rectangle(Pad, y, w - Ui.S(70), Ui.S(16)),
+                    TextRenderer.DrawText(g, _discos[i][1], Ui.FontSemi, new Rectangle(Pad, y, w - Ui.S(150), Ui.S(16)),
                         Ui.Text, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-                    TextRenderer.DrawText(g, _discos[i][0], Ui.FontSmall, new Rectangle(Pad, y, w, Ui.S(16)),
+                    bool temUso = _discosGb[i] > 0 && _discosUsados[i] >= 0;
+                    string direita = temUso ? SpecSheet.EmGigabytes((ulong)(_discosUsados[i] * 1073741824.0)) + " / " + _discos[i][0] : _discos[i][0];
+                    TextRenderer.DrawText(g, direita, Ui.FontSmall, new Rectangle(Pad, y, w, Ui.S(16)),
                         Ui.Muted, TextFormatFlags.Right | TextFormatFlags.NoPadding);
-                    if (_discosGb[i] <= 0) { y += Ui.S(26); continue; }   // sem tamanho (leitor USB): sem barra
+                    if (!temUso) { y += Ui.S(26); continue; }   // sem midia ou sem volume legivel: sem barra
                     Rectangle trilho = new Rectangle(Pad, y + Ui.S(19), w, Ui.S(6));
                     using (GraphicsPath p = Ui.RoundRect(trilho, Ui.S(3)))
                     using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(b, p);
-                    int cheio = Math.Max(Ui.S(6), (int)(w * Math.Min(1.0, _discosGb[i] / maior)));
+                    int cheio = Math.Max(Ui.S(6), (int)(w * Math.Min(1.0, _discosUsados[i] / _discosGb[i])));
                     using (GraphicsPath p = Ui.RoundRect(new Rectangle(Pad, y + Ui.S(19), cheio, Ui.RaioControle), Ui.S(3)))
                     using (SolidBrush b = new SolidBrush(Ui.Accent)) g.FillPath(b, p);
                     y += Ui.S(34);

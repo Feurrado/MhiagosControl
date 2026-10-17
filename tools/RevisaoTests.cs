@@ -113,7 +113,7 @@ namespace MhiagosControl
                 string original = File.ReadAllText(arq);
                 Verdade(original.Contains("X11"), "o historico de partida guarda o aparelho");
 
-                Periferico outro = Periferico.Lido("Fone", TipoPeriferico.Headset, FontePeriferico.Bluetooth, 50, true);
+                Periferico outro = Periferico.Lido("Fone", TipoPeriferico.Headset, FontePeriferico.GHub, 50, true);
                 using (new FileStream(arq, FileMode.Open, FileAccess.Read, FileShare.None))
                 {
                     HistoricoDeBateria.Recarregar();   // a leitura falha: arquivo preso

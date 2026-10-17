@@ -1560,35 +1560,81 @@ namespace MhiagosControl
             Periferico[] vivos = Perifericos.Atual;
             List<AnaliseDeBateria> analises = HistoricoDeBateria.Analisar(vivos);
 
-            bool mudouLista = analises.Count != _cartoesDeBateria.Count;
-            for (int i = 0; !mudouLista && i < analises.Count; i++)
-                mudouLista = analises[i].Chave != _cartoesDeBateria[i].Chave;
+            // Os cartoes sao reaproveitados por chave: quem chega entra com fade e
+            // expansao, quem some sai do mesmo jeito e so e removido ao fim.
+            bool animar = _bateriasPopuladas && _pgBaterias.Visible;
+            bool mudouLista = false;
+            HashSet<string> vivas = new HashSet<string>();
+            foreach (AnaliseDeBateria a in analises) vivas.Add(a.Chave);
 
-            if (mudouLista)
+            foreach (CartaoDeBateria c in _cartoesDeBateria)
+                if (!c.Saindo && !vivas.Contains(c.Chave)) { c.Sair(); mudouLista = true; }
+
+            List<CartaoDeBateria> nova = new List<CartaoDeBateria>();
+            foreach (AnaliseDeBateria a in analises)
             {
-                foreach (CartaoDeBateria c in _cartoesDeBateria) { _pgBaterias.Controls.Remove(c); c.Dispose(); }
-                _cartoesDeBateria.Clear();
-                foreach (AnaliseDeBateria a in analises)
+                CartaoDeBateria achado = null;
+                foreach (CartaoDeBateria c in _cartoesDeBateria) if (c.Chave == a.Chave) achado = c;
+                if (achado == null)
                 {
-                    CartaoDeBateria c = new CartaoDeBateria();
-                    c.AlturaMudou += delegate { ArranjarBaterias(); };
-                    _pgBaterias.Controls.Add(c);
-                    _cartoesDeBateria.Add(c);
+                    achado = new CartaoDeBateria();
+                    achado.AlturaMudou += delegate { ArranjarBaterias(); };
+                    CartaoDeBateria novo = achado;
+                    achado.Saiu += delegate { RemoverCartaoDeBateria(novo); };
+                    int? aut = null;
+                    foreach (Periferico p in vivos) if (HistoricoDeBateria.Chave(p) == a.Chave) aut = p.Autonomia;
+                    achado.Mostrar(a, aut);
+                    _pgBaterias.Controls.Add(achado);
+                    if (animar) achado.NascerEntrando();
+                    mudouLista = true;
                 }
+                else if (achado.Saindo) { achado.Entrar(); mudouLista = true; }
+                nova.Add(achado);
             }
 
-            for (int i = 0; i < analises.Count; i++)
+            // quem saiu da leitura fica logo depois do cartao que vinha antes dele
+            int ultimo = -1;
+            foreach (CartaoDeBateria c in _cartoesDeBateria)
             {
+                if (nova.Contains(c)) { ultimo = nova.IndexOf(c); continue; }
+                nova.Insert(ultimo + 1, c);
+                ultimo++;
+            }
+            for (int i = 0; !mudouLista && i < nova.Count; i++) mudouLista = !ReferenceEquals(nova[i], _cartoesDeBateria.Count > i ? _cartoesDeBateria[i] : null);
+            _cartoesDeBateria.Clear();
+            _cartoesDeBateria.AddRange(nova);
+
+            foreach (CartaoDeBateria c in _cartoesDeBateria)
+            {
+                if (c.Saindo) continue;
                 int? autonomia = null;
                 foreach (Periferico p in vivos)
-                    if (HistoricoDeBateria.Chave(p) == analises[i].Chave) autonomia = p.Autonomia;
-                _cartoesDeBateria[i].Mostrar(analises[i], autonomia);
+                    if (HistoricoDeBateria.Chave(p) == c.Chave) autonomia = p.Autonomia;
+                foreach (AnaliseDeBateria a in analises)
+                    if (a.Chave == c.Chave) c.Mostrar(a, autonomia);
             }
+            _bateriasPopuladas = true;
 
             if (mudouLista) ArranjarBaterias();
             // o menu do widget e o da bandeja mudam a configuracao sem passar
             // por aqui: o cartao confere a cada leitura
             SincronizarWidget();
+        }
+
+        /// <summary>A primeira carga da pagina nao anima: os cartoes ja chegam inteiros.</summary>
+        private bool _bateriasPopuladas;
+
+        private void RemoverCartaoDeBateria(CartaoDeBateria c)
+        {
+            // fora do tick do relogio que acabou de terminar
+            BeginInvoke(new Action(delegate
+            {
+                if (c.IsDisposed || !c.Saindo || !_cartoesDeBateria.Contains(c)) return;
+                _pgBaterias.Controls.Remove(c);
+                _cartoesDeBateria.Remove(c);
+                c.Dispose();
+                ArranjarBaterias();
+            }));
         }
 
         private void ArranjarBaterias()
@@ -1632,7 +1678,7 @@ namespace MhiagosControl
                 {
                     int alt = c.AlturaDesejada(larg);
                     c.SetBounds(x, y, larg, alt);
-                    y += alt + Esp;
+                    y += alt + (int)Math.Round(Esp * c.Presenca);
                 }
             }
             finally { _pgBaterias.ResumeLayout(); }

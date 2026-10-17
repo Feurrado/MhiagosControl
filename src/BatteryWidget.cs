@@ -84,8 +84,8 @@ namespace MhiagosControl
             sb.AppendLine("ativo=" + (Ativo ? "1" : "0"));
             if (TemPosicao)
             {
-                sb.AppendLine("x=" + X.ToString(CultureInfo.InvariantCulture));
-                sb.AppendLine("y=" + Y.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("ancora_x=" + X.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("ancora_y=" + Y.ToString(CultureInfo.InvariantCulture));
             }
             sb.AppendLine("layout=" + (Layout == LayoutDoWidget.Lista ? "lista" : "aneis"));
             sb.AppendLine("fosco=" + (Fosco ? "1" : "0"));
@@ -114,8 +114,8 @@ namespace MhiagosControl
                 switch (k)
                 {
                     case "ativo": c.Ativo = v == "1"; break;
-                    case "x": if (numero) c.X = n; break;
-                    case "y": if (numero) c.Y = n; break;
+                    case "ancora_x": if (numero) c.X = n; break;
+                    case "ancora_y": if (numero) c.Y = n; break;
                     case "layout": c.Layout = v == "lista" ? LayoutDoWidget.Lista : LayoutDoWidget.Aneis; break;
                     case "fosco": c.Fosco = v == "1"; break;
                     case "nitido": c.Nitido = v == "1"; break;
@@ -156,9 +156,9 @@ namespace MhiagosControl
         private const float BolhaDaLista = 40f;
 
         /// <summary>
-        /// O que vai para o widget: todo aparelho do G HUB e da Attack Shark,
-        /// mesmo desligado, e do Bluetooth so quem deu leitura. O marcador vazio
-        /// do Bluetooth ("nenhum conectado") faz sentido na Visao geral, mas
+        /// O que vai para o widget: so o fone e o mouse (G HUB e Attack Shark) que
+        /// estao conectados, com leitura, e do Bluetooth so quem deu leitura. Desligado, o icone some.
+        /// O marcador vazio do Bluetooth faz sentido na Visao geral, mas
         /// num widget de bateria seria um anel sem bateria nenhuma.
         /// </summary>
         internal static Periferico[] Visiveis(Periferico[] todos)
@@ -166,7 +166,7 @@ namespace MhiagosControl
             List<Periferico> l = new List<Periferico>();
             if (todos != null)
                 foreach (Periferico p in todos)
-                    if (p != null && (p.Bateria.HasValue || p.Fonte != FontePeriferico.Bluetooth)) l.Add(p);
+                    if (p != null && p.Bateria.HasValue) l.Add(p);
             return l.ToArray();
         }
 
@@ -189,8 +189,24 @@ namespace MhiagosControl
 
         internal static Size Medir(LayoutDoWidget layout, int quantos, float escala, bool comNome)
         {
+            return Medir(layout, (float)quantos, escala, comNome);
+        }
+
+        /// <summary>
+        /// Com aparelhos entrando e saindo, "quantos" e fracionario: a soma das
+        /// presencas. De 0 a 1 o widget cresce do tamanho vazio ate o de um
+        /// aparelho; dai em diante cada aparelho acrescenta sua parte.
+        /// </summary>
+        internal static Size Medir(LayoutDoWidget layout, float quantos, float escala, bool comNome)
+        {
+            if (quantos > 0f && quantos < 1f)
+            {
+                Size vazio = Medir(layout, 0f, escala, comNome), um = Medir(layout, 1f, escala, comNome);
+                return new Size(vazio.Width + (int)Math.Round((um.Width - vazio.Width) * quantos),
+                                vazio.Height + (int)Math.Round((um.Height - vazio.Height) * quantos));
+            }
             float w, h;
-            if (quantos <= 0) { w = 240f; h = 64f; }
+            if (quantos <= 0f) { w = 240f; h = 64f; }
             else if (layout == LayoutDoWidget.Lista)
             {
                 w = LarguraDaLista;
@@ -221,6 +237,141 @@ namespace MhiagosControl
             return z;
         }
 
+        private static readonly Dictionary<string, float> _nomes = new Dictionary<string, float>();
+
+        /// <summary>
+        /// Largura do nome na fonte do widget a 100%, medida com o mesmo
+        /// formato do desenho (que conta a folga dos lados). Zero onde a imagem
+        /// ja diz quem e o aparelho.
+        /// </summary>
+        internal static float LarguraDoNome(Periferico p)
+        {
+            if (!MostraNome(p) || string.IsNullOrEmpty(p.Nome)) return 0f;
+            float w;
+            if (_nomes.TryGetValue(p.Nome, out w)) return w;
+            using (Bitmap b = new Bitmap(1, 1))
+            using (Graphics g = Graphics.FromImage(b))
+            using (Fontes f = new Fontes(1f))
+            using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
+                w = g.MeasureString(p.Nome, f.Nome, PointF.Empty, sf).Width + 4f;
+            _nomes[p.Nome] = w;
+            return w;
+        }
+
+        /// <summary>
+        /// A largura de cada aparelho, em unidades a 100%: nos aneis a coluna
+        /// cresce ate caber o nome inteiro; na lista e a largura que o widget
+        /// precisa para o nome caber entre a bolha e a porcentagem.
+        /// </summary>
+        internal static float[] Larguras(LayoutDoWidget layout, Periferico[] itens)
+        {
+            float[] l = new float[itens.Length];
+            for (int i = 0; i < l.Length; i++)
+            {
+                float nome = LarguraDoNome(itens[i]);
+                l[i] = layout == LayoutDoWidget.Lista
+                    ? Math.Max(LarguraDaLista, 2 * Margem + BolhaDaLista + 12f + nome + 6f + 70f)
+                    : Math.Max(Coluna, nome);
+            }
+            return l;
+        }
+
+        /// <summary>De 0 a 1: quanto da linha do nome ja esta presente (o maior entre os aparelhos que a usam).</summary>
+        internal static float FracaoDeNome(Periferico[] itens, float[] presenca)
+        {
+            float m = 0f;
+            for (int i = 0; i < itens.Length; i++)
+                if (MostraNome(itens[i])) m = Math.Max(m, i < presenca.Length ? presenca[i] : 1f);
+            return Math.Max(0f, Math.Min(1f, m));
+        }
+
+        /// <summary>
+        /// A medida do widget com cada aparelho no seu ponto de entrada ou saida,
+        /// com a largura propria e a linha do nome entrando junto: nada muda de
+        /// tamanho de uma vez.
+        /// </summary>
+        internal static Size Medir(LayoutDoWidget layout, float[] pres, float[] larg, float escala, float nome)
+        {
+            float soma = 0f;
+            for (int i = 0; i < pres.Length; i++) soma += pres[i];
+            bool lista = layout == LayoutDoWidget.Lista;
+            float w, h;
+            if (soma <= 0f) { w = 240f; h = 64f; }
+            else
+            {
+                if (lista)
+                {
+                    w = LarguraDaLista;
+                    for (int i = 0; i < pres.Length; i++) w = Math.Max(w, LarguraDaLista + (larg[i] - LarguraDaLista) * pres[i]);
+                    h = 2 * Margem + soma * (Linha + VaoDeLinha) - VaoDeLinha * Math.Min(1f, soma);
+                }
+                else
+                {
+                    float conteudo = 0f;
+                    for (int i = 0; i < pres.Length; i++) conteudo += pres[i] * (larg[i] + VaoDeColuna);
+                    w = 2 * Margem + conteudo - VaoDeColuna * Math.Min(1f, soma);
+                    h = 2 * Margem + Anel + 8f + 20f + 18f * nome;
+                }
+                if (soma < 1f)
+                {
+                    // de 0 a 1 o widget cresce do tamanho vazio ate o de um aparelho
+                    float w1 = lista ? w : 2 * Margem + (w - 2 * Margem) / soma;
+                    float h1 = lista ? 2 * Margem + Linha : h;
+                    w = 240f + (w1 - 240f) * soma;
+                    h = 64f + (h1 - 64f) * soma;
+                }
+            }
+            return new Size((int)Math.Ceiling(w * escala), (int)Math.Ceiling(h * escala));
+        }
+
+        internal static RectangleF[] Zonas(LayoutDoWidget layout, float[] pres, float[] larg, Size tam, float escala)
+        {
+            RectangleF[] z = new RectangleF[pres.Length];
+            float pos = Margem;
+            for (int i = 0; i < z.Length; i++)
+            {
+                if (layout == LayoutDoWidget.Lista)
+                {
+                    z[i] = new RectangleF(Margem * escala, pos * escala, tam.Width - 2 * Margem * escala, Linha * escala);
+                    pos += pres[i] * (Linha + VaoDeLinha);
+                }
+                else
+                {
+                    z[i] = new RectangleF(pos * escala, Margem * escala, larg[i] * escala, tam.Height - 2 * Margem * escala);
+                    pos += pres[i] * (larg[i] + VaoDeColuna);
+                }
+            }
+            return z;
+        }
+
+        /// <summary>
+        /// As zonas com presenca: cada aparelho ocupa so a fatia que ja entrou,
+        /// e os de depois deslizam para o lugar. O item e desenhado inteiro na
+        /// zona; o que o esconde enquanto entra e a transparencia.
+        /// </summary>
+        internal static RectangleF[] Zonas(LayoutDoWidget layout, float[] presenca, float escala, bool comNome)
+        {
+            float soma = 0f;
+            foreach (float v in presenca) soma += v;
+            Size tam = Medir(layout, soma, escala, comNome);
+            RectangleF[] z = new RectangleF[presenca.Length];
+            float pos = Margem;
+            for (int i = 0; i < z.Length; i++)
+            {
+                if (layout == LayoutDoWidget.Lista)
+                {
+                    z[i] = new RectangleF(Margem * escala, pos * escala, tam.Width - 2 * Margem * escala, Linha * escala);
+                    pos += presenca[i] * (Linha + VaoDeLinha);
+                }
+                else
+                {
+                    z[i] = new RectangleF(pos * escala, Margem * escala, Coluna * escala, tam.Height - 2 * Margem * escala);
+                    pos += presenca[i] * (Coluna + VaoDeColuna);
+                }
+            }
+            return z;
+        }
+
         /// <summary>Tudo o que muda o desenho, numa peca so.</summary>
         internal sealed class Quadro
         {
@@ -239,6 +390,51 @@ namespace MhiagosControl
             /// TransicaoDeCarga). Sem valor, vale o estado de agora, sem transicao.
             /// </summary>
             public float[] Carga = new float[0];
+            /// <summary>
+            /// De 0 a 1 por item: quanto cada um ja entrou (ou ainda nao saiu) da
+            /// lista - ver PresencaAnimada. Sem valor, todos estao inteiros.
+            /// </summary>
+            public float[] Presenca = new float[0];
+        }
+
+        internal static float PresencaDe(Quadro q, int i)
+        {
+            return i < q.Presenca.Length ? Math.Max(0f, Math.Min(1f, q.Presenca[i])) : 1f;
+        }
+
+        private static Bitmap _folha;
+
+        /// <summary>
+        /// Pinta um item numa folha a parte e a cola com transparencia: o
+        /// texto sobre fundo transparente nao aceita alfa por pincel, e assim
+        /// o item inteiro (anel, texto, nota) esmaece junto.
+        /// </summary>
+        private static void ComAlfa(Graphics g, RectangleF z, float alfa, float escala, Action<Graphics, RectangleF> pinta)
+        {
+            int pad = (int)Math.Ceiling(6f * escala);
+            int w = (int)Math.Ceiling(z.Width) + 2 * pad, h = (int)Math.Ceiling(z.Height) + 2 * pad;
+            if (_folha == null || _folha.Width < w || _folha.Height < h)
+            {
+                if (_folha != null) _folha.Dispose();
+                _folha = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            }
+            using (Graphics t = Graphics.FromImage(_folha))
+            {
+                t.Clear(Color.Transparent);
+                t.SmoothingMode = g.SmoothingMode;
+                t.PixelOffsetMode = g.PixelOffsetMode;
+                t.InterpolationMode = g.InterpolationMode;
+                t.TextRenderingHint = g.TextRenderingHint;
+                pinta(t, new RectangleF(pad, pad, z.Width, z.Height));
+            }
+            ColorMatrix m = new ColorMatrix();
+            m.Matrix33 = alfa;
+            using (ImageAttributes a = new ImageAttributes())
+            {
+                a.SetColorMatrix(m);
+                g.DrawImage(_folha, new Rectangle((int)Math.Round(z.X) - pad, (int)Math.Round(z.Y) - pad, w, h),
+                            0, 0, w, h, GraphicsUnit.Pixel, a);
+            }
         }
 
         /// <summary>A carga do item i no quadro: a da transicao, ou 0/1 se ninguem a mediu.</summary>
@@ -269,13 +465,19 @@ namespace MhiagosControl
                           new RectangleF(0, 0, tamanho.Width, tamanho.Height), StringAlignment.Center, StringAlignment.Center);
                     return;
                 }
-                RectangleF[] zonas = Zonas(q.Layout, q.Itens.Length, s, ComNome(q.Itens));
+                float[] pres = new float[q.Itens.Length];
+                for (int i = 0; i < pres.Length; i++) pres[i] = PresencaDe(q, i);
+                RectangleF[] zonas = Zonas(q.Layout, pres, Larguras(q.Layout, q.Itens), tamanho, s);
                 for (int i = 0; i < q.Itens.Length; i++)
                 {
                     string nota = i < q.Notas.Length ? q.Notas[i] : null;
                     float carga = CargaDe(q, i);
-                    if (q.Layout == LayoutDoWidget.Lista) ItemDaLista(g, zonas[i], q.Itens[i], nota, carga, q, f);
-                    else ItemDoAnel(g, zonas[i], q.Itens[i], carga, q, f);
+                    Periferico p = q.Itens[i];
+                    Action<Graphics, RectangleF> pinta = q.Layout == LayoutDoWidget.Lista
+                        ? (Action<Graphics, RectangleF>)delegate(Graphics gg, RectangleF zz) { ItemDaLista(gg, zz, p, nota, carga, q, f); }
+                        : delegate(Graphics gg, RectangleF zz) { ItemDoAnel(gg, zz, p, carga, q, f); };
+                    if (pres[i] >= 0.999f) pinta(g, zonas[i]);
+                    else if (pres[i] > 0.001f) ComAlfa(g, zonas[i], pres[i], s, pinta);
                 }
             }
         }
@@ -705,8 +907,19 @@ namespace MhiagosControl
         private readonly ToolTip _dica = new ToolTip();
         private ContextMenu _menu;
 
+        /// <summary>O que o widget mostra agora: a ultima leitura mais quem ainda esta saindo.</summary>
         private Periferico[] _itens = new Periferico[0];
         private string[] _notas = new string[0];
+        private float[] _presenca = new float[0];
+
+        /// <summary>A ultima leitura, sem os que estao saindo: o que decide se ha algo novo a desenhar.</summary>
+        private Periferico[] _reais = new Periferico[0];
+        private string[] _notasReais = new string[0];
+        private readonly PresencaAnimada _entradas = new PresencaAnimada();
+        private readonly Dictionary<string, Periferico> _ultimo = new Dictionary<string, Periferico>();
+        private readonly Dictionary<string, string> _ultimaNota = new Dictionary<string, string>();
+        /// <summary>A primeira leitura (ao abrir) nao anima: o widget ja nasce completo.</summary>
+        private bool _lido;
         private float _escala = 1f;
         private bool _sobre;
         private int _zonaDaDica = -1;
@@ -747,6 +960,8 @@ namespace MhiagosControl
             _leitura.Tick += delegate { Atualizar(false); };
             _animacao.Interval = IntervaloDeAnimacao;
             _animacao.Tick += delegate { Renderizar(); };
+            _entradas.Quadro += delegate { Reconstruir(); };
+            _entradas.Removido += AoPassarPresenca;
             _conferirDesktop.Interval = 300;
             _conferirDesktop.Tick += delegate { _conferirDesktop.Stop(); ConferirDesktop(); };
 
@@ -800,6 +1015,7 @@ namespace MhiagosControl
             {
                 _leitura.Stop(); _leitura.Dispose();
                 _animacao.Stop(); _animacao.Dispose();
+                _entradas.Dispose();
                 _conferirDesktop.Stop(); _conferirDesktop.Dispose();
                 if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
                 _dica.Dispose();
@@ -826,20 +1042,79 @@ namespace MhiagosControl
             }
             catch (Exception ex) { Log.Error("leitura do widget", ex); return; }
 
-            bool igual = !forcar && itens.Length == _itens.Length;
+            bool igual = !forcar && itens.Length == _reais.Length;
             for (int i = 0; igual && i < itens.Length; i++)
-                igual = itens[i].Equals(_itens[i]) && notas[i] == _notas[i];
+                igual = itens[i].Equals(_reais[i]) && notas[i] == _notasReais[i];
             if (igual) return;
 
             foreach (Periferico p in itens)
                 TransicaoDeCarga.Informar(HistoricoDeBateria.Chave(p), p.Carregando && p.Bateria.HasValue);
-            int antes = _itens.Length;
-            _itens = itens;
-            _notas = notas;
+            _reais = itens;
+            _notasReais = notas;
+            string[] chaves = Chaves(itens);
+            for (int i = 0; i < itens.Length; i++) { _ultimo[chaves[i]] = itens[i]; _ultimaNota[chaves[i]] = notas[i]; }
+            bool animar = _lido;
+            _lido = true;
+            // Quem chega ou parte entra e sai com fade e deslize; a lista exibida
+            // (_itens) segue o relogio da presenca, nao a leitura.
+            _entradas.Definir(chaves, animar);
+            Reconstruir();
+        }
+
+        /// <summary>Uma chave por aparelho; se duas coincidirem, a segunda ganha um sufixo.</summary>
+        internal static string[] Chaves(Periferico[] itens)
+        {
+            string[] k = new string[itens.Length];
+            HashSet<string> vistas = new HashSet<string>();
+            for (int i = 0; i < itens.Length; i++)
+            {
+                string c = HistoricoDeBateria.Chave(itens[i]) ?? "";
+                string unica = c;
+                for (int n = 2; !vistas.Add(unica); n++) unica = c + "#" + n;
+                k[i] = unica;
+            }
+            return k;
+        }
+
+        /// <summary>Monta a lista exibida a partir da presenca: quem esta saindo continua nela, esmaecendo.</summary>
+        private void Reconstruir()
+        {
+            List<Periferico> itens = new List<Periferico>();
+            List<string> notas = new List<string>();
+            List<float> pres = new List<float>();
+            for (int i = 0; i < _entradas.Quantidade; i++)
+            {
+                string k = _entradas.Chave(i);
+                Periferico p;
+                if (!_ultimo.TryGetValue(k, out p)) continue;
+                string nota;
+                _ultimaNota.TryGetValue(k, out nota);
+                itens.Add(p); notas.Add(nota); pres.Add(_entradas.Valor(i));
+            }
+            _itens = itens.ToArray();
+            _notas = notas.ToArray();
+            _presenca = pres.ToArray();
+            _zonaDaDica = -1;
             AjustarAnimacao();
             Renderizar();
-            if (antes != itens.Length) ManterNaTela();
         }
+
+        private void AoPassarPresenca(object sender, EventArgs e)
+        {
+            // quem saiu de vez nao precisa mais do ultimo estado guardado
+            HashSet<string> ficam = new HashSet<string>();
+            for (int i = 0; i < _entradas.Quantidade; i++) ficam.Add(_entradas.Chave(i));
+            foreach (string k in new List<string>(_ultimo.Keys))
+                if (!ficam.Contains(k)) { _ultimo.Remove(k); _ultimaNota.Remove(k); }
+        }
+
+        /// <summary>O tamanho do widget agora, com quem entra e sai e os nomes por inteiro.</summary>
+        private Size Medida()
+        {
+            return PintorDoWidget.Medir(_cfg.Layout, _presenca, PintorDoWidget.Larguras(_cfg.Layout, _itens), _escala,
+                                        PintorDoWidget.FracaoDeNome(_itens, _presenca));
+        }
+
 
         private void AjustarAnimacao()
         {
@@ -868,16 +1143,26 @@ namespace MhiagosControl
             if (IsDisposed || !IsHandleCreated) return;
             try
             {
-                Size tam = PintorDoWidget.Medir(_cfg.Layout, _itens.Length, _escala, PintorDoWidget.ComNome(_itens));
+                Size tam = Medida();
                 if (tam != Size)
                 {
-                    Size = tam;
+                    Rectangle antes = Bounds;
+                    // cresce para o lado da tela que tem mais espaco: perto da
+                    // borda direita (ou de baixo) a borda do widget fica parada
+                    Rectangle area = Screen.FromRectangle(antes).WorkingArea;
+                    Point onde = AncorarCrescimento(antes, tam, area);
+                    onde = new Point(Math.Max(area.Left, Math.Min(onde.X, area.Right - tam.Width)),
+                                     Math.Max(area.Top, Math.Min(onde.Y, area.Bottom - tam.Height)));
+                    // posicao e tamanho numa chamada so: em duas, o quadro do
+                    // meio mostra o widget no lugar errado e os icones pulam
+                    Bounds = new Rectangle(onde, tam);
                     AplicarRegiao(tam);
                 }
 
                 PintorDoWidget.Quadro q = new PintorDoWidget.Quadro();
                 q.Itens = _itens;
                 q.Notas = _notas;
+                q.Presenca = _presenca;
                 q.Layout = _cfg.Layout;
                 q.Escuro = Escuro;
                 q.Fosco = _cfg.Fosco && !_cfg.Nitido;
@@ -1039,19 +1324,47 @@ namespace MhiagosControl
         /// <summary>Volta onde estava; na primeira vez, ou se a tela sumiu, no canto de cima a direita.</summary>
         private void Posicionar()
         {
-            Size tam = PintorDoWidget.Medir(_cfg.Layout, _itens.Length, _escala, PintorDoWidget.ComNome(_itens));
+            Size tam = Medida();
             Point p;
-            if (_cfg.TemPosicao && Visivel(new Rectangle(_cfg.X, _cfg.Y, tam.Width, tam.Height)))
-                p = new Point(_cfg.X, _cfg.Y);
-            else
+            if (_cfg.TemPosicao)
             {
-                Rectangle area = Screen.PrimaryScreen.WorkingArea;
-                int m = (int)(24 * _escala);
-                p = new Point(area.Right - tam.Width - m, area.Top + m);
+                Rectangle area = Screen.FromPoint(new Point(_cfg.X - 1, _cfg.Y - 1)).WorkingArea;
+                p = DoCanto(new Point(_cfg.X, _cfg.Y), tam, area);
+                if (!Visivel(new Rectangle(p, tam))) p = PosicaoPadrao(tam);
             }
+            else p = PosicaoPadrao(tam);
             Location = p;
             ManterNaTela();
             Renderizar();
+        }
+
+        /// <summary>Canto inferior direito da area de trabalho, um pouco longe da borda.</summary>
+        private Point PosicaoPadrao(Size tam)
+        {
+            Rectangle area = Screen.PrimaryScreen.WorkingArea;
+            int m = (int)(48 * _escala);
+            return DoCanto(new Point(area.Right - m, area.Bottom - m), tam, area);
+        }
+
+        /// <summary>
+        /// O canto que fica parado quando o widget muda de tamanho: o mais
+        /// proximo da borda da tela (direito se o centro esta na metade direita,
+        /// de baixo se esta na metade de baixo). E ele que se guarda: assim o
+        /// widget reabre no mesmo lugar mesmo com mais ou menos aparelhos.
+        /// </summary>
+        internal static Point CantoAncora(Rectangle b, Rectangle area)
+        {
+            bool dir = b.Left + b.Width / 2 > area.Left + area.Width / 2;
+            bool baixo = b.Top + b.Height / 2 > area.Top + area.Height / 2;
+            return new Point(dir ? b.Right : b.Left, baixo ? b.Bottom : b.Top);
+        }
+
+        /// <summary>Onde fica o canto de cima a esquerda, dado o canto guardado e o tamanho de agora.</summary>
+        internal static Point DoCanto(Point canto, Size tam, Rectangle area)
+        {
+            bool dir = canto.X > area.Left + area.Width / 2;
+            bool baixo = canto.Y > area.Top + area.Height / 2;
+            return new Point(dir ? canto.X - tam.Width : canto.X, baixo ? canto.Y - tam.Height : canto.Y);
         }
 
         /// <summary>Visivel o bastante para alguem achar e arrastar de volta.</summary>
@@ -1069,6 +1382,19 @@ namespace MhiagosControl
         /// Encaixa a placa dentro da area util da tela em que esta. Com mais um
         /// aparelho ela cresce para a direita, e no canto direito sairia da tela.
         /// </summary>
+        /// <summary>
+        /// Onde fica o canto de cima a esquerda quando o widget muda de tamanho:
+        /// na metade direita da tela a borda direita fica parada (cresce para a
+        /// esquerda), na de baixo a borda de baixo; senao, a esquerda e o topo.
+        /// </summary>
+        internal static Point AncorarCrescimento(Rectangle antes, Size novo, Rectangle area)
+        {
+            int x = antes.Left, y = antes.Top;
+            if (antes.Left + antes.Width / 2 > area.Left + area.Width / 2) x = antes.Right - novo.Width;
+            if (antes.Top + antes.Height / 2 > area.Top + area.Height / 2) y = antes.Bottom - novo.Height;
+            return new Point(x, y);
+        }
+
         private void ManterNaTela()
         {
             Rectangle area = Screen.FromRectangle(Bounds).WorkingArea;
@@ -1090,8 +1416,9 @@ namespace MhiagosControl
 
         private void GuardarPosicao()
         {
-            _cfg.X = Left;
-            _cfg.Y = Top;
+            Point c = CantoAncora(Bounds, Screen.FromRectangle(Bounds).WorkingArea);
+            _cfg.X = c.X;
+            _cfg.Y = c.Y;
             _cfg.Salvar();
         }
 
@@ -1183,7 +1510,7 @@ namespace MhiagosControl
         /// <summary>Nome, carga e a previsao do aparelho sob o ponteiro.</summary>
         private void AtualizarDica(Point p)
         {
-            RectangleF[] zonas = PintorDoWidget.Zonas(_cfg.Layout, _itens.Length, _escala, PintorDoWidget.ComNome(_itens));
+            RectangleF[] zonas = PintorDoWidget.Zonas(_cfg.Layout, _presenca, PintorDoWidget.Larguras(_cfg.Layout, _itens), Medida(), _escala);
             int zona = -1;
             for (int i = 0; i < zonas.Length; i++) if (zonas[i].Contains(p)) { zona = i; break; }
             if (zona == _zonaDaDica) return;
