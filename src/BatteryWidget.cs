@@ -244,9 +244,9 @@ namespace MhiagosControl
         /// formato do desenho (que conta a folga dos lados). Zero onde a imagem
         /// ja diz quem e o aparelho.
         /// </summary>
-        internal static float LarguraDoNome(Periferico p)
+        internal static float LarguraDoNome(Periferico p, bool todos)
         {
-            if (!MostraNome(p) || string.IsNullOrEmpty(p.Nome)) return 0f;
+            if (p == null || string.IsNullOrEmpty(p.Nome) || (!todos && !MostraNome(p))) return 0f;
             float w;
             if (_nomes.TryGetValue(p.Nome, out w)) return w;
             using (Bitmap b = new Bitmap(1, 1))
@@ -268,7 +268,8 @@ namespace MhiagosControl
             float[] l = new float[itens.Length];
             for (int i = 0; i < l.Length; i++)
             {
-                float nome = LarguraDoNome(itens[i]);
+                float nome = LarguraDoNome(itens[i], layout == LayoutDoWidget.Lista);
+                if (layout == LayoutDoWidget.Lista) nome = Math.Min(nome, 150f);
                 l[i] = layout == LayoutDoWidget.Lista
                     ? Math.Max(LarguraDaLista, 2 * Margem + BolhaDaLista + 12f + nome + 6f + 70f)
                     : Math.Max(Coluna, nome);
@@ -593,7 +594,7 @@ namespace MhiagosControl
             if (MostraNome(p))
             {
                 RectangleF lNome = new RectangleF(z.X, y + 20f * s, z.Width, 17f * s);
-                Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Center, StringAlignment.Center);
+                Texto(g, p.Nome, f.Nome, Secundario(escuro), escuro, lNome, StringAlignment.Center, StringAlignment.Center);
             }
         }
 
@@ -636,7 +637,7 @@ namespace MhiagosControl
                 largValor = g.MeasureString(valor, f.Pct, PointF.Empty, sf).Width + 2f * s;
             // sem o nome, a porcentagem vai para o lugar dele, a esquerda, e o
             // raio da carga logo depois dela
-            bool nome = MostraNome(p);
+            bool nome = !string.IsNullOrEmpty(p.Nome); // na lista todo aparelho mostra o nome
             RectangleF lValor = nome ? new RectangleF(z.Right - largValor, z.Y, largValor, 21f * s)
                                      : new RectangleF(x, z.Y, largValor, 21f * s);
             Texto(g, valor, f.Pct, Apagado(p) ? Secundario(escuro) : Primario(escuro), escuro, lValor,
@@ -652,7 +653,7 @@ namespace MhiagosControl
             if (nome)
             {
                 RectangleF lNome = new RectangleF(x, z.Y, Math.Max(0f, lValor.X - x - 6f * s), 21f * s);
-                Texto(g, p.Nome, f.Nome, Primario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
+                Texto(g, p.Nome, f.Nome, Secundario(escuro), escuro, lNome, StringAlignment.Near, StringAlignment.Center);
             }
 
             // mesma espessura do traco dos aneis
@@ -729,18 +730,13 @@ namespace MhiagosControl
                 sf.Alignment = h;
                 sf.LineAlignment = v;
                 sf.Trimming = StringTrimming.EllipsisCharacter;
-                // halo em volta das letras, na cor oposta: com o vidro nitido o
-                // fundo aparece inteiro, e sem isso o texto se perde nele
-                using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(90, 0, 0, 0) : Color.FromArgb(110, 255, 255, 255)))
+                // sombra suave de um pixel embaixo, como o texto sobre vidro da Apple:
+                // o halo em volta das letras deixava o contorno sujo
+                using (SolidBrush b = new SolidBrush(escuro ? Color.FromArgb(110, 0, 0, 0) : Color.FromArgb(120, 255, 255, 255)))
                 {
-                    for (int dx = -1; dx <= 1; dx++)
-                        for (int dy = -1; dy <= 1; dy++)
-                        {
-                            if (dx == 0 && dy == 0) continue;
-                            RectangleF halo = r;
-                            halo.Offset(dx, dy);
-                            g.DrawString(texto, fonte, b, halo, sf);
-                        }
+                    RectangleF sombra = r;
+                    sombra.Offset(0, 1f);
+                    g.DrawString(texto, fonte, b, sombra, sf);
                 }
                 using (SolidBrush b = new SolidBrush(cor)) g.DrawString(texto, fonte, b, r, sf);
             }
@@ -819,9 +815,9 @@ namespace MhiagosControl
             public Fontes(float s)
             {
                 // pesos mais grossos: sobre o vidro nitido o traco fino se perde
-                Pct = Criar("Segoe UI", 15f * s, FontStyle.Bold);
-                Nome = Criar("Segoe UI", 12.5f * s, FontStyle.Bold);
-                Nota = Criar("Segoe UI", 11.5f * s, FontStyle.Bold);
+                Pct = Criar("Segoe UI Semibold", 16f * s, FontStyle.Regular);
+                Nome = Criar("Segoe UI Semibold", 12.5f * s, FontStyle.Regular);
+                Nota = Criar("Segoe UI", 11.5f * s, FontStyle.Regular);
             }
 
             /// <summary>Sem o Semibold instalado, o GDI+ cairia numa fonte qualquer; o negrito comum chega perto.</summary>

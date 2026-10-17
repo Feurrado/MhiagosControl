@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -149,9 +149,10 @@ namespace MhiagosControl
             Periferico curto = Periferico.Lido("BT", TipoPeriferico.Outro, FontePeriferico.Bluetooth, 18, false);
             foreach (LayoutDoWidget layout in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
             {
-                float nome = PintorDoWidget.LarguraDoNome(longo);
+                float nome = PintorDoWidget.LarguraDoNome(longo, layout == LayoutDoWidget.Lista);
                 Verdade(nome > 100f, layout + ": o nome longo e medido (" + nome.ToString("0") + ")");
-                Igual(0f, PintorDoWidget.LarguraDoNome(g), layout + ": aparelho que se reconhece pelo desenho nao usa nome");
+                if (layout == LayoutDoWidget.Aneis) Igual(0f, PintorDoWidget.LarguraDoNome(g, false), layout + ": aparelho que se reconhece pelo desenho nao usa nome");
+                else Verdade(PintorDoWidget.LarguraDoNome(g, true) > 0f, layout + ": a lista mostra o nome de todo aparelho");
                 float[] larg = PintorDoWidget.Larguras(layout, new Periferico[] { longo, curto, g });
                 float[] um = new float[] { 1f, 1f, 1f };
                 Size cheio = PintorDoWidget.Medir(layout, um, larg, 1f, 1f);
