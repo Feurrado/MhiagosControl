@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -109,7 +110,17 @@ namespace MhiagosControl
             e.TextColor = e.Item.Enabled ? Ui.Text : Ui.Faint;
             e.TextFont = Ui.FontBase;
             base.OnRenderItemText(e);
+
+            // A marca e desenhada aqui, com o texto, e nao no OnRenderItemCheck: so
+            // agora se sabe em que linha as letras ficaram, e e nesse eixo que ela
+            // tem de ficar (centrar na caixa do item errava, e errava mais em DPI alto).
+            float cx;
+            ToolStripMenuItem mi = e.Item as ToolStripMenuItem;
+            if (mi != null && mi.Checked && _centrosDaMarca.TryGetValue(mi, out cx))
+                DesenharMarca(e.Graphics, mi, cx, e.TextRectangle.Y + e.TextRectangle.Height / 2f + OffsetDoTexto());
         }
+
+        private readonly Dictionary<ToolStripItem, float> _centrosDaMarca = new Dictionary<ToolStripItem, float>();
 
         protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
         {
@@ -126,16 +137,14 @@ namespace MhiagosControl
 
         protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
         {
-            Graphics g = e.Graphics;
-            Ui.Smooth(g);
             Rectangle r = e.ImageRectangle;
-            float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f;
-            // O texto do item fica um pouco acima do centro da caixa (o espaco do
-            // corpo da letra e maior embaixo); medido numa captura, a marca
-            // centrada na caixa caia ~1 px abaixo do eixo das letras, e mais
-            // em tela de DPI alto. O ajuste cresce com a fonte.
-            cy -= Ui.FontBase.Height * 0.07f;
-            if (e.Item.Name == MenuTema.Radio)
+            _centrosDaMarca[e.Item] = r.X + r.Width / 2f;   // quem desenha e o OnRenderItemText
+        }
+
+        private static void DesenharMarca(Graphics g, ToolStripItem item, float cx, float cy)
+        {
+            Ui.Smooth(g);
+            if (item.Name == MenuTema.Radio)
             {
                 float d = Ui.S(7);
                 using (SolidBrush b = new SolidBrush(Ui.AccentText))
@@ -150,6 +159,37 @@ namespace MhiagosControl
                     g.DrawLines(p, new PointF[] { new PointF(cx - s, cy), new PointF(cx - s / 3f, cy + s * 0.7f), new PointF(cx + s, cy - s * 0.7f) });
                 }
             }
+        }
+
+        private static float _offsetTexto = float.NaN;
+
+        /// <summary>
+        /// Quanto o centro das letras fica acima ou abaixo do centro da linha, medido
+        /// pelo desenho de verdade (a conta por metricas de fonte errava em DPI alto):
+        /// escreve um "H" centrado numa caixa e acha as linhas de tinta.
+        /// </summary>
+        private static float OffsetDoTexto()
+        {
+            if (!float.IsNaN(_offsetTexto)) return _offsetTexto;
+            try
+            {
+                int h = Ui.S(32), w = Ui.S(40);
+                using (Bitmap b = new Bitmap(w, h))
+                using (Graphics g = Graphics.FromImage(b))
+                {
+                    g.Clear(Color.Black);
+                    TextRenderer.DrawText(g, "H", Ui.FontBase, new Rectangle(0, 0, w, h), Color.White,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                    int topo = -1, base0 = -1;
+                    for (int y = 0; y < h; y++)
+                        for (int x = 0; x < w; x++)
+                            if (b.GetPixel(x, y).R > 90) { if (topo < 0) topo = y; base0 = y; break; }
+                    if (topo >= 0) _offsetTexto = (topo + base0 + 1) / 2f - h / 2f;
+                }
+            }
+            catch { }
+            if (float.IsNaN(_offsetTexto)) _offsetTexto = 0f;
+            return _offsetTexto;
         }
 
         /// <summary>Tabela neutra: o resto do desenho e do renderizador, mas o que vaza usa as cores do tema.</summary>

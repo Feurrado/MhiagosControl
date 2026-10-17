@@ -1603,7 +1603,7 @@ namespace MhiagosControl
             c.Controls.Add(MakeLabel(T.WidgetTint, 16, 166, Ui.FontMed));
             _sgWidgetCor = new Segmented();
             _sgWidgetCor.SetItems(T.WidgetTintAutoShort, T.WidgetTintDark, T.WidgetTintLight);
-            _sgWidgetCor.SetBounds(Ui.S(16), Ui.S(190), Ui.S(380), Ui.S(30));
+            _sgWidgetCor.SetBounds(Ui.S(16), Ui.S(190), Ui.S(450), Ui.S(30));
             c.Controls.Add(_sgWidgetCor);
 
             _tgWidgetFrente = new Toggle();

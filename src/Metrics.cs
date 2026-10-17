@@ -357,6 +357,10 @@ namespace MhiagosControl
         {
             int n = MetricHistory.Janela(SensorId, Janela, FimBalde, ref _buf);
 
+            // min/med/max ganham uma faixa propria acima da curva, e nao ficam por cima dela
+            int topoEixo = topo;
+            if (detalhado) topo += Ui.S(18);
+
             float min = float.MaxValue, max = float.MinValue;
             double soma = 0;
             int lidos = 0;
@@ -434,7 +438,7 @@ namespace MhiagosControl
                         g.DrawLine(tracejada, pontes[k], pontes[k + 1]);
                 }
 
-            if (detalhado) DesenharEixo(g, topo, alt, min, media, max);
+            if (detalhado) DesenharEixo(g, topoEixo, alt, min, media, max);
             if (detalhado && _hoverX >= 0)
                 DesenharDetalhe(g, cor, topo, alt, n, baixo, faixa);
         }
