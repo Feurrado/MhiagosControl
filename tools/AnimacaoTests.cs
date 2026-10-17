@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -42,6 +42,10 @@ namespace MhiagosControl
             Verdade(Motion.Entrada(0.3f) > 0.3f, "a curva de entrada sai na frente (desacelera)");
             Verdade(Motion.Saida(0.3f) < 0.3f, "a curva de saida fica atras (acelera)");
             Verdade(Ui.FontBadge.SizeInPoints >= 9f - 0.01f, "o selo nunca fica abaixo de 9 pt");
+            Igual(1f, Ui.FatorDoTexto(100), "Tamanho do texto 100% nao muda nada");
+            Igual(1.5f, Ui.FatorDoTexto(150), "Tamanho do texto 150% cresce a rampa em 1,5");
+            Igual(2.25f, Ui.FatorDoTexto(400), "Tamanho do texto limita em 225%");
+            Igual(1f, Ui.FatorDoTexto(0), "valor invalido volta a 100%");
             Verdade(Ui.FontBase.SizeInPoints >= 10f - 0.01f, "o corpo e de 10 pt");
             Igual(Ui.S(4), Ui.RaioControle, "raio de controle 4");
             Igual(Ui.S(8), Ui.RaioCartao, "raio de cartao 8");

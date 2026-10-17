@@ -32,7 +32,7 @@ namespace MhiagosControl
             _acao.Click += delegate { Action a = _aoAgir; Ocultar(); if (a != null) a(); };
 
             _fechar.Text = "\uE711";
-            _fechar.Font = new Font("Segoe MDL2 Assets", 9f);
+            _fechar.Font = Ui.FontGlyph9;
             _fechar.Click += delegate { Ocultar(); };
 
             Controls.Add(_acao);

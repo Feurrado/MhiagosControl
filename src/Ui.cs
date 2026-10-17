@@ -27,12 +27,43 @@ namespace MhiagosControl
 
         private static float LerZoom()
         {
+            float teste = 1f;
             try
             {
                 object z = AppDomain.CurrentDomain.GetData("MhiagosControl.Zoom");
-                return z is float && (float)z >= 1f ? (float)z : 1f;
+                if (z is float && (float)z >= 1f) teste = (float)z;
+            }
+            catch { }
+            return teste * LerTamanhoDoTexto();
+        }
+
+        /// <summary>
+        /// Configuracoes > Acessibilidade > Tamanho do texto (100% a 225%).
+        /// O Windows guarda em HKCU\Software\Microsoft\Accessibility. A rampa
+        /// tipografica e as medidas S() crescem juntas, como num DPI maior,
+        /// para o texto maior nao cortar nem sair do cartao. Vale na proxima
+        /// abertura do aplicativo: as fontes sao criadas uma vez.
+        /// </summary>
+        private static float LerTamanhoDoTexto()
+        {
+            try
+            {
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser
+                    .OpenSubKey(@"Software\Microsoft\Accessibility"))
+                {
+                    object v = k == null ? null : k.GetValue("TextScaleFactor");
+                    return v is int ? FatorDoTexto((int)v) : 1f;
+                }
             }
             catch { return 1f; }
+        }
+
+        /// <summary>Porcentagem do Windows para fator: limita a 100% a 225%, a faixa que as Configuracoes oferecem.</summary>
+        internal static float FatorDoTexto(int porcentagem)
+        {
+            if (porcentagem < 100) porcentagem = 100;
+            if (porcentagem > 225) porcentagem = 225;
+            return porcentagem / 100f;
         }
 
         internal static float Pt(float pontos) { return pontos * _zoom; }
