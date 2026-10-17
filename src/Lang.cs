@@ -932,6 +932,11 @@ namespace MhiagosControl
             return P("sem leitura · " + d, "no reading · " + d);
         }
         public static string BatNoCurve { get { return P("a curva aparece com as primeiras leituras", "the curve shows up with the first readings"); } }
+        public static string BatCycles(double ciclos)
+        {
+            string n = ciclos.ToString("0.0", Pt ? new System.Globalization.CultureInfo("pt-BR") : System.Globalization.CultureInfo.InvariantCulture);
+            return P("cerca de " + n + " ciclos completos", "about " + n + " full cycles");
+        }
         public static string UseHours(string duracao) { return P(duracao + " de uso", duracao + " of use"); }
         public static string UpTo(int pct) { return P("até " + pct + "%", "up to " + pct + "%"); }
         public static string TookTime(string duracao) { return P("levou " + duracao, "took " + duracao); }

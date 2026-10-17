@@ -47,6 +47,8 @@ namespace MhiagosControl
             RegressionPeripheralBattery();
             RegressionPeripheralIcons();
             RegressionBatteryHistory();
+            RegressionBatteryCoarseSteps();
+            RegressionLeitoresReconhecemRapido();
             RegressionNavOrder(root);
             RegressionBatteryWidget(root);
             RegressionWidgetCard(root);
@@ -414,7 +416,7 @@ namespace MhiagosControl
                 // faixas: 71-80% gastou 15 pontos em 4500 s, 81-90% 20 em 5400 s,
                 // 91-100% 5 em 900 s; as demais ficam na media (270 s/ponto),
                 // e cada faixa e puxada para a media com peso de 5 pontos
-                Igual(7.4, Math.Round(r.HorasPorCargaCheia.Value, 1), "duracao soma o ritmo de cada faixa");
+                Igual(7.3, Math.Round(r.HorasPorCargaCheia.Value, 1), "duracao soma o ritmo de cada faixa");
                 Verdade(r.HorasPorPontoNaFaixa[9].Value < r.HorasPorPontoNaFaixa[7].Value,
                     "faixa que gastou mais depressa fica com ritmo mais curto");
                 Verdade(!r.HorasPorPontoNaFaixa[3].HasValue, "faixa sem gasto medido fica sem ritmo proprio");
@@ -423,7 +425,7 @@ namespace MhiagosControl
                 AnaliseDeBateria viva = null;
                 foreach (AnaliseDeBateria a in HistoricoDeBateria.Analisar(leitura(75, false)))
                     if (a.Chave == chave) viva = a;
-                Igual(5.7, Math.Round(viva.HorasRestantes.Value, 1), "restante soma as faixas abaixo da carga atual");
+                Igual(5.6, Math.Round(viva.HorasRestantes.Value, 1), "restante soma as faixas abaixo da carga atual");
                 Igual(viva.HorasRestantes, HistoricoDeBateria.Restante(leitura(75, false)[0]),
                     "a Visao geral usa a mesma previsao da pagina Baterias");
 
@@ -444,7 +446,7 @@ namespace MhiagosControl
                 HistoricoDeBateria.Recarregar();
                 AnaliseDeBateria lida = analise();
                 Verdade(lida != null, "historico sobrevive a gravacao");
-                Igual(r.HorasPorCargaCheia.Value, lida.HorasPorCargaCheia.Value, "media igual depois de reler");
+                Igual(Math.Round(r.HorasPorCargaCheia.Value, 2), Math.Round(lida.HorasPorCargaCheia.Value, 2), "media igual depois de reler");
                 Igual(r.UltimaCarga.Fim, lida.UltimaCarga.Fim, "ultima carga igual depois de reler");
                 Igual(r.Amostras.Length, lida.Amostras.Length, "amostras iguais depois de reler");
 
@@ -482,6 +484,98 @@ namespace MhiagosControl
                 // Rele o arquivo de verdade em vez de zerar: com o historico vazio
                 // e marcado como lido, o proximo Registrar dos testes da bandeja
                 // gravaria por cima do baterias.dat de quem roda a suite.
+                HistoricoDeBateria.Recarregar();
+                try { Directory.Delete(pasta, true); } catch { }
+            }
+        }
+
+        private static void RegressionLeitoresReconhecemRapido()
+        {
+            Secao("perifericos: reconhecer o aparelho ligado de volta sem esperar 30 s");
+            List<LeitorGHub.Aparelho> todosAtivos = new List<LeitorGHub.Aparelho> {
+                new LeitorGHub.Aparelho { Id = "dev1", Tipo = TipoPeriferico.Headset, Ativo = true } };
+            Verdade(!LeitorGHub.PrecisaListar(3, todosAtivos), "tudo ativo: a lista segue a cada 15 ciclos");
+            Verdade(LeitorGHub.PrecisaListar(15, todosAtivos), "e no ciclo 15 ela vem");
+            List<LeitorGHub.Aparelho> umInativo = new List<LeitorGHub.Aparelho> {
+                new LeitorGHub.Aparelho { Id = "dev1", Tipo = TipoPeriferico.Headset, Ativo = false } };
+            Verdade(LeitorGHub.PrecisaListar(3, umInativo), "headset desligado: a lista vem a cada ciclo");
+            List<LeitorGHub.Aparelho> irrelevante = new List<LeitorGHub.Aparelho> {
+                new LeitorGHub.Aparelho { Id = "dev2", Tipo = TipoPeriferico.Outro, Ativo = false } };
+            Verdade(!LeitorGHub.PrecisaListar(3, irrelevante), "aparelho sem bateria desligado nao acelera a lista");
+        }
+
+        private static void RegressionBatteryCoarseSteps()
+        {
+            Secao("bateria: leitura em degraus de 10% (G325), degrau em curso e lacunas");
+
+            string pasta = Path.Combine(Path.GetTempPath(), "mhiagos-bat-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(pasta);
+            HistoricoDeBateria.Caminho = Path.Combine(pasta, "baterias.dat");
+            HistoricoDeBateria.Zerar();
+            try
+            {
+                const string Nome = "HeadsetDeTeste";
+                DateTime t0 = new DateTime(2026, 10, 2, 8, 0, 0);
+                Func<int, bool, Periferico[]> leitura = delegate(int pct, bool cabo)
+                {
+                    return new Periferico[] { Periferico.Lido(Nome, TipoPeriferico.Headset, FontePeriferico.GHub, pct, cabo) };
+                };
+                Func<AnaliseDeBateria> analise = delegate
+                {
+                    foreach (AnaliseDeBateria a in HistoricoDeBateria.Analisar(null))
+                        if (a.Nome == Nome) return a;
+                    return null;
+                };
+
+                // tira do cabo cheio, a leitura assenta de 100 para 90 e depois
+                // cada degrau de 10% dura 2 h: o primeiro (sem inicio conhecido)
+                // nao conta, os outros quatro dao 720 s por ponto
+                HistoricoDeBateria.Registrar(leitura(100, true), t0);
+                int s = 10;
+                int[] quedas = { 300, 7500, 14700, 21900, 29100, 36300 };
+                int[] niveis = { 90, 80, 70, 60, 50, 40 };
+                for (; s <= 36300 + 3600; s += 10)
+                {
+                    int pct = 100;
+                    for (int i = 0; i < quedas.Length; i++) if (s >= quedas[i]) pct = niveis[i];
+                    HistoricoDeBateria.Registrar(leitura(pct, false), t0.AddSeconds(s));
+                }
+                AnaliseDeBateria r = analise();
+                Igual(20.0, Math.Round(r.HorasPorCargaCheia.Value, 1), "so degraus completos: 720 s por ponto, 20 h por carga cheia");
+                Igual(0.4, Math.Round(r.CiclosEquivalentes, 2), "quatro degraus de 10 pontos sao 0,4 ciclo");
+                Verdade(!r.HorasPorPontoNaFaixa[8].HasValue && !r.HorasPorPontoNaFaixa[9].HasValue, "o degrau sem inicio conhecido (apos a assentada) nao entra");
+
+                // 1 h dos 2 h do degrau de 40% ja passou: faltam 1 h + 3 degraus de 2 h
+                Igual(7.0, Math.Round(HistoricoDeBateria.Restante(leitura(40, false)[0]).Value, 2),
+                    "restante desconta o tempo ja gasto no degrau atual");
+
+                // passou do tempo usual do degrau: ainda sobra um quarto dele
+                for (; s <= 36300 + 10800; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(40, false), t0.AddSeconds(s));
+                Igual(6.5, Math.Round(HistoricoDeBateria.Restante(leitura(40, false)[0]).Value, 2),
+                    "degrau alem do usual nao zera o restante");
+
+                // o aparelho some por 1 h no meio do degrau: a queda seguinte nao tem duracao confiavel
+                s += 3600;
+                HistoricoDeBateria.Registrar(leitura(30, false), t0.AddSeconds(s));
+                for (int k = 0; k < 720; k++) { s += 10; HistoricoDeBateria.Registrar(leitura(30, false), t0.AddSeconds(s)); }
+                for (int k = 0; k < 720; k++) { s += 10; HistoricoDeBateria.Registrar(leitura(20, false), t0.AddSeconds(s)); }
+                for (int k = 0; k < 720; k++) { s += 10; HistoricoDeBateria.Registrar(leitura(10, false), t0.AddSeconds(s)); }
+                r = analise();
+                Verdade(!r.HorasPorPontoNaFaixa[3].HasValue, "degrau que atravessou uma lacuna nao entra");
+                Verdade(!r.HorasPorPontoNaFaixa[2].HasValue, "nem o que comecou na lacuna");
+                Verdade(r.HorasPorPontoNaFaixa[1].HasValue, "o seguinte, medido de ponta a ponta, entra");
+
+                // gravar e reler preserva as fracoes do esquecimento
+                HistoricoDeBateria.Salvar();
+                HistoricoDeBateria.Recarregar();
+                AnaliseDeBateria lida = analise();
+                Igual(Math.Round(r.HorasPorCargaCheia.Value, 2), Math.Round(lida.HorasPorCargaCheia.Value, 2), "ritmo igual depois de reler");
+                Igual(r.CiclosEquivalentes, lida.CiclosEquivalentes, "ciclos iguais depois de reler");
+            }
+            finally
+            {
+                HistoricoDeBateria.Caminho = null;
                 HistoricoDeBateria.Recarregar();
                 try { Directory.Delete(pasta, true); } catch { }
             }

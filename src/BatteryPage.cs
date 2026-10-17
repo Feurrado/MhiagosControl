@@ -595,7 +595,8 @@ namespace MhiagosControl
                 new string[] { T.BatPace, Ritmo(), "" },
                 new string[] { T.BatLastCharge, UltimaCarga(), "" },
                 descarga,
-                new string[] { T.BatTotalUse, HistoricoDeBateria.Duracao(_a.UsoTotalHoras), "" } };
+                new string[] { T.BatTotalUse, HistoricoDeBateria.Duracao(_a.UsoTotalHoras),
+                    _a.CiclosEquivalentes >= 0.1 ? T.BatCycles(_a.CiclosEquivalentes) : "" } };
         }
 
         private void DesenharDetalhes(Graphics g, Rectangle r)
