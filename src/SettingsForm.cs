@@ -49,6 +49,7 @@ namespace MhiagosControl
 
         private NavBar _nav;
         private Panel _host;
+        private FaixaDeAviso _faixa;
         private Profile _current;
         private Profile _selectionAtLastSave;
         private bool _loading = false;
@@ -115,7 +116,7 @@ namespace MhiagosControl
         private void FalhaAoGravar(string erro)
         {
             _autoPausado = true;
-            Warn(T.SaveFailed(erro));
+            Warn(T.SaveFailed(erro), T.TryAgain, delegate { _autoPausado = false; GravarPendente(); });
         }
 
         /// <summary>
@@ -297,6 +298,9 @@ namespace MhiagosControl
             _host.Padding = new Padding(Ui.S(16), Ui.S(16), Ui.S(16), Ui.S(16));
             Controls.Add(_host);
 
+            _faixa = new FaixaDeAviso();
+            Controls.Add(_faixa);
+
             // O Windows Forms encaixa os controles do fundo da ordem Z para a
             // frente: quem esta atras reivindica a borda inteira primeiro. Com
             // a lateral adicionada ANTES do rodape, era o rodape que atravessava
@@ -307,6 +311,7 @@ namespace MhiagosControl
             // esquerda de cima a baixo, e o rodape se encaixa no que sobra. O
             // Fill vem na frente de todos, senao nao ganha o espaco restante.
             _host.BringToFront();
+            _faixa.SendToBack();
             _nav.SendToBack();
         }
 
@@ -3043,7 +3048,7 @@ namespace MhiagosControl
 
                 string erro;
                 if (Config.ExportProfile(p, d.FileName, _cfg.SavePath, out erro)) Aviso(T.Exported(p.Name));
-                else Warn(T.ExportFailed(erro));
+                else Warn(T.ExportFailed(erro), T.TryAgain, delegate { OnExportProfile(null, EventArgs.Empty); });
             }
         }
 
@@ -3058,7 +3063,7 @@ namespace MhiagosControl
 
                 string erro;
                 Profile p = Config.ImportProfile(d.FileName, out erro);
-                if (p == null) { Warn(T.ImportFailed(erro)); return; }
+                if (p == null) { Warn(T.ImportFailed(erro), T.TryAgain, delegate { OnImportProfile(null, EventArgs.Empty); }); return; }
 
                 SaveToProfile();
                 p.Name = _cfg.UniqueName(p.Name);
@@ -3139,9 +3144,13 @@ namespace MhiagosControl
             OferecerDesfazer(T.ProfileDeleted(nomeAlvo), delegate { RestaurarPerfis(antes, nomeAlvo); });
         }
 
-        private static void Warn(string msg)
+        /// <summary>Falha recuperavel: faixa no alto da janela, com a acao que resolve quando ha.</summary>
+        private void Warn(string msg) { Warn(msg, null, null); }
+
+        private void Warn(string msg, string textoDaAcao, Action acao)
         {
-            MessageBox.Show(msg, T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (_faixa == null || IsDisposed) { Log.Write("aviso: " + msg); return; }
+            _faixa.Mostrar(msg, textoDaAcao, acao);
         }
 
         /// <summary>Confirmacao discreta no rodape, que se apaga sozinha.</summary>
@@ -4590,7 +4599,7 @@ namespace MhiagosControl
             bool ok = target ? Autostart.Enable() : Autostart.Disable();
             if (!ok)
             {
-                Warn(Autostart.UltimaRecusa ?? T.AutostartFailed + Log.Path);
+                Warn(Autostart.UltimaRecusa ?? T.AutostartFailed + Log.Path, T.TryAgain, delegate { _tgAutostart.Checked = target; });
                 _loading = true; _tgAutostart.Checked = !target; _loading = false;
             }
         }

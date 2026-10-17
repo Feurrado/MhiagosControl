@@ -156,6 +156,8 @@ namespace MhiagosControl
             _icon.Visible = true;
             _icon.Click += new EventHandler(OnIconClick);
             _icon.DoubleClick += new EventHandler(OnConfig);
+            _icon.BalloonTipClicked += delegate { ExecutarAcaoDoBalao(); };
+            _icon.BalloonTipClosed += delegate { _acaoDoBalao = null; };
             _cfgWidget = ConfigDoWidget.Carregar();
             BuildMenu();
 
@@ -291,7 +293,7 @@ namespace MhiagosControl
 
                 string erro;
                 if (!HwInfo.Adotar(origem, out erro))
-                    MessageBox.Show(T.AdoptFailed(erro), T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    NotificarComAcao(T.AppName, T.AdoptFailed(erro), ConferirMotor);
             }
             catch (Exception ex) { Log.Error("conferencia do motor de sensores", ex); }
         }
@@ -459,8 +461,7 @@ namespace MhiagosControl
             if (!salvo)
             {
                 RebuildProfileMenu();
-                MessageBox.Show(T.SaveFailed(erro), T.AppName,
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                NotificarComAcao(T.AppName, T.SaveFailed(erro), delegate { OnPickProfile(sender, e); });
                 return;
             }
 
@@ -687,8 +688,8 @@ namespace MhiagosControl
             bool target = !_miAutostart.Checked;
             bool ok = target ? Autostart.Enable() : Autostart.Disable();
             if (ok) _miAutostart.Checked = target;
-            else MessageBox.Show(Autostart.UltimaRecusa ?? T.AutostartFailed + Log.Path,
-                    T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            else NotificarComAcao(T.AppName, Autostart.UltimaRecusa ?? T.AutostartFailed + Log.Path,
+                    delegate { OnToggleAutostart(null, EventArgs.Empty); });
         }
 
         /// <summary>Os dialogos do arranque, ja com o mostrador funcionando.</summary>
@@ -706,8 +707,10 @@ namespace MhiagosControl
 
         private DialogResult Avisar(string texto, string titulo, MessageBoxButtons botoes, MessageBoxIcon icone)
         {
-            return MostrarAviso != null ? MostrarAviso(texto, titulo, botoes, icone)
-                                        : MessageBox.Show(texto, titulo, botoes, icone);
+            if (MostrarAviso != null) return MostrarAviso(texto, titulo, botoes, icone);
+            // So informa: vira notificacao da bandeja, sem travar o arranque.
+            if (botoes == MessageBoxButtons.OK) { NotificarComAcao(titulo, texto, null); return DialogResult.OK; }
+            return MessageBox.Show(texto, titulo, botoes, icone);
         }
 
         /// <summary>A tarefa do software de fabrica disputaria o painel a cada logon.</summary>
@@ -1060,6 +1063,29 @@ namespace MhiagosControl
             });
         }
 
+        private Action _acaoDoBalao;
+
+        /// <summary>
+        /// Notificacao de falha recuperavel: clicar nela refaz o que falhou.
+        /// O balao do Windows nao tem botoes proprios, entao o clique no balao
+        /// e a acao, e o texto diz isso.
+        /// </summary>
+        private void NotificarComAcao(string titulo, string texto, Action acao)
+        {
+            _acaoDoBalao = acao;
+            string dica = acao == null ? "" : "\n" + T.ClickToRetry;
+            Notificar(titulo, texto + dica, ToolTipIcon.Warning, "aviso com acao: " + texto);
+        }
+
+        private void ExecutarAcaoDoBalao()
+        {
+            Action a = _acaoDoBalao;
+            _acaoDoBalao = null;
+            if (a == null) return;
+            try { a(); }
+            catch (Exception ex) { Log.Error("acao do balao", ex); }
+        }
+
         // ---------------- icone da bandeja com alerta ----------------
 
         private Icon _iconBaixa;
@@ -1347,7 +1373,7 @@ namespace MhiagosControl
                 _janelaAberta = false;
                 AjustarFoco();
                 Log.Error("janela de configuracao", ex);
-                MessageBox.Show(ex.Message, T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ErroInesperado.Mostrar(ex);
             }
             finally
             {
@@ -1635,8 +1661,7 @@ namespace MhiagosControl
                 catch (Exception ex)
                 {
                     Log.Error("falha fatal", ex);
-                    MessageBox.Show("Erro inesperado:\n\n" + ex.Message + "\n\nDetalhes em:\n" + Log.Path,
-                        "Mhiagos Control", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ErroInesperado.Mostrar(ex);
                 }
             }
         }

@@ -1,4 +1,4 @@
-namespace MhiagosControl
+﻿namespace MhiagosControl
 {
     public static partial class T
     {
@@ -26,6 +26,13 @@ namespace MhiagosControl
         public static string Undo { get { return P("Desfazer", "Undo"); } }
         public static string ProfileDeleted(string name) { return P("Perfil apagado: " + name, "Profile deleted: " + name); }
         public static string MetricProfileDeleted(string name) { return P("Perfil de métricas apagado: " + name, "Metric profile deleted: " + name); }
+        public static string ClickToRetry { get { return P("Clique aqui para tentar de novo.", "Click here to try again."); } }
+        public static string TryAgain { get { return P("Tentar de novo", "Try again"); } }
+        public static string CopyDetails { get { return P("Copiar detalhes", "Copy details"); } }
+        public static string DetailsCopied { get { return P("Detalhes copiados", "Details copied"); } }
+        public static string Close2 { get { return P("Fechar", "Close"); } }
+        public static string UnexpectedErrorTitle { get { return P("Algo deu errado", "Something went wrong"); } }
+        public static string UnexpectedErrorBody { get { return P("O Mhiagos Control encontrou um problema inesperado. Se o erro se repetir, copie os detalhes e envie junto com o pedido de ajuda.", "Mhiagos Control hit an unexpected problem. If it keeps happening, copy the details and include them when asking for help."); } }
         public static string Undone { get { return P("Desfeito", "Undone"); } }
         public static string KeyboardHelp { get { return P("Atalhos: Mudanças valem na hora · Alt+1…7 navega · Ctrl+B recolhe a barra", "Shortcuts: Changes apply immediately · Alt+1…7 navigates · Ctrl+B collapses sidebar"); } }
     }
