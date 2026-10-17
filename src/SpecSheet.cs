@@ -107,7 +107,10 @@ namespace MhiagosControl
             if (o == null) return g;
 
             g.Por(T.SpecModel, Texto(o, "Name"));
-            g.Por(T.SpecVendor, Fabricante(Texto(o, "Manufacturer")));
+            string fabCpu = Fabricante(Texto(o, "Manufacturer"));
+            if (fabCpu == "AuthenticAMD") fabCpu = "AMD";
+            else if (fabCpu == "GenuineIntel") fabCpu = "Intel";
+            g.Por(T.SpecVendor, fabCpu);
 
             // "AMD64 Family 25 Model 33 Stepping 2" - a mesma linha que o CPU-Z
             // reparte em tres campos. Sai inteira e repartida: inteira e o que se
