@@ -202,7 +202,7 @@ namespace MhiagosControl
             MinimumSize = new Size(Ui.S(880), Ui.S(660));
 
             Size guardado = TamanhoGuardado();
-            ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(Ui.S(1010), Ui.S(900)),
+            ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(Ui.S(1280), Ui.S(790)),
                 Screen.FromPoint(Cursor.Position).WorkingArea.Size);
             Point? posicao = PosicaoGuardada();
             if (posicao.HasValue)
@@ -1268,6 +1268,17 @@ namespace MhiagosControl
                 if (melhor >= 0) wEsq = melhor;
                 int wDir = alvo - wEsq - Esp;
 
+                // A altura do meio e a da FOTO, e nao o que sobrou da janela: o
+                // cartao abraca a previa quadrada (titulo + foto + linhas de perfil)
+                // e os dois graficos acompanham essa altura.
+                int linhasCooler = 0;
+                if (_vgPerfil != null && _vgPerfil.Visible) linhasCooler++;
+                if (_vgPainel != null && _vgPainel.Visible) linhasCooler++;
+                int hIdeal = Ui.S(46) + (wEsq - Ui.S(32)) + Ui.S(14) + linhasCooler * Ui.S(26) + Ui.S(14);
+                if (hIdeal < hMeio) hMeio = Math.Max(hIdeal, MeioMin);
+                yPerif = yMeio + hMeio + Esp;
+                ySpecs = yPerif + AlturaPerif + Esp;
+
                 _cardCooler.SetBounds(x0, yMeio, wEsq, hMeio);
 
                 int hCurva = (hMeio - Esp) / 2;
@@ -1384,8 +1395,10 @@ namespace MhiagosControl
 
             for (int i = 0; i < n; i++)
             {
-                _vgSpecCap[i].SetBounds(x, Ui.S(11), larg[i], Ui.S(15));
-                _vgSpecVal[i].SetBounds(x, Ui.S(28), larg[i], Ui.S(18));
+                int hCap = Ui.FontSmall.Height, hVal = Ui.FontSemi.Height;
+                int topoSpec = (_cardSpecs.Height - (hCap + hVal)) / 2;
+                _vgSpecCap[i].SetBounds(x, topoSpec, larg[i], hCap);
+                _vgSpecVal[i].SetBounds(x, topoSpec + hCap, larg[i], hVal);
                 x += larg[i] + Vao;
             }
         }
