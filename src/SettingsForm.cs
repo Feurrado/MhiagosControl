@@ -202,7 +202,7 @@ namespace MhiagosControl
             MinimumSize = new Size(Ui.S(880), Ui.S(660));
 
             Size guardado = TamanhoGuardado();
-            ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(Ui.S(1010), Ui.S(900)),
+            ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(Ui.S(1280), Ui.S(790)),
                 Screen.FromPoint(Cursor.Position).WorkingArea.Size);
             Point? posicao = PosicaoGuardada();
             if (posicao.HasValue)
