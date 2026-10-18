@@ -665,7 +665,7 @@ namespace MhiagosControl
 
         private static void RegressionPeripheralIcons()
         {
-            Secao("icones dos perifericos: G325 e X11 decalcados de foto");
+            Secao("icones dos perifericos: G325, PRO X e X11 decalcados de foto");
 
             Image[] icones = { Assets.Headset, Assets.Mouse, Assets.Bluetooth };
             string[] nomes = { "G325", "X11", "Bluetooth" };
@@ -698,6 +698,29 @@ namespace MhiagosControl
                 Color c = mouse.GetPixel(128, 170);
                 Verdade(c.A == 255 && c.R > 230 && c.G > 230 && c.B > 230, "X11: corpo branco");
             }
+
+            // o PRO X Wireless e grafite, como o aparelho, com o vao entre tiara e conchas aberto
+            Bitmap prox = Assets.HeadsetProX as Bitmap;
+            Verdade(prox != null && prox.Width == 256 && prox.Height == 256, "PRO X: icone embutido em 256 px");
+            if (prox != null)
+            {
+                Verdade(prox.GetPixel(0, 0).A == 0 && prox.GetPixel(255, 255).A == 0, "PRO X: fundo transparente");
+                Color c = prox.GetPixel(176, 150);
+                Verdade(c.A == 255 && c.R < 80 && c.G < 80 && c.B < 80, "PRO X: almofada escura");
+                Verdade(prox.GetPixel(128, 128).A == 0, "PRO X: vao aberto entre as conchas");
+            }
+
+            // o G HUB lista os dois headsets com o mesmo tipo; o nome separa os icones
+            Periferico g325 = Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 70, false);
+            Periferico proX = Periferico.Lido("PRO X Wireless", TipoPeriferico.Headset, FontePeriferico.GHub, 80, false);
+            Periferico proXLongo = Periferico.Lido("PRO X Wireless Gaming Headset", TipoPeriferico.Headset, FontePeriferico.GHub, 80, false);
+            Periferico mouseProX = Periferico.Lido("PRO X SUPERLIGHT", TipoPeriferico.Mouse, FontePeriferico.GHub, 80, false);
+            Verdade(PeripheralStrip.Imagem(g325) == Assets.Headset, "G325 conectado: icone do G325");
+            Verdade(PeripheralStrip.Imagem(proX) == Assets.HeadsetProX, "PRO X Wireless conectado: icone do PRO X");
+            Verdade(PeripheralStrip.Imagem(proXLongo) == Assets.HeadsetProX, "PRO X com nome longo: icone do PRO X");
+            Verdade(PeripheralStrip.Imagem(mouseProX) == Assets.Mouse, "mouse PRO X nao vira headset");
+            Verdade(Perifericos.NomeCompleto("PRO X Wireless", FontePeriferico.GHub) == "Logitech PRO X Wireless", "PRO X: nome completo na aba Baterias");
+            Verdade(Perifericos.NomeCompleto("G325", FontePeriferico.GHub) == "Logitech G325 Lightspeed", "G325: nome completo segue igual");
         }
 
         private static void RegressionVideoMemory()

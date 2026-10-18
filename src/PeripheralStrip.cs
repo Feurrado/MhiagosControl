@@ -376,6 +376,7 @@ namespace MhiagosControl
         internal static Image Imagem(Periferico p)
         {
             if (p.Fonte == FontePeriferico.Bluetooth) return Assets.Bluetooth;
+            if (Perifericos.EhProX(p)) return Assets.HeadsetProX ?? Assets.Headset;
             if (p.Tipo == TipoPeriferico.Headset) return Assets.Headset;
             if (p.Tipo == TipoPeriferico.Mouse) return Assets.Mouse;
             return null;

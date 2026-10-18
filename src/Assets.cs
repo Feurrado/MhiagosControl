@@ -105,11 +105,14 @@ namespace MhiagosControl
             }
         }
 
-        private static Image _headset, _mouse, _bluetooth;
+        private static Image _headset, _headsetProX, _mouse, _bluetooth;
         private static bool _perifTried = false;
 
         /// <summary>Headset G325 branco, decalcado de foto (assets\svg\g325.svg).</summary>
         public static Image Headset { get { CarregarPerifericos(); return _headset; } }
+
+        /// <summary>Headset PRO X Wireless grafite, decalcado de foto (assets\svg\prox.svg).</summary>
+        public static Image HeadsetProX { get { CarregarPerifericos(); return _headsetProX; } }
 
         /// <summary>Mouse X11 branco, decalcado de foto (assets\svg\x11.svg).</summary>
         public static Image Mouse { get { CarregarPerifericos(); return _mouse; } }
@@ -124,6 +127,7 @@ namespace MhiagosControl
             try
             {
                 _headset = Copia("g325.png");
+                _headsetProX = Copia("prox.png");
                 _mouse = Copia("x11.png");
                 _bluetooth = Copia("bluetooth.png");
             }
