@@ -403,12 +403,18 @@ namespace MhiagosControl
 
             int tx = x + Icone + Ui.S(10);
             int yNome = Height / 2 - Ui.S(27);
-            TextRenderer.DrawText(g, p.Nome, Ui.FontSmall, new Point(tx, yNome), Ui.Faint, TextFormatFlags.NoPadding);
+            if (!SemNumero(p))
+                TextRenderer.DrawText(g, p.Nome, Ui.FontSmall, new Point(tx, yNome), Ui.Faint, TextFormatFlags.NoPadding);
 
             int yVal = Height / 2 - Ui.S(10);
             if (SemNumero(p))
             {
-                TextRenderer.DrawText(g, Nota(p, null), Ui.FontSmall, new Point(tx, yVal + Ui.S(3)), Ui.Muted, TextFormatFlags.NoPadding);
+                // Sem numero sao so duas linhas: o bloco vai para o meio da caixa,
+                // alinhado ao centro do icone, e nao colado no topo como as tres.
+                int hLinha = Ui.FontSmall.Height, gap = Ui.S(3);
+                int y2 = (Height - (2 * hLinha + gap)) / 2;
+                TextRenderer.DrawText(g, p.Nome, Ui.FontSmall, new Point(tx, y2), Ui.Faint, TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(g, Nota(p, null), Ui.FontSmall, new Point(tx, y2 + hLinha + gap), Ui.Muted, TextFormatFlags.NoPadding);
                 return;
             }
 
