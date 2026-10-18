@@ -133,10 +133,25 @@ namespace MhiagosControl
             string n = nome.Trim();
             if (fonte == FontePeriferico.GHub && string.Equals(n, "G325", StringComparison.OrdinalIgnoreCase))
                 return "Logitech G325 Lightspeed";
+            if (fonte == FontePeriferico.GHub && n.StartsWith("PRO X Wireless", StringComparison.OrdinalIgnoreCase))
+                return "Logitech PRO X Wireless";
             if (fonte == FontePeriferico.AttackShark && string.Equals(n, "X11", StringComparison.OrdinalIgnoreCase))
                 return "Attack Shark X11";
             return nome;
         }
+
+        /// <summary>
+        /// Headset PRO X Wireless, que o G HUB lista ao lado do G325 com outro
+        /// nome. O tipo (HEADSET) e igual para os dois, entao so o nome separa:
+        /// "PRO X Wireless" e variantes como "PRO X Wireless Gaming Headset".
+        /// </summary>
+        public static bool EhProX(Periferico p)
+        {
+            return p != null && p.Fonte == FontePeriferico.GHub && p.Tipo == TipoPeriferico.Headset
+                && p.Nome != null && ReProX.IsMatch(p.Nome);
+        }
+
+        private static readonly Regex ReProX = new Regex(@"\bPRO\s*-?\s*X\b", RegexOptions.IgnoreCase);
 
         /// <summary>"G325 70%  X11 90%", ou nulo quando nao ha nada para dizer.</summary>
         public static string Resumo()
