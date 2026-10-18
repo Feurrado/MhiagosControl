@@ -1374,7 +1374,9 @@ namespace MhiagosControl
             // pixels do lado direito, se leem como uma tira que ficou pela
             // metade. Centralizada, o que sobra vira margem dos dois lados, que e
             // a mesma decisao que a pagina inteira ja toma acima de 1100 px.
-            int total = (n - 1) * Vao;
+            // A folga de 14 px da ultima coluna nao e texto: contada, a tira inteira
+            // saia deslocada para a esquerda do centro do cartao.
+            int total = (n - 1) * Vao - Ui.S(14);
             for (int i = 0; i < n; i++) total += larg[i];
 
             int x = (_cardSpecs.Width - total) / 2;

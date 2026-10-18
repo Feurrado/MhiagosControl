@@ -99,7 +99,7 @@ namespace MhiagosControl
             if (!item.Enabled || !item.Selected) return;
             Graphics g = e.Graphics;
             Ui.Smooth(g);
-            Rectangle r = new Rectangle(Ui.S(2), 1, item.Width - Ui.S(4) - 1, item.Height - 3);
+            Rectangle r = new Rectangle(Ui.S(2), 1, item.Width - Ui.S(4) - 1, item.Height - 2);   // centro no meio do item
             using (GraphicsPath p = Ui.RoundRect(r, Ui.RaioControle))
             using (SolidBrush b = new SolidBrush(Ui.Hover))
                 g.FillPath(b, p);
@@ -109,6 +109,14 @@ namespace MhiagosControl
         {
             e.TextColor = e.Item.Enabled ? Ui.Text : Ui.Faint;
             e.TextFont = Ui.FontBase;
+            // A Segoe UI Variable deixa as letras alto na caixa da linha (o espaco de
+            // baixo e maior): centrada pela caixa, a palavra ficava uns pixels acima
+            // do meio do destaque. Desce o texto o que a tinta medida pede.
+            Rectangle tr = e.TextRectangle;
+            // E o retangulo que o ToolStrip entrega vem no ALTO do item (Y=2 num item de
+            // 34 px), e nao no meio: era isso que tirava o texto do eixo do destaque.
+            tr.Y = (e.Item.Height - tr.Height) / 2 - (int)Math.Round(OffsetDoTexto());
+            e.TextRectangle = tr;
             base.OnRenderItemText(e);
 
             // A marca e desenhada aqui, com o texto, e nao no OnRenderItemCheck: so
