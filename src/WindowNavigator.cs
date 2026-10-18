@@ -179,6 +179,11 @@ namespace MhiagosControl
             using (Pen p = new Pen(Color.FromArgb(150, CorDaLinha ?? Ui.Accent)))
             {
                 int colunas = Math.Max(1, f.Width - Ui.S(2));
+                // Ultimo valor da coluna anterior: cada traco vertical vai ate ele, e
+                // assim a curva e continua. Sem isto, onde o sinal pula mais que a
+                // altura de uma coluna os tracos ficavam soltos e a linha parecia
+                // quebrada em pedacos.
+                float ultimo = float.NaN;
                 for (int c = 0; c < colunas; c++)
                 {
                     int a = (int)((long)c * n / colunas), b = (int)((long)(c + 1) * n / colunas);
@@ -190,7 +195,15 @@ namespace MhiagosControl
                         if (v < lo) lo = v;
                         if (v > hi) hi = v;
                     }
-                    if (lo > hi) continue;
+                    if (lo > hi) { ultimo = float.NaN; continue; }
+                    float fim = float.NaN;
+                    for (int i = a; i < b && i < n; i++)
+                    {
+                        if (float.IsNaN(_buf[i])) continue;
+                        fim = _buf[i];
+                    }
+                    if (!float.IsNaN(ultimo)) { if (ultimo < lo) lo = ultimo; if (ultimo > hi) hi = ultimo; }
+                    ultimo = fim;
                     float x = f.X + 1 + c;
                     float y0 = alto + alt - (hi - min) / faixa * alt;
                     float y1 = alto + alt - (lo - min) / faixa * alt;

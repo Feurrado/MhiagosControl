@@ -36,6 +36,11 @@ namespace MhiagosControl
                 return RegressionChild(args);
             if (args.Length > 2 && args[0] == "--medir-animacao")
                 return CapturaDeEscala(args);
+            if (args.Length > 0 && args[0] == "--specs") { SpecSheet.Coletar(new System.Collections.Generic.List<SensorEntry>()); Console.Write(SpecSheet.EmTexto()); return 0; }
+            if (args.Length > 2 && args[0] == "--captura-abertura")
+                return CapturaDaAbertura(args);
+            if (args.Length > 2 && args[0] == "--captura-menu")
+                return CapturaDoMenu(args);
             if (args.Length > 1 && args[0] == "--captura-presenca")
                 return CapturaDePresenca(args);
             if (args.Length > 2 && (args[0] == "--captura-escala" || args[0] == "--captura-tela" || args[0] == "--medir-pintura"))

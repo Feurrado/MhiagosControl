@@ -23,7 +23,7 @@ namespace MhiagosControl
         private static readonly int Margem = Ui.S(18);
         private static readonly int Icone = Ui.S(48);
         private static readonly int AlturaDoCabecalho = Ui.S(88);
-        private static readonly int AlturaDoBloco = Ui.S(68);
+        private static readonly int AlturaDoBloco = Ui.S(82);
         private static readonly int EspacoEntreBlocos = Ui.S(10);
         private static readonly int AlturaDaCurva = Ui.S(132);
         private static readonly int AlturaDaBarraDeDetalhes = Ui.S(40);
@@ -465,7 +465,9 @@ namespace MhiagosControl
                 TextRenderer.DrawText(g, blocos[i][0], Ui.FontSmall, new Rectangle(x, b.Y + Ui.S(9), w, Ui.S(16)), Ui.Muted, Uma);
                 TextRenderer.DrawText(g, blocos[i][1], Ui.FontTileValue, new Rectangle(x, b.Y + Ui.S(25), w, Ui.S(22)), Ui.Text, Uma);
                 if (!string.IsNullOrEmpty(blocos[i][2]))
-                    TextRenderer.DrawText(g, blocos[i][2], Ui.FontSmall, new Rectangle(x, b.Y + Ui.S(47), w, Ui.S(16)), Ui.Muted, Uma);
+                    // a linha de apoio quebra em duas, em vez de terminar em reticencias
+                    TextRenderer.DrawText(g, blocos[i][2], Ui.FontSmall, new Rectangle(x, b.Y + Ui.S(47), w, Ui.S(32)), Ui.Muted,
+                        TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
             }
         }
 

@@ -360,14 +360,16 @@ namespace MhiagosControl
 
         private static int LarguraDoTexto(Graphics g, Periferico p, string previsao)
         {
-            int nome = TextRenderer.MeasureText(g, p.Nome, Ui.FontSmall).Width;
+            // medido como e desenhado (sem a folga do GDI): com a folga o grupo saia
+            // alguns pixels para a esquerda do centro do cartao
+            int nome = TextRenderer.MeasureText(g, p.Nome, Ui.FontSmall, Size.Empty, TextFormatFlags.NoPadding).Width;
             string nota = Nota(p, previsao);
             if (SemNumero(p))
-                return Math.Max(nome, TextRenderer.MeasureText(g, nota, Ui.FontSmall).Width);
+                return Math.Max(nome, TextRenderer.MeasureText(g, nota, Ui.FontSmall, Size.Empty, TextFormatFlags.NoPadding).Width);
 
-            int linha = TextRenderer.MeasureText(g, Valor(p), FontPct).Width;
+            int linha = TextRenderer.MeasureText(g, Valor(p), FontPct, Size.Empty, TextFormatFlags.NoPadding).Width;
             if (p.Bateria.HasValue) linha += Ui.S(8) + Barra;
-            int baixo = nota != null ? TextRenderer.MeasureText(g, nota, Ui.FontSmall).Width : 0;
+            int baixo = nota != null ? TextRenderer.MeasureText(g, nota, Ui.FontSmall, Size.Empty, TextFormatFlags.NoPadding).Width : 0;
             return Math.Max(nome, Math.Max(linha, baixo));
         }
 

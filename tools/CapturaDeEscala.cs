@@ -185,6 +185,87 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>
+        /// O menu do icone da bandeja, aberto de verdade e copiado da tela:
+        /// Tests.exe --captura-menu 1.0 pasta
+        /// </summary>
+        private static int CapturaDoMenu(string[] args)
+        {
+            float zoom = float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
+            AppDomain.CurrentDomain.SetData("MhiagosControl.Zoom", zoom);
+            Directory.CreateDirectory(args[2]);
+            T.Language = T.PtBr;
+            ContextMenuStrip m = MenuTema.Novo();
+            ToolStripMenuItem sub = MenuTema.Submenu(T.TrayProfiles);
+            sub.DropDownItems.Add(MenuTema.Opcao("A", true, null));
+            sub.DropDownItems.Add(MenuTema.Opcao("Jogos  ·  padrao", false, null));
+            m.Items.Add(sub);
+            m.Items.Add(MenuTema.Item(T.TrayConfigure, null));
+            ToolStripMenuItem w = MenuTema.Item(T.TrayBatteryWidget, null); w.Checked = true;
+            m.Items.Add(w);
+            MenuTema.Separador(m.Items);
+            m.Items.Add(MenuTema.Item(T.TrayPause, null));
+            ToolStripMenuItem a = MenuTema.Item(T.TrayAutostart, null); a.Checked = true;
+            m.Items.Add(a);
+            m.Items.Add(MenuTema.Item(T.TrayOpenData, null));
+            MenuTema.Separador(m.Items);
+            m.Items.Add(MenuTema.Item(T.TrayExit, null));
+            m.Show(new Point(60, 60));
+            Esperar(400);
+            Cursor.Position = new Point(120, 60 + 88);
+            Esperar(400);
+            sub.ShowDropDown();
+            Esperar(400);
+            using (Bitmap bmp = new Bitmap(520, 420))
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.CopyFromScreen(new Point(50, 50), Point.Empty, bmp.Size);
+                bmp.Save(Path.Combine(args[2], "menu.png"), ImageFormat.Png);
+            }
+            m.Close();
+            return 0;
+        }
+
+        /// <summary>
+        /// O que a janela mostra no instante em que abre, antes do Shown:
+        /// Tests.exe --captura-abertura 1.0 pasta [chave-da-pagina]
+        /// </summary>
+        private static int CapturaDaAbertura(string[] args)
+        {
+            Directory.CreateDirectory(args[2]);
+            string root = Path.Combine(Path.GetTempPath(), "MhiagosControl-abertura-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            typeof(Log).GetField("_path", AuditFlags).SetValue(null, Path.Combine(root, "log.txt"));
+            DetalhesDaBateria._caminho = Path.Combine(root, "detalhes.txt");
+            DetalhesDaBateria.Recarregar();
+            HistoricoDeBateria.Caminho = Path.Combine(root, "baterias.dat");
+            HistoricoDeBateria.Zerar();
+            MetricHistory.Arquivo = Path.Combine(root, "history.dat");
+            T.Language = T.PtBr;
+            Config config = AuditConfig(root, "abertura");
+            config.LastPage = args.Length > 3 ? args[3] : "baterias";
+            DadosDeCaptura dados = new DadosDeCaptura();
+            using (SettingsForm form = new SettingsForm(config, dados.Sensors, dados))
+            {
+                form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual;
+                form.Location = new Point(-30000, -30000);
+                form.Show();
+                using (Bitmap bmp = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bmp, new Rectangle(Point.Empty, bmp.Size));
+                    bmp.Save(Path.Combine(args[2], "abertura-antes-do-shown.png"), ImageFormat.Png);
+                }
+                Esperar(500);
+                using (Bitmap bmp = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bmp, new Rectangle(Point.Empty, bmp.Size));
+                    bmp.Save(Path.Combine(args[2], "abertura-depois.png"), ImageFormat.Png);
+                }
+                form.Close();
+            }
+            return 0;
+        }
+
         private static int CapturaDeEscala(string[] args)
         {
             float zoom = float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
@@ -203,6 +284,20 @@ namespace MhiagosControl
             HistoricoDeBateria.Caminho = Path.Combine(root, "baterias.dat");
             HistoricoDeBateria.Zerar();
             MetricHistory.Arquivo = Path.Combine(root, "history.dat");
+            // Historico sintetico (ruido, uma falha curta e uma longa) para a curva
+            // dos mostradores aparecer nas capturas.
+            MetricHistory.Seguir(new string[] { "cpu", "load", "gpu", "fan" });
+            {
+                Random rnd = new Random(7);
+                DateTime ini = DateTime.UtcNow.AddMinutes(-45);
+                for (int k = 0; k < 45 * 12; k++)
+                {
+                    if (k > 470 && k < 475) continue;       // falha curta (25 s)
+                    if (k > 495 && k < 515) continue;       // falha longa
+                    double a = k;
+                    MetricHistory.AmostrarEm(delegate (string id) { return (float?)(45 + 8 * Math.Sin(a / 40) + rnd.NextDouble() * 4); }, ini.AddSeconds(k * 5));
+                }
+            }
             T.Language = args.Length > 3 ? args[3] : T.PtBr;
 
             // Dois aparelhos com historico, para a pagina Baterias ter cartoes.

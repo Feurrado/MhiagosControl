@@ -152,6 +152,8 @@ namespace MhiagosControl
             object virt = Campo(o, "VirtualizationFirmwareEnabled");
             if (virt is bool) g.Por(T.SpecVirtualization, ((bool)virt) ? T.On : T.Off);
 
+            g.Por(T.SpecInstructions, Instrucoes());
+
             return g;
         }
 
@@ -178,7 +180,11 @@ namespace MhiagosControl
                 g.Por(T.SpecBiosVendor, Fabricante(Texto(bios, "Manufacturer")));
                 g.Por(T.SpecBiosVersion, Texto(bios, "SMBIOSBIOSVersion"));
                 g.Por(T.SpecBiosDate, DataWmi(Texto(bios, "ReleaseDate")));
+
+                int smMaior = Inteiro(bios, "SMBIOSMajorVersion"), smMenor = Inteiro(bios, "SMBIOSMinorVersion");
+                if (smMaior > 0) g.Por(T.SpecSmbios, smMaior + "." + smMenor);
             }
+            g.Por(T.SpecFirmwareMode, ModoDoFirmware());
             return g;
         }
 
@@ -193,6 +199,8 @@ namespace MhiagosControl
             int velocidade = 0;
             string tipo = null;
             List<string> canais = new List<string>();
+            string formato = null;
+            int milivolts = 0;
 
             foreach (ManagementObject m in mods)
             {
@@ -203,6 +211,13 @@ namespace MhiagosControl
                 if (vel > velocidade) velocidade = vel;
 
                 if (tipo == null) tipo = TipoDeMemoria(Inteiro(m, "SMBIOSMemoryType"));
+                if (formato == null)
+                {
+                    int ff = Inteiro(m, "FormFactor");
+                    formato = ff == 8 ? "DIMM" : ff == 12 ? "SO-DIMM" : null;
+                }
+                int mv = Inteiro(m, "ConfiguredVoltage");
+                if (mv > milivolts) milivolts = mv;
 
                 string banco = Texto(m, "BankLabel");
                 if (!string.IsNullOrEmpty(banco) && !canais.Contains(banco)) canais.Add(banco);
@@ -210,7 +225,9 @@ namespace MhiagosControl
 
             if (total > 0) g.Por(T.SpecTotal, EmGigabytes(total));
             g.Por(T.SpecType, tipo);
+            g.Por(T.SpecFormFactor, formato);
             if (velocidade > 0) g.Por(T.SpecMemSpeed, velocidade + " MT/s");
+            if (milivolts > 0) g.Por(T.SpecVoltage, Decimal((milivolts / 1000.0).ToString("0.00", CultureInfo.InvariantCulture)) + " V");
             if (canais.Count > 0)
                 g.Por(T.SpecChannels, canais.Count.ToString(CultureInfo.InvariantCulture));
             g.Por(T.SpecModules, mods.Count.ToString(CultureInfo.InvariantCulture));
@@ -319,6 +336,8 @@ namespace MhiagosControl
             int hz = Inteiro(o, "CurrentRefreshRate");
             if (lx > 0 && ly > 0)
                 g.Por(T.SpecResolution, lx + " × " + ly + (hz > 0 ? "  ·  " + hz + " Hz" : ""));
+
+            g.Por(T.SpecHags, AgendamentoDeGpu());
 
             foreach (string mon in Monitores()) g.Por(T.SpecMonitor, mon);
 
@@ -519,6 +538,7 @@ namespace MhiagosControl
             // Sem nome de maquina nem de usuario, de proposito: esta tela vai
             // parar em captura de tela dentro de issue, e nada aqui vale expor
             // quem e a pessoa.
+            g.Por(T.SpecMachine, Computador());
             SystemInfo info = SystemInfo.From(null);
             g.Por(T.SpecVersion, info.Sistema);
             g.Por(T.SpecArch, Environment.Is64BitOperatingSystem ? "x64" : "x86");
@@ -535,8 +555,152 @@ namespace MhiagosControl
 
             g.Por(T.SpecSecureBoot, InicializacaoSegura());
             g.Por(T.SpecTpm, Tpm());
+            g.Por(T.SpecVbs, IsolamentoDeNucleo());
+            g.Por(T.SpecPowerPlan, PlanoDeEnergia());
+            try { g.Por(T.SpecLanguage, System.Globalization.CultureInfo.InstalledUICulture.NativeName.Substring(0, 1).ToUpperInvariant() + System.Globalization.CultureInfo.InstalledUICulture.NativeName.Substring(1)); } catch { }
             g.Por(".NET", Environment.Version.ToString());
             return g;
+        }
+
+        // ---------------- campos extras ----------------
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern bool IsProcessorFeaturePresent(int recurso);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern bool GetFirmwareType(out int tipo);
+
+        /// <summary>
+        /// Conjuntos de instrucoes que o Windows confirma para o processador: o
+        /// que se confere antes de rodar um programa que exige AVX2 ou AVX-512.
+        /// </summary>
+        private static string Instrucoes()
+        {
+            try
+            {
+                int[] codigos = { 38, 39, 40, 41 };
+                string[] nomes = { "SSE4.2", "AVX", "AVX2", "AVX-512" };
+                List<string> ok = new List<string>();
+                for (int i = 0; i < codigos.Length; i++)
+                    if (IsProcessorFeaturePresent(codigos[i])) ok.Add(nomes[i]);
+                return ok.Count == 0 ? null : string.Join("  ·  ", ok.ToArray());
+            }
+            catch { return null; }
+        }
+
+        /// <summary>UEFI ou BIOS legada. GetFirmwareType responde na hora, sem WMI.</summary>
+        private static string ModoDoFirmware()
+        {
+            try
+            {
+                int t;
+                if (!GetFirmwareType(out t)) return null;
+                return t == 1 ? "BIOS (Legacy)" : t == 2 ? "UEFI" : null;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Agendamento de GPU acelerado por hardware (HAGS): mexe em latencia e
+        /// em geracao de quadros, e so o registro diz se esta ligado.
+        /// </summary>
+        private static string AgendamentoDeGpu()
+        {
+            try
+            {
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.LocalMachine
+                    .OpenSubKey(@"SYSTEM\CurrentControlSet\Control\GraphicsDrivers"))
+                {
+                    if (k == null) return null;
+                    object v = k.GetValue("HwSchMode");
+                    if (v == null) return null;
+                    int m = Convert.ToInt32(v, CultureInfo.InvariantCulture);
+                    return m == 2 ? T.On : m == 1 ? T.Off : null;
+                }
+            }
+            catch { return null; }
+        }
+
+        /// <summary>Fabricante e modelo do computador, quando o montador preencheu: o texto de exemplo da placa nao entra.</summary>
+        private static string Computador()
+        {
+            try
+            {
+                ManagementObject cs = Primeiro("Win32_ComputerSystem");
+                if (cs == null) return null;
+                string fab = Fabricante(Texto(cs, "Manufacturer"));
+                string mod = Texto(cs, "Model");
+                if (Generico(fab)) fab = null;
+                if (Generico(mod)) mod = null;
+                // Montagem propria: o modelo do "computador" e o da placa, e repeti-lo
+                // so ocupa uma linha.
+                ManagementObject placa = Primeiro("Win32_BaseBoard");
+                string produto = placa == null ? null : Texto(placa, "Product");
+                if (mod != null && produto != null && mod.IndexOf(produto, StringComparison.OrdinalIgnoreCase) >= 0) return null;
+                if (fab == null) return mod;
+                if (mod == null) return fab;
+                return mod.StartsWith(fab, StringComparison.OrdinalIgnoreCase) ? mod : fab + " " + mod;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>Virgula decimal no idioma portugues, como o resto da tela.</summary>
+        private static string Decimal(string n) { return T.Language == T.PtBr ? n.Replace('.', ',') : n; }
+
+        private static bool Generico(string t)
+        {
+            if (string.IsNullOrEmpty(t)) return true;
+            string[] lixo = { "System manufacturer", "System Product Name", "To Be Filled By O.E.M.", "Default string", "Not Applicable", "O.E.M.", "System Version" };
+            foreach (string x in lixo)
+                if (string.Equals(t, x, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Isolamento de nucleo (integridade de memoria, VBS): custa desempenho
+        /// em jogo e e a primeira coisa que se confere quando o FPS some.
+        /// </summary>
+        private static string IsolamentoDeNucleo()
+        {
+            try
+            {
+                using (ManagementObjectSearcher s = new ManagementObjectSearcher(
+                    "root\\Microsoft\\Windows\\DeviceGuard", "SELECT VirtualizationBasedSecurityStatus FROM Win32_DeviceGuard"))
+                using (ManagementObjectCollection c = s.Get())
+                    foreach (ManagementObject o in c)
+                        return Inteiro(o, "VirtualizationBasedSecurityStatus") == 2 ? T.On : T.Off;
+            }
+            catch { }
+            return null;
+        }
+
+        [System.Runtime.InteropServices.DllImport("powrprof.dll")]
+        private static extern uint PowerGetActiveScheme(IntPtr raiz, out IntPtr esquema);
+
+        [System.Runtime.InteropServices.DllImport("powrprof.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern uint PowerReadFriendlyName(IntPtr raiz, ref Guid esquema, IntPtr sub, IntPtr config, StringBuilder nome, ref uint tamanho);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern IntPtr LocalFree(IntPtr p);
+
+        /// <summary>Plano de energia ativo, pela API de energia: sem WMI, que para este namespace exige administrador.</summary>
+        private static string PlanoDeEnergia()
+        {
+            IntPtr p = IntPtr.Zero;
+            try
+            {
+                if (PowerGetActiveScheme(IntPtr.Zero, out p) != 0 || p == IntPtr.Zero) return null;
+                Guid id = (Guid)System.Runtime.InteropServices.Marshal.PtrToStructure(p, typeof(Guid));
+                uint n = 0;
+                PowerReadFriendlyName(IntPtr.Zero, ref id, IntPtr.Zero, IntPtr.Zero, null, ref n);
+                if (n < 2 || n > 4096) return null;
+                StringBuilder sb = new StringBuilder((int)n);
+                if (PowerReadFriendlyName(IntPtr.Zero, ref id, IntPtr.Zero, IntPtr.Zero, sb, ref n) != 0) return null;
+                string nome = sb.ToString().Trim();
+                return nome.Length == 0 || nome.StartsWith("@") ? null : nome;
+            }
+            catch { return null; }
+            finally { if (p != IntPtr.Zero) LocalFree(p); }
         }
 
         /// <summary>
