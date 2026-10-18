@@ -1289,6 +1289,20 @@ namespace MhiagosControl
                 _cardPerif.SetBounds(x0, yPerif, alvo, AlturaPerif);
                 _cardSpecs.SetBounds(x0, ySpecs, alvo, AlturaSpecs);
 
+                // O bloco inteiro centrado tambem na vertical: na horizontal ja
+                // sobra margem igual dos dois lados, e o vao so embaixo fazia a
+                // pagina parecer cortada. Sem folga (janela baixa) fica no topo.
+                int y0 = (_pgVisao.Height - (ySpecs + AlturaSpecs)) / 2;
+                if (y0 > 0)
+                {
+                    foreach (Control c in _vgTiles) c.Top += y0;
+                    _cardCooler.Top += y0;
+                    if (_vgP1 != null) _vgP1.Top += y0;
+                    if (_vgP2 != null) _vgP2.Top += y0;
+                    _cardPerif.Top += y0;
+                    _cardSpecs.Top += y0;
+                }
+
                 ArranjarCooler();
                 ArranjarSpecs();
             }
