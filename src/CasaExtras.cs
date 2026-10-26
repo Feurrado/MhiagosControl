@@ -24,7 +24,7 @@ namespace MhiagosControl
         private readonly Label _lbConsumo, _nota, _lbAjustes, _lbAlertas;
         private readonly CampoDeTexto _wFrio, _wEco, _wVent, _tarifa;
         private readonly Label _lwFrio, _lwEco, _lwVent, _ltarifa;
-        private readonly Toggle _alFalha, _alOffline, _alQuente;
+        private readonly Toggle _alFalha, _alOffline, _alQuente, _alLavadora;
         private readonly NumberBox _limite;
         private Rectangle _grafico, _barras;
         private static readonly int[] Horas = { 6, 24, 24 * 7 };
@@ -60,6 +60,7 @@ namespace MhiagosControl
             _alFalha = Chave(T.CasaAlertaFalhaOpcao, p.AlertaFalha, delegate(bool v) { ServicoCasa.Pref.AlertaFalha = v; });
             _alOffline = Chave(T.CasaAlertaOfflineOpcao, p.AlertaDesconectado, delegate(bool v) { ServicoCasa.Pref.AlertaDesconectado = v; });
             _alQuente = Chave(T.CasaAlertaQuenteOpcao, p.AlertaQuente, delegate(bool v) { ServicoCasa.Pref.AlertaQuente = v; });
+            _alLavadora = Chave(T.CasaAlertaLavadoraFimOpcao, p.AlertaLavadoraFim, delegate(bool v) { ServicoCasa.Pref.AlertaLavadoraFim = v; });
             _limite = new NumberBox();
             _limite.Minimum = 20; _limite.Maximum = 40;
             _limite.Value = p.LimiteQuente;
@@ -171,13 +172,13 @@ namespace MhiagosControl
 
             _lbAlertas.SetBounds(M, y, iw, Ui.S(18));
             y += Ui.S(22);
-            int tc = iw >= Ui.S(760) ? 3 : 1;
+            int tc = iw >= Ui.S(760) ? 2 : 1;
             int tw = (iw - (tc - 1) * Ui.S(12)) / tc;
-            Toggle[] ts = { _alFalha, _alOffline, _alQuente };
-            for (int i = 0; i < 3; i++)
-                ts[i].SetBounds(M + (i % tc) * (tw + Ui.S(12)), y + (i / tc) * Ui.S(38), tw - (i == 2 ? Ui.S(96) : 0), Ui.S(32));
+            Toggle[] ts = { _alFalha, _alOffline, _alQuente, _alLavadora };
+            for (int i = 0; i < ts.Length; i++)
+                ts[i].SetBounds(M + (i % tc) * (tw + Ui.S(12)), y + (i / tc) * Ui.S(38), tw - (ts[i] == _alQuente ? Ui.S(96) : 0), Ui.S(32));
             _limite.SetBounds(_alQuente.Right + Ui.S(6), _alQuente.Top, Ui.S(88), Ui.S(32));
-            y += ((3 + tc - 1) / tc) * Ui.S(38) + Ui.S(10);
+            y += ((ts.Length + tc - 1) / tc) * Ui.S(38) + Ui.S(10);
             return y;
         }
 

@@ -206,6 +206,7 @@ namespace MhiagosControl
                 }
                 foreach (Aparelho a in lista)
                 {
+                    if (a.Lavadora) { CiclosDaLavadora.Conferir(a, Pref); continue; }
                     if (!a.ArCondicionado) continue;
                     HistoricoDoAr.Registrar(a, DateTime.Now);
                     Diagnostico.Atualizar(nuvem, a);
@@ -483,7 +484,7 @@ namespace MhiagosControl
     /// <summary>Preferencias da pagina Casa, em casa.ini ao lado da config.</summary>
     internal sealed class PreferenciasCasa
     {
-        public bool AlertaFalha = true, AlertaDesconectado = true, AlertaQuente = true;
+        public bool AlertaFalha = true, AlertaDesconectado = true, AlertaQuente = true, AlertaLavadoraFim = true;
         public int LimiteQuente = 28;
         /// <summary>Potencia por modo, em W. Padrao, nao medido: o modelo nao mede consumo.</summary>
         public int PotenciaFrio = 1100, PotenciaEco = 1100, PotenciaSeco = 600, PotenciaVentilar = 60;
@@ -530,6 +531,7 @@ namespace MhiagosControl
                         case "alertafalha": p.AlertaFalha = v == "1"; break;
                         case "alertadesconectado": p.AlertaDesconectado = v == "1"; break;
                         case "alertaquente": p.AlertaQuente = v == "1"; break;
+                        case "alertalavadorafim": p.AlertaLavadoraFim = v == "1"; break;
                         case "limitequente": if (ehInt) p.LimiteQuente = Math.Max(16, Math.Min(45, i)); break;
                         case "potenciafrio": if (ehInt) p.PotenciaFrio = Math.Max(0, i); break;
                         case "potenciaeco": if (ehInt) p.PotenciaEco = Math.Max(0, i); break;
@@ -552,6 +554,7 @@ namespace MhiagosControl
             sb.AppendLine("alertafalha=" + (AlertaFalha ? "1" : "0"));
             sb.AppendLine("alertadesconectado=" + (AlertaDesconectado ? "1" : "0"));
             sb.AppendLine("alertaquente=" + (AlertaQuente ? "1" : "0"));
+            sb.AppendLine("alertalavadorafim=" + (AlertaLavadoraFim ? "1" : "0"));
             sb.AppendLine("limitequente=" + LimiteQuente.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("potenciafrio=" + PotenciaFrio.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("potenciaeco=" + PotenciaEco.ToString(CultureInfo.InvariantCulture));

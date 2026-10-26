@@ -17,6 +17,7 @@ namespace MhiagosControl
             CasaJsonEAparelhos();
             CasaMetaDoModelo();
             CasaServicoOffline();
+            CasaLavadora(root);
             CasaPagina(root);
         }
 
@@ -210,6 +211,34 @@ namespace MhiagosControl
                                 Verdade(!ar.Secoes[4].Visible && !ar.Cenas.Editando, "concluir fecha o editor");
                             }
                         }
+
+                        // Lava e seca: secando, concluida e desconectada, nas duas larguras.
+                        foreach (string estado in new string[] { "secando", "concluido", "offline" })
+                        {
+                            List<Aparelho> l = Exemplo();
+                            l[0] = Lavadora(estado);
+                            casa.MostrarSemNuvem(l);
+                            foreach (int largura in new int[] { 1300, 880 })
+                            {
+                                form.Size = new Size(largura, 760);
+                                casa.Arranjar();
+                                string sufixo = estado + "-" + language + "-" + largura;
+                                CartaoDaLavadora lv = null;
+                                foreach (CartaoDeAparelho cd in casa.Cartoes) if (cd is CartaoDaLavadora) lv = (CartaoDaLavadora)cd;
+                                Verdade(lv != null && lv.Right <= casa.Width - Pagina.LarguraDaBarra, "lavadora cabe na largura " + sufixo);
+                                if (lv == null) continue;
+                                SemSobrepor(lv, "lavadora " + sufixo);
+                                AnelDoCiclo anel = (AnelDoCiclo)Field(lv, "_anel");
+                                Label titulo = (Label)Field(lv, "_titulo");
+                                if (estado == "secando")
+                                    Verdade(anel.Grande == "1 h 25" && titulo.Text == T.LavFaseSecagem && ((EtapasDoCiclo)Field(lv, "_etapas")).Atual == 3,
+                                        "secando: 1 h 25 restantes, etapa Secar " + sufixo);
+                                if (estado == "offline")
+                                    Verdade(anel.Apagado && titulo.Text == T.LavDesconectada, "desconectada: anel apagado " + sufixo);
+                                CaptureEvolution(lv, "casa-lavadora-" + sufixo);
+                            }
+                        }
+                        casa.MostrarSemNuvem(Exemplo());
                     }
                 }
             }
@@ -475,14 +504,94 @@ namespace MhiagosControl
             for (int i = 0; i < kv.Length; i += 2) ar.Estado[kv[i]] = kv[i + 1];
             ar.Meta = MetaDoArDeJanela();
 
-            Aparelho lav = new Aparelho();
-            lav.Puid = "p2"; lav.DeviceId = "d2"; lav.Tipo = "003"; lav.Apelido = "Lava e seca";
-            lav.Modelo = "WD3S"; lav.Comodo = "Lavanderia"; lav.Online = true;
-            string[] kl = { "DeviceStatus", "2", "CurrentProgramPhase", "2", "Remaining_time_in_minutes", "48",
-                "Program", "Algodão", "Temperature", "40", "SpinSpeed", "1200", "DoorStatus", "0", "ChildLockActive", "1" };
-            for (int i = 0; i < kl.Length; i += 2) lav.Estado[kl[i]] = kl[i + 1];
+            return new List<Aparelho> { Lavadora("secando"), ar };
+        }
 
-            return new List<Aparelho> { lav, ar };
+        /// <summary>
+        /// A lava e seca do Thiago (025), com os valores lidos em 26/10/2026 as
+        /// 21:20 ("secando": programa 7, fase 8, 85 de 389 min), ou o ciclo
+        /// concluido, ou desconectada.
+        /// </summary>
+        private static Aparelho Lavadora(string como)
+        {
+            Aparelho lav = new Aparelho();
+            lav.Puid = "p2"; lav.DeviceId = "d2"; lav.Tipo = "025"; lav.Apelido = "Josefina Roupa Limpa";
+            lav.Modelo = "WD3S1114-LVT008-000"; lav.Comodo = "Lavanderia"; lav.Online = como != "offline";
+            string[] kl = { "machine_status", "2", "Current_program_phase", "8", "Selected_program_ID", "7",
+                "Selected_program_remaining_time_in_minutes", "85", "Selected_program_total_running_time_in_minutes", "389",
+                "Selected_program_total_time_in_minutes", "389", "temperature", "9", "Spin_speed_rpm", "14", "RinseNum", "3",
+                "ExtraRinseNum", "1", "dry_time", "2", "Soil_Lever", "0", "SoilLeverFlag", "0", "Door_status", "3", "Child_lock", "0",
+                "Water_consumption_int", "168", "Water_consumption_decimal", "13", "Electricit_consumption_int", "2",
+                "Electricit_consumption_decimal", "48", "error_code", "0", "DrumCleanFlag", "0", "DelayEndTime", "0", "DelayEndTime_Minute", "0" };
+            for (int i = 0; i < kl.Length; i += 2) lav.Estado[kl[i]] = kl[i + 1];
+            if (como == "concluido")
+            {
+                lav.Estado["machine_status"] = "1"; lav.Estado["Current_program_phase"] = "10";
+                lav.Estado["Selected_program_remaining_time_in_minutes"] = "0";
+            }
+            return lav;
+        }
+
+        private static void CasaLavadora(string root)
+        {
+            Secao("casa: lava e seca");
+            CicloAtual c = CicloAtual.De(Lavadora("secando"));
+            Verdade(c.Online && c.Rodando && c.Fase == 8 && c.Restante == 85 && c.Total == 389 && Math.Abs(c.Progresso - (1 - 85f / 389)) < 0.001,
+                "ciclo lido: secando, 85 de 389 min");
+            Igual(T.LavFaseSecagem, c.Titulo(), "titulo pela fase");
+            Verdade(Math.Abs(c.Agua.Value - 168.13) < 0.001 && Math.Abs(c.Energia.Value - 2.48) < 0.001, "agua e energia do ciclo");
+            Igual("90 °C", TabelaDaLavadora.Temperatura(9), "temperatura 9 = 90 °C");
+            Igual("1400 rpm", TabelaDaLavadora.Centrifugacao(14), "centrifugacao 14 = 1400 rpm");
+            Igual(T.LavConcluida, CicloAtual.De(Lavadora("concluido")).Titulo(), "concluido");
+            Igual(T.LavDesconectada, CicloAtual.De(Lavadora("offline")).Titulo(), "desconectada");
+            Aparelho erro = Lavadora("secando"); erro.Estado["machine_status"] = "4"; erro.Estado["error_code"] = "12";
+            Verdade(CicloAtual.De(erro).Erro && CicloAtual.De(erro).Titulo().Contains("12"), "erro com codigo");
+
+            // Ciclos: comeca ao rodar, termina ao parar, avisa uma vez.
+            string pasta = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mhiagos-casa-teste3");
+            System.IO.Directory.CreateDirectory(pasta);
+            string antes = CiclosDaLavadora.Arquivo;
+            CiclosDaLavadora.Arquivo = System.IO.Path.Combine(pasta, "casa-ciclos.txt");
+            System.IO.File.Delete(CiclosDaLavadora.Arquivo);
+            CiclosDaLavadora.Zerar();
+            Action<string, string> notifAntes = ServicoCasa.Notificar;
+            List<string> avisos = new List<string>();
+            ServicoCasa.Notificar = delegate(string t, string x) { avisos.Add(t + "|" + x); };
+            try
+            {
+                PreferenciasCasa p = new PreferenciasCasa();
+                DateTime t0 = DateTime.Now.AddHours(-2);
+                Aparelho lav = Lavadora("secando");
+                lav.Estado["Current_program_phase"] = "3";
+                CiclosDaLavadora.Conferir(lav, p, t0);
+                lav.Estado["Current_program_phase"] = "8";
+                CiclosDaLavadora.Conferir(lav, p, t0.AddMinutes(90));
+                Igual(0, avisos.Count, "rodando nao avisa");
+                Aparelho fim = Lavadora("concluido");
+                CiclosDaLavadora.Conferir(fim, p, t0.AddMinutes(120));
+                CiclosDaLavadora.Conferir(fim, p, t0.AddMinutes(121));
+                Igual(1, avisos.Count, "fim do ciclo avisa uma vez");
+                List<CiclosDaLavadora.Ciclo> u = CiclosDaLavadora.Ultimos("p2", 5);
+                Verdade(u.Count == 1 && u[0].Programa == 7 && u[0].Concluido && Math.Abs((u[0].Fim - u[0].Inicio).TotalMinutes - 120) < 0.01,
+                    "ciclo registrado: programa 7, 2 h, concluido");
+                CiclosDaLavadora.Zerar();
+                CiclosDaLavadora.Arquivo = CiclosDaLavadora.Arquivo;
+                typeof(CiclosDaLavadora).GetField("_carregado", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static).SetValue(null, false);
+                Igual(1, CiclosDaLavadora.Ultimos("p2", 5).Count, "ciclo lido de volta do arquivo");
+                avisos.Clear();
+                CiclosDaLavadora.Conferir(erro, p, t0);
+                CiclosDaLavadora.Conferir(erro, p, t0.AddMinutes(1));
+                Igual(1, avisos.Count, "erro avisa uma vez");
+                avisos.Clear();
+                CiclosDaLavadora.Conferir(Lavadora("offline"), p, t0.AddMinutes(2));
+                Igual(0, avisos.Count, "desconectada nao fecha ciclo nem avisa");
+            }
+            finally
+            {
+                ServicoCasa.Notificar = notifAntes;
+                CiclosDaLavadora.Arquivo = antes;
+                CiclosDaLavadora.Zerar();
+            }
         }
     }
 }
