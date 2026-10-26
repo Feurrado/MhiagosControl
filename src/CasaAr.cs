@@ -149,7 +149,7 @@ namespace MhiagosControl
     }
 
     /// <summary>Icones de linha desenhados: a Segoe nao tem floco, gota nem folha.</summary>
-    internal static class IconesCasa
+    internal static partial class IconesCasa
     {
         private static Pen Caneta(Color c, RectangleF r) { Pen p = new Pen(c, Math.Max(1.5f, r.Width / 12f)); p.StartCap = p.EndCap = LineCap.Round; return p; }
 
@@ -604,19 +604,32 @@ namespace MhiagosControl
 
         private readonly Mostrador _dial;
         private readonly BotaoRedondo _menos, _mais, _liga;
-        private readonly Label _lbModo, _lbVento, _lbMais, _lbAlerta, _lbLiga;
+        private readonly Label _lbModo, _lbVento, _lbAlerta, _lbLiga;
         private readonly Blocos _modo, _vento;
         private readonly Segmented _unidade;
         private readonly Label _lbUnidade;
         private readonly List<Toggle> _chaves = new List<Toggle>();
-        private readonly List<Control> _extras = new List<Control>();
         private readonly System.Windows.Forms.Timer _espera;
         private int _alvoPendente = -1;
         private string _assinatura = "";
         private readonly Toggle _semBipe;
         private bool _ajustando;
-        private readonly AcoesDoAr _acoes;
-        internal AcoesDoAr Acoes { get { return _acoes; } }
+
+        // Secoes de baixo: Funcoes, Preferencias, Cenas, Timer; editor e diagnostico por cima de tudo.
+        private readonly Secao _secFuncoes, _secPref, _secCenas, _secTimer, _secEditor, _secDiag;
+        private readonly PainelDeCenas _cenas;
+        private readonly EditorDeCena _editor;
+        private readonly PainelDoTimer _timer;
+        private readonly Label _diag;
+        private readonly BotaoChave _chave;
+        private readonly ToolTip _dica = new ToolTip();
+        private int _editando = -2;   // -2 nenhuma, -1 nova, >=0 indice
+        private bool _diagAberto;
+
+        internal PainelDeCenas Cenas { get { return _cenas; } }
+        internal EditorDeCena Editor { get { return _editor; } }
+        internal BotaoChave Chave { get { return _chave; } }
+        internal Secao[] Secoes { get { return new[] { _secFuncoes, _secPref, _secCenas, _secTimer, _secEditor, _secDiag }; } }
 
         /// <summary>Preferencia do app, nao do aparelho: a pagina guarda na config.</summary>
         public bool SemBipe;
@@ -652,16 +665,10 @@ namespace MhiagosControl
             _vento.Escolheu += delegate { Mandar("t_fan_speed", _vento.Selecionado); };
             Controls.Add(_vento);
 
-            _lbMais = Rotulo(T.CasaFuncoes, Ui.FontSmall, Ui.Muted);
-            _lbUnidade = Rotulo(T.CasaUnidade, Ui.FontBase, Ui.Text);
-            _lbUnidade.TextAlign = ContentAlignment.MiddleLeft;
-            _unidade = new Segmented();
-            _unidade.SetItems("°C", "°F");
-            _unidade.SelectedIndexChanged += delegate { Mandar("t_temp_type", _unidade.SelectedIndex); };
-            Controls.Add(_unidade);
-
             _lbAlerta = Rotulo("", Ui.FontSmall, Ui.Danger);
 
+            // --- Funcoes
+            _secFuncoes = NovaSecao(T.CasaFuncoes);
             _semBipe = new Toggle();
             _semBipe.Label = T.CasaSemBipe;
             _semBipe.CheckedChanged += delegate
@@ -670,12 +677,61 @@ namespace MhiagosControl
                 SemBipe = _semBipe.Checked;
                 if (SemBipeMudou != null) SemBipeMudou(this, EventArgs.Empty);
             };
-            Controls.Add(_semBipe);
+            _secFuncoes.Controls.Add(_semBipe);
 
-            _acoes = new AcoesDoAr();
-            _acoes.Cena += delegate(object s, CenaEventArgs e) { MandarVarios(e.Propriedades); };
-            _acoes.MudouAltura += delegate { AvisarAltura(); };
-            Controls.Add(_acoes);
+            // --- Preferencias: a unidade, rotulo a esquerda e seletor a direita
+            _secPref = NovaSecao(T.CasaPreferencias);
+            _lbUnidade = new Label();
+            _lbUnidade.Text = T.CasaUnidade; _lbUnidade.Font = Ui.FontBase; _lbUnidade.ForeColor = Ui.Text;
+            _lbUnidade.AutoSize = false; _lbUnidade.BackColor = Color.Transparent; _lbUnidade.TextAlign = ContentAlignment.MiddleLeft;
+            _secPref.Controls.Add(_lbUnidade);
+            _unidade = new Segmented();
+            _unidade.SetItems("°C", "°F");
+            _unidade.SelectedIndexChanged += delegate { Mandar("t_temp_type", _unidade.SelectedIndex); };
+            _secPref.Controls.Add(_unidade);
+
+            // --- Cenas
+            _secCenas = NovaSecao(T.CasaCenas);
+            _secCenas.Acao.Text = T.CasaEditar;
+            _secCenas.Acao.Visible = true;
+            _secCenas.Acao.Click += delegate { AlternarEdicao(); };
+            _cenas = new PainelDeCenas();
+            _cenas.Rodar += delegate(object s, CenaEventArgs e) { MandarVarios(e.Propriedades); };
+            _cenas.Editar += AbrirEditor;
+            _secCenas.Controls.Add(_cenas);
+
+            _secEditor = NovaSecao(T.CasaEditarCena);
+            _secEditor.Acao.Text = T.CasaRestaurarPadroes;
+            _secEditor.Acao.Visible = true;
+            _secEditor.Acao.Click += delegate { RestaurarPadroes(); };
+            _editor = new EditorDeCena();
+            _editor.Salvar += delegate { SalvarCena(); };
+            _editor.Cancelar += delegate { FecharEditor(); };
+            _editor.Excluir += delegate { ExcluirCena(); };
+            _editor.Antes += delegate { MoverCena(-1); };
+            _editor.Depois += delegate { MoverCena(+1); };
+            _secEditor.Controls.Add(_editor);
+            _secEditor.Visible = false;
+
+            // --- Timer
+            _secTimer = NovaSecao(T.CasaTimer);
+            _timer = new PainelDoTimer();
+            _secTimer.Controls.Add(_timer);
+
+            // --- Diagnostico: aberto pela chave do cabecalho
+            _secDiag = NovaSecao(T.CasaDiagnostico);
+            _secDiag.Acao.Text = T.Close;
+            _secDiag.Acao.Visible = true;
+            _secDiag.Acao.Click += delegate { AlternarDiagnostico(); };
+            _diag = new Label();
+            _diag.Font = Ui.FontSmall; _diag.ForeColor = Ui.Text; _diag.AutoSize = false; _diag.BackColor = Color.Transparent;
+            _secDiag.Controls.Add(_diag);
+            _secDiag.Visible = false;
+
+            _chave = new BotaoChave();
+            _chave.Click += delegate { AlternarDiagnostico(); };
+            _dica.SetToolTip(_chave, T.CasaDiagnostico);
+            Controls.Add(_chave);
 
             // A temperatura vai em lote: tres cliques em + viram um comando so.
             _espera = new System.Windows.Forms.Timer();
@@ -688,6 +744,13 @@ namespace MhiagosControl
                 _alvoPendente = -1;
                 Mandar("t_temp", v);
             };
+        }
+
+        private Secao NovaSecao(string titulo)
+        {
+            Secao s = new Secao(titulo);
+            Controls.Add(s);
+            return s;
         }
 
         private bool Ligado { get { return A != null && A.Int("t_power", 0) != 0; } }
@@ -739,9 +802,107 @@ namespace MhiagosControl
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _espera.Dispose();
+            if (disposing) { _espera.Dispose(); _dica.Dispose(); }
             base.Dispose(disposing);
         }
+
+        // ---------------- cenas: edicao ----------------
+
+        private static List<CenaCasa> Lista { get { return ServicoCasa.Pref.Cenas; } }
+
+        private void AlternarEdicao()
+        {
+            _cenas.Editando = !_cenas.Editando;
+            _secCenas.Acao.Text = _cenas.Editando ? T.CasaConcluir : T.CasaEditar;
+            _secCenas.PosicionarAcao();
+            if (!_cenas.Editando) FecharEditor();
+            else AvisarAltura();
+            _cenas.Invalidate();
+        }
+
+        internal void AbrirEditor(int indice)
+        {
+            if (!_cenas.Editando) AlternarEdicao();
+            _editando = indice;
+            _editor.Nova = indice < 0;
+            CenaCasa c = indice >= 0 && indice < Lista.Count ? Lista[indice] : NovaCena();
+            _editor.Carregar(c, A, Lista.Count > 1);
+            _cenas.Selecionada = indice >= 0 ? indice : Lista.Count;
+            _secEditor.Titulo = indice >= 0 ? T.CasaEditarCena + ": " + c.Nome : T.CasaNovaCena;
+            _secEditor.Visible = true;
+            _secEditor.Invalidate();
+            AvisarAltura();
+        }
+
+        private static CenaCasa NovaCena()
+        {
+            CenaCasa c = new CenaCasa();
+            c.Nome = T.CasaNovaCena;
+            c.Icone = "floco";
+            c.Temp = 24;
+            return c;
+        }
+
+        private void FecharEditor()
+        {
+            _editando = -2;
+            _cenas.Selecionada = -1;
+            _secEditor.Visible = false;
+            AvisarAltura();
+        }
+
+        private void Gravar()
+        {
+            ServicoCasa.Pref.Salvar();
+            _cenas.Mostrar(A, Lista);
+        }
+
+        private void SalvarCena()
+        {
+            CenaCasa c = _editor.Ler();
+            if (_editando >= 0 && _editando < Lista.Count) Lista[_editando] = c;
+            else if (Lista.Count < CenaCasa.MaxCenas) Lista.Add(c);
+            Gravar();
+            FecharEditor();
+        }
+
+        private void ExcluirCena()
+        {
+            if (_editando >= 0 && _editando < Lista.Count) Lista.RemoveAt(_editando);
+            Gravar();
+            FecharEditor();
+        }
+
+        private void MoverCena(int passo)
+        {
+            int de = _editando, para = _editando + passo;
+            if (de < 0 || para < 0 || para >= Lista.Count) return;
+            CenaCasa c = Lista[de];
+            Lista.RemoveAt(de);
+            Lista.Insert(para, c);
+            _editando = para;
+            _cenas.Selecionada = para;
+            Gravar();
+        }
+
+        private void RestaurarPadroes()
+        {
+            ServicoCasa.Pref.Cenas = CenaCasa.Padrao();
+            Gravar();
+            FecharEditor();
+        }
+
+        internal void AlternarDiagnostico()
+        {
+            _diagAberto = !_diagAberto;
+            _chave.Aberto = _diagAberto;
+            _chave.Invalidate();
+            _secDiag.Visible = _diagAberto;
+            if (_diagAberto) _diag.Text = Diagnostico.Texto(A);
+            AvisarAltura();
+        }
+
+        // ---------------- estado ----------------
 
         protected override void Preencher()
         {
@@ -821,16 +982,17 @@ namespace MhiagosControl
                 t.Checked = A.Int((string)t.Tag, 0) != 0;
                 t.Enabled = on && Grava((string)t.Tag);
             }
-
-            _unidade.Visible = _lbUnidade.Visible = Grava("t_temp_type") || A.Tem("t_temp_type");
-            _unidade.SelectedIndex = Fahrenheit ? 1 : 0;
-            _unidade.Enabled = on && Grava("t_temp_type");
             _semBipe.Visible = Grava("t_beep");
             _ajustando = true;
             try { _semBipe.Checked = SemBipe; }
             finally { _ajustando = false; }
             _semBipe.Enabled = on;
-            _lbMais.Visible = _chaves.Count > 0 || _unidade.Visible || _semBipe.Visible;
+            _secFuncoes.Visible = _chaves.Count > 0 || _semBipe.Visible;
+
+            bool unidade = Grava("t_temp_type") || A.Tem("t_temp_type");
+            _secPref.Visible = unidade;
+            _unidade.SelectedIndex = Fahrenheit ? 1 : 0;
+            _unidade.Enabled = on && Grava("t_temp_type");
 
             // --- alertas: as falhas f_e_* que o aparelho acusar
             List<string> alertas = new List<string>();
@@ -842,15 +1004,22 @@ namespace MhiagosControl
                 alertas.Add(kv.Key == "f_e_push" ? string.Format(T.CasaAlertaCodigo, v) : T.CasaFalha(kv.Key, Meta(kv.Key)));
             }
             if (A.Int("f_filter", 0) != 0) alertas.Add(T.CasaFiltro);
-            _lbAlerta.Text = alertas.Count > 0 ? "⚠  " + string.Join("  ·  ", alertas.ToArray()) : "";
+            _lbAlerta.Text = alertas.Count > 0 ? "\u26A0  " + string.Join("  ·  ", alertas.ToArray()) : "";
             _lbAlerta.Visible = alertas.Count > 0;
+            _chave.Falha = Diagnostico.TemFalha(A);
+            _chave.Invalidate();
+            if (_diagAberto) _diag.Text = Diagnostico.Texto(A);
 
-            // Extras de leitura no rodape do alerta: umidade e potencia, se houver.
+            // Extras de leitura ao lado do liga/desliga: umidade e potencia, se houver.
             List<string> leituras = new List<string>();
             if (A.Tem("f_humidity")) leituras.Add(string.Format(T.CasaUmidade, A.Int("f_humidity", 0)));
             if (A.Tem("f_power_display")) leituras.Add(A.Int("f_power_display", 0) + " W");
             _lbLiga.Tag = leituras.Count > 0 ? string.Join("  ·  ", leituras.ToArray()) : null;
-            _acoes.Mostrar(A);
+
+            _cenas.Mostrar(A, Lista);
+            _secCenas.Visible = Lista.Count > 0 || _cenas.Editando || true;
+            _timer.Mostrar(A);
+            _secTimer.Visible = _timer.Disponivel;
         }
 
         private void SincronizarChaves(List<string> chaves)
@@ -858,7 +1027,7 @@ namespace MhiagosControl
             bool igual = chaves.Count == _chaves.Count;
             for (int i = 0; igual && i < chaves.Count; i++) igual = (string)_chaves[i].Tag == chaves[i];
             if (igual) return;
-            foreach (Toggle t in _chaves) { Controls.Remove(t); t.Dispose(); }
+            foreach (Toggle t in _chaves) { _secFuncoes.Controls.Remove(t); t.Dispose(); }
             _chaves.Clear();
             foreach (string k in chaves)
             {
@@ -869,10 +1038,12 @@ namespace MhiagosControl
                 t.Tag = k;
                 t.CheckedChanged += delegate { Mandar(chave, t.Checked ? 1 : 0); };
                 _chaves.Add(t);
-                Controls.Add(t);
+                _secFuncoes.Controls.Add(t);
             }
             AvisarAltura();
         }
+
+        // ---------------- arranjo ----------------
 
         public override int Arranjar(int w)
         {
@@ -882,6 +1053,13 @@ namespace MhiagosControl
             // Empilhado, o mostrador abre a coluna: respiro extra entre o puxador e o divisor.
             int y0Dial = lado ? y0 : Cabeca + Ui.S(28);
             int dialLado = Ui.S(250);
+
+            // --- chave do diagnostico, no cabecalho, a esquerda do selo
+            int seloW = 0;
+            foreach (string s in new[] { T.CasaOnline, T.CasaOffline, T.CasaEnviando })
+                seloW = Math.Max(seloW, TextRenderer.MeasureText(s, Ui.FontSmall).Width + Ui.S(22));
+            int kc = Ui.S(32);
+            _chave.SetBounds(w - M - seloW - Ui.S(10) - kc, (Cabeca - kc) / 2, kc, kc);
 
             // --- coluna do mostrador: o mostrador centrado nela, com folga igual
             // dos dois lados; o anel inteiro (com o puxador) cabe dentro dele.
@@ -895,7 +1073,7 @@ namespace MhiagosControl
             _mais.SetBounds(centro + Ui.S(16), yb, bt, bt);
             int fimDial = yb + bt + Ui.S(4);
 
-            // --- coluna dos controles
+            // --- coluna dos controles: liga, modo e ventilador
             int cx = lado ? M + colDial + Ui.S(20) : M;
             int cw = lado ? w - M - cx : iw;
             int y = lado ? y0 : fimDial + Ui.S(8);
@@ -917,29 +1095,6 @@ namespace MhiagosControl
                 _vento.SetBounds(cx, y + Ui.S(22), cw, Ui.S(44));
                 y += Ui.S(22) + Ui.S(44) + Ui.S(14);
             }
-            if (_lbMais.Visible)
-            {
-                _lbMais.SetBounds(cx, y, cw, Ui.S(18));
-                y += Ui.S(22);
-                int col = cw >= Ui.S(380) ? 2 : 1;
-                int tw = (cw - (col - 1) * Ui.S(12)) / col;
-                int i = 0;
-                List<Toggle> todas = new List<Toggle>(_chaves);
-                if (_semBipe.Visible) todas.Add(_semBipe);
-                foreach (Toggle t in todas)
-                {
-                    t.SetBounds(cx + (i % col) * (tw + Ui.S(12)), y + (i / col) * Ui.S(36), tw, Ui.S(32));
-                    i++;
-                }
-                y += ((i + col - 1) / col) * Ui.S(36);
-                if (_unidade.Visible)
-                {
-                    int uw = Ui.S(120);
-                    _lbUnidade.SetBounds(cx, y + Ui.S(2), cw - uw - Ui.S(12), Ui.S(32));
-                    _unidade.SetBounds(cx + cw - uw, y + Ui.S(2), uw, Ui.S(32));
-                    y += Ui.S(40);
-                }
-            }
             if (_lbAlerta.Visible)
             {
                 Size s = TextRenderer.MeasureText(_lbAlerta.Text, _lbAlerta.Font, new Size(cw, 0), TextFormatFlags.WordBreak);
@@ -956,9 +1111,107 @@ namespace MhiagosControl
                 fimDial += desce;
             }
             int fim = Math.Max(lado ? fimDial : 0, y) + Ui.S(10);
-            int ha = _acoes.Arranjar(iw);
-            _acoes.SetBounds(M, fim, iw, ha);
-            return fim + ha + Ui.S(8);
+            return ArranjarSecoes(M, fim, iw) + Ui.S(16);
+        }
+
+        /// <summary>
+        /// Grade das secoes: duas colunas na janela larga (Funcoes | Preferencias,
+        /// Cenas | Timer, com alturas iguais por linha) e uma na estreita. O editor
+        /// de cenas e o diagnostico ocupam a largura toda, embaixo.
+        /// </summary>
+        private int ArranjarSecoes(int x, int y, int w)
+        {
+            int gap = Ui.Gap;
+            bool duas = w >= Ui.S(700);
+            int colW = duas ? (w - gap) / 2 : w;
+            Secao[][] linhas = { new[] { _secFuncoes, _secPref }, new[] { _secCenas, _secTimer } };
+            foreach (Secao[] linha in linhas)
+            {
+                List<Secao> vis = new List<Secao>();
+                foreach (Secao s in linha) if (s.Visible) vis.Add(s);
+                if (vis.Count == 0) continue;
+                if (duas)
+                {
+                    int sw = vis.Count == 1 ? w : colW;
+                    int h = 0;
+                    foreach (Secao s in vis) h = Math.Max(h, Altura(s, sw));
+                    for (int i = 0; i < vis.Count; i++)
+                    {
+                        vis[i].SetBounds(x + i * (colW + gap), y, sw, h);
+                        Conteudo(vis[i], sw);
+                    }
+                    y += h + gap;
+                }
+                else
+                    foreach (Secao s in vis)
+                    {
+                        int h = Altura(s, w);
+                        s.SetBounds(x, y, w, h);
+                        Conteudo(s, w);
+                        y += h + gap;
+                    }
+            }
+            foreach (Secao s in new[] { _secEditor, _secDiag })
+            {
+                if (!s.Visible) continue;
+                int h = Altura(s, w);
+                s.SetBounds(x, y, w, h);
+                Conteudo(s, w);
+                y += h + gap;
+            }
+            return y - gap;
+        }
+
+        /// <summary>Altura da secao para a largura dada (titulo + conteudo + margem).</summary>
+        private int Altura(Secao s, int w)
+        {
+            return Secao.Topo + Conteudo(s, w) + Secao.Margem;
+        }
+
+        /// <summary>Posiciona o conteudo da secao e devolve a altura dele.</summary>
+        private int Conteudo(Secao s, int w)
+        {
+            int m = Secao.Margem, iw = w - 2 * m, y = Secao.Topo;
+            s.PosicionarAcao();
+            if (s == _secFuncoes)
+            {
+                List<Toggle> todas = new List<Toggle>(_chaves);
+                if (_semBipe.Visible) todas.Add(_semBipe);
+                for (int i = 0; i < todas.Count; i++) todas[i].SetBounds(m, y + i * Ui.S(36), iw, Ui.S(32));
+                return Math.Max(Ui.S(32), todas.Count * Ui.S(36) - Ui.S(4));
+            }
+            if (s == _secPref)
+            {
+                int uw = Ui.S(120);
+                _lbUnidade.SetBounds(m, y, iw - uw - Ui.S(12), Ui.S(32));
+                _unidade.SetBounds(m + iw - uw, y, uw, Ui.S(32));
+                return Ui.S(32);
+            }
+            if (s == _secCenas)
+            {
+                int h = _cenas.Altura(iw);
+                _cenas.SetBounds(m, y, iw, h);
+                return h;
+            }
+            if (s == _secTimer)
+            {
+                int h = _timer.Arranjar(iw);
+                _timer.SetBounds(m, y, iw, h);
+                return h;
+            }
+            if (s == _secEditor)
+            {
+                int h = _editor.Arranjar(iw);
+                _editor.SetBounds(m, y, iw, h);
+                return h;
+            }
+            if (s == _secDiag)
+            {
+                Size t = TextRenderer.MeasureText(_diag.Text.Length > 0 ? _diag.Text : " ", _diag.Font, new Size(iw, 0), TextFormatFlags.WordBreak);
+                _diag.SetBounds(m, y, iw, t.Height + Ui.S(2));
+                return _diag.Height;
+            }
+            return 0;
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -970,7 +1223,6 @@ namespace MhiagosControl
                 new Rectangle(_lbLiga.Left, _lbLiga.Bottom, _lbLiga.Width, Ui.S(18)), Ui.Muted, TextFormatFlags.Left);
         }
     }
-
     public static partial class T
     {
         public static string CasaModoN { get { return P("Modo {0}", "Mode {0}"); } }

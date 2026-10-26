@@ -490,6 +490,8 @@ namespace MhiagosControl
         public double Tarifa = 0.85;
         public long DesligarEmUtc;
         public string DesligarPuid = "";
+        /// <summary>Cenas do ar, na ordem dos botoes. Sem nenhuma gravada, as de fabrica.</summary>
+        public List<CenaCasa> Cenas = CenaCasa.Padrao();
 
         internal static string Arquivo
         {
@@ -515,6 +517,7 @@ namespace MhiagosControl
             try
             {
                 if (!File.Exists(Arquivo)) return p;
+                bool lidas = false;
                 foreach (string linha in File.ReadAllLines(Arquivo, Encoding.UTF8))
                 {
                     int eq = linha.IndexOf('=');
@@ -535,6 +538,7 @@ namespace MhiagosControl
                         case "tarifa": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out d) && d >= 0) p.Tarifa = d; break;
                         case "desligarem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.DesligarEmUtc = l; break;
                         case "desligarpuid": p.DesligarPuid = v; break;
+                        case "cena": { CenaCasa cena = CenaCasa.DeLinha(v); if (cena != null) { if (!lidas) { p.Cenas.Clear(); lidas = true; } if (p.Cenas.Count < CenaCasa.MaxCenas) p.Cenas.Add(cena); } break; }
                     }
                 }
             }
@@ -556,6 +560,7 @@ namespace MhiagosControl
             sb.AppendLine("tarifa=" + Tarifa.ToString("0.####", CultureInfo.InvariantCulture));
             sb.AppendLine("desligarem=" + DesligarEmUtc.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("desligarpuid=" + (DesligarPuid ?? ""));
+            foreach (CenaCasa cena in Cenas) sb.AppendLine("cena=" + cena.Linha());
             try { GravacaoAtomica.Escrever(Arquivo, sb.ToString(), new UTF8Encoding(false)); }
             catch (Exception ex) { Log.Error("casa: gravar casa.ini", ex); }
         }
@@ -690,6 +695,46 @@ namespace MhiagosControl
         }
 
         internal static void Definir(string puid, List<FalhaOficial> l) { lock (_trava) _listas[puid] = l; }
+
+        /// <summary>Alguma falha ativa agora (f_e_* acusando)?</summary>
+        public static bool TemFalha(Aparelho a)
+        {
+            if (a == null) return false;
+            foreach (KeyValuePair<string, string> kv in a.Estado)
+                if (kv.Key.StartsWith("f_e_") && a.Int(kv.Key, 0) != 0) return true;
+            return false;
+        }
+
+        /// <summary>O diagnostico em texto: cada falha da lista oficial e o estado dela agora.</summary>
+        public static string Texto(Aparelho a)
+        {
+            if (a == null) return "";
+            List<string> l = new List<string>();
+            List<FalhaOficial> lista = Lista(a.Puid);
+            if (lista == null || lista.Count == 0)
+            {
+                // Sem a lista oficial ainda: as f_e_* que o aparelho publica.
+                foreach (KeyValuePair<string, string> kv in a.Estado)
+                    if (kv.Key.StartsWith("f_e_") && kv.Key != "f_e_push")
+                        l.Add((a.Int(kv.Key, 0) != 0 ? "\u25CF  " + T.CasaFalhaAtiva : "\u25CB  " + T.CasaFalhaOk) + "  ·  " + T.CasaFalha(kv.Key, null));
+            }
+            else
+                foreach (FalhaOficial f in lista)
+                {
+                    bool ativa = a.Tem(f.Chave) && a.Estado[f.Chave] == f.ValorDeFalha;
+                    string s = (ativa ? "\u25CF  " + T.CasaFalhaAtiva : "\u25CB  " + T.CasaFalhaOk) + "  ·  " + f.Nome;
+                    if (f.Categoria.Length > 0) s += " (" + f.Categoria + ")";
+                    if (ativa && f.Orientacao.Length > 0) s += "\n      " + f.Orientacao;
+                    l.Add(s);
+                }
+            if (a.Int("f_e_push", 0) != 0) l.Add("\u25CF  " + string.Format(T.CasaAlertaCodigo, a.Int("f_e_push", 0)));
+            DateTime ult = ServicoCasa.UltimaLeitura;
+            l.Add("");
+            l.Add(T.CasaUltimaLeitura(ult == DateTime.MinValue ? "--" : ult.ToString("HH:mm:ss")) + "  ·  " +
+                (a.Online ? T.CasaOnline : T.CasaOffline));
+            if (lista != null && lista.Count > 0) l.Add(T.CasaDiagnosticoFonte);
+            return string.Join("\n", l.ToArray());
+        }
 
         internal static List<FalhaOficial> Interpretar(Dictionary<string, object> r)
         {

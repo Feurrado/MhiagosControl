@@ -156,10 +156,28 @@ namespace MhiagosControl
                             Verdade(((Toggle)Field(ar, "_semBipe")).Checked && ar.SemBipe, "a preferencia da pagina chega ao cartao");
                             casa.SemBipe = false;
 
-                            // Faixa de acoes: as tres cenas e o timer neste modelo.
-                            AcoesDoAr acoes = ar.Acoes;
-                            Verdade(acoes.Visible && acoes.Top >= menos.Bottom && acoes.Bottom <= ar.Height, "acoes embaixo do painel, dentro do cartao " + sufixo);
-                            SemSobrepor(acoes, "acoes " + sufixo);
+                            // Secoes de baixo: Funcoes, Preferencias, Cenas e Timer, sem sobrepor,
+                            // alinhadas em duas colunas na janela larga.
+                            Secao[] secoes = ar.Secoes;
+                            foreach (Secao s in secoes)
+                                if (s.Visible) SemSobrepor(s, "secao " + s.Titulo + " " + sufixo);
+                            Verdade(secoes[0].Visible && secoes[1].Visible && secoes[2].Visible && secoes[3].Visible,
+                                "Funcoes, Preferencias, Cenas e Timer aparecem " + sufixo);
+                            Verdade(secoes[0].Top >= menos.Bottom && secoes[3].Bottom <= ar.Height, "secoes embaixo do painel, dentro do cartao " + sufixo);
+                            if (largura == 1300)
+                                Verdade(secoes[0].Top == secoes[1].Top && secoes[0].Height == secoes[1].Height &&
+                                    secoes[2].Top == secoes[3].Top && secoes[0].Left == secoes[2].Left && secoes[1].Left == secoes[3].Left,
+                                    "duas colunas alinhadas na janela larga");
+                            else
+                                Verdade(secoes[1].Left == secoes[0].Left && secoes[1].Top > secoes[0].Bottom, "uma coluna na janela estreita");
+                            Segmented unidade = (Segmented)Field(ar, "_unidade");
+                            Label lbUnidade = (Label)Field(ar, "_lbUnidade");
+                            Verdade(unidade.Parent == secoes[1] && unidade.Top == lbUnidade.Top && unidade.Height == lbUnidade.Height &&
+                                unidade.Right == secoes[1].Width - MhiagosControl.Secao.Margem && lbUnidade.Left == MhiagosControl.Secao.Margem,
+                                "unidade: rotulo a esquerda e seletor a direita, mesma linha " + sufixo);
+                            BotaoChave chave = ar.Chave;
+                            Verdade(chave.Visible && chave.Bottom <= Ui.S(64) && chave.Right < ar.Width - Ui.S(18) - Ui.S(60),
+                                "chave do diagnostico no cabecalho, antes do selo " + sufixo);
                             CartaoHistoricoDoAr hist = casa.Historico;
                             Verdade(hist != null && hist.Visible && hist.Top > ar.Bottom && hist.Bottom < casa.Cartoes[1].Top,
                                 "historico e consumo logo abaixo do ar " + sufixo);
@@ -169,16 +187,27 @@ namespace MhiagosControl
                             {
                                 CaptureEvolution(hist, "casa-historico-" + sufixo);
                                 ServicoCasa.DefinirTimer("p1", 60);
-                                acoes.Mostrar(ar.Aparelho);
-                                typeof(AcoesDoAr).GetField("_diagAberto", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(acoes, true);
-                                acoes.Mostrar(ar.Aparelho);
+                                ar.Atualizar();
+                                ar.AlternarDiagnostico();
                                 casa.Arranjar();
-                                SemSobrepor(acoes, "acoes com timer e diagnostico " + sufixo);
-                                CaptureEvolution(ar, "casa-ar-acoes-" + sufixo);
+                                foreach (Secao s in ar.Secoes) if (s.Visible) SemSobrepor(s, "com timer e diagnostico " + s.Titulo);
+                                Verdade(ar.Chave.Aberto && ar.Secoes[5].Visible, "a chave abre o diagnostico");
+                                CaptureEvolution(ar, "casa-ar-secoes-" + sufixo);
                                 ServicoCasa.CancelarTimer();
-                                typeof(AcoesDoAr).GetField("_diagAberto", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(acoes, false);
-                                acoes.Mostrar(ar.Aparelho);
+                                ar.AlternarDiagnostico();
+
+                                // Editor de cenas: abre a primeira, sem sobrepor, e fecha.
+                                ar.AbrirEditor(0);
                                 casa.Arranjar();
+                                Verdade(ar.Secoes[4].Visible && ar.Cenas.Editando, "editor de cena aberto");
+                                SemSobrepor(ar.Editor, "editor de cena " + sufixo);
+                                SemSobrepor(ar.Secoes[4], "secao do editor " + sufixo);
+                                CaptureEvolution(ar, "casa-ar-editor-" + sufixo);
+                                ar.Editor.GetType();
+                                InvokePrivate(ar, "AlternarEdicao");
+                                ar.Atualizar();
+                                casa.Arranjar();
+                                Verdade(!ar.Secoes[4].Visible && !ar.Cenas.Editando, "concluir fecha o editor");
                             }
                         }
                     }
@@ -229,9 +258,8 @@ namespace MhiagosControl
                 Aparelho ar = Exemplo()[1];
 
                 // Cenas: comando unico, so com valores do modelo.
-                AcoesDoAr acoes = new AcoesDoAr();
-                acoes.Mostrar(ar);
-                Dictionary<string, int> dormir = acoes.CenaDormir(), gelar = acoes.CenaGelar(), eco = acoes.CenaEco();
+                List<CenaCasa> padrao = CenaCasa.Padrao();
+                Dictionary<string, int> dormir = padrao[0].Comando(ar), gelar = padrao[1].Comando(ar), eco = padrao[2].Comando(ar);
                 Verdade(dormir != null && dormir["t_sleep"] == 1 && dormir["t_temp"] == 24 && dormir["t_fan_speed"] == 2 && dormir["t_power"] == 1,
                     "Dormir: noturno, 24 graus, ventilador minimo, ligado");
                 Verdade(gelar != null && gelar["t_work_mode"] == 2 && gelar["t_temp"] == 18 && gelar["t_fan_speed"] == 4,
@@ -252,9 +280,34 @@ namespace MhiagosControl
                 split.Meta = MetaPropriedade.DaResposta((Dictionary<string, object>)Json.Ler(
                     "{\"properties\":[{\"propertyKey\":\"t_work_mode\",\"propertyValueList\":\"0,1,2,3,4\",\"propertyRW\":\"RW\"}," +
                     "{\"propertyKey\":\"t_temp\",\"propertyValueList\":\"16~32\",\"propertyRW\":\"RW\"}]}"));
-                acoes.Mostrar(split);
-                Verdade(acoes.CenaEco() == null, "sem ECO no modelo, a cena Economico nao aparece");
-                acoes.Dispose();
+                Verdade(padrao[2].Comando(split) == null, "sem ECO no modelo, a cena Economico fica indisponivel");
+
+                // Cenas editadas: gravar, ler de novo, manter, desligar e em °F.
+                CenaCasa minha = new CenaCasa();
+                minha.Nome = "Leitura | noite"; minha.Icone = "lua"; minha.Modo = 3; minha.Temp = 26; minha.Vento = 3; minha.Noturno = -1;
+                CenaCasa volta = CenaCasa.DeLinha(minha.Linha());
+                Verdade(volta != null && volta.Nome == "Leitura / noite" && volta.Icone == "lua" && volta.Modo == 3 && volta.Temp == 26 &&
+                    volta.Vento == 3 && volta.Noturno == -1 && !volta.Desligar, "cena editada sobrevive a gravacao (| no nome vira /)");
+                Dictionary<string, int> pm = minha.Comando(ar);
+                Verdade(pm != null && pm["t_work_mode"] == 3 && pm["t_temp"] == 26 && pm["t_fan_speed"] == 3 && !pm.ContainsKey("t_sleep"),
+                    "Manter deixa o noturno de fora do comando");
+                CenaCasa desliga = new CenaCasa(); desliga.Nome = "Sair"; desliga.Desligar = true;
+                Dictionary<string, int> pd = desliga.Comando(ar);
+                Verdade(pd != null && pd.Count == 1 && pd["t_power"] == 0, "cena de desligar manda so t_power=0");
+                CenaCasa invalida = new CenaCasa(); invalida.Nome = "X"; invalida.Modo = 4;
+                Verdade(invalida.Comando(ar) == null, "modo que o modelo nao tem deixa a cena indisponivel");
+                ar.Estado["t_temp_type"] = "1";
+                Dictionary<string, int> pf = padrao[0].Comando(ar);
+                Verdade(pf != null && pf["t_temp"] == 75, "em °F, 24 °C vira 75 °F");
+                ar.Estado["t_temp_type"] = "0";
+
+                ServicoCasa.Pref = new PreferenciasCasa();
+                ServicoCasa.Pref.Cenas = new List<CenaCasa> { volta, desliga };
+                ServicoCasa.Pref.Salvar();
+                List<CenaCasa> lidas = PreferenciasCasa.Carregar().Cenas;
+                Verdade(lidas.Count == 2 && lidas[0].Nome == "Leitura / noite" && lidas[1].Desligar, "cenas gravadas em casa.ini, na ordem");
+                System.IO.File.Delete(PreferenciasCasa.Arquivo);
+                Verdade(PreferenciasCasa.Carregar().Cenas.Count == 3, "sem cenas gravadas, as de fabrica");
 
                 // Alertas: uma vez por passagem para o estado ruim.
                 Alertas.Zerar();
