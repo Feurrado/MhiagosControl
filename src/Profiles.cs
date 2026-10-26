@@ -126,6 +126,8 @@ namespace MhiagosControl
         /// largura cheia desfaria isso a cada vez.
         /// </summary>
         public bool SidebarCollapsed = false;
+        /// <summary>Pagina Casa: manda t_beep=0 junto de cada comando ao ar, para ele nao apitar.</summary>
+        public bool CasaSemBipe = false;
 
         /// <summary>
         /// Ordem das paginas na barra lateral, como chaves separadas por
@@ -217,6 +219,7 @@ namespace MhiagosControl
             IdleBlankMinutes = other.IdleBlankMinutes;
             RotateSeconds = other.RotateSeconds;
             SidebarCollapsed = other.SidebarCollapsed;
+            CasaSemBipe = other.CasaSemBipe;
             NavOrder = other.NavOrder;
             MetricsChosen = other.MetricsChosen;
             MetricRange = other.MetricRange;
@@ -561,6 +564,7 @@ namespace MhiagosControl
                         else if (k == "idleblank") c.IdleBlankMinutes = ParseTiming(v, strictTiming);
                         else if (k == "rotateseconds") c.RotateSeconds = ParseTiming(v, strictTiming);
                         else if (k == "sidebarcollapsed") c.SidebarCollapsed = (v == "1");
+                        else if (k == "casasembipe") c.CasaSemBipe = (v == "1");
                         else if (k == "navorder") c.NavOrder = v;
                         else if (k == "metricschosen") c.MetricsChosen = (v == "1");
                         else if (k == "metricrange") c.MetricRange = MetricHistory.JanelaValida(ParseInt(v));
@@ -773,6 +777,7 @@ namespace MhiagosControl
                 sb.AppendLine("idleblank=" + IdleBlankMinutes.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("rotateseconds=" + RotateSeconds.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("sidebarcollapsed=" + (SidebarCollapsed ? "1" : "0"));
+                sb.AppendLine("casasembipe=" + (CasaSemBipe ? "1" : "0"));
                 if (!string.IsNullOrEmpty(NavOrder)) sb.AppendLine("navorder=" + NavOrder);
                 sb.AppendLine("metricschosen=" + (MetricsChosen ? "1" : "0"));
                 sb.AppendLine("metricrange=" + MetricRange.ToString(CultureInfo.InvariantCulture));

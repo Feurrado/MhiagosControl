@@ -1063,6 +1063,25 @@ namespace MhiagosControl
             });
         }
 
+        /// <summary>
+        /// A pagina Casa em segundo plano: alertas, timer de desligar e historico
+        /// do ar correm com a janela fechada. So o executavel liga isto; os
+        /// testes montam o TrayContext sem falar com a nuvem.
+        /// </summary>
+        internal void IniciarCasa()
+        {
+            try
+            {
+                ServicoCasa.SemBipe = _cfg.CasaSemBipe;
+                ServicoCasa.Notificar = delegate(string titulo, string texto)
+                {
+                    Notificar(titulo, texto, ToolTipIcon.Warning, "casa: " + titulo + " - " + texto);
+                };
+                ServicoCasa.Iniciar();
+            }
+            catch (Exception ex) { Log.Error("iniciar a pagina Casa", ex); }
+        }
+
         private Action _acaoDoBalao;
 
         /// <summary>
@@ -1657,7 +1676,12 @@ namespace MhiagosControl
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 
-                try { Application.Run(new TrayContext(new Sensors(), new HidPanel(), activation)); }
+                try
+                {
+                    TrayContext contexto = new TrayContext(new Sensors(), new HidPanel(), activation);
+                    contexto.IniciarCasa();
+                    Application.Run(contexto);
+                }
                 catch (Exception ex)
                 {
                     Log.Error("falha fatal", ex);

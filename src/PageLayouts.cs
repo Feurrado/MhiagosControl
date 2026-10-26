@@ -12,7 +12,7 @@ namespace MhiagosControl
     /// os fontes do app; um teste confere que as duas andam juntas.
     public static class AppInfo
     {
-        public const string Versao = "2.28.0";
+        public const string Versao = "2.29.0";
     }
 
     /// <summary>

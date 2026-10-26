@@ -447,7 +447,9 @@ namespace MhiagosControl
                             CaptureEvolution(form, "layout-config-" + sufixo);
 
                             // ---- 6A
-                            nav.SelectedIndex = 7;
+                            // Pela chave: a pagina Casa entrou antes do Sobre.
+                            for (int i = 0; i < nav.Items.Count; i++)
+                                if (nav.Items[i].Key == "sobre") nav.SelectedIndex = i;
                             CartaoDeIdentidade id = (CartaoDeIdentidade)Field(form, "_cartaoIdentidade");
                             Verdade(id.Versao.Contains(AppInfo.Versao), "a versao aparece no cartao de identidade");
                             Verdade(id.Icone != null && id.Icone.Width >= 96, "o icone grande vem da entrada de 128 px");

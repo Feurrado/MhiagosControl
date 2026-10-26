@@ -367,10 +367,32 @@ namespace MhiagosControl
             NavItem baterias = new NavItem();
             baterias.Text = T.NavBatteries; baterias.Glyph = "\uE83F"; baterias.Icone = Ui.IconeDeBateria; baterias.Page = BuildPageBaterias();
 
+            // Ar-condicionado e lava e seca da conta ConnectLife. E9CA e o
+            // termometro da Segoe MDL2; a casa (E80F) ja e da Visao geral.
+            NavItem casa = new NavItem();
+            _pgCasa = new PaginaCasa();
+            _pgCasa.SemBipe = _cfg.CasaSemBipe;   // tambem leva ao ServicoCasa
+            // Grava na hora, como a barra recolhida: e preferencia do app, nao edicao de perfil.
+            _pgCasa.SemBipeMudou += delegate
+            {
+                try
+                {
+                    _cfg.CasaSemBipe = _pgCasa.SemBipe;
+                    string erro;
+                    if (!_session.TrySavePreferences(delegate(Config draft, Config target)
+                    {
+                        target.CasaSemBipe = draft.CasaSemBipe;
+                    }, out erro)) Log.Write("comandos sem bipe nao persistiu: " + erro);
+                }
+                catch (Exception ex) { Log.Error("gravar comandos sem bipe", ex); }
+            };
+            casa.Text = T.NavCasa; casa.Glyph = ""; casa.Page = _pgCasa;
+
             visao.Key = "visao"; paineis.Key = "paineis"; metricas.Key = "metricas"; specs.Key = "specs";
             perfis.Key = "perfis"; config.Key = "config"; baterias.Key = "baterias"; sobre.Key = "sobre";
+            casa.Key = "casa";
 
-            NavItem[] fabrica = { visao, paineis, metricas, specs, perfis, config, baterias, sobre };
+            NavItem[] fabrica = { visao, paineis, metricas, specs, perfis, config, baterias, casa, sobre };
             foreach (NavItem it in OrdemDaBarra(fabrica, _cfg.NavOrder))
             {
                 _nav.Add(it);
@@ -721,6 +743,7 @@ namespace MhiagosControl
             else if (pagina == _pgConfig) ArrangeSettings();
             else if (pagina == _pgPerfis) ArrangeProfiles();
             else if (pagina == _pgSobre) ArranjarSobre();
+            else if (pagina == _pgCasa) _pgCasa.Arranjar();
             else ArrangeAboutBounds(pagina);
         }
 
@@ -1511,6 +1534,7 @@ namespace MhiagosControl
         // ---------------- pagina: Baterias ----------------
 
         private Pagina _pgBaterias;
+        private PaginaCasa _pgCasa;
         private Label _lbBateriasVazio;
         private FlatBtn _btGHub;
         private bool? _temGHub;
