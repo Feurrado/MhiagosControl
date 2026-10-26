@@ -18,6 +18,7 @@ namespace MhiagosControl
             CasaMetaDoModelo();
             CasaServicoOffline();
             CasaLavadora(root);
+            PerifericosOcultos(root);
             CasaPagina(root);
         }
 
@@ -233,6 +234,27 @@ namespace MhiagosControl
                                 if (estado == "secando")
                                     Verdade(anel.Grande == "1 h 25" && titulo.Text == T.LavFaseSecagem && ((EtapasDoCiclo)Field(lv, "_etapas")).Atual == 3,
                                         "secando: 1 h 25 restantes, etapa Secar " + sufixo);
+                                EtapasDoCiclo et = (EtapasDoCiclo)Field(lv, "_etapas");
+                                if (et.Visible)
+                                {
+                                    Rectangle[] rr = et.Rotulos();
+                                    float[] cx = et.Centros();
+                                    bool cabe = true;
+                                    for (int k = 0; k < rr.Length; k++)
+                                    {
+                                        int largura2 = TextRenderer.MeasureText(et.Nomes[k], k == et.Atual ? Ui.FontMed : Ui.FontSmall, Size.Empty, TextFormatFlags.NoPadding).Width;
+                                        if (rr[k].Left < 0 || rr[k].Right > et.Width || largura2 > rr[k].Width) cabe = false;
+                                        if (cx[k] - Ui.S(7) - Ui.S(6) < 0 || cx[k] + Ui.S(7) + Ui.S(6) > et.Width) cabe = false;
+                                    }
+                                    Verdade(cabe && et.Right <= lv.Width - Ui.S(18), "etapas: marcadores e rotulos inteiros dentro do cartao " + sufixo);
+                                    if (estado == "secando" && largura == 1300)
+                                        using (Bitmap bm = new Bitmap(et.Width, et.Height))
+                                        {
+                                            et.DrawToBitmap(bm, new Rectangle(0, 0, et.Width, et.Height));
+                                            string dir = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                                            if (!string.IsNullOrEmpty(dir)) bm.Save(System.IO.Path.Combine(dir, "casa-etapas-" + sufixo + ".png"));
+                                        }
+                                }
                                 if (estado == "offline")
                                     Verdade(anel.Apagado && titulo.Text == T.LavDesconectada, "desconectada: anel apagado " + sufixo);
                                 CaptureEvolution(lv, "casa-lavadora-" + sufixo);
@@ -530,6 +552,66 @@ namespace MhiagosControl
                 lav.Estado["Selected_program_remaining_time_in_minutes"] = "0";
             }
             return lav;
+        }
+
+        /// <summary>Perifericos escondidos: o filtro, a pagina Baterias e o X11 que fica.</summary>
+        private static void PerifericosOcultos(string root)
+        {
+            Secao("perifericos escondidos (G325 e PRO X fora, X11 fica)");
+            string[] antes = Perifericos.Ocultos;
+            string pasta = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mhiagos-ocultos-" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(pasta);
+            string histAntes = HistoricoDeBateria.Caminho;
+            HistoricoDeBateria.Caminho = System.IO.Path.Combine(pasta, "baterias.dat");
+            HistoricoDeBateria.Zerar();
+            try
+            {
+                Perifericos.Ocultos = Perifericos.LerOcultos(new Config().PerifericosOcultos);
+                Verdade(Perifericos.Ocultos.Length == 2, "padrao da config: G325 e PRO X");
+                Verdade(Perifericos.OcultoChave("GHub|G325") && Perifericos.OcultoChave("GHub|PRO X Wireless Gaming Headset") &&
+                    !Perifericos.OcultoChave("AttackShark|X11") && !Perifericos.OcultoChave("Bluetooth|G325"), "casa por fonte e inicio do nome");
+
+                Perifericos.PublicarLogitech(new Periferico[] {
+                    Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 70, false),
+                    Periferico.Sem("PRO X Wireless", TipoPeriferico.Headset, FontePeriferico.GHub, EstadoPeriferico.Desligado) });
+                Perifericos.PublicarShark(Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 46, false));
+                Periferico[] atual = Perifericos.Atual;
+                Verdade(atual.Length == 1 && atual[0].Nome == "X11" && atual[0].Bateria == 46, "so o X11 no retrato, com a bateria");
+
+                // A pagina Baterias tambem esquece o que o historico lembra deles.
+                Perifericos.Ocultos = new string[0];
+                HistoricoDeBateria.Registrar(Perifericos.Atual, DateTime.Now.AddMinutes(-10));
+                Perifericos.Ocultos = Perifericos.LerOcultos("GHub|G325,GHub|PRO X");
+                List<AnaliseDeBateria> an = HistoricoDeBateria.Analisar(Perifericos.Atual);
+                bool soX11 = an.Count > 0;
+                foreach (AnaliseDeBateria a in an) if (a.Nome != "X11") soX11 = false;
+                Verdade(soX11, "Baterias: so o X11, mesmo com G325 no historico");
+
+                Config config = AuditConfig(root, "ocultos");
+                using (SettingsForm form = BugForm(config, new FreshData()))
+                {
+                    NavBar nav = (NavBar)Field(form, "_nav");
+                    for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "baterias") nav.SelectedIndex = i;
+                    form.Size = new Size(1300, 760);
+                    Field(form, "_bateriasLidas");
+                    typeof(SettingsForm).GetField("_bateriasLidas", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(form, DateTime.MinValue);
+                    InvokePrivate(form, "AtualizarBaterias");
+                    InvokePrivate(form, "ArranjarBaterias");
+                    System.Collections.IList cartoes = (System.Collections.IList)Field(form, "_cartoesDeBateria");
+                    int vivos = 0;
+                    foreach (CartaoDeBateria cb in cartoes) if (!cb.Saindo) { vivos++; Verdade(cb.Chave == "AttackShark|X11", "cartao da Baterias: " + cb.Chave); }
+                    Igual(1, vivos, "um cartao so na Baterias");
+                    CaptureEvolution(form, "baterias-so-x11");
+                }
+            }
+            finally
+            {
+                Perifericos.Ocultos = antes;
+                Perifericos.PublicarLogitech(new Periferico[0]);
+                Perifericos.PublicarShark(null);
+                HistoricoDeBateria.Caminho = histAntes;
+                HistoricoDeBateria.Zerar();
+            }
         }
 
         private static void CasaLavadora(string root)

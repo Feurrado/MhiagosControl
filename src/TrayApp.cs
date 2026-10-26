@@ -1073,6 +1073,8 @@ namespace MhiagosControl
             try
             {
                 ServicoCasa.SemBipe = _cfg.CasaSemBipe;
+                // So o executavel esconde perifericos: os testes contam com o G325.
+                Perifericos.Ocultos = Perifericos.LerOcultos(_cfg.PerifericosOcultos);
                 ServicoCasa.Notificar = delegate(string titulo, string texto)
                 {
                     Notificar(titulo, texto, ToolTipIcon.Warning, "casa: " + titulo + " - " + texto);

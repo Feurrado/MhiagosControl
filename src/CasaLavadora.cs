@@ -335,6 +335,42 @@ namespace MhiagosControl
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         }
 
+        private int Diametro { get { return Ui.S(14); } }
+        private int Halo { get { return Ui.S(6); } }
+        private int Yc { get { return Ui.S(12); } }
+
+        /// <summary>
+        /// Centro de cada marcador. As pontas recuam o raio mais o halo do atual,
+        /// para o primeiro e o ultimo nao encostarem na borda.
+        /// </summary>
+        internal float[] Centros()
+        {
+            int n = Nomes.Count;
+            float[] x = new float[n];
+            float ini = Diametro / 2f + Halo + 1, fim = Width - Diametro / 2f - Halo - 1;
+            for (int i = 0; i < n; i++) x[i] = n == 1 ? Width / 2f : ini + i * (fim - ini) / (n - 1);
+            return x;
+        }
+
+        /// <summary>
+        /// Onde cada rotulo cabe: o primeiro alinhado a esquerda, o ultimo a
+        /// direita, os do meio centrados no marcador com metade do espaco ate os vizinhos.
+        /// </summary>
+        internal Rectangle[] Rotulos()
+        {
+            int n = Nomes.Count;
+            float[] x = Centros();
+            Rectangle[] r = new Rectangle[n];
+            int y = Yc + Halo + Ui.S(6), h = Ui.S(20);
+            for (int i = 0; i < n; i++)
+            {
+                float esq = i == 0 ? 0 : (x[i - 1] + x[i]) / 2f;
+                float dir = i == n - 1 ? Width : (x[i] + x[i + 1]) / 2f;
+                r[i] = Rectangle.FromLTRB((int)Math.Ceiling(esq), y, (int)Math.Floor(dir), y + h);
+            }
+            return r;
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -342,32 +378,26 @@ namespace MhiagosControl
             Ui.Smooth(g);
             int n = Nomes.Count;
             if (n == 0) return;
-            int d = Ui.S(14), yc = Ui.S(10);
-            float passo = n > 1 ? (Width - d) / (float)(n - 1) : 0;
+            int d = Diametro, yc = Yc;
+            float[] x = Centros();
+            Rectangle[] rot = Rotulos();
             for (int i = 0; i < n - 1; i++)
-            {
-                float x0 = d / 2f + i * passo, x1 = d / 2f + (i + 1) * passo;
-                using (Pen p = new Pen(i < Atual ? Cor : Ui.Border, Ui.S(2))) g.DrawLine(p, x0, yc, x1, yc);
-            }
+                using (Pen p = new Pen(i < Atual ? Cor : Ui.Border, Ui.S(2))) g.DrawLine(p, x[i], yc, x[i + 1], yc);
             for (int i = 0; i < n; i++)
             {
-                float cx = d / 2f + i * passo;
-                RectangleF bola = new RectangleF(cx - d / 2f, yc - d / 2f, d, d);
+                RectangleF bola = new RectangleF(x[i] - d / 2f, yc - d / 2f, d, d);
                 bool feita = i < Atual, atual = i == Atual;
                 using (SolidBrush b = new SolidBrush(feita || atual ? Cor : Ui.Surface)) g.FillEllipse(b, bola);
                 using (Pen p = new Pen(feita || atual ? Cor : Ui.Border, Ui.S(2))) g.DrawEllipse(p, bola);
                 if (atual)
                     using (Pen p = new Pen(Color.FromArgb(90, Cor), Ui.S(3)))
                         g.DrawEllipse(p, RectangleF.Inflate(bola, Ui.S(4), Ui.S(4)));
-                int tw = (int)Math.Max(Ui.S(60), passo);
                 TextFormatFlags al = i == 0 ? TextFormatFlags.Left : i == n - 1 ? TextFormatFlags.Right : TextFormatFlags.HorizontalCenter;
-                int tx = i == 0 ? 0 : i == n - 1 ? Width - tw : (int)(cx - tw / 2);
-                TextRenderer.DrawText(g, Nomes[i], atual ? Ui.FontMed : Ui.FontSmall, new Rectangle(tx, yc + Ui.S(14), tw, Ui.S(20)),
-                    atual ? Ui.Text : feita ? Ui.Muted : Ui.Faint, al | TextFormatFlags.EndEllipsis);
+                TextRenderer.DrawText(g, Nomes[i], atual ? Ui.FontMed : Ui.FontSmall, rot[i],
+                    atual ? Ui.Text : feita ? Ui.Muted : Ui.Faint, al | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
             }
         }
     }
-
     /// <summary>
     /// Painel da lava e seca: anel com o tempo restante e a hora de termino,
     /// o que a maquina esta fazendo, as etapas do ciclo, os parametros, porta,
@@ -555,7 +585,7 @@ namespace MhiagosControl
             y = Bloco(_titulo, cx, y, cw) + Ui.S(2);
             if (_programa.Visible) y = Bloco(_programa, cx, y, cw) + Ui.S(2);
             if (_termino.Visible) y = Bloco(_termino, cx, y, cw) + Ui.S(10);
-            if (_etapas.Visible) { _etapas.SetBounds(cx, y + Ui.S(6), cw, Ui.S(40)); y += Ui.S(52); }
+            if (_etapas.Visible) { _etapas.SetBounds(cx, y + Ui.S(6), cw, Ui.S(48)); y += Ui.S(60); }
             if (_aviso.Visible) y = Bloco(_aviso, cx, y + Ui.S(4), cw) + Ui.S(4);
             y = Math.Max(y, lado ? y0 + anel : y) + Ui.S(14);
 

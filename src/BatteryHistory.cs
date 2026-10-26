@@ -452,8 +452,8 @@ namespace MhiagosControl
                         if (p != null && p.Fonte != FontePeriferico.Bluetooth && (p.Bateria.HasValue || _aparelhos.ContainsKey(Chave(p))))
                             vivos[Chave(p)] = p;
 
-                foreach (Aparelho a in _aparelhos.Values)
-                    if (a.Fonte != FontePeriferico.Bluetooth) l.Add(Analisar(a, vivos));
+                foreach (KeyValuePair<string, Aparelho> kv in _aparelhos)
+                    if (kv.Value.Fonte != FontePeriferico.Bluetooth && !Perifericos.OcultoChave(kv.Key)) l.Add(Analisar(kv.Value, vivos));
             }
             l.Sort(delegate(AnaliseDeBateria x, AnaliseDeBateria y)
             {
