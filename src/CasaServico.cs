@@ -278,7 +278,36 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Manda propriedades JUNTAS, num comando so. Com "sem bipe" e o modelo
+        /// Propriedades que o aparelho so aceita num comando sozinhas. Testado no
+        /// ar de janela do Thiago (008/301) em 26/10/2026: t_sleep=1 junto de
+        /// t_power/t_temp/t_fan_speed era aceito pela nuvem e ignorado pelo
+        /// aparelho; sozinho, pegava em 5 s.
+        /// </summary>
+        internal static readonly string[] SoSozinhas = { "t_sleep" };
+
+        /// <summary>O comando dividido: as demais juntas primeiro, cada isolada depois.</summary>
+        internal static List<Dictionary<string, string>> Partes(Dictionary<string, string> props)
+        {
+            List<Dictionary<string, string>> l = new List<Dictionary<string, string>>();
+            Dictionary<string, string> juntas = new Dictionary<string, string>();
+            List<Dictionary<string, string>> isoladas = new List<Dictionary<string, string>>();
+            foreach (KeyValuePair<string, string> kv in props)
+            {
+                if (Array.IndexOf(SoSozinhas, kv.Key) >= 0 && props.Count > 1)
+                {
+                    Dictionary<string, string> s = new Dictionary<string, string>();
+                    s[kv.Key] = kv.Value;
+                    isoladas.Add(s);
+                }
+                else juntas[kv.Key] = kv.Value;
+            }
+            if (juntas.Count > 0) l.Add(juntas);
+            l.AddRange(isoladas);
+            return l;
+        }
+
+        /// <summary>
+        /// Manda propriedades JUNTAS, num comando so (menos as SoSozinhas, que vao depois). Com "sem bipe" e o modelo
         /// aceitando t_beep, ele vai junto (silencia so aquele comando); se a
         /// nuvem recusar o par, repete sem. fim sai do fundo com a falha ou nulo.
         /// </summary>
@@ -295,17 +324,21 @@ namespace MhiagosControl
                 Exception erro = null;
                 try
                 {
-                    if (!semBipe) nuvem.Definir(puid, props);
-                    else
+                    List<Dictionary<string, string>> partes = Partes(props);
+                    for (int i = 0; i < partes.Count; i++)
                     {
-                        Dictionary<string, string> comBipe = new Dictionary<string, string>(props);
+                        // Um respiro entre partes: o aparelho processa um comando por vez.
+                        if (i > 0) Thread.Sleep(1500);
+                        Dictionary<string, string> parte = partes[i];
+                        if (!semBipe) { nuvem.Definir(puid, parte); continue; }
+                        Dictionary<string, string> comBipe = new Dictionary<string, string>(parte);
                         comBipe["t_beep"] = "0";
                         try { nuvem.Definir(puid, comBipe); }
                         catch (ConnectLifeErro e)
                         {
                             if (e.PedeLogin) throw;
                             Log.Write("ConnectLife: comando com t_beep=0 recusado, repetindo sem: " + e.Message);
-                            nuvem.Definir(puid, props);
+                            nuvem.Definir(puid, parte);
                         }
                     }
                     lock (_trava) _erro = null;

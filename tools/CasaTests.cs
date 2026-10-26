@@ -237,6 +237,16 @@ namespace MhiagosControl
                 Verdade(gelar != null && gelar["t_work_mode"] == 2 && gelar["t_temp"] == 18 && gelar["t_fan_speed"] == 4,
                     "Gelar rapido: Frio, 18 graus, ventilador maximo");
                 Verdade(eco != null && eco["t_work_mode"] == 5 && eco["t_temp"] == 25, "Economico: ECO a 25 graus");
+
+                // O noturno vai num segundo comando: junto dos outros, o ar de janela ignorava.
+                Dictionary<string, string> cmd = new Dictionary<string, string>();
+                foreach (KeyValuePair<string, int> kv in dormir) cmd[kv.Key] = kv.Value.ToString();
+                List<Dictionary<string, string>> partes = ServicoCasa.Partes(cmd);
+                Verdade(partes.Count == 2 && !partes[0].ContainsKey("t_sleep") && partes[0].Count == 3 &&
+                    partes[1].Count == 1 && partes[1]["t_sleep"] == "1", "Dormir: noturno sozinho, depois do resto");
+                Dictionary<string, string> soNoturno = new Dictionary<string, string>();
+                soNoturno["t_sleep"] = "0";
+                Verdade(ServicoCasa.Partes(soNoturno).Count == 1, "noturno sozinho continua um comando so");
                 Aparelho split = new Aparelho();
                 split.Tipo = "009"; split.Online = true; split.Estado["t_power"] = "1"; split.Estado["t_work_mode"] = "2";
                 split.Meta = MetaPropriedade.DaResposta((Dictionary<string, object>)Json.Ler(
