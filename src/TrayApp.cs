@@ -128,6 +128,8 @@ namespace MhiagosControl
         internal TrayContext(ISensorService sensors, IPanelDevice panel,
                              EventWaitHandle activationSignal)
         {
+            Motion.PrenderNaInterface();
+            try { Motion.Diagnostico = System.IO.File.Exists(System.IO.Path.Combine(Paths.DataDir, "animacao-debug")); } catch { }
             if (sensors == null) throw new ArgumentNullException("sensors");
             if (panel == null) throw new ArgumentNullException("panel");
             _sensors = sensors;

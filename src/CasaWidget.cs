@@ -312,6 +312,50 @@ namespace MhiagosControl
 
         private int Alvo { get { return _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0); } }
 
+        private readonly ArAnimadoNoWidget _anim = new ArAnimadoNoWidget();
+
+        /// <summary>O widget precisa de quadros: alguma animacao do ar esta correndo.</summary>
+        internal bool Animando { get { return Ativa && _ar != null && _anim.Animando; } }
+
+        internal ArAnimadoNoWidget Animacao { get { return _anim; } }
+
+        /// <summary>Ao ligar, um anel que cresce e some em volta de r; ao desligar, um anel cinza que se fecha.</summary>
+        private void AnelDoPulso(Graphics g, RectangleF r, float st)
+        {
+            float pu = _anim.Pulso, ap = _anim.Apagando;
+            if (pu >= 0f)
+            {
+                float k = r.Width * 0.3f * pu;
+                using (Pen p = new Pen(Color.FromArgb((int)(200 * (1f - pu)), Ui.Accent), Math.Max(2f, st * 0.8f)))
+                    g.DrawEllipse(p, RectangleF.Inflate(r, k, k));
+            }
+            if (ap >= 0f)
+            {
+                float k = r.Width * 0.3f * (1f - ap);
+                using (Pen p = new Pen(Color.FromArgb((int)(170 * (1f - ap)), 160, 160, 170), Math.Max(2f, st * 0.8f)))
+                    g.DrawEllipse(p, RectangleF.Inflate(r, k, k));
+            }
+        }
+
+        /// <summary>O alvo do ar; quando muda, o velho sai e o novo entra deslizando (sobe: por baixo), com fade.</summary>
+        private void NumeroDoAr(Graphics g, string valor, Font fonte, Color cor, bool escuro, RectangleF r, StringAlignment alinhar)
+        {
+            float v = _anim.Troca;
+            if (v < 0f || _anim.Antigo == null)
+            {
+                PintorDoWidget.Texto(g, valor, fonte, cor, escuro, r, alinhar, StringAlignment.Center);
+                return;
+            }
+            float curso = r.Height * 0.6f;
+            int dir = _anim.Direcao;
+            GraphicsState st = g.Save();
+            g.SetClip(RectangleF.Inflate(r, 4f, 2f));
+            PintorDoWidget.Texto(g, _anim.Antigo, fonte, Color.FromArgb((int)(cor.A * (1f - v)), cor), escuro, new RectangleF(r.X, r.Y - dir * curso * v, r.Width, r.Height), alinhar, StringAlignment.Center);
+            PintorDoWidget.Texto(g, valor, fonte, Color.FromArgb((int)(cor.A * v), cor), escuro, new RectangleF(r.X, r.Y + dir * curso * (1f - v), r.Width, r.Height), alinhar, StringAlignment.Center);
+            g.Restore(st);
+        }
+
+
         private static void Glifo(Graphics g, string texto, Font fonte, RectangleF area, Color cor)
         {
             using (GraphicsPath gp = BotaoRedondo.Glifo(texto, fonte, area))
@@ -336,14 +380,16 @@ namespace MhiagosControl
         }
 
         /// <summary>O anel do widget de bateria: trilho apagado na cor, arco com brilho suave por baixo.</summary>
-        private static void Anel(Graphics g, RectangleF anel, float st, float fracao, Color cor, bool aceso, bool escuro)
+        private static void Anel(Graphics g, RectangleF anel, float st, float fracao, Color cor, float acende, bool escuro)
         {
-            Color trilho = aceso ? Color.FromArgb(escuro ? 70 : 60, cor) : PintorDoWidget.Trilho(escuro);
+            // acende vai de 0 (apagado) a 1 (aceso): no ar ele anda em 450 ms ao ligar e desligar
+            Color apagado = PintorDoWidget.Trilho(escuro);
+            Color trilho = Ui.Misturar(apagado, Color.FromArgb(escuro ? 70 : 60, cor), acende);
             using (Pen pen = new Pen(trilho, st)) g.DrawEllipse(pen, anel);
-            if (!aceso || fracao <= 0f) return;
+            if (acende <= 0.01f || fracao <= 0f) return;
             float arco = 360f * Math.Min(1f, fracao);
-            using (Pen luz = PintorDoWidget.Redonda(Color.FromArgb(55, cor), st * 2f)) g.DrawArc(luz, anel, -90f, arco);
-            using (Pen pen = PintorDoWidget.Redonda(cor, st)) g.DrawArc(pen, anel, -90f, arco);
+            using (Pen luz = PintorDoWidget.Redonda(Color.FromArgb((int)(55 * acende), cor), st * 2f)) g.DrawArc(luz, anel, -90f, arco);
+            using (Pen pen = PintorDoWidget.Redonda(Color.FromArgb((int)(255 * acende), cor), st)) g.DrawArc(pen, anel, -90f, arco);
         }
 
         // ---------------- formato aneis ----------------
@@ -362,11 +408,15 @@ namespace MhiagosControl
             int t = Alvo, min, max;
             FaixaDoAlvo(out min, out max);
             float fracao = max > min && t > 0 ? 0.15f + 0.85f * (t - min) / (float)(max - min) : 0f;
-            Anel(g, anel, st, fracao, Ui.Accent, ligado, escuro);
+            // ligar, desligar e o alvo andam por relogio (ArAnimadoNoWidget): o arco acende e corre ate o alvo novo
+            _anim.Observar(ligado, t, fracao);
+            float lig = _anim.Lig;
+            Anel(g, anel, st, _anim.Fracao, Ui.Accent, lig, escuro);
+            AnelDoPulso(g, anel, st);
             float db = d - 2f * st - 6f * s;
             RectangleF bolha = new RectangleF(cx - db / 2f, anel.Y + anel.Height / 2f - db / 2f, db, db);
             PintorDoWidget.Bolha(g, bolha, escuro);
-            Glifo(g, "\uE9CA", glifo, bolha, ligado ? Color.White : Color.FromArgb(150, 255, 255, 255));
+            Glifo(g, "\uE9CA", glifo, bolha, Color.FromArgb(150 + (int)(105 * lig), 255, 255, 255));
 
             float mini = Mini * s, cy = anel.Y + anel.Height / 2f;
             _rMenos = new RectangleF(z.X, cy - mini / 2f, mini, mini);
@@ -378,8 +428,8 @@ namespace MhiagosControl
             Botao(g, _rLiga, "\uE7E8", peq, ligado, on, 2, escuro);
 
             RectangleF lValor = new RectangleF(z.X, z.Y + d + 7f * s, z.Width, PintorDoWidget.LinhaDoValor * s);
-            PintorDoWidget.Texto(g, t > 0 ? t + "°" : "--", f.Pct, ligado ? PintorDoWidget.Primario(escuro) : PintorDoWidget.Secundario(escuro), escuro,
-                lValor, StringAlignment.Center, StringAlignment.Center);
+            NumeroDoAr(g, t > 0 ? t + "°" : "--", f.Pct, Ui.Misturar(PintorDoWidget.Secundario(escuro), PintorDoWidget.Primario(escuro), lig), escuro,
+                lValor, StringAlignment.Center);
         }
 
         /// <summary>A lavadora como um item de anel: o arco e o progresso do ciclo, o tempo restante embaixo.</summary>
@@ -389,7 +439,7 @@ namespace MhiagosControl
             CicloAtual c = CicloAtual.De(_lav);
             float cx = z.X + z.Width / 2f;
             RectangleF anel = new RectangleF(cx - d / 2f + st / 2f, z.Y + st / 2f, d - st, d - st);
-            Anel(g, anel, st, c.Erro ? 1f : c.Progresso, CorDoCiclo(c), true, escuro);
+            Anel(g, anel, st, c.Erro ? 1f : c.Progresso, CorDoCiclo(c), 1f, escuro);
             float db = d - 2f * st - 6f * s;
             RectangleF bolha = new RectangleF(cx - db / 2f, anel.Y + anel.Height / 2f - db / 2f, db, db);
             PintorDoWidget.Bolha(g, bolha, escuro);
@@ -410,7 +460,10 @@ namespace MhiagosControl
             float db = PintorDoWidget.BolhaDaLista * s;
             RectangleF bolha = new RectangleF(z.X, z.Y + (z.Height - db) / 2f, db, db);
             PintorDoWidget.Bolha(g, bolha, escuro);
-            Glifo(g, "\uE9CA", glifo, bolha, ligado ? Color.White : Color.FromArgb(150, 255, 255, 255));
+            _anim.Observar(ligado, Alvo, 0f);
+            float lig = _anim.Lig;
+            AnelDoPulso(g, bolha, 2f * s);
+            Glifo(g, "\uE9CA", glifo, bolha, Color.FromArgb(150 + (int)(105 * lig), 255, 255, 255));
 
             float x = bolha.Right + 12f * s;
             int t = Alvo;
@@ -419,8 +472,8 @@ namespace MhiagosControl
             using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
                 largValor = g.MeasureString(valor, f.Pct, PointF.Empty, sf).Width + 2f * s;
             RectangleF lValor = new RectangleF(z.Right - largValor, z.Y, largValor, 21f * s);
-            PintorDoWidget.Texto(g, valor, f.Pct, ligado ? PintorDoWidget.Primario(escuro) : PintorDoWidget.Secundario(escuro), escuro,
-                lValor, StringAlignment.Far, StringAlignment.Center);
+            NumeroDoAr(g, valor, f.Pct, Ui.Misturar(PintorDoWidget.Secundario(escuro), PintorDoWidget.Primario(escuro), lig), escuro,
+                lValor, StringAlignment.Far);
             PintorDoWidget.Texto(g, _ar.Nome, f.Nome, PintorDoWidget.Primario(escuro), escuro,
                 new RectangleF(x, z.Y, Math.Max(0f, lValor.X - x - 6f * s), 21f * s), StringAlignment.Near, StringAlignment.Center);
 

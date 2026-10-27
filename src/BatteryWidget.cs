@@ -1239,6 +1239,8 @@ namespace MhiagosControl
                     g.Clear(Color.Transparent);
                     PintorDoWidget.Pintar(g, tam, q);
                 }
+                // o ar da casa animando (ligar, desligar, alvo) tambem pede quadros
+                if (_casa.Animando) _transicao = true;
                 AplicarBitmap(_quadro);
                 // o ultimo quadro da transicao desliga o relogio se nada mais carrega
                 AjustarAnimacao();

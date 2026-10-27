@@ -87,9 +87,31 @@ namespace MhiagosControl
         {
             Timer t = new Timer();
             t.Interval = 10;
-            t.Tick += delegate { Passo(_cronometro.ElapsedMilliseconds); };
+            t.Tick += delegate { _ultimoTique = _cronometro.ElapsedMilliseconds; Passo(_ultimoTique); };
             return t;
         }
+
+        private static long _ultimoTique;
+        private static int _threadDaInterface;
+        private static System.Threading.SynchronizationContext _interface;
+
+        /// <summary>
+        /// Prende o relogio na thread da interface (a bandeja e a janela chamam ao
+        /// nascer). O Timer do WinForms passa a bater na thread que o liga: ligado
+        /// por engano numa thread sem fila de mensagens, nunca bateria, e nenhuma
+        /// animacao andaria. Assinar fora dela e repassado para ela.
+        /// </summary>
+        public static void PrenderNaInterface()
+        {
+            if (System.Threading.SynchronizationContext.Current == null) return;
+            _interface = System.Threading.SynchronizationContext.Current;
+            _threadDaInterface = System.Threading.Thread.CurrentThread.ManagedThreadId;
+        }
+
+        /// <summary>Diagnostico: com o arquivo "animacao-debug" na pasta de dados, as animacoes do ar anotam no log.</summary>
+        internal static bool Diagnostico;
+
+        internal static void Anotar(string texto) { if (Diagnostico) Log.Write("animacao: " + texto + " (relogio " + (_relogio.Enabled ? "ligado" : "parado") + ", efeitos " + (Ui.Animacoes ? "sim" : "nao") + ", assinantes " + _assinantes.Count + ")"); }
 
         /// <summary>Milissegundos do relogio de movimento (so cresce).</summary>
         public static long Agora { get { return _cronometro.ElapsedMilliseconds; } }
@@ -102,8 +124,15 @@ namespace MhiagosControl
         public static void Assinar(Func<long, bool> passo)
         {
             if (passo == null) return;
+            if (_interface != null && System.Threading.Thread.CurrentThread.ManagedThreadId != _threadDaInterface)
+            {
+                _interface.Post(delegate { Assinar(passo); }, null);
+                return;
+            }
             if (!_assinantes.Contains(passo)) _assinantes.Add(passo);
-            if (!_relogio.Enabled) _relogio.Start();
+            // Ligado mas sem bater ha um tempo (timer preso a outra thread, ou parado pelo sistema): religa aqui.
+            if (_relogio.Enabled && _cronometro.ElapsedMilliseconds - _ultimoTique > 300) { _relogio.Stop(); Anotar("relogio religado"); }
+            if (!_relogio.Enabled) { _ultimoTique = _cronometro.ElapsedMilliseconds; _relogio.Start(); }
         }
 
         internal static int Assinantes { get { return _assinantes.Count; } }

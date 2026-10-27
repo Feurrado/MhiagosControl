@@ -39,6 +39,7 @@ namespace MhiagosControl
             _atual = texto;
             _t.Zerar();
             _t.Ir(1f);
+            Motion.Anotar("alvo " + _antigo + " -> " + texto + (_t.Animando ? " deslizando" : " sem animar"));
         }
 
         /// <summary>+1 quando o numero subiu, -1 quando desceu, 0 se nao da para comparar.</summary>
@@ -119,6 +120,68 @@ namespace MhiagosControl
             _t.Ir(ligado ? 1f : 0f);
             if (ligado) { _pulso.Zerar(); _pulso.Ir(1f); }
             else { _apaga.Zerar(); _apaga.Ir(1f); }
+            Motion.Anotar((ligado ? "ligar" : "desligar") + (_t.Animando ? " animando" : " sem animar"));
+        }
+    }
+
+
+    /// <summary>
+    /// As animacoes do ar no widget de bateria, por relogio (o widget e uma
+    /// janela em camadas pintada em quadros, sem Invalidate): ligar e desligar
+    /// em 450 ms com pulso, o arco que anda ate o alvo novo e o numero que
+    /// desliza, como no cartao da Visao geral. Detecta a mudanca pelo que vai
+    /// ser pintado; a primeira leitura nao anima.
+    /// </summary>
+    internal sealed class ArAnimadoNoWidget
+    {
+        private const long Longe = -100000;
+        private bool _iniciado, _ligado;
+        private int _alvo;
+        private float _ligDe, _arcoDe, _arcoAte;
+        private long _tLig = Longe, _tPulso = Longe, _tApaga = Longe, _tNum = Longe, _tArco = Longe;
+        private string _numAntigo;
+        private int _numDir;
+
+        private static float P(long inicio, int dur)
+        {
+            if (!Ui.Animacoes) return 1f;
+            return Math.Max(0f, Math.Min(1f, (Motion.Agora - inicio) / (float)dur));
+        }
+
+        public void Observar(bool ligado, int alvo, float fracao)
+        {
+            long agora = Motion.Agora;
+            if (!_iniciado) { _iniciado = true; _ligado = ligado; _alvo = alvo; _arcoAte = _arcoDe = fracao; return; }
+            if (ligado != _ligado)
+            {
+                _ligDe = Lig; _ligado = ligado; _tLig = agora;
+                Motion.Anotar("widget: " + (ligado ? "ligar" : "desligar"));
+                if (ligado) _tPulso = agora; else _tApaga = agora;
+            }
+            if (alvo != _alvo)
+            {
+                _numAntigo = _alvo > 0 ? _alvo + "°" : "--";
+                _numDir = alvo > _alvo ? 1 : -1;
+                _alvo = alvo; _tNum = agora;
+            }
+            if (Math.Abs(fracao - _arcoAte) > 0.0001f) { _arcoDe = Fracao; _arcoAte = fracao; _tArco = agora; }
+        }
+
+        public float Lig { get { float a = _ligado ? 1f : 0f; return _ligDe + (a - _ligDe) * Motion.Padrao(P(_tLig, LigadoAnimado.DuracaoMs)); } }
+        public float Fracao { get { return _arcoDe + (_arcoAte - _arcoDe) * Motion.Padrao(P(_tArco, NumeroDeslizante.DuracaoMs)); } }
+        public float Pulso { get { float p = P(_tPulso, LigadoAnimado.PulsoMs); return p < 1f ? p : -1f; } }
+        public float Apagando { get { float p = P(_tApaga, LigadoAnimado.DuracaoMs); return p < 1f ? p : -1f; } }
+        public float Troca { get { float p = P(_tNum, NumeroDeslizante.DuracaoMs); return p < 1f ? Motion.Padrao(p) : -1f; } }
+        public string Antigo { get { return _numAntigo; } }
+        public int Direcao { get { return _numDir; } }
+
+        public bool Animando
+        {
+            get
+            {
+                return P(_tLig, LigadoAnimado.DuracaoMs) < 1f || P(_tPulso, LigadoAnimado.PulsoMs) < 1f || P(_tApaga, LigadoAnimado.DuracaoMs) < 1f
+                    || P(_tNum, NumeroDeslizante.DuracaoMs) < 1f || P(_tArco, NumeroDeslizante.DuracaoMs) < 1f;
+            }
         }
     }
 
