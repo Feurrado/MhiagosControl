@@ -25,6 +25,14 @@ namespace MhiagosControl
         private Rectangle _grafico, _barras;
         private static readonly int[] Horas = { 6, 24, 24 * 7 };
         private static readonly int M = Ui.S(18);
+        private readonly AnimacaoDeRecolher _anim;
+        private int _alturaAberta;
+        private string _resumo = "";
+
+        /// <summary>Abriu, fechou ou esta animando: a pagina rearranja.</summary>
+        public event EventHandler MudouAltura;
+
+        public bool Aberto { get { return _anim.Aberto; } }
 
         public string Puid { get { return _a != null ? _a.Puid : null; } }
 
@@ -40,6 +48,45 @@ namespace MhiagosControl
 
             _lbConsumo = Rotulo("", Ui.FontBase, Ui.Text);
             _nota = Rotulo(T.CasaEstimativaNotaAjustes, Ui.FontSmall, Ui.Muted);
+
+            // Comeca fechado (decisao do guia) e lembra o que a pessoa escolheu.
+            _anim = new AnimacaoDeRecolher(ServicoCasa.Pref.ConsumoArAberto);
+            _anim.Quadro += delegate { AjustarVisiveis(); Invalidate(); if (MudouAltura != null) MudouAltura(this, EventArgs.Empty); };
+            AjustarVisiveis();
+        }
+
+        /// <summary>Abre ou fecha, animando quando a janela ja esta na tela.</summary>
+        public void Alternar(bool animar)
+        {
+            bool abrir = !_anim.Aberto;
+            ServicoCasa.Pref.ConsumoArAberto = abrir;
+            ServicoCasa.Pref.Salvar();
+            _anim.Ir(abrir, animar && IsHandleCreated && Visible);
+        }
+
+        private void AjustarVisiveis()
+        {
+            bool algo = _anim.Valor > 0.001f;
+            _periodo.Visible = _anim.Aberto;
+            _lbConsumo.Visible = _nota.Visible = algo;
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left && e.Y < TitleHeight) Alternar(true);
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            Cursor = e.Y < TitleHeight ? Cursors.Hand : Cursors.Default;
+            base.OnMouseMove(e);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _anim.Dispose();
+            base.Dispose(disposing);
         }
 
         /// <summary>Recalcula com a potencia e a tarifa novas (vem da aba Ajustes).</summary>
@@ -65,6 +112,7 @@ namespace MhiagosControl
             double tarifa = ServicoCasa.Pref.Tarifa;
             _lbConsumo.Text = T.CasaConsumoHoje(Horas2(hoje[0]), hoje[1].ToString("0.0"), (hoje[1] * tarifa).ToString("0.00")) + "\n" +
                 T.CasaConsumoMes(Horas2(hMes), kMes.ToString("0.0"), (kMes * tarifa).ToString("0.00"));
+            _resumo = T.CasaResumoConsumo(Horas2(hoje[0]), hoje[1].ToString("0.0"));
             Invalidate();
         }
 
@@ -78,7 +126,7 @@ namespace MhiagosControl
         {
             int iw = w - 2 * M;
             int pw = Ui.S(220);
-            _periodo.SetBounds(w - M - pw, Ui.S(6), pw, Ui.S(30));
+            _periodo.SetBounds(w - M - Ui.S(30) - pw, Ui.S(6), pw, Ui.S(30));
             int y = TitleHeight + Ui.S(12);
             _grafico = new Rectangle(M, y, iw, Ui.S(170));
             y = _grafico.Bottom + Ui.S(16);
@@ -91,17 +139,30 @@ namespace MhiagosControl
             s = TextRenderer.MeasureText(_nota.Text, _nota.Font, new Size(iw, 0), TextFormatFlags.WordBreak);
             _nota.SetBounds(M, y, iw, s.Height + Ui.S(2));
             y = _nota.Bottom + Ui.S(14);
-            return y;
+            _alturaAberta = y;
+            return TitleHeight + 1 + (int)Math.Round((_alturaAberta - TitleHeight - 1) * _anim.Valor);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            if (_a == null) return;
             Graphics g = e.Graphics;
             Ui.Smooth(g);
+            // Seta de abrir e fechar, e o resumo de hoje com o cartao fechado.
+            Rectangle seta = new Rectangle(Width - M - Ui.S(22), (TitleHeight - Ui.S(22)) / 2, Ui.S(22), Ui.S(22));
+            TextRenderer.DrawText(g, _anim.Aberto ? "\uE70E" : "\uE70D", Ui.FontGlyph9, seta, Ui.Muted,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (!_anim.Aberto && _resumo.Length > 0)
+            {
+                int tx = Ui.S(14) + TextRenderer.MeasureText(Title ?? "", Ui.FontSection).Width + Ui.S(12);
+                TextRenderer.DrawText(g, _resumo, Ui.FontSmall, new Rectangle(tx, 0, Math.Max(0, seta.Left - tx - Ui.S(8)), TitleHeight), Ui.Muted,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            }
+            if (_a == null || _anim.Valor <= 0.001f) return;
+            g.SetClip(new Rectangle(0, TitleHeight + 1, Width, Math.Max(0, Height - TitleHeight - 2)));
             DesenharCurva(g, _grafico);
             DesenharBarras(g, _barras);
+            g.ResetClip();
         }
 
         /// <summary>
@@ -282,6 +343,7 @@ namespace MhiagosControl
         public static string CasaAlertaQuenteTexto(string t) { return P("O ambiente chegou a " + t + " e o ar está desligado.", "The room reached " + t + " and the AC is off."); }
 
         public static string CasaHistoricoTitulo { get { return P("Histórico e consumo", "History and usage"); } }
+        public static string CasaResumoConsumo(string h, string kwh) { return P("hoje: ligado " + h + " · ~" + kwh + " kWh", "today: on " + h + " · ~" + kwh + " kWh"); }
         public static string CasaSeteDias { get { return P("7 dias", "7 days"); } }
         public static string CasaLegendaAmbiente { get { return P("ambiente", "room"); } }
         public static string CasaLegendaAlvo { get { return P("desejada (ligado)", "target (on)"); } }

@@ -204,7 +204,17 @@ namespace MhiagosControl
                             CaptureEvolution(form, "casa-aparelhos-" + sufixo);
                             if (largura == 1300 && hist != null)
                             {
+                                // Item 4: o cartao de consumo comeca fechado, abre e lembra.
+                                Verdade(!hist.Aberto && hist.Height <= hist.TitleHeight + 2, "consumo do ar comeca fechado " + sufixo);
+                                hist.Alternar(false);
+                                casa.Arranjar();
+                                Verdade(hist.Aberto && hist.Height > Ui.S(300) && ServicoCasa.Pref.ConsumoArAberto, "consumo abre e lembra " + sufixo);
+                                SemSobrepor(hist, "historico aberto " + sufixo);
+                                Verdade(hist.Bottom < casa.Cartoes[1].Top, "lavadora desce com o consumo aberto " + sufixo);
                                 CaptureEvolution(hist, "casa-historico-" + sufixo);
+                                hist.Alternar(false);
+                                casa.Arranjar();
+                                Verdade(!hist.Aberto && !ServicoCasa.Pref.ConsumoArAberto, "fecha de novo " + sufixo);
                                 ServicoCasa.DefinirTimer("p1", 60);
                                 ar.Atualizar();
                                 ar.AlternarDiagnostico();

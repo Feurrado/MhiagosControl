@@ -491,6 +491,10 @@ namespace MhiagosControl
         public double Tarifa = 0.85;
         /// <summary>Aba da pagina Casa: 0 Painel, 1 Ajustes.</summary>
         public int AbaCasa;
+        /// <summary>Cartao de consumo do ar aberto (comeca fechado).</summary>
+        public bool ConsumoArAberto;
+        /// <summary>Secao de consumo e historico da lavadora aberta (comeca fechada).</summary>
+        public bool ConsumoLavadoraAberto;
         public long DesligarEmUtc;
         public string DesligarPuid = "";
         /// <summary>Cenas do ar, na ordem dos botoes. Sem nenhuma gravada, as de fabrica.</summary>
@@ -543,6 +547,8 @@ namespace MhiagosControl
                         case "desligarem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.DesligarEmUtc = l; break;
                         case "desligarpuid": p.DesligarPuid = v; break;
                         case "abacasa": if (ehInt) p.AbaCasa = i == 1 ? 1 : 0; break;
+                        case "consumoaraberto": p.ConsumoArAberto = v == "1"; break;
+                        case "consumolavadoraaberto": p.ConsumoLavadoraAberto = v == "1"; break;
                         case "cena": { CenaCasa cena = CenaCasa.DeLinha(v); if (cena != null) { if (!lidas) { p.Cenas.Clear(); lidas = true; } if (p.Cenas.Count < CenaCasa.MaxCenas) p.Cenas.Add(cena); } break; }
                     }
                 }
@@ -567,6 +573,8 @@ namespace MhiagosControl
             sb.AppendLine("desligarem=" + DesligarEmUtc.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("desligarpuid=" + (DesligarPuid ?? ""));
             sb.AppendLine("abacasa=" + AbaCasa.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("consumoaraberto=" + (ConsumoArAberto ? "1" : "0"));
+            sb.AppendLine("consumolavadoraaberto=" + (ConsumoLavadoraAberto ? "1" : "0"));
             foreach (CenaCasa cena in Cenas) sb.AppendLine("cena=" + cena.Linha());
             try { GravacaoAtomica.Escrever(Arquivo, sb.ToString(), new UTF8Encoding(false)); }
             catch (Exception ex) { Log.Error("casa: gravar casa.ini", ex); }

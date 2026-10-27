@@ -254,6 +254,7 @@ namespace MhiagosControl
                 if (primeiroAr != null && _historico == null)
                 {
                     _historico = new CartaoHistoricoDoAr();
+                    _historico.MudouAltura += delegate { Arranjar(); };
                     Controls.Add(_historico);
                 }
                 else if (primeiroAr == null && _historico != null)
