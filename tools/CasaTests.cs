@@ -19,6 +19,7 @@ namespace MhiagosControl
             CasaServicoOffline();
             CasaLavadora(root);
             PerifericosOcultos(root);
+            CasaWidget();
             CasaPagina(root);
         }
 
@@ -83,6 +84,7 @@ namespace MhiagosControl
             string prefAntes = PreferenciasCasa.Arquivo, histAntes = HistoricoDoAr.Arquivo;
             PreferenciasCasa.Arquivo = System.IO.Path.Combine(pasta, "casa.ini");
             HistoricoDoAr.Arquivo = System.IO.Path.Combine(pasta, "casa-historico.txt");
+            ConfigDoWidgetCasa.Caminho = System.IO.Path.Combine(pasta, "widget-casa.ini");
             System.IO.File.Delete(PreferenciasCasa.Arquivo);
             System.IO.File.Delete(HistoricoDoAr.Arquivo);
             ServicoCasa.Pref = new PreferenciasCasa();
@@ -685,6 +687,56 @@ namespace MhiagosControl
             return lav;
         }
 
+        /// <summary>Item 9: widget da casa (configuracao, pintura e cliques), sem mostrar janela.</summary>
+        private static void CasaWidget()
+        {
+            Secao("casa: widget da area de trabalho");
+            string pasta = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mhiagos-widget-casa-" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(pasta);
+            string antes = ConfigDoWidgetCasa.Caminho;
+            ConfigDoWidgetCasa.Caminho = System.IO.Path.Combine(pasta, "widget-casa.ini");
+            try
+            {
+                ConfigDoWidgetCasa cfg = new ConfigDoWidgetCasa();
+                cfg.Ativo = true; cfg.X = 100; cfg.Y = 200; cfg.Travado = true; cfg.NaFrente = false;
+                cfg.Salvar();
+                ConfigDoWidgetCasa lido = ConfigDoWidgetCasa.Carregar();
+                Verdade(lido.Ativo && lido.X == 100 && lido.Y == 200 && lido.Travado && !lido.NaFrente, "config do widget gravada e lida");
+
+                ServicoCasa.Simular(Exemplo());
+                using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
+                {
+                    Verdade(w.Ar != null && w.Lavadora != null, "widget le o ar e a lavadora do servico");
+                    foreach (float escala in new float[] { 1f, 1.25f, 1.5f })
+                    {
+                        w.Size = new Size((int)(Ui.S(320) * escala), (int)(Ui.S(156) * escala));
+                        using (Bitmap bm = new Bitmap(w.Width, w.Height))
+                        using (Graphics g = Graphics.FromImage(bm))
+                        {
+                            w.Pintar(g);
+                            string dir = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                            if (!string.IsNullOrEmpty(dir)) bm.Save(System.IO.Path.Combine(dir, "casa-widget-" + (int)(escala * 100) + ".png"));
+                        }
+                    }
+                    w.Size = new Size(Ui.S(320), Ui.S(156));
+                    using (Bitmap bm = new Bitmap(w.Width, w.Height)) using (Graphics g = Graphics.FromImage(bm)) w.Pintar(g);
+                    w.Clicar(2);
+                    Verdade(w.UltimoComando != null && w.UltimoComando.Count == 1 && w.UltimoComando["t_power"] == "0", "liga/desliga no widget manda t_power");
+                    w.Ar.Estado["t_power"] = "1";
+                }
+                ServicoCasa.PararSimulacao();
+                using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
+                {
+                    Verdade(w.Ar == null, "sem conta o widget mostra o convite");
+                    using (Bitmap bm = new Bitmap(w.Width, w.Height)) using (Graphics g = Graphics.FromImage(bm)) w.Pintar(g);
+                }
+            }
+            finally
+            {
+                ServicoCasa.PararSimulacao();
+                ConfigDoWidgetCasa.Caminho = antes;
+            }
+        }
         /// <summary>Perifericos escondidos: o filtro, a pagina Baterias e o X11 que fica.</summary>
         private static void PerifericosOcultos(string root)
         {

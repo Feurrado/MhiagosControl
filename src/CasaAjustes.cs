@@ -21,7 +21,9 @@ namespace MhiagosControl
 
         private CartaoDoAr _ar;
         private Secao _funcoes, _pref, _retorno;
-        private readonly Secao _secAlertas, _secConsumo, _secConta;
+        private readonly Secao _secAlertas, _secConsumo, _secConta, _secWidget;
+        private readonly Toggle _widget;
+        private readonly Label _widgetNota;
         private readonly Toggle _alFalha, _alOffline, _alQuente, _alLavadora;
         private readonly NumberBox _limite;
         private readonly CampoDeTexto _wFrio, _wEco, _wVent, _tarifa;
@@ -34,7 +36,7 @@ namespace MhiagosControl
             get
             {
                 List<Secao> l = new List<Secao>();
-                foreach (Secao s in new[] { _funcoes, _pref, _secAlertas, _secConsumo, _retorno, _secConta }) if (s != null) l.Add(s);
+                foreach (Secao s in new[] { _funcoes, _pref, _secAlertas, _secConsumo, _retorno, _secWidget, _secConta }) if (s != null) l.Add(s);
                 foreach (Control c in _extras) { Secao s = c as Secao; if (s != null) l.Add(s); }
                 return l.ToArray();
             }
@@ -68,6 +70,11 @@ namespace MhiagosControl
             _tarifa = Campo(_secConsumo, p.Tarifa.ToString("0.00##", CultureInfo.CurrentCulture));
             _nota = Rotulo(_secConsumo, T.CasaAjustesConsumo);
             _nota.ForeColor = Ui.Muted;
+
+            _secWidget = NovaSecao(T.CasaWidgetTitulo);
+            _widget = Chave(_secWidget, T.CasaWidgetOpcao, GerenteDoWidgetCasa.Ativo, delegate(bool v) { GerenteDoWidgetCasa.Definir(v); });
+            _widgetNota = Rotulo(_secWidget, T.CasaWidgetNota);
+            _widgetNota.ForeColor = Ui.Muted;
 
             _secConta = NovaSecao(T.CasaConta);
             _conta = Rotulo(_secConta, T.CasaContaNota);
@@ -169,7 +176,8 @@ namespace MhiagosControl
             foreach (Control c in _extras) { Secao s = c as Secao; if (s != null) extras.Add(s); }
             for (int i = 0; i < extras.Count; i += 2)
                 linhas.Add(new[] { extras[i], i + 1 < extras.Count ? extras[i + 1] : null });
-            linhas.Add(new[] { _retorno, _secConta });
+            linhas.Add(new[] { _retorno, _secWidget });
+            linhas.Add(new[] { _secConta, (Secao)null });
 
             int y = 0;
             foreach (Secao[] linha in linhas)
@@ -231,6 +239,13 @@ namespace MhiagosControl
                 Size t = TextRenderer.MeasureText(_nota.Text, _nota.Font, new Size(iw, 0), TextFormatFlags.WordBreak);
                 _nota.SetBounds(m, yn, iw, t.Height + Ui.S(2));
                 return _nota.Bottom - y;
+            }
+            if (s == _secWidget)
+            {
+                _widget.SetBounds(m, y, iw, Ui.S(32));
+                Size tn = TextRenderer.MeasureText(_widgetNota.Text, _widgetNota.Font, new Size(iw, 0), TextFormatFlags.WordBreak);
+                _widgetNota.SetBounds(m, y + Ui.S(38), iw, tn.Height + Ui.S(2));
+                return _widgetNota.Bottom - y;
             }
             if (s == _secConta)
             {
