@@ -55,10 +55,14 @@ namespace MhiagosControl
         /// A troca de tema pelo usuario dispara UserPreferenceChanged, que
         /// invalida o cache.
         /// </summary>
+        /// <summary>Testes e capturas: forca escuro ou claro sem mexer no Windows. Nulo segue o Windows.</summary>
+        internal static bool? Forcado;
+
         public static bool IsDark
         {
             get
             {
+                if (Forcado.HasValue) return Forcado.Value;
                 if (!_darkRead) { _dark = ReadDark(); _darkRead = true; }
                 return _dark;
             }

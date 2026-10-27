@@ -447,6 +447,30 @@ namespace MhiagosControl
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         }
 
+        /// <summary>
+        /// Preenche os nomes das etapas (Secar so quando o ciclo seca) e devolve
+        /// o indice da atual pela fase, ou -1. Usado aqui e na Visao geral.
+        /// </summary>
+        internal static int Montar(Aparelho a, CicloAtual c, List<string> nomes)
+        {
+            bool seca = a.Int("dry_time", 0) > 0 || a.Int("DryingSwitch", 0) == 1 || c.Fase == 8 || c.Fase == 9;
+            nomes.Clear();
+            nomes.Add(T.LavEtapaLavar);
+            nomes.Add(T.LavEtapaEnxaguar);
+            nomes.Add(T.LavEtapaCentrifugar);
+            if (seca) nomes.Add(T.LavEtapaSecar);
+            nomes.Add(T.LavEtapaFim);
+            switch (c.Fase)
+            {
+                case 1: case 2: case 3: return 0;
+                case 4: case 5: return 1;
+                case 6: case 7: return 2;
+                case 8: case 9: return seca ? 3 : 2;
+                case 10: return nomes.Count - 1;
+                default: return -1;
+            }
+        }
+
         private int Diametro { get { return Ui.S(14); } }
         private int Halo { get { return Ui.S(6); } }
         private int Yc { get { return Ui.S(12); } }
@@ -673,24 +697,7 @@ namespace MhiagosControl
             _termino.Visible = _termino.Text.Length > 0;
 
             // --- etapas
-            bool seca = A.Int("dry_time", 0) > 0 || A.Int("DryingSwitch", 0) == 1 || c.Fase == 8 || c.Fase == 9;
-            _etapas.Nomes.Clear();
-            _etapas.Nomes.Add(T.LavEtapaLavar);
-            _etapas.Nomes.Add(T.LavEtapaEnxaguar);
-            _etapas.Nomes.Add(T.LavEtapaCentrifugar);
-            if (seca) _etapas.Nomes.Add(T.LavEtapaSecar);
-            _etapas.Nomes.Add(T.LavEtapaFim);
-            int fim = _etapas.Nomes.Count - 1;
-            int atual;
-            switch (c.Fase)
-            {
-                case 1: case 2: case 3: atual = 0; break;
-                case 4: case 5: atual = 1; break;
-                case 6: case 7: atual = 2; break;
-                case 8: case 9: atual = seca ? 3 : 2; break;
-                case 10: atual = fim; break;
-                default: atual = -1; break;
-            }
+            int atual = EtapasDoCiclo.Montar(A, c, _etapas.Nomes);
             _etapas.Atual = c.Online && (c.Rodando || c.Concluido) ? atual : -1;
             _etapas.Cor = cor;
             _etapas.Visible = c.Rodando || c.Concluido;

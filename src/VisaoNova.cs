@@ -2,106 +2,1019 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.Management;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace MhiagosControl
 {
     /// <summary>
-    /// Faixa de status da Visao geral nova: um "chip" por area (PC,
-    /// perifericos, casa, painel do cooler). Cada chip le o proprio texto na
-    /// hora de pintar e leva a pagina da area no clique.
+    /// Pecas da Visao geral nova: fontes monoespacadas, as cores quente e fria,
+    /// o nome de quem usa o Windows e o texto do cabecalho.
+    ///
+    /// Numeros, rotulos tecnicos e graficos vao em Cascadia Mono (Consolas se
+    /// nao houver); o resto continua na fonte do app. Valores frios (uso, alvo
+    /// do ar, barras) na cor de destaque; quentes (temperaturas, tempo da
+    /// lavadora, bateria) em ambar, com tom proprio em cada tema para o
+    /// contraste nao cair no claro.
     /// </summary>
-    internal sealed class FaixaDeStatus : Control
+    internal static class Visao
     {
-        internal sealed class Chip
+        public static readonly string FamiliaMono = Ui.Tipo.Achar(new[] { "Cascadia Mono", "Consolas" }, "Consolas");
+        public static readonly Font MonoPequena = new Font(FamiliaMono, Ui.Pt(8f));
+        public static readonly Font MonoRotulo = new Font(FamiliaMono, Ui.Pt(8f));
+        public static readonly Font MonoTexto = MonoSemi(Ui.Pt(9.5f));
+        public static readonly Font MonoValor = MonoSemi(Ui.Pt(15f));
+        public static readonly Font MonoGrande = MonoSemi(Ui.Pt(21f));
+        public static readonly Font FonteFrase = Ui.Semi(Ui.Pt(17f), Ui.Tipo.Exibicao);
+
+        private static Font MonoSemi(float tamanho)
         {
-            public string Chave, Titulo, Glifo;
-            public Func<string> Valor;
-            public Func<bool> Atencao;
+            try
+            {
+                Font f = new Font(FamiliaMono + " SemiBold", tamanho);
+                // Familia inexistente volta como outra: o negrito da mono e melhor que uma sem serifa.
+                if (f.Name.IndexOf(FamiliaMono, StringComparison.OrdinalIgnoreCase) >= 0) return f;
+                f.Dispose();
+            }
+            catch { }
+            return new Font(FamiliaMono, tamanho, FontStyle.Bold);
         }
 
-        public readonly List<Chip> Chips = new List<Chip>();
-        public event Action<string> Abrir;
-        private int _hover = -1;
-        public const int Altura = 68;
+        /// <summary>Ambar dos valores quentes: #f2b84b no escuro, #b35c00 no claro.</summary>
+        public static Color Quente { get { return Ui.Dark ? Color.FromArgb(0xF2, 0xB8, 0x4B) : Color.FromArgb(0xB3, 0x5C, 0x00); } }
 
-        public FaixaDeStatus()
+        public static readonly Color Verde = Color.FromArgb(0x2E, 0xA0, 0x43);
+
+        /// <summary>Roda na thread da interface (o ServicoCasa avisa de outra thread).</summary>
+        public static void NaInterface(Control c, MethodInvoker m)
+        {
+            try
+            {
+                if (c.IsDisposed) return;
+                if (!c.IsHandleCreated) { m(); return; }
+                if (c.InvokeRequired) c.BeginInvoke(m); else m();
+            }
+            catch (InvalidOperationException) { }
+        }
+
+        public static string Maiusculas(string s)
+        {
+            return string.IsNullOrEmpty(s) ? "" : s.ToUpper(T.Pt ? new CultureInfo("pt-BR") : CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>"SEG 26/10 · 22:20" (en: "MON 10/26 · 22:20").</summary>
+        public static string Data(DateTime d)
+        {
+            CultureInfo c = new CultureInfo(T.Pt ? "pt-BR" : "en-US");
+            string dia = c.DateTimeFormat.GetAbbreviatedDayName(d.DayOfWeek).TrimEnd('.').ToUpper(c);
+            return dia + " " + d.ToString(T.Pt ? "dd/MM" : "MM/dd", c) + " · " + d.ToString("HH:mm", c);
+        }
+
+        // ---------------- nome de quem usa ----------------
+
+        private static string _nome;
+        private static bool _buscou;
+
+        /// <summary>
+        /// O primeiro nome do usuario do Windows. A conta local guarda o nome
+        /// completo (numa conta Microsoft, o da conta); o nome de login fica
+        /// como reserva enquanto a consulta, em segundo plano, nao volta.
+        /// </summary>
+        public static string NomeDoUsuario
+        {
+            get
+            {
+                if (!_buscou)
+                {
+                    _buscou = true;
+                    _nome = PrimeiroNome(Environment.UserName);
+                    Thread t = new Thread(BuscarNome);
+                    t.IsBackground = true;
+                    t.Start();
+                }
+                return _nome;
+            }
+        }
+
+        private static void BuscarNome()
+        {
+            try
+            {
+                string login = Environment.UserName.Replace("\\", "\\\\").Replace("'", "\\'");
+                using (ManagementObjectSearcher s = new ManagementObjectSearcher(
+                    "SELECT FullName FROM Win32_UserAccount WHERE LocalAccount=True AND Name='" + login + "'"))
+                    foreach (ManagementBaseObject o in s.Get())
+                    {
+                        string f = o["FullName"] as string;
+                        if (!string.IsNullOrEmpty(f) && f.Trim().Length > 0) { _nome = PrimeiroNome(f); break; }
+                    }
+            }
+            catch (Exception ex) { Log.Error("nome do usuario", ex); }
+        }
+
+        internal static string PrimeiroNome(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            string p = s.Trim().Split(new[] { ' ', '.', '_' }, StringSplitOptions.RemoveEmptyEntries)[0];
+            return p.Length == 0 ? "" : char.ToUpper(p[0]) + p.Substring(1);
+        }
+
+        // ---------------- textos do cabecalho ----------------
+
+        /// <summary>A frase de atencao, ou nulo quando esta tudo em ordem.</summary>
+        public static string Alerta()
+        {
+            if (ServicoCasa.Logado)
+                foreach (Aparelho a in ServicoCasa.Aparelhos)
+                {
+                    if (a.Lavadora && a.Online && CicloAtual.De(a).Erro) return T.VisaoAtencaoLavadora;
+                    if (a.ArCondicionado && a.Online && Diagnostico.TemFalha(a)) return T.VisaoAtencaoAr;
+                }
+            foreach (Periferico p in Perifericos.Atual)
+                if (p != null && p.Bateria.HasValue && p.Bateria.Value <= EventosDaVisao.BateriaBaixa && !p.Carregando)
+                    return T.VisaoAtencaoBateria(p.Nome);
+            return null;
+        }
+
+        /// <summary>"A roupa fica pronta as 22:45 · escritorio a 27 °C", so com os trechos que existirem.</summary>
+        public static string Resumo()
+        {
+            List<string> l = new List<string>();
+            if (!ServicoCasa.Logado) return "";
+            Aparelho ar = null, lav = null;
+            foreach (Aparelho a in ServicoCasa.Aparelhos)
+            {
+                if (ar == null && a.ArCondicionado) ar = a;
+                if (lav == null && a.Lavadora) lav = a;
+            }
+            if (lav != null)
+            {
+                CicloAtual c = CicloAtual.De(lav);
+                if (c.Online && c.Rodando && c.Restante > 0)
+                    l.Add(T.VisaoRoupaPronta(FimDoCiclo(c).ToString("HH:mm")));
+            }
+            if (ar != null && ar.Online && ar.Tem("f_temp_in"))
+            {
+                string comodo = string.IsNullOrEmpty(ar.Comodo) ? T.VisaoAmbienteNome : ar.Comodo;
+                if (T.Pt && comodo.Length > 1 && char.IsUpper(comodo[0]) && !char.IsUpper(comodo[1]))
+                    comodo = char.ToLower(comodo[0]) + comodo.Substring(1);
+                l.Add(T.VisaoComodoA(comodo, Temperatura(ar, ar.Num("f_temp_in", 0))));
+            }
+            return string.Join("  ·  ", l.ToArray());
+        }
+
+        public static DateTime FimDoCiclo(CicloAtual c)
+        {
+            DateTime leitura = ServicoCasa.UltimaLeitura == DateTime.MinValue ? DateTime.Now : ServicoCasa.UltimaLeitura;
+            return leitura.AddMinutes(c.Restante);
+        }
+
+        public static string Temperatura(Aparelho ar, double v)
+        {
+            return v.ToString("0.#", CultureInfo.CurrentCulture) + (ar.Int("t_temp_type", 0) == 1 ? " °F" : " °C");
+        }
+    }
+
+    /// <summary>
+    /// Os ultimos acontecimentos da casa e dos perifericos, em memoria: mudancas
+    /// no ar, fases da lavadora e bateria baixa. A nuvem nao da historico de
+    /// eventos, entao a lista nasce aqui, comparando cada leitura com a
+    /// anterior; a primeira leitura de cada aparelho so serve de base.
+    /// </summary>
+    internal static class EventosDaVisao
+    {
+        internal sealed class Evento
+        {
+            public DateTime Hora;
+            public string Texto;
+        }
+
+        private sealed class Visto
+        {
+            public bool Online, Rodando, Concluido, Erro;
+            public int Power, Temp, Modo, Fase, Codigo;
+        }
+
+        public const int BateriaBaixa = 20;
+        private const int Maximo = 30;
+
+        private static readonly object _trava = new object();
+        private static readonly List<Evento> _lista = new List<Evento>();
+        private static readonly Dictionary<string, Visto> _vistos = new Dictionary<string, Visto>();
+        private static readonly Dictionary<string, int> _baterias = new Dictionary<string, int>();
+        private static bool _iniciado;
+
+        /// <summary>Lista mudou. Pode vir de outra thread.</summary>
+        public static event EventHandler Mudou;
+
+        /// <summary>Passa a acompanhar a casa. Chamado pela bandeja e pela janela; so assina uma vez.</summary>
+        public static void Iniciar()
+        {
+            lock (_trava) { if (_iniciado) return; _iniciado = true; }
+            ServicoCasa.Mudou += delegate { ObservarCasa(ServicoCasa.Logado ? ServicoCasa.Aparelhos : new List<Aparelho>()); };
+            if (ServicoCasa.Logado) ObservarCasa(ServicoCasa.Aparelhos);
+        }
+
+        public static Evento[] Recentes(int n)
+        {
+            lock (_trava)
+            {
+                int k = Math.Min(n, _lista.Count);
+                Evento[] r = new Evento[k];
+                for (int i = 0; i < k; i++) r[i] = _lista[_lista.Count - 1 - i];
+                return r;
+            }
+        }
+
+        /// <summary>Testes: comeca do zero.</summary>
+        internal static void Limpar()
+        {
+            lock (_trava) { _lista.Clear(); _vistos.Clear(); _baterias.Clear(); }
+        }
+
+        internal static void Acrescentar(string texto)
+        {
+            if (string.IsNullOrEmpty(texto)) return;
+            lock (_trava)
+            {
+                Evento e = new Evento();
+                e.Hora = DateTime.Now; e.Texto = texto;
+                _lista.Add(e);
+                if (_lista.Count > Maximo) _lista.RemoveAt(0);
+            }
+            EventHandler h = Mudou;
+            if (h != null) h(null, EventArgs.Empty);
+        }
+
+        internal static void ObservarCasa(List<Aparelho> aparelhos)
+        {
+            if (aparelhos == null) return;
+            List<string> novos = new List<string>();
+            lock (_trava)
+            {
+                foreach (Aparelho a in aparelhos)
+                {
+                    if (a == null || string.IsNullOrEmpty(a.Puid)) continue;
+                    Visto v = new Visto();
+                    v.Online = a.Online;
+                    CicloAtual c = null;
+                    if (a.ArCondicionado)
+                    {
+                        v.Power = a.Int("t_power", 0); v.Temp = a.Int("t_temp", 0); v.Modo = a.Int("t_work_mode", -1);
+                    }
+                    else if (a.Lavadora)
+                    {
+                        c = CicloAtual.De(a);
+                        v.Rodando = c.Rodando; v.Concluido = c.Concluido; v.Erro = c.Erro; v.Fase = c.Fase; v.Codigo = c.CodigoDeErro;
+                    }
+                    else continue;
+
+                    Visto antes;
+                    bool tinha = _vistos.TryGetValue(a.Puid, out antes);
+                    _vistos[a.Puid] = v;
+                    if (!tinha) continue;
+
+                    if (antes.Online && !v.Online) { novos.Add(a.ArCondicionado ? T.EvArOffline : T.EvLavOffline); continue; }
+                    if (!v.Online) continue;
+                    string u = a.Int("t_temp_type", 0) == 1 ? "°F" : "°C";
+                    if (a.ArCondicionado)
+                    {
+                        if (antes.Power != v.Power) novos.Add(v.Power != 0 ? T.EvArLigado(v.Temp + " " + u) : T.EvArDesligado);
+                        else if (v.Power != 0 && antes.Temp != v.Temp) novos.Add(T.EvArTemp(v.Temp + " " + u));
+                        else if (v.Power != 0 && antes.Modo != v.Modo) novos.Add(T.EvArModo(TabelaDoAr.Modo(v.Modo, a.Tipo)));
+                    }
+                    else
+                    {
+                        if (v.Erro && !antes.Erro) novos.Add(T.EvLavErro(v.Codigo));
+                        else if (v.Rodando && !antes.Rodando) novos.Add(T.EvLavInicio(TabelaDaLavadora.Programa(c.Programa)));
+                        else if (antes.Rodando && !v.Rodando) novos.Add(T.EvLavFim);
+                        else if (v.Rodando && antes.Fase != v.Fase && TabelaDaLavadora.Fase(v.Fase).Length > 0)
+                            novos.Add(T.EvLavFase(TabelaDaLavadora.Fase(v.Fase)));
+                    }
+                }
+            }
+            foreach (string s in novos) Acrescentar(s);
+        }
+
+        internal static void ObservarPerifericos(Periferico[] lista)
+        {
+            if (lista == null) return;
+            List<string> novos = new List<string>();
+            lock (_trava)
+            {
+                foreach (Periferico p in lista)
+                {
+                    if (p == null || !p.Bateria.HasValue) continue;
+                    int antes;
+                    bool tinha = _baterias.TryGetValue(p.Nome, out antes);
+                    _baterias[p.Nome] = p.Bateria.Value;
+                    if (tinha && antes > BateriaBaixa && p.Bateria.Value <= BateriaBaixa && !p.Carregando)
+                        novos.Add(T.EvBateria(p.Nome, p.Bateria.Value));
+                }
+            }
+            foreach (string s in novos) Acrescentar(s);
+        }
+    }
+
+    /// <summary>
+    /// Data e hora, a frase grande ("Tudo em ordem, Thiago.") e, a direita,
+    /// o resumo do que a casa esta fazendo. Sem lugar ao lado, o resumo desce
+    /// para baixo da frase.
+    /// </summary>
+    internal sealed class CabecalhoDaVisao : Control
+    {
+        private readonly System.Windows.Forms.Timer _relogio;
+        private readonly EventHandler _mudou;
+
+        public CabecalhoDaVisao()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            _relogio = new System.Windows.Forms.Timer();
+            _relogio.Interval = 15000;
+            _relogio.Tick += delegate { Invalidate(); };
+            _relogio.Start();
+            _mudou = delegate { Visao.NaInterface(this, Invalidate); };
+            ServicoCasa.Mudou += _mudou;
         }
 
-        public void Acrescentar(string chave, string titulo, string glifo, Func<string> valor, Func<bool> atencao)
+        protected override void Dispose(bool disposing)
         {
-            Chip c = new Chip();
-            c.Chave = chave; c.Titulo = titulo; c.Glifo = glifo; c.Valor = valor; c.Atencao = atencao;
-            Chips.Add(c);
+            if (disposing) { ServicoCasa.Mudou -= _mudou; _relogio.Dispose(); }
+            base.Dispose(disposing);
         }
 
-        internal Rectangle Caixa(int i)
+        public string Frase
         {
-            int n = Math.Max(1, Chips.Count), gap = Ui.S(8);
-            int w = (Width - gap * (n - 1)) / n;
-            return new Rectangle(i * (w + gap), 0, (i == n - 1 ? Width - i * (w + gap) : w) - 1, Height - 1);
+            get
+            {
+                string a = Visao.Alerta();
+                return a ?? T.VisaoTudoEmOrdem(Visao.NomeDoUsuario);
+            }
         }
 
-        private int Hit(Point p) { for (int i = 0; i < Chips.Count; i++) if (Caixa(i).Contains(p)) return i; return -1; }
+        private int AlturaDaFrase { get { return TextRenderer.MeasureText("Ág", Visao.FonteFrase).Height; } }
 
-        protected override void OnMouseMove(MouseEventArgs e)
+        /// <summary>O resumo cabe ao lado da frase nesta largura?</summary>
+        internal bool ResumoAoLado(int largura)
         {
-            int h = Hit(e.Location);
-            if (h != _hover) { _hover = h; Cursor = h >= 0 ? Cursors.Hand : Cursors.Default; Invalidate(); }
-            base.OnMouseMove(e);
+            string r = Visao.Resumo();
+            if (r.Length == 0) return true;
+            int f = TextRenderer.MeasureText(Frase, Visao.FonteFrase).Width;
+            int s = TextRenderer.MeasureText(r, Ui.FontSmall).Width;
+            return f + s + Ui.S(32) <= largura;
         }
 
-        protected override void OnMouseLeave(EventArgs e) { _hover = -1; Invalidate(); base.OnMouseLeave(e); }
-
-        protected override void OnMouseDown(MouseEventArgs e)
+        public int AlturaPara(int largura)
         {
-            int h = Hit(e.Location);
-            if (h >= 0 && Abrir != null) Abrir(Chips[h].Chave);
-            base.OnMouseDown(e);
+            int h = Ui.S(18) + AlturaDaFrase;
+            if (!ResumoAoLado(largura)) h += Ui.FontSmall.Height + Ui.S(4);
+            return h;
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             using (SolidBrush b = new SolidBrush(Ui.Window)) g.FillRectangle(b, ClientRectangle);
+            TextRenderer.DrawText(g, Visao.Data(DateTime.Now), Visao.MonoRotulo, new Point(Ui.S(2), 0), Ui.Muted, TextFormatFlags.NoPadding);
+            bool alerta = Visao.Alerta() != null;
+            int yf = Ui.S(16), hf = AlturaDaFrase;
+            string resumo = Visao.Resumo();
+            bool lado = ResumoAoLado(Width);
+            int wf = Width;
+            if (lado && resumo.Length > 0) wf = Width - TextRenderer.MeasureText(resumo, Ui.FontSmall).Width - Ui.S(24);
+            TextRenderer.DrawText(g, Frase, Visao.FonteFrase, new Rectangle(0, yf, wf, hf), alerta ? Visao.Quente : Ui.Text,
+                TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            if (resumo.Length == 0) return;
+            if (lado)
+                TextRenderer.DrawText(g, resumo, Ui.FontSmall, new Rectangle(0, yf + hf - Ui.FontSmall.Height - Ui.S(5), Width, Ui.FontSmall.Height),
+                    Ui.Muted, TextFormatFlags.Right | TextFormatFlags.NoPrefix);
+            else
+                TextRenderer.DrawText(g, resumo, Ui.FontSmall, new Rectangle(0, yf + hf + Ui.S(2), Width, Ui.FontSmall.Height),
+                    Ui.Muted, TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+    }
+
+    /// <summary>
+    /// Botao da Visao geral: redondo com contorno na cor de destaque (- e +) ou
+    /// pilula de estado ("Ligado"/"Desligado"), que acende quando Aceso.
+    /// </summary>
+    internal sealed class BotaoDaVisao : Control
+    {
+        public bool Pilula, Aceso;
+        private readonly string _glifo;
+        private bool _sobre;
+
+        public BotaoDaVisao(string glifo)
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
+            _glifo = glifo;
+            Cursor = Cursors.Hand;
+            TabStop = true;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _sobre = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _sobre = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnEnabledChanged(EventArgs e) { Cursor = Enabled ? Cursors.Hand : Cursors.Default; Invalidate(); base.OnEnabledChanged(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space) { OnClick(EventArgs.Empty); e.Handled = true; e.SuppressKeyPress = true; }
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillRectangle(b, ClientRectangle);
             Ui.Smooth(g);
-            for (int i = 0; i < Chips.Count; i++)
+            Rectangle r = new Rectangle(1, 1, Width - 3, Height - 3);
+            if (Pilula)
             {
-                Chip c = Chips[i];
-                Rectangle r = Caixa(i);
-                bool atencao = c.Atencao != null && c.Atencao();
-                using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))
+                using (GraphicsPath p = Ui.RoundRect(r, r.Height / 2))
                 {
-                    using (SolidBrush b = new SolidBrush(i == _hover ? Ui.Misturar(Ui.Surface, Ui.Hover, 0.7f) : Ui.Surface)) g.FillPath(b, p);
-                    using (Pen pen = new Pen(atencao ? Ui.Warn : Ui.Border)) g.DrawPath(pen, p);
+                    Color fundo = !Enabled ? Ui.SurfaceAlt : Aceso ? Ui.AccentSoft : _sobre ? Ui.Hover : Ui.Surface;
+                    using (SolidBrush b = new SolidBrush(fundo)) g.FillPath(b, p);
+                    using (Pen pen = new Pen(Aceso && Enabled ? Ui.AccentSoft : Ui.Border)) g.DrawPath(pen, p);
                 }
-                Rectangle ic = new Rectangle(r.X + Ui.S(12), r.Y + (r.Height - Ui.S(36)) / 2, Ui.S(36), Ui.S(36));
-                using (GraphicsPath p = Ui.RoundRect(ic, Ui.S(10)))
-                using (SolidBrush b = new SolidBrush(Ui.AccentSoft)) g.FillPath(b, p);
-                if (c.Chave == "baterias") Ui.IconeDeBateria(g, RectangleF.Inflate(ic, -Ui.S(9), -Ui.S(11)), Ui.AccentText);
-                else TextRenderer.DrawText(g, c.Glifo, Ui.FontGlyph11, ic, Ui.AccentText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-                int tx = ic.Right + Ui.S(10), tw = r.Right - tx - Ui.S(8);
-                TextRenderer.DrawText(g, c.Titulo, Ui.FontSmall, new Rectangle(tx, r.Y + Ui.S(14), tw, Ui.S(18)), Ui.Muted,
-                    TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-                string v = "";
-                try { v = c.Valor != null ? c.Valor() : ""; } catch (Exception ex) { Log.Error("faixa de status", ex); }
-                TextRenderer.DrawText(g, v, Ui.FontMed, new Rectangle(tx, r.Y + Ui.S(32), tw, Ui.S(22)), atencao ? Ui.Warn : Ui.Text,
-                    TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+                TextRenderer.DrawText(g, Text, Ui.FontMed, r, !Enabled ? Ui.Faint : Aceso ? Ui.AccentText : Ui.Muted,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                return;
+            }
+            if (_sobre && Enabled) using (SolidBrush b = new SolidBrush(Ui.AccentSoft)) g.FillEllipse(b, r);
+            using (Pen pen = new Pen(Enabled ? Ui.Accent : Ui.Border, 1.5f)) g.DrawEllipse(pen, r);
+            TextRenderer.DrawText(g, _glifo, Ui.FontGlyph9, r, Enabled ? Ui.AccentText : Ui.Faint,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (Focused && ShowFocusCues)
+                using (Pen pen = new Pen(Ui.AccentText)) { pen.DashStyle = DashStyle.Dot; g.DrawEllipse(pen, Rectangle.Inflate(r, -3, -3)); }
+        }
+    }
+
+    /// <summary>Base dos cartoes da casa na Visao geral: assina o ServicoCasa e abre a pagina Casa pelo nome.</summary>
+    internal abstract class CartaoDaCasaVisao : Card
+    {
+        public event EventHandler AbrirCasa;
+        private readonly EventHandler _mudou;
+        protected Rectangle Nome;
+
+        protected CartaoDaCasaVisao()
+        {
+            Title = null;
+            _mudou = delegate { Visao.NaInterface(this, Puxar); };
+            ServicoCasa.Mudou += _mudou;
+        }
+
+        internal abstract void Puxar();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ServicoCasa.Mudou -= _mudou;
+            base.Dispose(disposing);
+        }
+
+        protected void PedirCasa() { if (AbrirCasa != null) AbrirCasa(this, EventArgs.Empty); }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            Cursor = Nome.Contains(e.Location) ? Cursors.Hand : Cursors.Default;
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left && Nome.Contains(e.Location)) PedirCasa();
+            base.OnMouseDown(e);
+        }
+
+        /// <summary>Quadrado arredondado do icone, no tom suave do destaque.</summary>
+        protected static Rectangle Icone(Graphics g, int x, int y)
+        {
+            Rectangle r = new Rectangle(x, y, Ui.S(40), Ui.S(40));
+            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(11)))
+            using (SolidBrush b = new SolidBrush(Ui.AccentSoft)) g.FillPath(b, p);
+            return r;
+        }
+
+        /// <summary>Nome em seminegrito e a linha de apoio embaixo; guarda a area do nome para o clique.</summary>
+        protected void NomeELinha(Graphics g, string nome, string linha, int x, int y, int largura, Color corLinha)
+        {
+            Size sn = TextRenderer.MeasureText(nome, Ui.FontSection);
+            Nome = new Rectangle(x, y, Math.Min(largura, sn.Width), sn.Height);
+            TextRenderer.DrawText(g, nome, Ui.FontSection, new Rectangle(x, y, largura, sn.Height), Ui.Text,
+                TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(g, linha, Ui.FontSmall, new Rectangle(x, y + sn.Height + Ui.S(2), largura, Ui.FontSmall.Height), corLinha,
+                TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+    }
+
+    /// <summary>
+    /// O ar na Visao geral: nome, "Escritorio · Frio · ambiente 27 °C", - e +
+    /// em volta do alvo grande e a pilula Ligado/Desligado. Os comandos vao
+    /// pelo ServicoCasa.Enviar, com a mesma previa otimista da pagina Casa.
+    /// </summary>
+    internal sealed class CartaoDoArVisao : CartaoDaCasaVisao
+    {
+        public const int Altura = 92;
+        private Aparelho _ar;
+        private readonly BotaoDaVisao _menos, _mais, _liga;
+        private readonly System.Windows.Forms.Timer _espera;
+        private int _alvoPendente = -1;
+
+        internal Aparelho Ar { get { return _ar; } }
+        internal BotaoDaVisao BotaoLiga { get { return _liga; } }
+        internal BotaoDaVisao BotaoMais { get { return _mais; } }
+        internal BotaoDaVisao BotaoMenos { get { return _menos; } }
+        /// <summary>Testes: o ultimo comando montado.</summary>
+        internal Dictionary<string, string> UltimoComando;
+
+        public CartaoDoArVisao()
+        {
+            _menos = new BotaoDaVisao("\uE738"); _menos.AccessibleName = T.CasaMenosGrau; _menos.Click += delegate { Mudar(-1); };
+            _mais = new BotaoDaVisao("\uE710"); _mais.AccessibleName = T.CasaMaisGrau; _mais.Click += delegate { Mudar(+1); };
+            _liga = new BotaoDaVisao(null); _liga.Pilula = true; _liga.AccessibleName = T.CasaLigaDesliga;
+            _liga.Click += delegate { if (_ar != null) Mandar("t_power", _ar.Int("t_power", 0) != 0 ? 0 : 1); };
+            Controls.Add(_menos); Controls.Add(_mais); Controls.Add(_liga);
+            _espera = new System.Windows.Forms.Timer();
+            _espera.Interval = 700;
+            _espera.Tick += delegate
+            {
+                _espera.Stop();
+                if (_alvoPendente < 0) return;
+                int v = _alvoPendente;
+                _alvoPendente = -1;
+                Mandar("t_temp", v);
+            };
+            Puxar();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _espera.Dispose();
+            base.Dispose(disposing);
+        }
+
+        internal override void Puxar()
+        {
+            _ar = null;
+            if (ServicoCasa.Logado)
+                foreach (Aparelho a in ServicoCasa.Aparelhos)
+                    if (a.ArCondicionado) { _ar = a; break; }
+            Preencher();
+            Invalidate();
+        }
+
+        private void Preencher()
+        {
+            if (_ar == null) return;
+            bool on = _ar.Online, ligado = _ar.Int("t_power", 0) != 0;
+            _liga.Aceso = on && ligado;
+            _liga.Text = !on ? T.CasaOffline : ligado ? T.CasaLigado : T.CasaDesligado;
+            _liga.Enabled = on;
+            _menos.Enabled = _mais.Enabled = on && ligado && _ar.Tem("t_temp");
+            _liga.Invalidate();
+            Arranjar();
+        }
+
+        private void Mudar(int passo)
+        {
+            if (_ar == null || !_ar.Tem("t_temp")) return;
+            int min, max;
+            CenaCasa.FaixaC(_ar, out min, out max);
+            if (_ar.Int("t_temp_type", 0) == 1) { min = (int)Math.Round(min * 9.0 / 5 + 32); max = (int)Math.Round(max * 9.0 / 5 + 32); }
+            int atual = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 24);
+            _alvoPendente = Math.Max(min, Math.Min(max, atual + passo));
+            _espera.Stop(); _espera.Start();
+            Invalidate();
+        }
+
+        /// <summary>Testes: manda o alvo pendente sem esperar o timer.</summary>
+        internal void MandarPendente()
+        {
+            _espera.Stop();
+            if (_alvoPendente < 0) return;
+            int v = _alvoPendente; _alvoPendente = -1;
+            Mandar("t_temp", v);
+        }
+
+        private void Mandar(string chave, int valor)
+        {
+            if (_ar == null) return;
+            Dictionary<string, string> p = new Dictionary<string, string>();
+            p[chave] = valor.ToString(CultureInfo.InvariantCulture);
+            _ar.Estado[chave] = p[chave];
+            if (ServicoCasa.RetornoPuid == _ar.Puid) ServicoCasa.CancelarRetorno();
+            Preencher();
+            Invalidate();
+            UltimoComando = p;
+            ServicoCasa.Enviar(_ar.Puid, p, null);
+        }
+
+        protected override void OnResize(EventArgs e) { base.OnResize(e); Arranjar(); }
+
+        private int LarguraDoNumero { get { return Ui.S(64); } }
+
+        private void Arranjar()
+        {
+            if (_liga == null) return;
+            int m = Ui.S(16), bt = Ui.S(32), ph = Ui.S(30);
+            int pw = Math.Max(TextRenderer.MeasureText(T.CasaLigado, Ui.FontMed).Width,
+                     Math.Max(TextRenderer.MeasureText(T.CasaDesligado, Ui.FontMed).Width, TextRenderer.MeasureText(T.CasaOffline, Ui.FontMed).Width)) + Ui.S(30);
+            _liga.SetBounds(Width - m - pw, (Height - ph) / 2, pw, ph);
+            _mais.SetBounds(_liga.Left - Ui.S(18) - bt, (Height - bt) / 2, bt, bt);
+            _menos.SetBounds(_mais.Left - LarguraDoNumero - bt, (Height - bt) / 2, bt, bt);
+        }
+
+        internal string Linha()
+        {
+            if (_ar == null) return "";
+            List<string> l = new List<string>();
+            if (!string.IsNullOrEmpty(_ar.Comodo)) l.Add(_ar.Comodo);
+            if (!_ar.Online) { l.Add(T.CasaOffline); return string.Join(" · ", l.ToArray()); }
+            l.Add(_ar.Int("t_power", 0) != 0 ? TabelaDoAr.Modo(_ar.Int("t_work_mode", -1), _ar.Tipo) : T.CasaDesligado);
+            if (_ar.Tem("f_temp_in")) l.Add(string.Format(T.CasaAmbienteCurto, Visao.Temperatura(_ar, _ar.Num("f_temp_in", 0))));
+            return string.Join(" · ", l.ToArray());
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (_ar == null) return;
+            Graphics g = e.Graphics;
+            Ui.Smooth(g);
+            int m = Ui.S(16);
+            Rectangle ic = Icone(g, m, (Height - Ui.S(40)) / 2);
+            TextRenderer.DrawText(g, "\uE9CA", Ui.FontGlyph11, ic, Ui.AccentText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            int tx = ic.Right + Ui.S(14);
+            int alto = Ui.FontSection.Height + Ui.S(2) + Ui.FontSmall.Height;
+            NomeELinha(g, _ar.Nome, Linha(), tx, (Height - alto) / 2, Math.Max(Ui.S(40), _menos.Left - Ui.S(12) - tx), Ui.Muted);
+
+            bool ligado = _ar.Online && _ar.Int("t_power", 0) != 0;
+            int alvo = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0);
+            Rectangle num = new Rectangle(_menos.Right, 0, _mais.Left - _menos.Right, Height);
+            TextRenderer.DrawText(g, alvo > 0 ? alvo + "°" : "--", Visao.MonoGrande, num, ligado ? Ui.Accent : Ui.Faint,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+    }
+
+    /// <summary>
+    /// A lavadora na Visao geral, so com ciclo em andamento: programa, fase,
+    /// temperatura e centrifugacao; o tempo que falta em ambar com a hora do
+    /// fim; a barra de progresso e as etapas, com a atual em negrito.
+    /// </summary>
+    internal sealed class CartaoDaLavadoraVisao : CartaoDaCasaVisao
+    {
+        public const int Altura = 128;
+        private Aparelho _lav;
+        private readonly System.Windows.Forms.Timer _relogio;
+        private readonly List<string> _etapas = new List<string>();
+
+        internal Aparelho Lavadora { get { return _lav; } }
+
+        public CartaoDaLavadoraVisao()
+        {
+            _relogio = new System.Windows.Forms.Timer();
+            _relogio.Interval = 30000;
+            _relogio.Tick += delegate { Invalidate(); };
+            _relogio.Start();
+            Puxar();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _relogio.Dispose();
+            base.Dispose(disposing);
+        }
+
+        /// <summary>Ha ciclo em andamento para mostrar.</summary>
+        public bool TemCiclo
+        {
+            get
+            {
+                if (_lav == null) return false;
+                CicloAtual c = CicloAtual.De(_lav);
+                return c.Online && c.Rodando;
+            }
+        }
+
+        internal override void Puxar()
+        {
+            _lav = null;
+            if (ServicoCasa.Logado)
+                foreach (Aparelho a in ServicoCasa.Aparelhos)
+                    if (a.Lavadora) { _lav = a; break; }
+            Invalidate();
+        }
+
+        internal string Linha()
+        {
+            if (_lav == null) return "";
+            CicloAtual c = CicloAtual.De(_lav);
+            List<string> l = new List<string>();
+            if (c.Programa > 0) l.Add(TabelaDaLavadora.Programa(c.Programa));
+            l.Add(c.Titulo());
+            if (_lav.Tem("temperature")) l.Add(TabelaDaLavadora.Temperatura(_lav.Int("temperature", 0)));
+            if (_lav.Tem("Spin_speed_rpm")) l.Add(TabelaDaLavadora.Centrifugacao(_lav.Int("Spin_speed_rpm", 0)));
+            return string.Join(" · ", l.ToArray());
+        }
+
+        internal static string Relogio(int minutos)
+        {
+            if (minutos < 0) minutos = 0;
+            return string.Format("{0:00}:{1:00}", minutos / 60, minutos % 60);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (_lav == null) return;
+            Graphics g = e.Graphics;
+            Ui.Smooth(g);
+            CicloAtual c = CicloAtual.De(_lav);
+            int m = Ui.S(16);
+
+            Rectangle ic = Icone(g, m, Ui.S(14));
+            Rectangle r = Rectangle.Inflate(ic, -Ui.S(10), -Ui.S(9));
+            using (Pen pen = new Pen(Ui.AccentText, Ui.S(2) * 0.75f))
+            {
+                using (GraphicsPath gp = Ui.RoundRect(r, Ui.S(3))) g.DrawPath(pen, gp);
+                int d = Math.Min(r.Width, r.Height) * 11 / 20;
+                g.DrawEllipse(pen, r.X + (r.Width - d) / 2, r.Bottom - d - Ui.S(3), d, d);
+            }
+
+            // o tempo que falta, a direita, e a hora do fim embaixo
+            string tempo = Relogio(c.Restante);
+            Size st = TextRenderer.MeasureText(g, tempo, Visao.MonoGrande, Size.Empty, TextFormatFlags.NoPadding);
+            int xt = Width - m - st.Width;
+            TextRenderer.DrawText(g, tempo, Visao.MonoGrande, new Point(xt, Ui.S(12)), Visao.Quente, TextFormatFlags.NoPadding);
+            string fim = T.VisaoFim(Visao.FimDoCiclo(c).ToString("HH:mm"));
+            Size sf = TextRenderer.MeasureText(g, fim, Visao.MonoPequena, Size.Empty, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, fim, Visao.MonoPequena, new Point(Width - m - sf.Width, Ui.S(14) + st.Height + Ui.S(2)), Ui.Muted, TextFormatFlags.NoPadding);
+
+            int tx = ic.Right + Ui.S(14);
+            int alto = Ui.FontSection.Height + Ui.S(2) + Ui.FontSmall.Height;
+            NomeELinha(g, _lav.Nome, Linha(), tx, ic.Top + (ic.Height - alto) / 2, Math.Max(Ui.S(40), Math.Min(xt, Width - m - sf.Width) - Ui.S(14) - tx),
+                c.Erro ? Ui.Danger : Ui.Muted);
+
+            // barra fina de progresso
+            int yb = Ui.S(72);
+            Rectangle trilho = new Rectangle(m, yb, Width - 2 * m, Ui.S(4));
+            using (GraphicsPath p = Ui.RoundRect(trilho, trilho.Height / 2))
+            using (SolidBrush b = new SolidBrush(Ui.Border)) g.FillPath(b, p);
+            int w = (int)Math.Round(trilho.Width * Math.Max(0f, Math.Min(1f, c.Progresso)));
+            if (w >= trilho.Height)
+                using (GraphicsPath p = Ui.RoundRect(new Rectangle(trilho.X, trilho.Y, w, trilho.Height), trilho.Height / 2))
+                using (SolidBrush b = new SolidBrush(c.Pausada ? Ui.Warn : Ui.Accent)) g.FillPath(b, p);
+
+            // etapas, a atual em negrito
+            int atual = EtapasDoCiclo.Montar(_lav, c, _etapas);
+            int n = _etapas.Count;
+            if (n == 0) return;
+            int y = yb + Ui.S(16), larg = (Width - 2 * m) / n;
+            for (int i = 0; i < n; i++)
+            {
+                bool essa = i == atual;
+                Font f = essa ? Ui.FontMed : Ui.FontSmall;
+                Color cor = essa ? Ui.Text : (atual >= 0 && i < atual) ? Ui.Muted : Ui.Faint;
+                TextFormatFlags al = i == 0 ? TextFormatFlags.Left : i == n - 1 ? TextFormatFlags.Right : TextFormatFlags.HorizontalCenter;
+                Rectangle rr = i == 0 ? new Rectangle(m, y, larg, Ui.S(20))
+                    : i == n - 1 ? new Rectangle(Width - m - larg, y, larg, Ui.S(20))
+                    : new Rectangle(m + (Width - 2 * m) * i / (n - 1) - larg / 2, y, larg, Ui.S(20));
+                TextRenderer.DrawText(g, _etapas[i], f, rr, cor, al | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             }
         }
     }
 
+    /// <summary>Sem conta da casa (ou sem aparelhos): convite discreto que abre a pagina Casa.</summary>
+    internal sealed class ConviteDaCasa : CartaoDaCasaVisao
+    {
+        public const int Altura = 76;
+
+        public ConviteDaCasa() { Cursor = Cursors.Hand; }
+
+        internal override void Puxar() { Invalidate(); }
+
+        protected override void OnMouseMove(MouseEventArgs e) { Cursor = Cursors.Hand; }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left) PedirCasa();
+        }
+
+        internal string Titulo { get { return ServicoCasa.Logado ? T.NavCasa : T.VisaoConecteCasa; } }
+
+        internal string Texto
+        {
+            get
+            {
+                if (!ServicoCasa.Logado) return T.CasaResumoSemConta;
+                return ServicoCasa.Buscando ? T.CasaCarregando : T.CasaSemAparelhos;
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Graphics g = e.Graphics;
+            Ui.Smooth(g);
+            int m = Ui.S(16);
+            Rectangle ic = Icone(g, m, (Height - Ui.S(40)) / 2);
+            TextRenderer.DrawText(g, "\uE80F", Ui.FontGlyph11, ic, Ui.AccentText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            string link = T.VisaoAbrirCasa;
+            Size sl = TextRenderer.MeasureText(link, Ui.FontMed);
+            TextRenderer.DrawText(g, link, Ui.FontMed, new Point(Width - m - sl.Width, (Height - sl.Height) / 2), Ui.AccentText, TextFormatFlags.NoPrefix);
+            int tx = ic.Right + Ui.S(14);
+            int alto = Ui.FontSection.Height + Ui.S(2) + Ui.FontSmall.Height;
+            NomeELinha(g, Titulo, Texto, tx, (Height - alto) / 2, Math.Max(Ui.S(40), Width - m - sl.Width - Ui.S(16) - tx), Ui.Muted);
+        }
+    }
+
+    /// <summary>Caixa compacta dos perifericos: nome e carga, com "Baterias ▸" para a pagina.</summary>
+    internal sealed class CaixaDePerifericos : Card
+    {
+        public event EventHandler BateriasPedidas;
+        private Periferico[] _itens = new Periferico[0];
+        private Rectangle _link;
+        public const int Altura = 132;
+        private const int MaxLinhas = 4;
+
+        public CaixaDePerifericos() { Title = null; }
+
+        public void Atualizar(Periferico[] itens)
+        {
+            _itens = itens ?? new Periferico[0];
+            Invalidate();
+        }
+
+        internal int Linhas
+        {
+            get { int n = 0; foreach (Periferico p in _itens) if (p != null) n++; return Math.Min(n, MaxLinhas); }
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e) { Cursor = _link.Contains(e.Location) ? Cursors.Hand : Cursors.Default; base.OnMouseMove(e); }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left && _link.Contains(e.Location) && BateriasPedidas != null) BateriasPedidas(this, EventArgs.Empty);
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Graphics g = e.Graphics;
+            int m = Ui.S(14);
+            TextRenderer.DrawText(g, T.VisaoChipPerifericos, Ui.FontMed, new Point(m, Ui.S(12)), Ui.Text, TextFormatFlags.NoPrefix);
+            Size sl = TextRenderer.MeasureText(T.VisaoBaterias, Ui.FontSmall);
+            _link = new Rectangle(Width - m - sl.Width, Ui.S(13), sl.Width, sl.Height);
+            TextRenderer.DrawText(g, T.VisaoBaterias, Ui.FontSmall, _link.Location, Ui.AccentText, TextFormatFlags.NoPrefix);
+
+            int y = Ui.S(42), passo = Ui.S(21), linhas = 0;
+            foreach (Periferico p in _itens)
+            {
+                if (p == null || linhas >= MaxLinhas) continue;
+                string pct = p.Bateria.HasValue ? p.Bateria.Value + "%" : "--";
+                Color cor = !p.Bateria.HasValue ? Ui.Faint : p.Carregando ? Ui.AccentText
+                    : p.Bateria.Value <= EventosDaVisao.BateriaBaixa ? Ui.Danger : Visao.Quente;
+                Size sp = TextRenderer.MeasureText(pct, Visao.MonoTexto);
+                TextRenderer.DrawText(g, pct, Visao.MonoTexto, new Point(Width - m - sp.Width, y), cor, TextFormatFlags.NoPrefix);
+                TextRenderer.DrawText(g, p.Nome, Ui.FontBase, new Rectangle(m, y, Width - 2 * m - sp.Width - Ui.S(8), passo), Ui.Text,
+                    TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                y += passo;
+                linhas++;
+            }
+            if (linhas == 0)
+                TextRenderer.DrawText(g, T.VisaoNenhum, Ui.FontSmall, new Point(m, y), Ui.Muted, TextFormatFlags.NoPrefix);
+        }
+    }
+
+    /// <summary>Os ultimos eventos (EventosDaVisao), em monoespacada, do mais novo ao mais velho.</summary>
+    internal sealed class CaixaDeEventos : Card
+    {
+        private readonly EventHandler _mudou;
+        private const int MaxLinhas = 5;
+
+        public CaixaDeEventos()
+        {
+            Title = null;
+            _mudou = delegate { Visao.NaInterface(this, Invalidate); };
+            EventosDaVisao.Mudou += _mudou;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) EventosDaVisao.Mudou -= _mudou;
+            base.Dispose(disposing);
+        }
+
+        private int Passo { get { return Ui.S(19); } }
+
+        /// <summary>Quantas linhas cabem nesta altura (3 a 5).</summary>
+        internal int Cabem { get { return Math.Max(1, Math.Min(MaxLinhas, (Height - Ui.S(46)) / Passo)); } }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Graphics g = e.Graphics;
+            int m = Ui.S(14);
+            TextRenderer.DrawText(g, T.VisaoEventos, Visao.MonoRotulo, new Point(m, Ui.S(15)), Ui.Muted, TextFormatFlags.NoPrefix);
+            EventosDaVisao.Evento[] ev = EventosDaVisao.Recentes(Cabem);
+            int y = Ui.S(42);
+            if (ev.Length == 0)
+            {
+                TextRenderer.DrawText(g, T.VisaoSemEventos, Ui.FontSmall, new Rectangle(m, y, Width - 2 * m, Ui.S(36)), Ui.Muted,
+                    TextFormatFlags.Left | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                return;
+            }
+            int wh = TextRenderer.MeasureText("00:00", Visao.MonoPequena).Width + Ui.S(4);
+            foreach (EventosDaVisao.Evento x in ev)
+            {
+                TextRenderer.DrawText(g, x.Hora.ToString("HH:mm"), Visao.MonoPequena, new Point(m, y), Ui.Faint, TextFormatFlags.NoPrefix);
+                TextRenderer.DrawText(g, x.Texto, Visao.MonoPequena, new Rectangle(m + wh, y, Width - 2 * m - wh, Passo), Ui.Text,
+                    TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                y += Passo;
+            }
+        }
+    }
+
+    /// <summary>
+    /// O cartao do cooler. Na Visao geral nova pinta tambem "● conectado" no
+    /// titulo e a linha fina que separa a previa das duas curvas.
+    /// </summary>
+    internal sealed class CartaoDoCooler : Card
+    {
+        public bool Nova, Conectado;
+        public int Linha = -1;
+
+        internal string Estado { get { return "● " + (Conectado ? T.VisaoConectado : T.VisaoDesconectado); } }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (!Nova) return;
+            Graphics g = e.Graphics;
+            int m = Ui.S(14);
+            string txt = Conectado ? T.VisaoConectado : T.VisaoDesconectado;
+            Size st = TextRenderer.MeasureText(txt, Ui.FontSmall);
+            Size sp = TextRenderer.MeasureText("●", Ui.FontSmall);
+            int y = (TitleHeight - st.Height) / 2;
+            TextRenderer.DrawText(g, txt, Ui.FontSmall, new Point(Width - m - st.Width, y), Ui.Muted, TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(g, "●", Ui.FontSmall, new Point(Width - m - st.Width - sp.Width + Ui.S(4), y), Conectado ? Visao.Verde : Ui.Faint, TextFormatFlags.NoPrefix);
+            if (Linha > 0)
+                using (Pen p = new Pen(Ui.Border)) g.DrawLine(p, m, Linha, Width - m, Linha);
+        }
+    }
+
+
+
     public static partial class T
     {
-        public static string VisaoNovaOpcao { get { return P("Visão geral nova (em teste)", "New overview (preview)"); } }
-        public static string VisaoNovaNota { get { return P("PC, periféricos e casa com o mesmo peso; o cooler num cartão menor que recolhe.", "PC, peripherals and home with equal weight; the cooler in a smaller, collapsible card."); } }
-        public static string VisaoChipPC { get { return P("Computador", "Computer"); } }
+        public static string VisaoNovaOpcao { get { return P("Usar a Visão geral clássica", "Use the classic overview"); } }
+        public static string VisaoNovaNota { get { return P("A de antes: o display do cooler em destaque e a casa numa faixa embaixo.", "The previous layout: the cooler display up front and the home in a strip below."); } }
         public static string VisaoChipPerifericos { get { return P("Periféricos", "Peripherals"); } }
         public static string VisaoChipCooler { get { return P("Display do cooler", "Cooler display"); } }
         public static string VisaoNenhum { get { return P("nenhum conectado", "none connected"); } }
-        public static string VisaoSemConta { get { return P("conectar conta", "connect account"); } }
+        public static string VisaoTudoEmOrdem(string nome) { return string.IsNullOrEmpty(nome) ? P("Tudo em ordem.", "All good.") : string.Format(P("Tudo em ordem, {0}.", "All good, {0}."), nome); }
+        public static string VisaoAtencaoLavadora { get { return P("A lavadora acusou erro", "The washer reported an error"); } }
+        public static string VisaoAtencaoAr { get { return P("O ar-condicionado acusou falha", "The air conditioner reported a fault"); } }
+        public static string VisaoAtencaoBateria(string nome) { return string.Format(P("Bateria baixa no {0}", "{0} battery is low"), nome); }
+        public static string VisaoRoupaPronta(string h) { return string.Format(P("A roupa fica pronta às {0}", "Laundry done at {0}"), h); }
+        public static string VisaoComodoA(string comodo, string t) { return string.Format(P("{0} a {1}", "{0} at {1}"), comodo, t); }
+        public static string VisaoAmbienteNome { get { return P("ambiente", "indoors"); } }
+        public static string VisaoEventos { get { return P("EVENTOS", "EVENTS"); } }
+        public static string VisaoSemEventos { get { return P("Nada novo desde que o app abriu.", "Nothing new since the app started."); } }
+        public static string VisaoBaterias { get { return P("Baterias ▸", "Batteries ▸"); } }
+        public static string VisaoAbrirPaineis { get { return P("Abrir Painéis ▸", "Open Panels ▸"); } }
+        public static string VisaoAbrirCasa { get { return P("Abrir Casa ▸", "Open Home ▸"); } }
+        public static string VisaoConectado { get { return P("conectado", "connected"); } }
+        public static string VisaoDesconectado { get { return P("desconectado", "disconnected"); } }
+        public static string VisaoConecteCasa { get { return P("Conecte a casa", "Connect your home"); } }
+        public static string VisaoFim(string h) { return P("fim ", "ends ") + h; }
+
+        public static string DashboardMetricMono(int index, string fallback)
+        {
+            switch (index)
+            {
+                case 0: return P("CPU · TEMPERATURA", "CPU · TEMPERATURE");
+                case 1: return P("CPU · USO", "CPU · USAGE");
+                case 2: return P("GPU · TEMPERATURA", "GPU · TEMPERATURE");
+                case 3: return P("GPU · USO", "GPU · USAGE");
+                case 4: return P("MEMÓRIA · USO", "MEMORY · USAGE");
+                default: return Visao.Maiusculas(fallback);
+            }
+        }
+
+        public static string EvArLigado(string t) { return P("Ar ligado · ", "AC on · ") + t; }
+        public static string EvArDesligado { get { return P("Ar desligado", "AC off"); } }
+        public static string EvArTemp(string t) { return P("Ar ajustado para ", "AC set to ") + t; }
+        public static string EvArModo(string m) { return P("Ar no modo ", "AC mode: ") + m; }
+        public static string EvArOffline { get { return P("Ar desconectado", "AC went offline"); } }
+        public static string EvLavOffline { get { return P("Lavadora desconectada", "Washer went offline"); } }
+        public static string EvLavInicio(string p) { return P("Lavadora começou: ", "Washer started: ") + p; }
+        public static string EvLavFase(string f) { return P("Lavadora: ", "Washer: ") + f; }
+        public static string EvLavFim { get { return P("Lavadora terminou o ciclo", "Washer finished"); } }
+        public static string EvLavErro(int c) { return P("Lavadora com erro ", "Washer error ") + c; }
+        public static string EvBateria(string n, int p) { return P("Bateria baixa: ", "Low battery: ") + n + " " + p + "%"; }
     }
 }

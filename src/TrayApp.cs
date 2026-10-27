@@ -1083,6 +1083,8 @@ namespace MhiagosControl
                     Notificar(titulo, texto, ToolTipIcon.Warning, "casa: " + titulo + " - " + texto);
                 };
                 ServicoCasa.Iniciar();
+                // Os eventos da Visao geral contam desde o arranque, com a janela fechada tambem.
+                EventosDaVisao.Iniciar();
                 // A casa no widget de bateria: o clique num item dela abre a pagina Casa, fora do clique (a janela e modal).
                 CasaNoWidget.AbrirCasa = delegate { Marshal(delegate { _paginaPedida = "casa"; PedirConfiguracao(); }); };
             }

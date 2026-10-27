@@ -130,10 +130,12 @@ namespace MhiagosControl
         public bool CasaSemBipe = false;
         /// <summary>Perifericos escondidos, "fonte|inicio do nome" separados por virgula. Ver Perifericos.Ocultos.</summary>
         public string PerifericosOcultos = "GHub|G325,GHub|PRO X";
-        /// <summary>Visao geral nova (faixa de status e grade), em teste; desligada por padrao.</summary>
-        public bool VisaoGeralNova = false;
-        /// <summary>Na Visao geral nova, o cartao do cooler recolhido.</summary>
-        public bool VisaoCoolerRecolhido = false;
+        /// <summary>
+        /// Visao geral nova (cabecalho, casa e cooler em duas colunas), a padrao.
+        /// Gravada como "visaoclassica" invertida: a chave antiga "visaogeralnova=0"
+        /// que todo config.ini ja tem deixaria a nova desligada para sempre.
+        /// </summary>
+        public bool VisaoGeralNova = true;
 
         /// <summary>
         /// Ordem das paginas na barra lateral, como chaves separadas por
@@ -228,7 +230,6 @@ namespace MhiagosControl
             CasaSemBipe = other.CasaSemBipe;
             PerifericosOcultos = other.PerifericosOcultos;
             VisaoGeralNova = other.VisaoGeralNova;
-            VisaoCoolerRecolhido = other.VisaoCoolerRecolhido;
             NavOrder = other.NavOrder;
             MetricsChosen = other.MetricsChosen;
             MetricRange = other.MetricRange;
@@ -575,8 +576,7 @@ namespace MhiagosControl
                         else if (k == "sidebarcollapsed") c.SidebarCollapsed = (v == "1");
                         else if (k == "casasembipe") c.CasaSemBipe = (v == "1");
                         else if (k == "perifericosocultos") c.PerifericosOcultos = v;
-                        else if (k == "visaogeralnova") c.VisaoGeralNova = (v == "1");
-                        else if (k == "visaocoolerrecolhido") c.VisaoCoolerRecolhido = (v == "1");
+                        else if (k == "visaoclassica") c.VisaoGeralNova = (v != "1");
                         else if (k == "navorder") c.NavOrder = v;
                         else if (k == "metricschosen") c.MetricsChosen = (v == "1");
                         else if (k == "metricrange") c.MetricRange = MetricHistory.JanelaValida(ParseInt(v));
@@ -791,8 +791,7 @@ namespace MhiagosControl
                 sb.AppendLine("sidebarcollapsed=" + (SidebarCollapsed ? "1" : "0"));
                 sb.AppendLine("casasembipe=" + (CasaSemBipe ? "1" : "0"));
                 sb.AppendLine("perifericosocultos=" + (PerifericosOcultos ?? ""));
-                sb.AppendLine("visaogeralnova=" + (VisaoGeralNova ? "1" : "0"));
-                sb.AppendLine("visaocoolerrecolhido=" + (VisaoCoolerRecolhido ? "1" : "0"));
+                sb.AppendLine("visaoclassica=" + (VisaoGeralNova ? "0" : "1"));
                 if (!string.IsNullOrEmpty(NavOrder)) sb.AppendLine("navorder=" + NavOrder);
                 sb.AppendLine("metricschosen=" + (MetricsChosen ? "1" : "0"));
                 sb.AppendLine("metricrange=" + MetricRange.ToString(CultureInfo.InvariantCulture));

@@ -341,7 +341,12 @@ namespace MhiagosControl
                         }
                         casa.MostrarSemNuvem(Exemplo());
 
-                        // Item 8: a casa na Visao geral, entre perifericos e especificacoes.
+                        // Item 8: a casa na Visao geral CLASSICA, entre perifericos e especificacoes.
+                        Config cfgForm = (Config)Field(form, "_cfg");
+                        Verdade(cfgForm.VisaoGeralNova && new Config().VisaoGeralNova, "Visao geral nova ligada por padrao " + language);
+                        Verdade(Config.FromText("visaogeralnova=0\n[profile]\nname=A").VisaoGeralNova && !Config.FromText("visaoclassica=1\n[profile]\nname=A").VisaoGeralNova,
+                            "a chave antiga nao desliga a nova; visaoclassica=1 volta a classica");
+                        cfgForm.VisaoGeralNova = false;
                         for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
                         foreach (int largura in new int[] { 1300, 880 })
                         {
@@ -362,65 +367,130 @@ namespace MhiagosControl
                             rc.Ar.Estado["t_power"] = "1";
                             rc.Puxar();
                         }
-                        // Item 10: Visao geral nova, atras da opcao (desligada por padrao).
-                        Config cfgForm = (Config)Field(form, "_cfg");
-                        Verdade(!cfgForm.VisaoGeralNova && !((Control)Field(form, "_faixaStatus")).Visible, "Visao geral nova desligada por padrao " + language);
+                        // Visao geral nova (a padrao): 1300 e 880 px, escuro e claro, com e sem ciclo.
                         cfgForm.VisaoGeralNova = true;
+                        Control pg = (Control)Field(form, "_pgVisao");
+                        CartaoDoCooler cooler = (CartaoDoCooler)Field(form, "_cardCooler");
+                        CabecalhoDaVisao cab = (CabecalhoDaVisao)Field(form, "_vgCabecalho");
+                        CartaoDoArVisao arv = (CartaoDoArVisao)Field(form, "_vgAr");
+                        CartaoDaLavadoraVisao lavv = (CartaoDaLavadoraVisao)Field(form, "_vgLav");
+                        Control convite = (Control)Field(form, "_vgConvite");
+                        Control evs = (Control)Field(form, "_vgEventos"), pfs = (Control)Field(form, "_vgPerif");
+                        Control specsN = (Control)Field(form, "_cardSpecs");
+                        List<MetricCard> tiles = (List<MetricCard>)Field(form, "_vgTiles");
+                        string dirCap = System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe"), "visao-geral-ef");
+                        bool capturar = language == T.PtBr;
+                        EventosDaVisao.Limpar();
+                        ServicoCasa.Simular(Exemplo());
+                        try
+                        {
+                            foreach (bool escuro in new bool[] { true, false })
+                            {
+                                bool antes = Theme.IsDark;
+                                Theme.Forcado = escuro;
+                                if (antes != escuro) Theme.Recolorir(form, antes);
+                                foreach (int largura in new int[] { 1300, 880 })
+                                    foreach (string estado in new string[] { "secando", "concluido" })
+                                    {
+                                        List<Aparelho> l = Exemplo();
+                                        if (estado != "secando") l[0] = Lavadora(estado);
+                                        ServicoCasa.Simular(l);
+                                        form.Size = new Size(largura, 900);
+                                        InvokePrivate(form, "ArranjarVisaoGeral");
+                                        string sufixo = "nova-" + language + "-" + largura + "-" + (escuro ? "escuro" : "claro") + "-" + estado;
+                                        Verdade(cab.Visible && cab.Frase.Length > 0 && cab.Height > 0, "cabecalho com a frase " + sufixo);
+                                        Verdade(arv.Visible && arv.Ar != null && !convite.Visible, "ar na Visao geral nova " + sufixo);
+                                        Verdade(lavv.Visible == (estado == "secando"), "lavadora so com ciclo em andamento " + sufixo);
+                                        Verdade(!((Control)Field(form, "_cardPerif")).Visible && !((Control)Field(form, "_cardCasa")).Visible,
+                                            "faixa e resumo da classica escondidos " + sufixo);
+                                        Verdade(((Control)Field(form, "_vgP1")).Parent == cooler && ((Control)Field(form, "_vgP2")).Parent == cooler && cooler.Nova,
+                                            "curvas dos mostradores dentro do cartao do cooler " + sufixo);
+                                        if (largura == 1300)
+                                        {
+                                            Verdade(tiles.Count < 5 || tiles[4].Top == tiles[0].Top, "cinco leituras numa fileira " + sufixo);
+                                            Verdade(cooler.Left > arv.Right && cooler.Top == arv.Top, "cooler na coluna da direita " + sufixo);
+                                            Verdade(Math.Abs(cooler.Bottom - evs.Bottom) <= 1, "as duas colunas terminam juntas " + sufixo);
+                                        }
+                                        else
+                                        {
+                                            Verdade(tiles.Count < 5 || (tiles[3].Top > tiles[0].Top && tiles[2].Top == tiles[0].Top), "leituras em 3 + 2 " + sufixo);
+                                            Verdade(cooler.Top >= evs.Bottom && cooler.Left == arv.Left && cooler.Width == arv.Width, "uma coluna so " + sufixo);
+                                        }
+                                        Verdade(specsN.Top >= Math.Max(cooler.Bottom, evs.Bottom), "especificacoes no rodape " + sufixo);
+                                        List<Control> vis = new List<Control>();
+                                        foreach (Control ctl in pg.Controls) if (ctl.Visible && ctl.Dock == DockStyle.None) vis.Add(ctl);
+                                        bool ok = true;
+                                        int limite = pg.Width - Pagina.LarguraDaBarra;
+                                        for (int i = 0; i < vis.Count; i++)
+                                        {
+                                            if (vis[i].Right > limite || vis[i].Left < 0) ok = false;
+                                            for (int j = i + 1; j < vis.Count; j++) if (vis[i].Bounds.IntersectsWith(vis[j].Bounds)) ok = false;
+                                        }
+                                        Verdade(ok, "Visao geral nova sem sobreposicao nem rolagem horizontal " + sufixo);
+                                        SemSobrepor(cooler, "cartao do cooler " + sufixo);
+                                        SemSobrepor(arv, "cartao do ar " + sufixo);
+                                        if (capturar && estado == "secando" && (largura == 1300 || escuro))
+                                            CapturarEm(dirCap, form, "visao-geral-" + (escuro ? "escuro" : "claro") + "-" + largura);
+                                    }
+                            }
+                        }
+                        finally
+                        {
+                            bool antes = Theme.IsDark;
+                            Theme.Forcado = null;
+                            if (antes != Theme.IsDark) Theme.Recolorir(form, antes);
+                        }
+                        // Eventos: as idas e vindas entre "secando" e "concluido" registram a lavadora.
+                        EventosDaVisao.Evento[] ev = EventosDaVisao.Recentes(5);
+                        Verdade(ev.Length > 0 && ev.Length <= 5, "eventos da lavadora registrados " + language);
+                        bool viuCiclo = false;
+                        foreach (EventosDaVisao.Evento x in ev) if (x.Texto == T.EvLavFim || x.Texto.StartsWith(T.EvLavInicio(""))) viuCiclo = true;
+                        Verdade(viuCiclo, "evento de inicio ou fim do ciclo " + language);
+                        // Ar: a pilula desliga, o + sobe um grau, tudo por ServicoCasa.Enviar.
+                        ServicoCasa.Simular(Exemplo());
+                        InvokePrivate(form, "ArranjarVisaoGeral");
+                        InvokePrivate(arv.BotaoLiga, "OnClick", EventArgs.Empty);
+                        Verdade(arv.UltimoComando != null && arv.UltimoComando.Count == 1 && arv.UltimoComando["t_power"] == "0", "pilula do ar manda t_power " + language);
+                        ServicoCasa.Simular(Exemplo());
+                        InvokePrivate(arv.BotaoMais, "OnClick", EventArgs.Empty);
+                        arv.MandarPendente();
+                        Verdade(arv.UltimoComando != null && arv.UltimoComando.Count == 1 && arv.UltimoComando["t_temp"] == "24", "+ do ar manda t_temp 24 " + language);
+                        Verdade(arv.Linha().Contains("Escritório") && arv.Linha().Contains(string.Format(T.CasaAmbienteCurto, "22 °C")), "linha do ar com comodo e ambiente " + language);
+                        Verdade(lavv.Linha().Contains("rpm"), "linha da lavadora com a centrifugacao " + language);
+                        Igual("01:25", CartaoDaLavadoraVisao.Relogio(85), "tempo da lavadora em hh:mm");
+                        Verdade(Visao.Resumo().Contains(T.VisaoComodoA("escritório", "22 °C")) || !T.Pt, "resumo do cabecalho com o comodo " + language);
+                        // Sem conta: convite no lugar do ar e da lavadora.
+                        ServicoCasa.PararSimulacao();
                         foreach (int largura in new int[] { 1300, 880 })
                         {
                             form.Size = new Size(largura, 900);
                             InvokePrivate(form, "ArranjarVisaoGeral");
-                            string sufixo = "nova-" + language + "-" + largura;
-                            Control pg = (Control)Field(form, "_pgVisao");
-                            FaixaDeStatus fx = (FaixaDeStatus)Field(form, "_faixaStatus");
-                            Verdade(fx.Visible && fx.Chips.Count == 4, "faixa de status com quatro chips " + sufixo);
-                            ResumoDaCasa rcn = (ResumoDaCasa)Field(form, "_cardCasa");
-                            Verdade(rcn.Top > fx.Bottom && rcn.Top < ((Control)Field(form, "_cardCooler")).Top, "casa logo abaixo da faixa, acima do cooler " + sufixo);
+                            string sufixo = "sem-conta-" + language + "-" + largura;
+                            Verdade(convite.Visible && !arv.Visible && !lavv.Visible, "convite \"Conecte a casa\" sem conta " + sufixo);
+                            Verdade(convite.Bottom <= pfs.Top, "convite acima das caixas " + sufixo);
                             List<Control> vis = new List<Control>();
-                            foreach (Control ctl in pg.Controls) if (ctl.Visible) vis.Add(ctl);
+                            foreach (Control ctl in pg.Controls) if (ctl.Visible && ctl.Dock == DockStyle.None) vis.Add(ctl);
                             bool ok = true;
                             for (int i = 0; i < vis.Count; i++)
-                            {
-                                if (vis[i].Right > pg.Width || vis[i].Left < 0) ok = false;
                                 for (int j = i + 1; j < vis.Count; j++) if (vis[i].Bounds.IntersectsWith(vis[j].Bounds)) ok = false;
-                            }
-                            Verdade(ok, "Visao geral nova sem sobreposicao " + sufixo);
-                            for (int i = 0; i < fx.Chips.Count; i++)
-                            {
-                                string v = fx.Chips[i].Valor();
-                                Verdade(v != null && v.Length > 0, "chip " + fx.Chips[i].Chave + " com texto " + sufixo);
-                            }
-                            CaptureEvolution(form, "visao-" + sufixo);
-                            // Cooler recolhido: vira barra de titulo na largura toda, sem sobrepor nada.
-                            Card cooler = (Card)Field(form, "_cardCooler");
-                            cfgForm.VisaoCoolerRecolhido = true;
-                            InvokePrivate(form, "ArranjarVisaoGeral");
-                            Verdade(cooler.Height <= cooler.TitleHeight + 2 && !((Control)Field(form, "_vgPreview")).Visible, "cooler recolhido so com o titulo " + sufixo);
-                            Verdade(((Control)Field(form, "_vgRecolher")).Visible, "seta de recolher visivel " + sufixo);
-                            vis.Clear();
-                            foreach (Control ctl in pg.Controls) if (ctl.Visible) vis.Add(ctl);
-                            ok = true;
-                            for (int i = 0; i < vis.Count; i++)
-                            {
-                                if (vis[i].Right > pg.Width || vis[i].Left < 0) ok = false;
-                                for (int j = i + 1; j < vis.Count; j++) if (vis[i].Bounds.IntersectsWith(vis[j].Bounds)) ok = false;
-                            }
-                            Verdade(ok, "cooler recolhido sem sobreposicao " + sufixo);
-                            CaptureEvolution(form, "visao-" + sufixo + "-cooler-recolhido");
-                            cfgForm.VisaoCoolerRecolhido = false;
-                            InvokePrivate(form, "ArranjarVisaoGeral");
-                            Verdade(cooler.Height > cooler.TitleHeight * 3 && ((Control)Field(form, "_vgPreview")).Visible, "cooler reaberto " + sufixo);
+                            Verdade(ok, "sem conta sem sobreposicao " + sufixo);
+                            if (capturar && largura == 1300) CapturarEm(dirCap, form, "visao-geral-sem-conta-escuro-1300");
                         }
+                        // Clique no convite abre a pagina Casa.
+                        InvokePrivate(convite, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, 10, 10, 0));
+                        Verdade(nav.Selected != null && nav.Selected.Key == "casa", "convite abre a pagina Casa " + language);
+                        for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+
+                        // A classica continua disponivel e sem as pecas da nova.
                         cfgForm.VisaoGeralNova = false;
                         InvokePrivate(form, "ArranjarVisaoGeral");
-                        Verdade(!((Control)Field(form, "_faixaStatus")).Visible, "desligar volta a Visao geral classica " + language);
-                        Verdade(!((Control)Field(form, "_vgRecolher")).Visible && ((Control)Field(form, "_vgPreview")).Visible, "classica sem seta de recolher " + language);
-                        ServicoCasa.PararSimulacao();
+                        Verdade(!cab.Visible && !convite.Visible && ((Control)Field(form, "_cardPerif")).Visible && ((Control)Field(form, "_vgP1")).Parent == pg,
+                            "desligar volta a Visao geral classica " + language);
                         ResumoDaCasa rs = (ResumoDaCasa)Field(form, "_cardCasa");
                         rs.Puxar();
                         Verdade(rs.Ar == null && ((FlatBtn)Field(rs, "_convite")).Visible, "sem conta: convite para a pagina Casa " + language);
                         SemSobrepor(rs, "resumo sem conta " + language);
-                        CaptureEvolution(form, "casa-visao-sem-conta-" + language);
+                        cfgForm.VisaoGeralNova = true;
                     }
                 }
             }
@@ -684,6 +754,18 @@ namespace MhiagosControl
             Igual(string.Format(T.CasaModoN, 7), TabelaDoAr.Modo(7, "008"), "valor desconhecido vai pelo numero");
             Igual(T.CasaVentoBaixo, TabelaDoAr.Ventilador(2, "008"), "ventilador 2 e o minimo no 008");
             Igual(T.CasaVentoAlto, TabelaDoAr.Ventilador(4, "008"), "ventilador 4 e o maximo no 008");
+        }
+
+        /// <summary>Captura para entregar (so com MHIAGOS_VISUAL_DIR definido, como as outras).</summary>
+        private static void CapturarEm(string pasta, Control c, string nome)
+        {
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR"))) return;
+            System.IO.Directory.CreateDirectory(pasta);
+            using (Bitmap b = new Bitmap(c.Width, c.Height))
+            {
+                c.DrawToBitmap(b, new Rectangle(Point.Empty, b.Size));
+                b.Save(System.IO.Path.Combine(pasta, nome + ".png"), System.Drawing.Imaging.ImageFormat.Png);
+            }
         }
 
         /// <summary>Filhos visiveis nao se cruzam e nao saem do cartao.</summary>
