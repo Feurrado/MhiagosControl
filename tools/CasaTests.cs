@@ -86,6 +86,75 @@ namespace MhiagosControl
                 }
                 finally { Ui.AnimacoesForcadas = antes; f.Close(); }
             }
+            // Quadros reais com o relogio do app: ligar e +1 no cartao do ar da Visao geral, pelo fluxo simulado.
+            CapturarQuadrosDoAr();
+        }
+
+        private static void EsperarQuadros(int ms)
+        {
+            System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < ms) { Application.DoEvents(); System.Threading.Thread.Sleep(4); }
+        }
+
+        private static long Assinatura(Bitmap b)
+        {
+            long s = 0;
+            for (int y = 0; y < b.Height; y += 2)
+                for (int x = 0; x < b.Width; x += 2) s = s * 31 + b.GetPixel(x, y).ToArgb();
+            return s;
+        }
+
+        private static void CapturarQuadrosDoAr()
+        {
+            bool? antes = Ui.AnimacoesForcadas;
+            string dir = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR")) ? null
+                : System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe"), "anim");
+            if (dir != null) System.IO.Directory.CreateDirectory(dir);
+            List<Aparelho> l = Exemplo();
+            l[1].Estado["t_power"] = "0";
+            ServicoCasa.Simular(l);
+            try
+            {
+                Ui.AnimacoesForcadas = true;
+                using (Form f = new Form())
+                {
+                    f.ShowInTaskbar = false; f.StartPosition = FormStartPosition.Manual; f.Location = new Point(-30000, -30000);
+                    f.FormBorderStyle = FormBorderStyle.None; f.ClientSize = new Size(Ui.S(560), Ui.S(92)); f.BackColor = Ui.Window;
+                    CartaoDoArVisao c = new CartaoDoArVisao();
+                    c.SetBounds(0, 0, Ui.S(560), Ui.S(92));
+                    f.Controls.Add(c);
+                    f.Show();
+                    c.Puxar();
+                    // fora da tela o Windows nao manda WM_PAINT: uma pintura antes do clique, como na janela de verdade
+                    using (Bitmap pre = new Bitmap(c.Width, c.Height)) c.DrawToBitmap(pre, new Rectangle(0, 0, c.Width, c.Height));
+                    EsperarQuadros(60);
+                    string[] seq = { "ligar", "mais" };
+                    int[][] tempos = { new int[] { 0, 60, 140, 240, 380, 560 }, new int[] { 0, 40, 90, 150, 220, 330 } };
+                    foreach (string nome in seq)
+                    {
+                        if (nome == "ligar") InvokePrivate(c.BotaoLiga, "OnClick", EventArgs.Empty);
+                        else InvokePrivate(c.BotaoMais, "OnClick", EventArgs.Empty);
+                        HashSet<long> vistos = new HashSet<long>();
+                        int ant = 0;
+                        int[] ts = nome == "ligar" ? tempos[0] : tempos[1];
+                        for (int i = 0; i < ts.Length; i++)
+                        {
+                            EsperarQuadros(ts[i] - ant); ant = ts[i];
+                            using (Bitmap b = new Bitmap(c.Width, c.Height))
+                            {
+                                c.DrawToBitmap(b, new Rectangle(0, 0, c.Width, c.Height));
+                                vistos.Add(Assinatura(b));
+                                if (dir != null) b.Save(System.IO.Path.Combine(dir, nome + "-" + i + "-" + ts[i] + "ms.png"), System.Drawing.Imaging.ImageFormat.Png);
+                            }
+                        }
+                        Verdade(vistos.Count >= 4, "animacao de " + nome + " muda de quadro em quadro (" + vistos.Count + " quadros diferentes de " + ts.Length + ")");
+                        EsperarQuadros(800);
+                    }
+                    c.MandarPendente();
+                    f.Close();
+                }
+            }
+            finally { Ui.AnimacoesForcadas = antes; ServicoCasa.PararSimulacao(); }
         }
 
         private static void CasaCodigoDoLogin()

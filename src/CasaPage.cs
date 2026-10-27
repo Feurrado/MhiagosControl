@@ -1041,11 +1041,11 @@ namespace MhiagosControl
             }
             using (SolidBrush b = new SolidBrush(fundo)) g.FillEllipse(b, r);
             float fl = Flash.Intensidade;
-            if (fl > 0f) using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(110 * fl), Ui.Accent))) g.FillEllipse(b, r);
+            if (fl > 0f) using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(200 * fl), Ui.Accent))) g.FillEllipse(b, r);
             float pu = TA.Pulso;
             if (pu >= 0f)
-                using (Pen p = new Pen(Color.FromArgb((int)(150 * (1f - pu)), Ui.Accent), 2f))
-                    g.DrawEllipse(p, RectangleF.Inflate(r, -Width * 0.12f * (1f - pu), -Height * 0.12f * (1f - pu)));
+                using (Pen p = new Pen(Color.FromArgb((int)(220 * (1f - pu)), Color.White), 3f))
+                    g.DrawEllipse(p, RectangleF.Inflate(r, -Width * 0.3f * (1f - pu), -Height * 0.3f * (1f - pu)));
             using (Pen p = new Pen(borda)) g.DrawEllipse(p, r);
             if (Focused && ShowFocusCues)
                 using (Pen p = new Pen(Ui.Accent, 2f)) g.DrawEllipse(p, Rectangle.Inflate(r, -2, -2));

@@ -435,7 +435,7 @@ namespace MhiagosControl
             }
             if (_sobre && Enabled) using (SolidBrush b = new SolidBrush(Ui.AccentSoft)) g.FillEllipse(b, r);
             float fl = Flash.Intensidade;
-            if (fl > 0f) using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(140 * fl), Ui.Accent))) g.FillEllipse(b, r);
+            if (fl > 0f) using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(210 * fl), Ui.Accent))) g.FillEllipse(b, r);
             using (Pen pen = new Pen(Enabled ? Ui.Accent : Ui.Border, 1.5f)) g.DrawEllipse(pen, r);
             TextRenderer.DrawText(g, _glifo, Ui.FontGlyph9, r, Enabled ? Ui.AccentText : Ui.Faint,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
@@ -685,15 +685,28 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
             int m = Ui.S(16);
-            // Ligar e desligar: o icone vai do cinza ao azul (e volta) em ~250 ms, com um pulso ao ligar.
+            // Ligar e desligar: o icone vai do cinza ao azul (e volta) em ~450 ms. Ao ligar, um anel
+            // azul cresce ate 1,6x e some, e a borda do cartao acende e esmaece; ao desligar, um anel
+            // cinza se fecha sobre o icone, como quem apaga.
             bool ligadoAgora = _ar.Online && _ar.Int("t_power", 0) != 0;
             Lig.Definir(ligadoAgora);
             float lig = Lig.Valor;
             Rectangle ic = new Rectangle(m, (Height - Ui.S(40)) / 2, Ui.S(40), Ui.S(40));
-            float pu = Lig.Pulso;
+            float pu = Lig.Pulso, ap = Lig.Apagando;
             if (pu >= 0f)
-                using (GraphicsPath pp = Ui.RoundRect(Rectangle.Inflate(ic, (int)(Ui.S(7) * pu), (int)(Ui.S(7) * pu)), Ui.S(11) + (int)(Ui.S(7) * pu)))
-                using (Pen pen = new Pen(Color.FromArgb((int)(160 * (1f - pu)), Ui.Accent), 2f)) g.DrawPath(pen, pp);
+            {
+                using (GraphicsPath borda = Ui.RoundRect(new Rectangle(1, 1, Width - 3, Height - 3), Ui.Radius))
+                using (Pen pen = new Pen(Color.FromArgb((int)(220 * (1f - pu)), Ui.Accent), 2.5f)) g.DrawPath(pen, borda);
+                int cresce = (int)(ic.Width * 0.3f * pu);
+                using (GraphicsPath pp = Ui.RoundRect(Rectangle.Inflate(ic, cresce, cresce), Ui.S(11) + cresce))
+                using (Pen pen = new Pen(Color.FromArgb((int)(180 * (1f - pu)), Ui.Accent), 3f)) g.DrawPath(pen, pp);
+            }
+            if (ap >= 0f)
+            {
+                int fecha = (int)(ic.Width * 0.3f * (1f - ap));
+                using (GraphicsPath pp = Ui.RoundRect(Rectangle.Inflate(ic, fecha, fecha), Ui.S(11) + fecha))
+                using (Pen pen = new Pen(Color.FromArgb((int)(170 * (1f - ap)), Ui.Muted), 3f)) g.DrawPath(pen, pp);
+            }
             using (GraphicsPath gi = Ui.RoundRect(ic, Ui.S(11)))
             using (SolidBrush bi = new SolidBrush(Ui.Misturar(Ui.SurfaceAlt, Ui.AccentSoft, lig))) g.FillPath(bi, gi);
             IconesCasa.GlifoCentrado(g, "\uE9CA", Ui.FontGlyph11, ic, Ui.Misturar(Ui.Faint, Ui.AccentText, lig));

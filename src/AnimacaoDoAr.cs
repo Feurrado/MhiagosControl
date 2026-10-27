@@ -6,7 +6,7 @@ namespace MhiagosControl
 {
     /// <summary>
     /// O alvo do ar que desliza quando muda: ao subir, o numero velho sai para
-    /// cima e o novo entra de baixo; ao descer, o contrario, com fade (~180 ms).
+    /// cima e o novo entra de baixo; ao descer, o contrario, com fade (~300 ms).
     ///
     /// Detecta a troca pelo proprio texto pintado, entao vale para qualquer
     /// origem da mudanca (o - e +, o arrasto no mostrador ou a leitura da
@@ -16,7 +16,7 @@ namespace MhiagosControl
     /// </summary>
     internal sealed class NumeroDeslizante
     {
-        public const int DuracaoMs = 180;
+        public const int DuracaoMs = 300;
         private readonly Transicao _t;
         private string _atual, _antigo;
         private int _direcao;
@@ -71,7 +71,8 @@ namespace MhiagosControl
                 TextRenderer.DrawText(g, texto, f, origem, cor, fl);
                 return;
             }
-            int curso = Math.Max(4, area.Height * 3 / 5);
+            // anda 60% da altura do numero: o bastante para se ver o movimento sem sair do cartao
+            int curso = Math.Max(4, TextRenderer.MeasureText(g, texto, f, Size.Empty, TextFormatFlags.NoPadding).Height * 3 / 5);
             int dir = _direcao == 0 ? 1 : _direcao;
             Region antes = g.Clip;
             g.SetClip(area);
@@ -83,21 +84,22 @@ namespace MhiagosControl
     }
 
     /// <summary>
-    /// Estado ligado do ar como um valor de 0 a 1 que anda em ~250 ms: as cores
+    /// Estado ligado do ar como um valor de 0 a 1 que anda em ~450 ms: as cores
     /// do botao, do icone e do alvo misturam pelo valor. A primeira leitura
     /// nao anima (a tela ja abre no estado certo); ao ligar, dispara tambem um
     /// pulso que cresce e some em volta do icone.
     /// </summary>
     internal sealed class LigadoAnimado
     {
-        public const int DuracaoMs = 250, PulsoMs = 450;
-        private readonly Transicao _t, _pulso;
+        public const int DuracaoMs = 450, PulsoMs = 700;
+        private readonly Transicao _t, _pulso, _apaga;
         private bool _iniciado, _alvo;
 
         public LigadoAnimado(Control dono)
         {
             _t = new Transicao(dono, DuracaoMs);
             _pulso = new Transicao(dono, PulsoMs);
+            _apaga = new Transicao(dono, DuracaoMs);
         }
 
         public float Valor { get { return _t.Valor; } }
@@ -106,6 +108,9 @@ namespace MhiagosControl
         /// <summary>De 0 a 1 enquanto o pulso de ligar corre; -1 parado.</summary>
         public float Pulso { get { return _pulso.Animando ? _pulso.Valor : -1f; } }
 
+        /// <summary>De 0 a 1 enquanto o "apagar" do desligar corre; -1 parado.</summary>
+        public float Apagando { get { return _apaga.Animando ? _apaga.Valor : -1f; } }
+
         public void Definir(bool ligado)
         {
             if (!_iniciado) { _iniciado = true; _alvo = ligado; _t.Fixar(ligado ? 1f : 0f); return; }
@@ -113,14 +118,15 @@ namespace MhiagosControl
             _alvo = ligado;
             _t.Ir(ligado ? 1f : 0f);
             if (ligado) { _pulso.Zerar(); _pulso.Ir(1f); }
+            else { _apaga.Zerar(); _apaga.Ir(1f); }
         }
     }
 
-    /// <summary>Flash curto do botao pressionado (- e +): acende e apaga em ~220 ms.</summary>
+    /// <summary>Flash claro do botao pressionado (- e +): acende e apaga em ~150 ms.</summary>
     internal sealed class FlashDoBotao
     {
         private readonly Transicao _t;
-        public FlashDoBotao(Control dono) { _t = new Transicao(dono, 220); }
+        public FlashDoBotao(Control dono) { _t = new Transicao(dono, 150); }
         public void Disparar() { _t.Zerar(); _t.Ir(1f); }
         /// <summary>Intensidade agora (1 no clique, 0 parado).</summary>
         public float Intensidade { get { return _t.Animando ? 1f - _t.Valor : 0f; } }
