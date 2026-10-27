@@ -150,7 +150,7 @@ namespace MhiagosControl
         /// Thiago ao juntar a casa): vale para tudo, aneis, fontes, bolhas e
         /// margens, multiplicado junto com a escala da tela.
         /// </summary>
-        internal const float Ampliacao = 1.15f;
+        internal const float Ampliacao = 1.07f;
         // internas: o widget da casa usa as mesmas medidas
         internal const float Margem = 16f;
 
