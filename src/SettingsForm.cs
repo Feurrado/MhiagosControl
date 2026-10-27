@@ -79,7 +79,7 @@ namespace MhiagosControl
 
         // pagina Sobre
         private Control _pgConfig;
-        private Toggle _tgAutostart, _tgIdle, _tgRotate;
+        private Toggle _tgAutostart, _tgIdle, _tgRotate, _tgVisaoNova;
         private NumberBox _idleMin, _rotSecs;
         private Label _idleNote, _rotNote;
         private Segmented _lang;
@@ -987,6 +987,7 @@ namespace MhiagosControl
         private Card _cardCooler, _cardSpecs;
         private PeripheralStrip _cardPerif;
         private ResumoDaCasa _cardCasa;
+        private FaixaDeStatus _faixaStatus;
         private PanelPreview _vgPreview;
         private Label _vgPerfil, _vgPainel;
         private Label[] _vgSpecCap, _vgSpecVal;
@@ -1061,6 +1062,20 @@ namespace MhiagosControl
             _cardCasa = new ResumoDaCasa();
             _cardCasa.AbrirCasa += delegate { AbrirPaginaPelaChave("casa"); };
             _pgVisao.Controls.Add(_cardCasa);
+
+            // Visao geral nova (opcao em teste): faixa de status no alto.
+            _faixaStatus = new FaixaDeStatus();
+            _faixaStatus.Acrescentar("metricas", T.VisaoChipPC, "\uE7F4", ResumoDoPC, null);
+            _faixaStatus.Acrescentar("baterias", T.VisaoChipPerifericos, "\uE83F", ResumoDosPerifericos, null);
+            _faixaStatus.Acrescentar("casa", T.NavCasa, "\uE80F", ResumoDaCasaNoChip, delegate
+            {
+                foreach (Aparelho a in ServicoCasa.Aparelhos) if (Diagnostico.TemFalha(a)) return true;
+                return false;
+            });
+            _faixaStatus.Acrescentar("paineis", T.VisaoChipCooler, "\uE7F8", delegate { return _vgPainel != null ? _vgPainel.Text : ""; }, null);
+            _faixaStatus.Abrir += delegate(string chave) { AbrirPaginaPelaChave(chave); };
+            _faixaStatus.Visible = false;
+            _pgVisao.Controls.Add(_faixaStatus);
 
             _cardSpecs = new Card();
             _cardSpecs.Title = null;    // tira sozinho: e uma tira de referencia
@@ -1232,10 +1247,44 @@ namespace MhiagosControl
         /// com tudo que sobrar. Assim nao existe sobra, em nenhum tamanho de
         /// janela.
         /// </summary>
+        private string ResumoDoPC()
+        {
+            List<string> l = new List<string>();
+            for (int i = 0; i < _vgTiles.Count && i < 2; i++) l.Add(_vgTiles[i].ValorTexto);
+            return l.Count > 0 ? string.Join("  ·  ", l.ToArray()) : "--";
+        }
+
+        private static string ResumoDosPerifericos()
+        {
+            List<string> l = new List<string>();
+            foreach (Periferico p in Perifericos.Atual)
+                if (p != null && p.Bateria.HasValue) l.Add(p.Nome + " " + p.Bateria.Value + "%");
+            return l.Count > 0 ? string.Join("  ·  ", l.ToArray()) : T.VisaoNenhum;
+        }
+
+        private static string ResumoDaCasaNoChip()
+        {
+            if (!ServicoCasa.Logado) return T.VisaoSemConta;
+            List<string> l = new List<string>();
+            foreach (Aparelho a in ServicoCasa.Aparelhos)
+            {
+                if (a.ArCondicionado)
+                    l.Add(!a.Online ? T.CasaOffline : a.Int("t_power", 0) != 0 ? a.Int("t_temp", 0) + "°" : T.CasaDesligado);
+                else if (a.Lavadora)
+                {
+                    CicloAtual c = CicloAtual.De(a);
+                    l.Add(c.Online && c.Rodando && c.Restante > 0 ? CiclosDaLavadora.Duracao(TimeSpan.FromMinutes(c.Restante)) : c.Titulo());
+                }
+            }
+            return l.Count > 0 ? string.Join("  ·  ", l.ToArray()) : T.CasaSemAparelhos;
+        }
+
         private void ArranjarVisaoGeral()
         {
             if (_pgVisao == null || _cardCooler == null) return;
             if (_pgVisao.Width <= 0 || _pgVisao.Height <= 0) return;
+            if (_faixaStatus != null) _faixaStatus.Visible = _cfg.VisaoGeralNova;
+            if (_cfg.VisaoGeralNova) { ArranjarVisaoGeralNova(); return; }
 
             int Esp = Ui.S(8);
             int AlturaBloco = Ui.S(104);
@@ -1336,6 +1385,82 @@ namespace MhiagosControl
                     if (_cardCasa != null) _cardCasa.Top += y0;
                     _cardSpecs.Top += y0;
                 }
+
+                ArranjarCooler();
+                ArranjarSpecs();
+            }
+            finally { _pgVisao.ResumeLayout(); }
+        }
+
+        /// <summary>
+        /// Visao geral nova (Config.VisaoGeralNova): faixa de status no alto, a
+        /// casa logo abaixo, e no meio duas colunas - Computador (destaques e
+        /// curvas) e o cooler, menor - com perifericos e especificacoes embaixo.
+        /// Usa os mesmos controles da classica; so muda a hierarquia.
+        /// </summary>
+        private void ArranjarVisaoGeralNova()
+        {
+            int Esp = Ui.S(8);
+            int AlturaChips = Ui.S(FaixaDeStatus.Altura);
+            int AlturaCasa = Ui.S(ResumoDaCasa.Altura);
+            int AlturaBloco = Ui.S(104);
+            int AlturaPerif = Ui.S(80);
+            int AlturaSpecs = Ui.S(56);
+            int MeioMin = Ui.S(260);
+
+            int disp = _pgVisao.Width - Ui.S(4);
+            int alvo = disp > LarguraMaxDaPagina ? LarguraMaxDaPagina : disp;
+            if (alvo < Ui.S(560)) alvo = Ui.S(560);
+            int x0 = Math.Max(0, (disp - alvo) / 2);
+
+            _pgVisao.SuspendLayout();
+            try
+            {
+                int y = 0;
+                _faixaStatus.SetBounds(x0, y, alvo, AlturaChips);
+                y += AlturaChips + Esp;
+                _cardCasa.SetBounds(x0, y, alvo, AlturaCasa);
+                y += AlturaCasa + Esp;
+
+                int hMeio = _pgVisao.Height - y - Esp - AlturaPerif - Esp - AlturaSpecs;
+                if (hMeio < MeioMin) hMeio = MeioMin;
+                int wEsq = alvo * 58 / 100, wDir = alvo - wEsq - Esp;
+
+                // Computador: destaques em cima, as duas curvas lado a lado embaixo.
+                int n = _vgTiles.Count;
+                if (n > 0)
+                {
+                    int larg = (wEsq - (n - 1) * Esp) / n, usado = 0;
+                    for (int i = 0; i < n; i++)
+                    {
+                        int w = (i == n - 1) ? wEsq - usado : larg;
+                        _vgTiles[i].SetBounds(x0 + usado, y, w, AlturaBloco);
+                        usado += w + Esp;
+                    }
+                }
+                int yCurvas = y + (n > 0 ? AlturaBloco + Esp : 0);
+                int hCurvas = Math.Max(Ui.S(120), y + hMeio - yCurvas);
+                int wc = (wEsq - Esp) / 2;
+                if (_vgP1 != null) _vgP1.SetBounds(x0, yCurvas, wc, hCurvas);
+                if (_vgP2 != null) _vgP2.SetBounds(x0 + wc + Esp, yCurvas, wEsq - wc - Esp, hCurvas);
+                int fimEsq = yCurvas + hCurvas;
+
+                // Cooler: coluna da direita, so com a altura que a foto pede.
+                int linhasCooler = 0;
+                if (_vgPerfil != null && _vgPerfil.Visible) linhasCooler++;
+                if (_vgPainel != null && _vgPainel.Visible) linhasCooler++;
+                int hCooler = Math.Min(fimEsq - y, Ui.S(46) + (wDir - Ui.S(32)) + Ui.S(14) + linhasCooler * Ui.S(26) + Ui.S(14));
+                _cardCooler.SetBounds(x0 + wEsq + Esp, y, wDir, Math.Max(Ui.S(200), hCooler));
+                y = Math.Max(fimEsq, _cardCooler.Bottom) + Esp;
+
+                _cardPerif.SetBounds(x0, y, alvo, AlturaPerif);
+                y += AlturaPerif + Esp;
+                _cardSpecs.SetBounds(x0, y, alvo, AlturaSpecs);
+                y += AlturaSpecs;
+
+                int y0 = (_pgVisao.Height - y) / 2;
+                if (y0 > 0)
+                    foreach (Control c in _pgVisao.Controls) if (c.Visible) c.Top += y0;
 
                 ArranjarCooler();
                 ArranjarSpecs();
@@ -1455,6 +1580,7 @@ namespace MhiagosControl
         private void AtualizarVisaoGeral(Dictionary<string, float> snap)
         {
             if (_cardCooler == null) return;
+            if (_faixaStatus != null && _faixaStatus.Visible) _faixaStatus.Invalidate();
 
             IPanelStatusData source = _data as IPanelStatusData;
             PanelStatus status = source != null ? source.CurrentPanelStatus() : null;
@@ -3540,6 +3666,21 @@ namespace MhiagosControl
             _tgAutostart.CheckedChanged += new EventHandler(OnToggleAutostart);
             // E7E8: botao de ligar
             LinhaDaConfig(page, new LinhaDeOpcao("\uE7E8", T.StartWithWindows, T.StartWithWindowsNote)).Interruptor(_tgAutostart, true);
+
+            // Visao geral nova, em teste e desligada por padrao. Grava na hora,
+            // como a barra recolhida: e arrumacao da tela, nao edicao de perfil.
+            _tgVisaoNova = new Toggle();
+            _tgVisaoNova.Checked = _cfg.VisaoGeralNova;
+            _tgVisaoNova.CheckedChanged += delegate
+            {
+                _cfg.VisaoGeralNova = _tgVisaoNova.Checked;
+                string erro;
+                if (!_session.TrySavePreferences(delegate(Config draft, Config target) { target.VisaoGeralNova = draft.VisaoGeralNova; }, out erro))
+                    Log.Write("visao geral nova nao persistiu: " + erro);
+                ArranjarVisaoGeral();
+            };
+            // E80F: a casa, a mesma da Visao geral
+            LinhaDaConfig(page, new LinhaDeOpcao("\uE80F", T.VisaoNovaOpcao, T.VisaoNovaNota)).Interruptor(_tgVisaoNova, true);
 
             GrupoDaConfig(page, T.PanelLabel);
 

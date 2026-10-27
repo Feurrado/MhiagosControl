@@ -362,6 +362,39 @@ namespace MhiagosControl
                             rc.Ar.Estado["t_power"] = "1";
                             rc.Puxar();
                         }
+                        // Item 10: Visao geral nova, atras da opcao (desligada por padrao).
+                        Config cfgForm = (Config)Field(form, "_cfg");
+                        Verdade(!cfgForm.VisaoGeralNova && !((Control)Field(form, "_faixaStatus")).Visible, "Visao geral nova desligada por padrao " + language);
+                        cfgForm.VisaoGeralNova = true;
+                        foreach (int largura in new int[] { 1300, 880 })
+                        {
+                            form.Size = new Size(largura, 900);
+                            InvokePrivate(form, "ArranjarVisaoGeral");
+                            string sufixo = "nova-" + language + "-" + largura;
+                            Control pg = (Control)Field(form, "_pgVisao");
+                            FaixaDeStatus fx = (FaixaDeStatus)Field(form, "_faixaStatus");
+                            Verdade(fx.Visible && fx.Chips.Count == 4, "faixa de status com quatro chips " + sufixo);
+                            ResumoDaCasa rcn = (ResumoDaCasa)Field(form, "_cardCasa");
+                            Verdade(rcn.Top > fx.Bottom && rcn.Top < ((Control)Field(form, "_cardCooler")).Top, "casa logo abaixo da faixa, acima do cooler " + sufixo);
+                            List<Control> vis = new List<Control>();
+                            foreach (Control ctl in pg.Controls) if (ctl.Visible) vis.Add(ctl);
+                            bool ok = true;
+                            for (int i = 0; i < vis.Count; i++)
+                            {
+                                if (vis[i].Right > pg.Width || vis[i].Left < 0) ok = false;
+                                for (int j = i + 1; j < vis.Count; j++) if (vis[i].Bounds.IntersectsWith(vis[j].Bounds)) ok = false;
+                            }
+                            Verdade(ok, "Visao geral nova sem sobreposicao " + sufixo);
+                            for (int i = 0; i < fx.Chips.Count; i++)
+                            {
+                                string v = fx.Chips[i].Valor();
+                                Verdade(v != null && v.Length > 0, "chip " + fx.Chips[i].Chave + " com texto " + sufixo);
+                            }
+                            CaptureEvolution(form, "visao-" + sufixo);
+                        }
+                        cfgForm.VisaoGeralNova = false;
+                        InvokePrivate(form, "ArranjarVisaoGeral");
+                        Verdade(!((Control)Field(form, "_faixaStatus")).Visible, "desligar volta a Visao geral classica " + language);
                         ServicoCasa.PararSimulacao();
                         ResumoDaCasa rs = (ResumoDaCasa)Field(form, "_cardCasa");
                         rs.Puxar();

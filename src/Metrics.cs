@@ -111,6 +111,9 @@ namespace MhiagosControl
             return v.ToString("0.0");
         }
 
+        /// <summary>O valor como aparece no cartao, com a unidade (a faixa de status da Visao geral nova le).</summary>
+        public string ValorTexto { get { return _valor.HasValue ? Formatado() + " " + (Unidade ?? "").Trim() : "--"; } }
+
         private string Formatado()
         {
             return _valor.HasValue ? Formatar(_valor.Value) : "--";

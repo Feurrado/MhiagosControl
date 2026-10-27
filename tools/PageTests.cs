@@ -437,7 +437,8 @@ namespace MhiagosControl
                                 Verdade(item.Top >= anterior, "itens das Configuracoes em ordem, sem sobrepor " + sufixo);
                                 anterior = item.Bottom;
                             }
-                            Igual(8, linhas, "oito linhas: idioma, inicio, sensores, ocioso, RTSS, pasta, backup e diagnostico");
+                            // Nove desde a Visao geral nova (item 10 do backlog da Casa): a chave dela entrou no grupo Geral.
+                            Igual(9, linhas, "nove linhas: idioma, inicio, visao geral nova, sensores, ocioso, RTSS, pasta, backup e diagnostico");
                             Igual(4, grupos, "em quatro grupos: Geral, Painel, FPS e Dados");
                             Verdade(Field(form, "_backupCard") is LinhaDeOpcao && Field(form, "_diagnosticCard") is LinhaDeOpcao,
                                 "backup e diagnostico viraram linhas do grupo Dados");
