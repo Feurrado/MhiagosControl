@@ -141,19 +141,22 @@ namespace MhiagosControl
     internal static class PintorDoWidget
     {
         internal const float RaioDoVidro = 8f;
-        private const float Margem = 16f;
+        // internas: o widget da casa usa as mesmas medidas
+        internal const float Margem = 16f;
 
         // aneis
-        private const float Coluna = 78f;
-        private const float VaoDeColuna = 6f;
-        private const float Anel = 56f;
-        private const float Traco = 5.5f;
+        internal const float Coluna = 78f;
+        internal const float VaoDeColuna = 6f;
+        internal const float Anel = 56f;
+        internal const float Traco = 5.5f;
+        /// <summary>Altura da linha do valor embaixo do anel, e o vao entre o anel e ela.</summary>
+        internal const float LinhaDoValor = 20f, VaoDoValor = 8f;
 
         // lista
-        private const float LarguraDaLista = 300f;
-        private const float Linha = 50f;
-        private const float VaoDeLinha = 10f;
-        private const float BolhaDaLista = Anel - 2f * Traco - 6f; // a mesma bolha dos aneis
+        internal const float LarguraDaLista = 300f;
+        internal const float Linha = 50f;
+        internal const float VaoDeLinha = 10f;
+        internal const float BolhaDaLista = Anel - 2f * Traco - 6f; // a mesma bolha dos aneis
 
         /// <summary>
         /// O que vai para o widget: so o fone e o mouse (G HUB e Attack Shark) que
@@ -881,7 +884,6 @@ namespace MhiagosControl
         private readonly Timer _animacao = new Timer();
         /// <summary>Algum aparelho entrava ou saia da carga no ultimo quadro.</summary>
         private bool _transicao;
-        private readonly Timer _conferirDesktop = new Timer();
         private readonly ToolTip _dica = new ToolTip();
         private ContextMenu _menu;
 
@@ -905,10 +907,8 @@ namespace MhiagosControl
         private bool _pressionado, _arrastando;
         private Point _inicioDoArrasto, _origemDoArrasto;
 
-        /// <summary>Mostrar a area de trabalho (Win+D) cobriu tudo; o widget sobe ate alguem voltar.</summary>
-        private bool _sobreDesktop;
-        private IntPtr _gancho = IntPtr.Zero;
-        private WinEventDelegate _ganchoProc;
+        /// <summary>O lugar na pilha de janelas (fundo, ou na frente com a opcao).</summary>
+        private readonly Camada _camada;
 
         private readonly AvisosDoSistema _preferencias;
 
@@ -940,8 +940,7 @@ namespace MhiagosControl
             _animacao.Tick += delegate { Renderizar(); };
             _entradas.Quadro += delegate { Reconstruir(); };
             _entradas.Removido += AoPassarPresenca;
-            _conferirDesktop.Interval = 300;
-            _conferirDesktop.Tick += delegate { _conferirDesktop.Stop(); ConferirDesktop(); };
+            _camada = new Camada(this, delegate { return _cfg.NaFrente; });
 
             _preferencias = new AvisosDoSistema(this);
         }
@@ -973,16 +972,8 @@ namespace MhiagosControl
             base.OnLoad(e);
             Atualizar(true);
             Posicionar();
-            Afundar();
+            _camada.Ligar();
             _leitura.Start();
-
-            try
-            {
-                _ganchoProc = new WinEventDelegate(AoMudarPrimeiroPlano);
-                _gancho = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero,
-                                          _ganchoProc, 0, 0, WINEVENT_OUTOFCONTEXT);
-            }
-            catch (Exception ex) { Log.Error("gancho de primeiro plano do widget", ex); }
 
             Log.Write("widget de bateria aberto");
         }
@@ -994,13 +985,12 @@ namespace MhiagosControl
                 _leitura.Stop(); _leitura.Dispose();
                 _animacao.Stop(); _animacao.Dispose();
                 _entradas.Dispose();
-                _conferirDesktop.Stop(); _conferirDesktop.Dispose();
+                _camada.Dispose();
                 if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
                 _dica.Dispose();
                 if (_menu != null) { _menu.Dispose(); _menu = null; }
                 if (_preferencias != null) _preferencias.Dispose();
             }
-            if (_gancho != IntPtr.Zero) { UnhookWinEvent(_gancho); _gancho = IntPtr.Zero; }
             base.Dispose(disposing);
         }
 
@@ -1619,66 +1609,15 @@ namespace MhiagosControl
             Posicionar();
         }
 
-        private void AplicarFrente()
-        {
-            bool frente = _cfg.NaFrente;
-            _sobreDesktop = false;
-            if (frente) SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            else
-            {
-                SetWindowPos(Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-                Afundar();
-            }
-        }
+        private void AplicarFrente() { _camada.AplicarFrente(); }
 
-        // ---------------- lugar na pilha de janelas ----------------
-
-        /// <summary>
-        /// Prende o widget logo acima da area de trabalho a cada mudanca de
-        /// ordem. HWND_BOTTOM puro nao serve: ficaria atras da janela dos icones,
-        /// que ocupa a tela inteira, e sumiria.
-        /// </summary>
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_MOUSEACTIVATE)
-            {
-                m.Result = (IntPtr)MA_NOACTIVATE;
-                return;
-            }
-            if (m.Msg == WM_WINDOWPOSCHANGING && _cfg != null && !_cfg.NaFrente && !_sobreDesktop && m.LParam != IntPtr.Zero)
-            {
-                try
-                {
-                    WINDOWPOS wp = (WINDOWPOS)Marshal.PtrToStructure(m.LParam, typeof(WINDOWPOS));
-                    if ((wp.flags & SWP_NOZORDER) == 0)
-                    {
-                        IntPtr depois = LugarNoFundo();
-                        if (depois == Handle) wp.flags |= SWP_NOZORDER;
-                        else wp.hwndInsertAfter = depois;
-                        Marshal.StructureToPtr(wp, m.LParam, false);
-                    }
-                }
-                catch (Exception ex) { Log.Error("ordem do widget", ex); }
-            }
+            if (_camada != null && _camada.Mensagem(ref m)) return;
             base.WndProc(ref m);
         }
 
-        /// <summary>A janela atras da qual o widget deve ficar: a que esta logo acima da area de trabalho.</summary>
-        private IntPtr LugarNoFundo()
-        {
-            IntPtr desktop = AreaDeTrabalho();
-            if (desktop == IntPtr.Zero) return HWND_BOTTOM;
-            IntPtr acima = GetWindow(desktop, GW_HWNDPREV);
-            if (acima == IntPtr.Zero) return HWND_TOP;   // a area de trabalho esta no topo: Win+D
-            return acima;
-        }
-
-        private void Afundar()
-        {
-            if (!IsHandleCreated || _cfg.NaFrente) return;
-            // a ordem final vem do WM_WINDOWPOSCHANGING acima
-            SetWindowPos(Handle, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        }
+        private void Afundar() { _camada.Afundar(); }
 
         /// <summary>
         /// A janela dos icones da area de trabalho: o Progman, ou o WorkerW que
@@ -1695,51 +1634,160 @@ namespace MhiagosControl
             return progman;
         }
 
-        /// <summary>A area de trabalho subiu para cima do widget? So acontece com o Mostrar area de trabalho.</summary>
-        private bool DesktopPorCima()
+        /// <summary>A area de trabalho subiu para cima da janela? So acontece com o Mostrar area de trabalho.</summary>
+        private static bool DesktopPorCima(IntPtr janela)
         {
             IntPtr desktop = AreaDeTrabalho();
             if (desktop == IntPtr.Zero) return false;
             int limite = 4096;
-            for (IntPtr h = GetWindow(Handle, GW_HWNDPREV); h != IntPtr.Zero && limite-- > 0; h = GetWindow(h, GW_HWNDPREV))
+            for (IntPtr h = GetWindow(janela, GW_HWNDPREV); h != IntPtr.Zero && limite-- > 0; h = GetWindow(h, GW_HWNDPREV))
                 if (h == desktop) return true;
             return false;
         }
 
-        private void AoMudarPrimeiroPlano(IntPtr gancho, uint evento, IntPtr hwnd, int objeto, int filho, uint thread, uint tempo)
-        {
-            if (IsDisposed || !IsHandleCreated || _cfg.NaFrente) return;
-            ConferirDesktop();
-            // o Explorer as vezes termina de subir a area de trabalho depois de avisar
-            _conferirDesktop.Stop();
-            _conferirDesktop.Start();
-        }
+        private bool DesktopPorCima() { return DesktopPorCima(Handle); }
 
         /// <summary>
-        /// Com o Win+D a area de trabalho cobre todas as janelas, inclusive o
-        /// widget. Ele sobe para a frente enquanto ela estiver por cima e
-        /// volta ao fundo quando qualquer outra janela ganha o primeiro plano.
+        /// O lugar do widget na pilha de janelas, compartilhado com o widget da
+        /// casa: fora do "sempre na frente", preso logo acima da area de
+        /// trabalho e abaixo de todo o resto, como um gadget; com o Win+D sobe
+        /// enquanto a area de trabalho estiver por cima. Nao rouba o foco.
         /// </summary>
-        private void ConferirDesktop()
+        internal sealed class Camada : IDisposable
         {
-            if (IsDisposed || !IsHandleCreated || _cfg.NaFrente) return;
-            try
+            private readonly Form _janela;
+            private readonly Func<bool> _naFrente;
+            private readonly Timer _conferir = new Timer();
+            private bool _sobreDesktop;
+            private IntPtr _gancho = IntPtr.Zero;
+            private WinEventDelegate _ganchoProc;
+
+            public Camada(Form janela, Func<bool> naFrente)
             {
-                if (!_sobreDesktop && DesktopPorCima())
+                _janela = janela;
+                _naFrente = naFrente;
+                _conferir.Interval = 300;
+                _conferir.Tick += delegate { _conferir.Stop(); Conferir(); };
+            }
+
+            /// <summary>Mostrar a area de trabalho (Win+D) cobriu tudo; o widget subiu ate alguem voltar.</summary>
+            public bool SobreDesktop { get { return _sobreDesktop; } }
+
+            private bool Pronta { get { return !_janela.IsDisposed && _janela.IsHandleCreated; } }
+
+            /// <summary>Na abertura: vai para o fundo e passa a ouvir as trocas de primeiro plano.</summary>
+            public void Ligar()
+            {
+                AplicarFrente();
+                try
                 {
-                    _sobreDesktop = true;
-                    SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    _ganchoProc = new WinEventDelegate(AoMudarPrimeiroPlano);
+                    _gancho = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero,
+                                              _ganchoProc, 0, 0, WINEVENT_OUTOFCONTEXT);
                 }
-                else if (_sobreDesktop && !EhAreaDeTrabalho(GetForegroundWindow()))
+                catch (Exception ex) { Log.Error("gancho de primeiro plano do widget", ex); }
+            }
+
+            /// <summary>
+            /// Clique nao ativa a janela, e cada mudanca de ordem e trocada pelo
+            /// lugar logo acima da area de trabalho. HWND_BOTTOM puro nao serve:
+            /// ficaria atras da janela dos icones, que ocupa a tela inteira.
+            /// Devolve true quando a mensagem ja foi respondida.
+            /// </summary>
+            public bool Mensagem(ref Message m)
+            {
+                if (m.Msg == WM_MOUSEACTIVATE)
                 {
-                    _sobreDesktop = false;
-                    SetWindowPos(Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    m.Result = (IntPtr)MA_NOACTIVATE;
+                    return true;
+                }
+                if (m.Msg == WM_WINDOWPOSCHANGING && !_naFrente() && !_sobreDesktop && m.LParam != IntPtr.Zero)
+                {
+                    try
+                    {
+                        WINDOWPOS wp = (WINDOWPOS)Marshal.PtrToStructure(m.LParam, typeof(WINDOWPOS));
+                        if ((wp.flags & SWP_NOZORDER) == 0)
+                        {
+                            IntPtr depois = LugarNoFundo();
+                            if (depois == _janela.Handle) wp.flags |= SWP_NOZORDER;
+                            else wp.hwndInsertAfter = depois;
+                            Marshal.StructureToPtr(wp, m.LParam, false);
+                        }
+                    }
+                    catch (Exception ex) { Log.Error("ordem do widget", ex); }
+                }
+                return false;
+            }
+
+            public void AplicarFrente()
+            {
+                if (!Pronta) return;
+                _sobreDesktop = false;
+                if (_naFrente()) SetWindowPos(_janela.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                else
+                {
+                    SetWindowPos(_janela.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
                     Afundar();
                 }
             }
-            catch (Exception ex) { Log.Error("widget e area de trabalho", ex); }
-        }
 
+            public void Afundar()
+            {
+                if (!Pronta || _naFrente()) return;
+                // a ordem final vem do WM_WINDOWPOSCHANGING acima
+                SetWindowPos(_janela.Handle, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+
+            /// <summary>A janela atras da qual o widget deve ficar: a que esta logo acima da area de trabalho.</summary>
+            private static IntPtr LugarNoFundo()
+            {
+                IntPtr desktop = AreaDeTrabalho();
+                if (desktop == IntPtr.Zero) return HWND_BOTTOM;
+                IntPtr acima = GetWindow(desktop, GW_HWNDPREV);
+                if (acima == IntPtr.Zero) return HWND_TOP;   // a area de trabalho esta no topo: Win+D
+                return acima;
+            }
+
+            private void AoMudarPrimeiroPlano(IntPtr gancho, uint evento, IntPtr hwnd, int objeto, int filho, uint thread, uint tempo)
+            {
+                if (!Pronta || _naFrente()) return;
+                Conferir();
+                // o Explorer as vezes termina de subir a area de trabalho depois de avisar
+                _conferir.Stop();
+                _conferir.Start();
+            }
+
+            /// <summary>
+            /// Com o Win+D a area de trabalho cobre todas as janelas, inclusive o
+            /// widget. Ele sobe para a frente enquanto ela estiver por cima e
+            /// volta ao fundo quando qualquer outra janela ganha o primeiro plano.
+            /// </summary>
+            public void Conferir()
+            {
+                if (!Pronta || _naFrente()) return;
+                try
+                {
+                    if (!_sobreDesktop && DesktopPorCima(_janela.Handle))
+                    {
+                        _sobreDesktop = true;
+                        SetWindowPos(_janela.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    }
+                    else if (_sobreDesktop && !EhAreaDeTrabalho(GetForegroundWindow()))
+                    {
+                        _sobreDesktop = false;
+                        SetWindowPos(_janela.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                        Afundar();
+                    }
+                }
+                catch (Exception ex) { Log.Error("widget e area de trabalho", ex); }
+            }
+
+            public void Dispose()
+            {
+                _conferir.Stop(); _conferir.Dispose();
+                if (_gancho != IntPtr.Zero) { UnhookWinEvent(_gancho); _gancho = IntPtr.Zero; }
+            }
+        }
         private static bool EhAreaDeTrabalho(IntPtr h)
         {
             if (h == IntPtr.Zero) return true;
@@ -1784,7 +1832,7 @@ namespace MhiagosControl
                 else sb.Append(" | area de trabalho nao esta abaixo do widget");
             }
             sb.Append(" | ela por cima do widget: ").Append(DesktopPorCima() ? "sim" : "nao");
-            sb.Append(" | sempre na frente: ").Append(_cfg.NaFrente || _sobreDesktop ? "sim" : "nao");
+            sb.Append(" | sempre na frente: ").Append(_cfg.NaFrente || _camada.SobreDesktop ? "sim" : "nao");
             return sb.ToString();
         }
 

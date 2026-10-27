@@ -16,7 +16,8 @@ namespace MhiagosControl
     internal sealed class ConfigDoWidgetCasa
     {
         public const int SemPosicao = int.MinValue;
-        public bool Ativo, NaFrente = true, Travado;
+        /// <summary>Como o de bateria: fica na area de trabalho; na frente so se pedir.</summary>
+        public bool Ativo, NaFrente, Travado;
         public int X = SemPosicao, Y = SemPosicao;
 
         internal static string Caminho
@@ -44,7 +45,8 @@ namespace MhiagosControl
                     switch (k)
                     {
                         case "ativo": c.Ativo = v == "1"; break;
-                        case "nafrente": c.NaFrente = v == "1"; break;
+                        // "nafrente" era gravado ligado por padrao e prendia o widget na frente: ignorado
+                        case "frente": c.NaFrente = v == "1"; break;
                         case "travado": c.Travado = v == "1"; break;
                         case "x": if (n) c.X = i; break;
                         case "y": if (n) c.Y = i; break;
@@ -59,7 +61,7 @@ namespace MhiagosControl
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("ativo=" + (Ativo ? "1" : "0"));
-            sb.AppendLine("nafrente=" + (NaFrente ? "1" : "0"));
+            sb.AppendLine("frente=" + (NaFrente ? "1" : "0"));
             sb.AppendLine("travado=" + (Travado ? "1" : "0"));
             if (TemPosicao)
             {
@@ -128,25 +130,23 @@ namespace MhiagosControl
 
     /// <summary>
     /// Widget da casa na area de trabalho, da mesma familia do widget de
-    /// bateria: a mesma placa de vidro (PintorDoWidget.Vidro, com a cor e o
-    /// desfoque escolhidos para o de bateria em widget.ini), as mesmas fontes,
-    /// bolhas, texto com halo e janela em camadas.
+    /// bateria: a mesma placa de vidro, as mesmas medidas (PintorDoWidget),
+    /// as mesmas fontes, bolhas e aneis, no formato escolhido para o de
+    /// bateria (aneis ou lista) e com a cor e o desfoque dele (widget.ini).
+    /// O ar e um item; a lavadora, so com ciclo ativo, e mais um.
     ///
-    /// Uma linha para o ar (ambiente, modo, alvo com - e +, liga/desliga) e,
-    /// so com ciclo ativo, uma linha enxuta da lavadora (fase, tempo restante
-    /// e barra fina). Muda de tamanho pelo canto mais perto da borda da tela,
-    /// como o de bateria: nada pula de lugar.
+    /// Fica na area de trabalho como o de bateria (WidgetDeBateria.Camada):
+    /// abaixo das janelas, sem roubar o foco; na frente so com a opcao.
     /// </summary>
     internal sealed class WidgetDaCasa : Form
     {
-        // medidas em pixels de 96 dpi, multiplicadas pela escala
-        internal const float Largura = 264f, LarguraVazia = 220f;
-        private const float Margem = 12f, LinhaAr = 40f, LinhaLav = 36f, Vao = 10f, Bolha = 32f;
-        private const float BotaoPeq = 26f, BotaoLiga = 30f, Alvo = 40f;
+        /// <summary>Bolhas de - e + (e do liga/desliga na lista): do tamanho do selo de carga do widget de bateria.</summary>
+        private const float Mini = 22f, VaoMini = 6f;
 
         private readonly ConfigDoWidgetCasa _cfg;
         private ConfigDoWidget _vidro;
         private readonly EventHandler _mudou;
+        private readonly WidgetDeBateria.Camada _camada;
         private Aparelho _ar, _lav;
         private RectangleF _rMenos, _rMais, _rLiga;
         private int _hover = -1;
@@ -166,6 +166,9 @@ namespace MhiagosControl
         /// <summary>Escala da tela; os testes trocam para conferir 125% e 150% sem abrir janela.</summary>
         internal float Escala { get { return _escala; } set { _escala = Math.Max(1f, value); } }
 
+        /// <summary>O formato do widget de bateria (aneis ou lista); os testes trocam.</summary>
+        internal LayoutDoWidget Formato { get { return _vidro.Layout; } set { _vidro.Layout = value; } }
+
         public WidgetDaCasa(ConfigDoWidgetCasa cfg)
         {
             _cfg = cfg;
@@ -175,6 +178,7 @@ namespace MhiagosControl
             StartPosition = FormStartPosition.Manual;
             ControlBox = false; MinimizeBox = false; MaximizeBox = false;
             Text = T.CasaWidgetTitulo;
+            _camada = new WidgetDeBateria.Camada(this, delegate { return _cfg.NaFrente; });
 
             _espera = new Timer();
             _espera.Interval = 700;
@@ -186,10 +190,17 @@ namespace MhiagosControl
                 _alvoPendente = -1;
                 Mandar("t_temp", v);
             };
-            // o relogio refaz o "termina as" e acompanha a cor do vidro do widget de bateria
+            // o relogio refaz o "termina as" e acompanha o vidro e o formato do widget de bateria
             _relogio = new Timer();
             _relogio.Interval = 30000;
-            _relogio.Tick += delegate { _vidro = ConfigDoWidget.Carregar(); Renderizar(); };
+            _relogio.Tick += delegate
+            {
+                ConfigDoWidget v = ConfigDoWidget.Carregar();
+                bool desfoque = v.Nitido != _vidro.Nitido || v.Fosco != _vidro.Fosco;
+                _vidro = v;
+                if (desfoque && IsHandleCreated) WidgetDeBateria.AplicarDesfoque(Handle, _vidro);
+                Renderizar();
+            };
             _relogio.Start();
 
             _mudou = delegate { NaInterface(Puxar); };
@@ -203,7 +214,7 @@ namespace MhiagosControl
             {
                 CreateParams p = base.CreateParams;
                 p.ExStyle |= 0x80000 | 0x80 | 0x8000000;   // WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
-                if (_cfg != null && _cfg.NaFrente) p.ExStyle |= 0x8;   // WS_EX_TOPMOST
+                if (_cfg != null && _cfg.NaFrente) p.ExStyle |= 0x8;   // WS_EX_TOPMOST, so com a opcao
                 return p;
             }
         }
@@ -212,7 +223,7 @@ namespace MhiagosControl
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == 0x21) { m.Result = (IntPtr)3; return; }   // WM_MOUSEACTIVATE: MA_NOACTIVATE
+            if (_camada != null && _camada.Mensagem(ref m)) return;
             base.WndProc(ref m);
         }
 
@@ -228,6 +239,21 @@ namespace MhiagosControl
         {
             base.OnLoad(e);
             Posicionar();
+            _camada.Ligar();
+        }
+
+        /// <summary>A janela esta de fato acima das outras (WS_EX_TOPMOST)? Para os testes.</summary>
+        internal bool NaFrenteAgora
+        {
+            get { return IsHandleCreated && (GetWindowLong(Handle, -20) & 0x8) != 0; }
+        }
+
+        /// <summary>Liga ou desliga o "sempre na frente" e grava em widget-casa.ini.</summary>
+        internal void DefinirNaFrente(bool frente)
+        {
+            _cfg.NaFrente = frente;
+            _cfg.Salvar();
+            _camada.AplicarFrente();
         }
 
         private void NaInterface(MethodInvoker m)
@@ -249,6 +275,7 @@ namespace MhiagosControl
                 _espera.Dispose();
                 _relogio.Dispose();
                 _dica.Dispose();
+                _camada.Dispose();
                 if (_menu != null) { _menu.Dispose(); _menu = null; }
                 if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
             }
@@ -272,7 +299,7 @@ namespace MhiagosControl
         /// <summary>
         /// A lavadora so entra com ciclo ativo: em funcionamento, pausada,
         /// aguardando o inicio programado ou com erro. Parada, concluida,
-        /// desligada ou desconectada, a linha some.
+        /// desligada ou desconectada, ela sai.
         /// </summary>
         internal static bool CicloAtivo(Aparelho lav)
         {
@@ -283,31 +310,49 @@ namespace MhiagosControl
 
         internal bool MostraLavadora { get { return CicloAtivo(_lav); } }
 
-        /// <summary>Tamanho do widget: ar numa linha e a lavadora embaixo so com ciclo ativo.</summary>
-        internal static Size Medir(bool ar, bool lavadora, float escala)
+        /// <summary>Coluna do ar nos aneis: o anel com uma bolha de - e de + de cada lado.</summary>
+        private static float ColunaDoAr { get { return PintorDoWidget.Anel + 2f * (Mini + 4f); } }
+
+        /// <summary>
+        /// Tamanho do widget, nas medidas do de bateria: cada aparelho e um item
+        /// (uma linha da lista ou uma coluna de anel). Sem nada, o mesmo vazio dele.
+        /// </summary>
+        internal static Size Medir(LayoutDoWidget formato, bool ar, bool lavadora, float escala)
         {
-            float w, h;
-            if (!ar && !lavadora) { w = LarguraVazia; h = 2 * Margem + LinhaAr; }
+            float m = PintorDoWidget.Margem, w, h;
+            int n = (ar ? 1 : 0) + (lavadora ? 1 : 0);
+            if (n == 0)
+                return PintorDoWidget.Medir(formato, 0, escala, false);
+            if (formato == LayoutDoWidget.Lista)
+            {
+                w = PintorDoWidget.LarguraDaLista;
+                h = 2 * m + n * PintorDoWidget.Linha + (n - 1) * PintorDoWidget.VaoDeLinha;
+            }
             else
             {
-                w = Largura;
-                h = 2 * Margem + (ar ? LinhaAr : 0f) + (ar && lavadora ? Vao : 0f) + (lavadora ? LinhaLav : 0f);
+                w = 2 * m + (ar ? ColunaDoAr : 0f) + (lavadora ? PintorDoWidget.Coluna : 0f) + (n - 1) * PintorDoWidget.VaoDeColuna;
+                h = 2 * m + PintorDoWidget.Anel + PintorDoWidget.VaoDoValor + PintorDoWidget.LinhaDoValor;
             }
             return new Size((int)Math.Ceiling(w * escala), (int)Math.Ceiling(h * escala));
         }
 
-        internal Size Medida() { return Medir(_ar != null, MostraLavadora, _escala); }
+        internal Size Medida() { return Medir(_vidro.Layout, _ar != null, MostraLavadora, _escala); }
 
         private void Mudar(int passo)
         {
             if (_ar == null || !_ar.Online || _ar.Int("t_power", 0) == 0) return;
             int min, max;
-            CenaCasa.FaixaC(_ar, out min, out max);
-            if (_ar.Int("t_temp_type", 0) == 1) { min = (int)Math.Round(min * 9.0 / 5 + 32); max = (int)Math.Round(max * 9.0 / 5 + 32); }
+            FaixaDoAlvo(out min, out max);
             int atual = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 24);
             _alvoPendente = Math.Max(min, Math.Min(max, atual + passo));
             _espera.Stop(); _espera.Start();
             Renderizar();
+        }
+
+        private void FaixaDoAlvo(out int min, out int max)
+        {
+            CenaCasa.FaixaC(_ar, out min, out max);
+            if (_ar.Int("t_temp_type", 0) == 1) { min = (int)Math.Round(min * 9.0 / 5 + 32); max = (int)Math.Round(max * 9.0 / 5 + 32); }
         }
 
         private void Mandar(string chave, int valor)
@@ -328,7 +373,7 @@ namespace MhiagosControl
         {
             Size tam = Medida();
             Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            int m = (int)(24 * _escala);
+            int m = (int)(48 * _escala);
             Point p = WidgetDeBateria.DoCanto(new Point(area.Right - m, area.Top + m), tam, area);
             if (_cfg.TemPosicao)
             {
@@ -418,7 +463,7 @@ namespace MhiagosControl
             base.OnMouseMove(e);
             bool redesenhar = false;
             if (!_sobre) { _sobre = true; redesenhar = true; }
-            if (_pressionado && !_cfg.Travado && Zona(PontoDoInicio()) == 3)
+            if (_pressionado && !_cfg.Travado && Zona(PointToClient(_inicioDoArrasto)) == 3)
             {
                 Point agora = Cursor.Position;
                 int dx = agora.X - _inicioDoArrasto.X, dy = agora.Y - _inicioDoArrasto.Y;
@@ -436,13 +481,20 @@ namespace MhiagosControl
             {
                 _hover = h;
                 Cursor = Cursors.Hand;
-                _dica.SetToolTip(this, h == 0 ? T.CasaMenosGrau : h == 1 ? T.CasaMaisGrau : h == 2 ? T.CasaLigaDesliga : T.CasaResumoConvite);
+                _dica.SetToolTip(this, h == 0 ? T.CasaMenosGrau : h == 1 ? T.CasaMaisGrau : h == 2 ? T.CasaLigaDesliga : Dica());
                 redesenhar = true;
             }
             if (redesenhar) Renderizar();
         }
 
-        private Point PontoDoInicio() { return PointToClient(_inicioDoArrasto); }
+        /// <summary>O que nao cabe na placa: nome, ambiente e modo do ar, fase e termino da lavadora.</summary>
+        private string Dica()
+        {
+            StringBuilder sb = new StringBuilder();
+            if (_ar != null) sb.Append(_ar.Nome).Append("  ").Append(LinhaDoAr()).Append('\n');
+            if (MostraLavadora) sb.Append(_lav.Nome).Append("  ").Append(LinhaDaLavadora(CicloAtual.De(_lav))).Append('\n');
+            return sb.Append(T.CasaResumoConvite).ToString();
+        }
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
@@ -469,11 +521,7 @@ namespace MhiagosControl
             ContextMenu m = new ContextMenu();
             m.MenuItems.Add(T.CasaResumoConvite, delegate { Clicar(3); });
             m.MenuItems.Add("-");
-            MenuItem frente = new MenuItem(T.CasaWidgetFrente, delegate
-            {
-                _cfg.NaFrente = !_cfg.NaFrente; _cfg.Salvar();
-                SetWindowPos(Handle, _cfg.NaFrente ? new IntPtr(-1) : new IntPtr(-2), 0, 0, 0, 0, 0x1 | 0x2 | 0x10);
-            });
+            MenuItem frente = new MenuItem(T.CasaWidgetFrente, delegate { DefinirNaFrente(!_cfg.NaFrente); });
             frente.Checked = _cfg.NaFrente;
             m.MenuItems.Add(frente);
             MenuItem trava = new MenuItem(T.CasaWidgetTravar, delegate { _cfg.Travado = !_cfg.Travado; _cfg.Salvar(); });
@@ -481,6 +529,7 @@ namespace MhiagosControl
             m.MenuItems.Add(trava);
             m.MenuItems.Add("-");
             m.MenuItems.Add(T.CasaWidgetFechar, delegate { GerenteDoWidgetCasa.Definir(false); });
+            // sem o primeiro plano o menu nao fecha ao clicar fora; a camada devolve o widget ao fundo
             SetForegroundWindow(Handle);
             _dica.Hide(this);
             if (_menu != null) _menu.Dispose();
@@ -489,7 +538,7 @@ namespace MhiagosControl
         }
 
         [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
-        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int indice);
 
         // ---------------- pintura ----------------
 
@@ -502,31 +551,65 @@ namespace MhiagosControl
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.TextRenderingHint = TextRenderingHint.AntiAlias;   // ClearType sobre transparente deixa franja
-            float s = _escala;
+            float s = _escala, m = PintorDoWidget.Margem * s;
             bool escuro = WidgetDeBateria.EscuroDe(_vidro);
             PintorDoWidget.Vidro(g, new RectangleF(0, 0, tam.Width, tam.Height), s, escuro, _vidro.Fosco && !_vidro.Nitido, _vidro.Nitido, _sobre);
             _rMenos = _rMais = _rLiga = RectangleF.Empty;
+            bool lav = MostraLavadora;
             using (PintorDoWidget.Fontes f = new PintorDoWidget.Fontes(s))
             using (Font glifo = new Font("Segoe MDL2 Assets", 13f * s, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (Font peq = new Font("Segoe MDL2 Assets", 9f * s, FontStyle.Regular, GraphicsUnit.Pixel))
             {
-                float x = Margem * s, w = tam.Width - 2 * Margem * s, y = Margem * s;
-                bool lav = MostraLavadora;
                 if (_ar == null && !lav)
                 {
-                    RectangleF b = new RectangleF(x, y + (LinhaAr - Bolha) / 2f * s, Bolha * s, Bolha * s);
-                    PintorDoWidget.Bolha(g, b, escuro);
-                    Glifo(g, "\uE80F", glifo, b, PintorDoWidget.Primario(escuro));
+                    // como o "nenhum aparelho" do widget de bateria: uma nota no meio da placa
                     string msg = !ServicoCasa.Logado ? T.VisaoSemConta : ServicoCasa.Buscando ? T.CasaCarregando : T.CasaSemAparelhos;
-                    float tx = b.Right + 10f * s;
-                    PintorDoWidget.Texto(g, T.NavCasa, f.Nome, PintorDoWidget.Primario(escuro), escuro,
-                        new RectangleF(tx, y, x + w - tx, 21f * s), StringAlignment.Near, StringAlignment.Center);
-                    PintorDoWidget.Texto(g, msg, f.Nota, PintorDoWidget.Secundario(escuro), escuro,
-                        new RectangleF(tx, y + 20f * s, x + w - tx, 19f * s), StringAlignment.Near, StringAlignment.Center);
+                    PintorDoWidget.Texto(g, T.NavCasa + " · " + msg, f.Nota, PintorDoWidget.Primario(escuro), escuro,
+                        new RectangleF(m / 2f, 0, tam.Width - m, tam.Height), StringAlignment.Center, StringAlignment.Center);
                     return;
                 }
-                if (_ar != null) { PintarAr(g, new RectangleF(x, y, w, LinhaAr * s), f, glifo, escuro); y += (LinhaAr + Vao) * s; }
-                if (lav) PintarLavadora(g, new RectangleF(x, y, w, LinhaLav * s), f, glifo, escuro);
+                if (_vidro.Layout == LayoutDoWidget.Lista)
+                {
+                    float w = tam.Width - 2 * m, y = m, linha = PintorDoWidget.Linha * s;
+                    if (_ar != null) { ArNaLista(g, new RectangleF(m, y, w, linha), f, glifo, peq, escuro); y += linha + PintorDoWidget.VaoDeLinha * s; }
+                    if (lav) LavadoraNaLista(g, new RectangleF(m, y, w, linha), f, escuro);
+                }
+                else
+                {
+                    float x = m, h = tam.Height - 2 * m;
+                    if (_ar != null) { ArNoAnel(g, new RectangleF(x, m, ColunaDoAr * s, h), f, glifo, peq, escuro); x += (ColunaDoAr + PintorDoWidget.VaoDeColuna) * s; }
+                    if (lav) LavadoraNoAnel(g, new RectangleF(x, m, PintorDoWidget.Coluna * s, h), f, escuro);
+                }
             }
+        }
+
+        private string LinhaDoAr()
+        {
+            bool on = _ar.Online, ligado = on && _ar.Int("t_power", 0) != 0;
+            string u = _ar.Int("t_temp_type", 0) == 1 ? "°F" : "°C";
+            string amb = _ar.Tem("f_temp_in") ? _ar.Num("f_temp_in", 0).ToString("0.#") + u + " · " : "";
+            return amb + (!on ? T.CasaOffline : ligado ? TabelaDoAr.Modo(_ar.Int("t_work_mode", -1), _ar.Tipo) : T.CasaDesligado);
+        }
+
+        private static string LinhaDaLavadora(CicloAtual c)
+        {
+            string fase = c.Titulo();
+            if (c.Restante > 0 && !c.Erro && !c.Pausada && !c.Programado)
+            {
+                DateTime leitura = ServicoCasa.UltimaLeitura == DateTime.MinValue ? DateTime.Now : ServicoCasa.UltimaLeitura;
+                fase += " · " + leitura.AddMinutes(c.Restante).ToString("HH:mm");
+            }
+            return fase;
+        }
+
+        private static string Tempo(CicloAtual c)
+        {
+            return c.Restante > 0 && !c.Erro ? CiclosDaLavadora.Duracao(TimeSpan.FromMinutes(c.Restante)) : "--";
+        }
+
+        private static Color CorDoCiclo(CicloAtual c)
+        {
+            return c.Erro ? Ui.Danger : c.Pausada ? Ui.Warn : Ui.Accent;
         }
 
         private static void Glifo(Graphics g, string texto, Font fonte, RectangleF area, Color cor)
@@ -535,7 +618,7 @@ namespace MhiagosControl
             using (SolidBrush b = new SolidBrush(cor)) g.FillPath(b, gp);
         }
 
-        /// <summary>Botao redondo no vidro: a bolha do widget de bateria; aceso, na cor de destaque.</summary>
+        /// <summary>Bolha pequena de vidro; acesa (o ar ligado), na cor de destaque.</summary>
         private void Botao(Graphics g, RectangleF r, string glifo, Font fonte, bool aceso, bool ativo, int zona, bool escuro)
         {
             if (aceso)
@@ -546,88 +629,153 @@ namespace MhiagosControl
                 if (ativo && _hover == zona)
                     using (SolidBrush b = new SolidBrush(Color.FromArgb(escuro ? 40 : 60, 255, 255, 255))) g.FillEllipse(b, r);
             }
-            Color frente = aceso ? Color.White : ativo ? PintorDoWidget.Primario(true) : Color.FromArgb(90, 255, 255, 255);
-            Glifo(g, glifo, fonte, r, frente);
+            Glifo(g, glifo, fonte, r, ativo || aceso ? Color.White : Color.FromArgb(110, 255, 255, 255));
         }
 
-        private void PintarAr(Graphics g, RectangleF b, PintorDoWidget.Fontes f, Font glifo, bool escuro)
+        /// <summary>O anel do widget de bateria: trilho apagado na cor, arco com brilho suave por baixo.</summary>
+        private static void Anel(Graphics g, RectangleF anel, float st, float fracao, Color cor, bool aceso, bool escuro)
+        {
+            Color trilho = aceso ? Color.FromArgb(escuro ? 70 : 60, cor) : PintorDoWidget.Trilho(escuro);
+            using (Pen pen = new Pen(trilho, st)) g.DrawEllipse(pen, anel);
+            if (!aceso || fracao <= 0f) return;
+            float arco = 360f * Math.Min(1f, fracao);
+            using (Pen luz = PintorDoWidget.Redonda(Color.FromArgb(55, cor), st * 2f)) g.DrawArc(luz, anel, -90f, arco);
+            using (Pen pen = PintorDoWidget.Redonda(cor, st)) g.DrawArc(pen, anel, -90f, arco);
+        }
+
+        // ---------------- formato aneis ----------------
+
+        /// <summary>
+        /// O ar como um item de anel: o arco e o alvo dentro da faixa do aparelho,
+        /// o termometro na bolha, o alvo embaixo (onde o de bateria poe a
+        /// porcentagem), - e + dos lados e o liga/desliga no lugar do selo de carga.
+        /// </summary>
+        private void ArNoAnel(Graphics g, RectangleF z, PintorDoWidget.Fontes f, Font glifo, Font peq, bool escuro)
+        {
+            float s = _escala, d = PintorDoWidget.Anel * s, st = PintorDoWidget.Traco * s;
+            bool on = _ar.Online, ligado = on && _ar.Int("t_power", 0) != 0;
+            float cx = z.X + z.Width / 2f;
+            RectangleF anel = new RectangleF(cx - d / 2f + st / 2f, z.Y + st / 2f, d - st, d - st);
+            int t = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0), min, max;
+            FaixaDoAlvo(out min, out max);
+            float fracao = max > min && t > 0 ? 0.15f + 0.85f * (t - min) / (float)(max - min) : 0f;
+            Anel(g, anel, st, fracao, Ui.Accent, ligado, escuro);
+            float db = d - 2f * st - 6f * s;
+            RectangleF bolha = new RectangleF(cx - db / 2f, anel.Y + anel.Height / 2f - db / 2f, db, db);
+            PintorDoWidget.Bolha(g, bolha, escuro);
+            Glifo(g, "\uE9CA", glifo, bolha, ligado ? Color.White : Color.FromArgb(150, 255, 255, 255));
+
+            float mini = Mini * s, cy = anel.Y + anel.Height / 2f;
+            _rMenos = new RectangleF(z.X, cy - mini / 2f, mini, mini);
+            _rMais = new RectangleF(z.Right - mini, cy - mini / 2f, mini, mini);
+            float r = anel.Width / 2f, ds = 19f * s;   // o selo do widget de bateria
+            _rLiga = new RectangleF(cx + r * 0.72f - ds / 2f, cy + r * 0.72f - ds / 2f, ds, ds);
+            Botao(g, _rMenos, "\uE738", peq, false, ligado, 0, escuro);
+            Botao(g, _rMais, "\uE710", peq, false, ligado, 1, escuro);
+            Botao(g, _rLiga, "\uE7E8", peq, ligado, on, 2, escuro);
+
+            RectangleF lValor = new RectangleF(z.X, z.Y + d + 7f * s, z.Width, PintorDoWidget.LinhaDoValor * s);
+            PintorDoWidget.Texto(g, t > 0 ? t + "°" : "--", f.Pct, ligado ? PintorDoWidget.Primario(escuro) : PintorDoWidget.Secundario(escuro), escuro,
+                lValor, StringAlignment.Center, StringAlignment.Center);
+        }
+
+        /// <summary>A lavadora como um item de anel: o arco e o progresso do ciclo, o tempo restante embaixo.</summary>
+        private void LavadoraNoAnel(Graphics g, RectangleF z, PintorDoWidget.Fontes f, bool escuro)
+        {
+            float s = _escala, d = PintorDoWidget.Anel * s, st = PintorDoWidget.Traco * s;
+            CicloAtual c = CicloAtual.De(_lav);
+            float cx = z.X + z.Width / 2f;
+            RectangleF anel = new RectangleF(cx - d / 2f + st / 2f, z.Y + st / 2f, d - st, d - st);
+            Anel(g, anel, st, c.Erro ? 1f : c.Progresso, CorDoCiclo(c), true, escuro);
+            float db = d - 2f * st - 6f * s;
+            RectangleF bolha = new RectangleF(cx - db / 2f, anel.Y + anel.Height / 2f - db / 2f, db, db);
+            PintorDoWidget.Bolha(g, bolha, escuro);
+            IconeDaLavadora(g, bolha, s);
+            RectangleF lValor = new RectangleF(z.X - 4f * s, z.Y + d + 7f * s, z.Width + 8f * s, PintorDoWidget.LinhaDoValor * s);
+            PintorDoWidget.Texto(g, Tempo(c), f.Pct, PintorDoWidget.Primario(escuro), escuro, lValor, StringAlignment.Center, StringAlignment.Center);
+        }
+
+        // ---------------- formato lista ----------------
+
+        /// <summary>
+        /// O ar como uma linha da lista: nome e alvo na linha de cima (como nome
+        /// e porcentagem), ambiente e modo embaixo, e - + e liga/desliga em bolhas pequenas.
+        /// </summary>
+        private void ArNaLista(Graphics g, RectangleF z, PintorDoWidget.Fontes f, Font glifo, Font peq, bool escuro)
         {
             float s = _escala;
             bool on = _ar.Online, ligado = on && _ar.Int("t_power", 0) != 0;
-            float cy = b.Y + b.Height / 2f;
-            RectangleF bolha = new RectangleF(b.X, cy - Bolha * s / 2f, Bolha * s, Bolha * s);
+            float db = PintorDoWidget.BolhaDaLista * s;
+            RectangleF bolha = new RectangleF(z.X, z.Y + (z.Height - db) / 2f, db, db);
             PintorDoWidget.Bolha(g, bolha, escuro);
-            Glifo(g, "\uE9CA", glifo, bolha, Color.White);
+            Glifo(g, "\uE9CA", glifo, bolha, ligado ? Color.White : Color.FromArgb(150, 255, 255, 255));
 
-            _rLiga = new RectangleF(b.Right - BotaoLiga * s, cy - BotaoLiga * s / 2f, BotaoLiga * s, BotaoLiga * s);
-            _rMais = new RectangleF(_rLiga.X - 8f * s - BotaoPeq * s, cy - BotaoPeq * s / 2f, BotaoPeq * s, BotaoPeq * s);
-            RectangleF alvo = new RectangleF(_rMais.X - Alvo * s, b.Y, Alvo * s, b.Height);
-            _rMenos = new RectangleF(alvo.X - BotaoPeq * s, _rMais.Y, BotaoPeq * s, BotaoPeq * s);
-            using (Font peq = new Font(glifo.FontFamily, 10f * s, FontStyle.Regular, GraphicsUnit.Pixel))
-            {
-                Botao(g, _rLiga, "\uE7E8", glifo, ligado, on, 2, escuro);
-                Botao(g, _rMais, "\uE710", peq, false, ligado, 1, escuro);
-                Botao(g, _rMenos, "\uE738", peq, false, ligado, 0, escuro);
-            }
+            float x = bolha.Right + 12f * s;
             int t = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0);
-            PintorDoWidget.Texto(g, t > 0 ? t + "°" : "--", f.Pct, ligado ? PintorDoWidget.Primario(escuro) : PintorDoWidget.Secundario(escuro), escuro,
-                alvo, StringAlignment.Center, StringAlignment.Center);
+            string valor = t > 0 ? t + "°" : "--";
+            float largValor;
+            using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
+                largValor = g.MeasureString(valor, f.Pct, PointF.Empty, sf).Width + 2f * s;
+            RectangleF lValor = new RectangleF(z.Right - largValor, z.Y, largValor, 21f * s);
+            PintorDoWidget.Texto(g, valor, f.Pct, ligado ? PintorDoWidget.Primario(escuro) : PintorDoWidget.Secundario(escuro), escuro,
+                lValor, StringAlignment.Far, StringAlignment.Center);
+            PintorDoWidget.Texto(g, _ar.Nome, f.Nome, PintorDoWidget.Primario(escuro), escuro,
+                new RectangleF(x, z.Y, Math.Max(0f, lValor.X - x - 6f * s), 21f * s), StringAlignment.Near, StringAlignment.Center);
 
-            float tx = bolha.Right + 10f * s, tw = _rMenos.X - 6f * s - tx;
-            string u = _ar.Int("t_temp_type", 0) == 1 ? "°F" : "°C";
-            string amb = _ar.Tem("f_temp_in") ? _ar.Num("f_temp_in", 0).ToString("0.#") + u : _ar.Nome;
-            string modo = !on ? T.CasaOffline : ligado ? TabelaDoAr.Modo(_ar.Int("t_work_mode", -1), _ar.Tipo) : T.CasaDesligado;
-            PintorDoWidget.Texto(g, amb, f.Nome, PintorDoWidget.Primario(escuro), escuro,
-                new RectangleF(tx, cy - 19f * s, tw, 19f * s), StringAlignment.Near, StringAlignment.Center);
-            PintorDoWidget.Texto(g, modo, f.Nota, PintorDoWidget.Secundario(escuro), escuro,
-                new RectangleF(tx, cy, tw, 18f * s), StringAlignment.Near, StringAlignment.Center);
+            float mini = Mini * s, vao = VaoMini * s, yb = z.Bottom - mini;
+            _rLiga = new RectangleF(z.Right - mini, yb, mini, mini);
+            _rMais = new RectangleF(_rLiga.X - vao - mini, yb, mini, mini);
+            _rMenos = new RectangleF(_rMais.X - vao - mini, yb, mini, mini);
+            Botao(g, _rMenos, "\uE738", peq, false, ligado, 0, escuro);
+            Botao(g, _rMais, "\uE710", peq, false, ligado, 1, escuro);
+            Botao(g, _rLiga, "\uE7E8", peq, ligado, on, 2, escuro);
+            PintorDoWidget.Texto(g, LinhaDoAr(), f.Nota, PintorDoWidget.Secundario(escuro), escuro,
+                new RectangleF(x, yb, Math.Max(0f, _rMenos.X - x - 6f * s), mini), StringAlignment.Near, StringAlignment.Center);
         }
 
-        private void PintarLavadora(Graphics g, RectangleF b, PintorDoWidget.Fontes f, Font glifo, bool escuro)
+        /// <summary>A lavadora como uma linha da lista: fase e tempo, a capsula do progresso e o termino embaixo.</summary>
+        private void LavadoraNaLista(Graphics g, RectangleF z, PintorDoWidget.Fontes f, bool escuro)
         {
             float s = _escala;
             CicloAtual c = CicloAtual.De(_lav);
-            float cy = b.Y + b.Height / 2f;
-            RectangleF bolha = new RectangleF(b.X, cy - Bolha * s / 2f, Bolha * s, Bolha * s);
+            float db = PintorDoWidget.BolhaDaLista * s;
+            RectangleF bolha = new RectangleF(z.X, z.Y + (z.Height - db) / 2f, db, db);
             PintorDoWidget.Bolha(g, bolha, escuro);
             IconeDaLavadora(g, bolha, s);
 
-            float tx = bolha.Right + 10f * s, tw = b.Right - tx;
-            string tempo = c.Restante > 0 && !c.Erro ? CiclosDaLavadora.Duracao(TimeSpan.FromMinutes(c.Restante)) : "";
-            float wt = 0f;
-            if (tempo.Length > 0)
-                using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
-                    wt = g.MeasureString(tempo, f.Pct, PointF.Empty, sf).Width + 2f * s;
-            RectangleF linha = new RectangleF(tx, b.Y + 1f * s, tw, 21f * s);
-            if (wt > 0)
-                PintorDoWidget.Texto(g, tempo, f.Pct, PintorDoWidget.Primario(escuro), escuro,
-                    new RectangleF(b.Right - wt, linha.Y, wt, linha.Height), StringAlignment.Far, StringAlignment.Center);
-            string fase = c.Titulo();
-            if (tempo.Length > 0 && !c.Pausada && !c.Programado)
-            {
-                DateTime leitura = ServicoCasa.UltimaLeitura == DateTime.MinValue ? DateTime.Now : ServicoCasa.UltimaLeitura;
-                fase += " · " + leitura.AddMinutes(c.Restante).ToString("HH:mm");
-            }
-            PintorDoWidget.Texto(g, fase, f.Nota, c.Erro ? Color.FromArgb(255, 255, 120, 110) : PintorDoWidget.Primario(escuro), escuro,
-                new RectangleF(tx, linha.Y, Math.Max(0f, tw - wt - 6f * s), linha.Height), StringAlignment.Near, StringAlignment.Center);
+            float x = bolha.Right + 12f * s, w = z.Right - x;
+            string valor = Tempo(c);
+            float largValor;
+            using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
+                largValor = g.MeasureString(valor, f.Pct, PointF.Empty, sf).Width + 2f * s;
+            RectangleF lValor = new RectangleF(z.Right - largValor, z.Y, largValor, 21f * s);
+            PintorDoWidget.Texto(g, valor, f.Pct, PintorDoWidget.Primario(escuro), escuro, lValor, StringAlignment.Far, StringAlignment.Center);
+            PintorDoWidget.Texto(g, _lav.Nome, f.Nome, PintorDoWidget.Primario(escuro), escuro,
+                new RectangleF(x, z.Y, Math.Max(0f, lValor.X - x - 6f * s), 21f * s), StringAlignment.Near, StringAlignment.Center);
 
-            // barra fina, com a mesma ponta redonda da capsula do widget de bateria
-            float h = 4f * s, by = b.Bottom - 7f * s;
-            Color cor = c.Erro ? Ui.Danger : c.Pausada ? Ui.Warn : Ui.Accent;
-            using (Pen trilho = PintorDoWidget.Redonda(PintorDoWidget.Trilho(escuro), h)) g.DrawLine(trilho, tx + h / 2f, by, b.Right - h / 2f, by);
-            float wp = (tw - h) * Math.Max(0f, Math.Min(1f, c.Progresso));
+            // a mesma capsula do widget de bateria, na espessura do traco dos aneis
+            float h = PintorDoWidget.Traco * s, cy = z.Y + 29f * s;
+            Color cor = CorDoCiclo(c);
+            using (Pen trilho = PintorDoWidget.Redonda(Color.FromArgb(escuro ? 70 : 60, cor), h)) g.DrawLine(trilho, x + h / 2f, cy, z.Right - h / 2f, cy);
+            float wp = (w - h) * (c.Erro ? 1f : Math.Max(0f, Math.Min(1f, c.Progresso)));
             if (wp > 0.5f)
-                using (Pen pen = PintorDoWidget.Redonda(cor, h)) g.DrawLine(pen, tx + h / 2f, by, tx + h / 2f + wp, by);
+            {
+                using (Pen luz = PintorDoWidget.Redonda(Color.FromArgb(55, cor), h * 2f)) g.DrawLine(luz, x + h / 2f, cy, x + h / 2f + wp, cy);
+                using (Pen pen = PintorDoWidget.Redonda(cor, h)) g.DrawLine(pen, x + h / 2f, cy, x + h / 2f + wp, cy);
+            }
+            PintorDoWidget.Texto(g, LinhaDaLavadora(c), f.Nota, c.Erro ? Color.FromArgb(255, 255, 120, 110) : PintorDoWidget.Primario(escuro), escuro,
+                new RectangleF(x, cy + h / 2f + 2f * s, w, 17f * s), StringAlignment.Near, StringAlignment.Center);
         }
 
         /// <summary>A maquininha (caixa com a porta redonda), em branco como os icones do widget de bateria.</summary>
         private static void IconeDaLavadora(Graphics g, RectangleF bolha, float s)
         {
-            RectangleF r = RectangleF.Inflate(bolha, -9.5f * s, -8.5f * s);
+            float lado = bolha.Width * 0.46f;
+            RectangleF r = new RectangleF(bolha.X + (bolha.Width - lado * 0.86f) / 2f, bolha.Y + (bolha.Height - lado) / 2f, lado * 0.86f, lado);
             using (Pen pen = new Pen(Color.White, 1.6f * s))
             {
                 using (GraphicsPath gp = PintorDoWidget.Arredondado(r, 2.5f * s)) g.DrawPath(pen, gp);
-                float d = r.Width * 0.58f;
+                float d = r.Width * 0.62f;
                 g.DrawEllipse(pen, r.X + (r.Width - d) / 2f, r.Bottom - d - 2f * s, d, d);
                 g.DrawLine(pen, r.X + 2.5f * s, r.Y + 3f * s, r.X + 5f * s, r.Y + 3f * s);
             }
