@@ -89,7 +89,7 @@ namespace MhiagosControl
         internal enum Tipo { Ar, Lavadora }
 
         /// <summary>Bolhas de - e + (e do liga/desliga na lista): o tamanho do selo de carga, um pouco maior para o dedo.</summary>
-        private const float Mini = 22f, VaoMini = 6f;
+        private const float Mini = 24f, VaoMini = 6f;
 
         private Aparelho _ar, _lav;
         private int _alvoPendente = -1;
@@ -266,7 +266,7 @@ namespace MhiagosControl
         {
             _zonas.Add(z);
             using (Font glifo = new Font("Segoe MDL2 Assets", 13f * s, FontStyle.Regular, GraphicsUnit.Pixel))
-            using (Font peq = new Font("Segoe MDL2 Assets", 9f * s, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (Font peq = new Font("Segoe MDL2 Assets", 11f * s, FontStyle.Bold, GraphicsUnit.Pixel))
             {
                 if (layout == LayoutDoWidget.Lista)
                 {
@@ -326,6 +326,9 @@ namespace MhiagosControl
             else
             {
                 PintorDoWidget.Bolha(g, r, escuro);
+                // claro e com aro, para - e + nao sumirem no vidro
+                using (SolidBrush b = new SolidBrush(Color.FromArgb(ativo ? 70 : 30, 255, 255, 255))) g.FillEllipse(b, r);
+                using (Pen aro = new Pen(Color.FromArgb(ativo ? 170 : 70, 255, 255, 255), Math.Max(1f, r.Width / 16f))) g.DrawEllipse(aro, RectangleF.Inflate(r, -0.5f, -0.5f));
                 if (ativo && _hover == zona)
                     using (SolidBrush b = new SolidBrush(Color.FromArgb(escuro ? 40 : 60, 255, 255, 255))) g.FillEllipse(b, r);
             }
