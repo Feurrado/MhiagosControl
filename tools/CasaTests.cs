@@ -140,7 +140,22 @@ namespace MhiagosControl
                             foreach (Toggle t in (List<Toggle>)Field(ar, "_chaves")) ks.Add((string)t.Tag);
                             Verdade(!ks.Contains("t_sleep") && !ks.Contains("t_beep") && !ks.Contains("t_device_info") && !ks.Contains("t_eco"),
                                 "interruptores do aparelho: nenhum repetido; nada que o modelo nao tenha");
-                            // Item 2: botao de noturno no painel, na linha do liga/desliga.
+                            // Item 3: cena com tempo agenda o retorno; mexer na mao cancela.
+                            ServicoCasa.CancelarRetorno();
+                            CenaCasa ct = CenaCasa.Padrao()[1]; ct.Duracao = 30;
+                            typeof(CartaoDeAparelho).GetMethod("MandarVarios", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null,
+                                new Type[] { typeof(Dictionary<string, int>), typeof(bool) }, null).Invoke(ar, new object[] { ct.Comando(ar.Aparelho), true });
+                            ServicoCasa.AgendarRetorno(ar.Aparelho.Puid, ct.Duracao);
+                            ar.Atualizar();
+                            casa.Arranjar();
+                            PainelDoTimer pt = (PainelDoTimer)Field(ar, "_timer");
+                            Verdade(pt.RetornoAtivo && ((Label)Field(pt, "_retorno")).Visible, "contagem do retorno aparece no painel " + sufixo);
+                            foreach (Secao s in ar.Secoes) if (s.Visible && s.Parent == ar) SemSobrepor(s, "com retorno " + s.Titulo + " " + sufixo);
+                            InvokePrivate(ar, "Mandar", "t_temp", 25);
+                            Verdade(ServicoCasa.RetornoEm == null, "mexer na mao cancela o retorno " + sufixo);
+                            ar.Aparelho.Estado["t_temp"] = "23"; ar.Aparelho.Estado["t_work_mode"] = "5"; ar.Aparelho.Estado["t_fan_speed"] = "2"; ar.Aparelho.Estado["t_sleep"] = "0";
+                            ar.Atualizar();
+                            casa.Arranjar();                            // Item 2: botao de noturno no painel, na linha do liga/desliga.
                             BotaoRedondo bn = ar.BotaoNoturno;
                             Verdade(bn.Visible && !bn.Aceso && bn.Right <= ar.Width - Ui.S(18) && bn.Bottom < ((Blocos)Field(ar, "_modo")).Top,
                                 "botao de noturno visivel, apagado, na linha do liga/desliga " + sufixo);
@@ -186,6 +201,7 @@ namespace MhiagosControl
                             else
                                 Verdade(secoes[3].Left == secoes[2].Left && secoes[3].Top > secoes[2].Bottom, "uma coluna na janela estreita");
                             Verdade(!casa.Ajustes.Visible, "aba Painel nao mostra Ajustes");
+                            Verdade(ar.SecaoRetorno.Parent == casa.Ajustes, "padrao das cenas mora em Ajustes " + sufixo);
 
                             // Aba Ajustes: Funcoes, Preferencias, Alertas, Estimativa e Conta.
                             casa.Aba = 1;
@@ -411,6 +427,32 @@ namespace MhiagosControl
                 Verdade(lidas.Count == 2 && lidas[0].Nome == "Leitura / noite" && lidas[1].Desligar, "cenas gravadas em casa.ini, na ordem");
                 System.IO.File.Delete(PreferenciasCasa.Arquivo);
                 Verdade(PreferenciasCasa.Carregar().Cenas.Count == 3, "sem cenas gravadas, as de fabrica");
+
+                // Item 3: cena por tempo e retorno ao padrao.
+                CenaCasa porTempo = padrao[1].Copia(); porTempo.Duracao = 30;
+                CenaCasa voltaT = CenaCasa.DeLinha(porTempo.Linha());
+                Verdade(voltaT != null && voltaT.Duracao == 30, "duracao da cena gravada (8o campo)");
+                Verdade(CenaCasa.DeLinha("Velha|lua|0|-1|24|-2|1").Duracao == 0, "linha antiga, de 7 campos, fica sem retorno");
+                Verdade(porTempo.Resumo(ar).Contains("30"), "resumo mostra a duracao");
+                PreferenciasCasa pr = new PreferenciasCasa();
+                Dictionary<string, int> rc = ServicoCasa.PadraoDeRetorno(pr).Comando(ar);
+                Verdade(rc != null && rc["t_power"] == 1 && rc["t_work_mode"] == 2 && rc["t_temp"] == 24 && rc["t_fan_speed"] == 2 && rc["t_sleep"] == 0,
+                    "padrao de retorno: 24 °C, Frio, ventilador baixo, sem noturno");
+                Dictionary<string, string> rcs = new Dictionary<string, string>();
+                foreach (KeyValuePair<string, int> kv in rc) rcs[kv.Key] = kv.Value.ToString();
+                List<Dictionary<string, string>> rp = ServicoCasa.Partes(rcs);
+                Verdade(rp.Count == 2 && rp[1].Count == 1 && rp[1].ContainsKey("t_sleep"), "no retorno o noturno tambem vai sozinho");
+                ServicoCasa.Pref = new PreferenciasCasa();
+                ServicoCasa.AgendarRetorno("p1", 30);
+                PreferenciasCasa lr = PreferenciasCasa.Carregar();
+                Verdade(lr.RetornoPuid == "p1" && Math.Abs((new DateTime(lr.RetornoEmUtc, DateTimeKind.Utc) - DateTime.UtcNow).TotalMinutes - 30) < 1,
+                    "retorno agendado sobrevive a reabrir");
+                ServicoCasa.DefinirTimer("p1", 60);
+                Verdade(ServicoCasa.RetornoEm == null, "timer de desligar cancela o retorno");
+                ServicoCasa.CancelarTimer();
+                ServicoCasa.AgendarRetorno("p1", 15);
+                ServicoCasa.CancelarRetorno();
+                Verdade(PreferenciasCasa.Carregar().RetornoEmUtc == 0, "cancelar o retorno apaga o gravado");
 
                 // Alertas: uma vez por passagem para o estado ruim.
                 Alertas.Zerar();

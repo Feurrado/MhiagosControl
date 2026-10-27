@@ -10,7 +10,9 @@ namespace MhiagosControl
     internal sealed class CenaEventArgs : EventArgs
     {
         public readonly Dictionary<string, int> Propriedades;
-        public CenaEventArgs(Dictionary<string, int> p) { Propriedades = p; }
+        public readonly CenaCasa Cena;
+        public CenaEventArgs(Dictionary<string, int> p) : this(p, null) { }
+        public CenaEventArgs(Dictionary<string, int> p, CenaCasa cena) { Propriedades = p; Cena = cena; }
     }
 
     /// <summary>

@@ -20,7 +20,7 @@ namespace MhiagosControl
         public event EventHandler ConsumoMudou;
 
         private CartaoDoAr _ar;
-        private Secao _funcoes, _pref;
+        private Secao _funcoes, _pref, _retorno;
         private readonly Secao _secAlertas, _secConsumo, _secConta;
         private readonly Toggle _alFalha, _alOffline, _alQuente, _alLavadora;
         private readonly NumberBox _limite;
@@ -34,7 +34,7 @@ namespace MhiagosControl
             get
             {
                 List<Secao> l = new List<Secao>();
-                foreach (Secao s in new[] { _funcoes, _pref, _secAlertas, _secConsumo, _secConta }) if (s != null) l.Add(s);
+                foreach (Secao s in new[] { _funcoes, _pref, _secAlertas, _secConsumo, _retorno, _secConta }) if (s != null) l.Add(s);
                 foreach (Control c in _extras) { Secao s = c as Secao; if (s != null) l.Add(s); }
                 return l.ToArray();
             }
@@ -148,13 +148,13 @@ namespace MhiagosControl
         public void Adotar(CartaoDoAr ar)
         {
             if (ar == _ar) return;
-            foreach (Secao s in new[] { _funcoes, _pref })
+            foreach (Secao s in new[] { _funcoes, _pref, _retorno })
                 if (s != null && s.Parent == this) { Controls.Remove(s); s.Dispose(); }
             _ar = ar;
             _funcoes = ar != null ? ar.SecaoFuncoes : null;
             _pref = ar != null ? ar.SecaoPreferencias : null;
-            if (_funcoes != null) Controls.Add(_funcoes);
-            if (_pref != null) Controls.Add(_pref);
+            _retorno = ar != null ? ar.SecaoRetorno : null;
+            foreach (Secao s in new[] { _funcoes, _pref, _retorno }) if (s != null) Controls.Add(s);
         }
 
         public int Arranjar(int w)
@@ -169,7 +169,7 @@ namespace MhiagosControl
             foreach (Control c in _extras) { Secao s = c as Secao; if (s != null) extras.Add(s); }
             for (int i = 0; i < extras.Count; i += 2)
                 linhas.Add(new[] { extras[i], i + 1 < extras.Count ? extras[i + 1] : null });
-            linhas.Add(new[] { _secConta, (Secao)null });
+            linhas.Add(new[] { _retorno, _secConta });
 
             int y = 0;
             foreach (Secao[] linha in linhas)
@@ -206,7 +206,7 @@ namespace MhiagosControl
         {
             int m = Secao.Margem, iw = w - 2 * m, y = Secao.Topo;
             s.PosicionarAcao();
-            if (_ar != null && (s == _funcoes || s == _pref)) return _ar.ConteudoExterno(s, w);
+            if (_ar != null && (s == _funcoes || s == _pref || s == _retorno)) return _ar.ConteudoExterno(s, w);
             if (s == _secAlertas)
             {
                 Toggle[] ts = { _alFalha, _alOffline, _alQuente, _alLavadora };

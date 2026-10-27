@@ -22,7 +22,7 @@ namespace MhiagosControl
         private static readonly object _trava = new object();
         private static ConnectLifeNuvem _nuvem;
         private static List<Aparelho> _aparelhos = new List<Aparelho>();
-        private static Timer _ciclo, _timerDesligar;
+        private static Timer _ciclo, _timerDesligar, _timerRetorno;
         private static bool _visivel, _buscando, _simulado, _iniciado;
         private static DateTime _ultimaLeitura = DateTime.MinValue;
         private static string _erro;
@@ -66,6 +66,7 @@ namespace MhiagosControl
             string refresh, source;
             if (!IgnorarCofre && CofreConnectLife.Ler(out refresh, out source)) Usar(new ConnectLifeNuvem(refresh, source));
             ArmarTimerDesligar(true);
+            ArmarRetorno(true);
             Reprogramar();
         }
 
@@ -411,6 +412,7 @@ namespace MhiagosControl
             }
             Pref.Salvar();
             Log.Write("casa: timer de desligar em " + minutos + " min");
+            CancelarRetorno();
             ArmarTimerDesligar(false);
             Avisar();
         }
@@ -471,6 +473,93 @@ namespace MhiagosControl
             });
         }
 
+        // ---------------- retorno das cenas ----------------
+
+        /// <summary>Hora local em que o ar volta ao padrao depois de uma cena, ou nulo.</summary>
+        public static DateTime? RetornoEm
+        {
+            get { lock (_trava) return Pref.RetornoEmUtc > 0 ? (DateTime?)new DateTime(Pref.RetornoEmUtc, DateTimeKind.Utc).ToLocalTime() : null; }
+        }
+
+        public static string RetornoPuid { get { lock (_trava) return Pref.RetornoPuid; } }
+
+        /// <summary>A cena rodou por tempo: volta ao padrao (Pref.Retorno*) daqui a tantos minutos.</summary>
+        public static void AgendarRetorno(string puid, int minutos)
+        {
+            lock (_trava)
+            {
+                Pref.RetornoEmUtc = DateTime.UtcNow.AddMinutes(minutos).Ticks;
+                Pref.RetornoPuid = puid;
+            }
+            Pref.Salvar();
+            Log.Write("casa: retorno ao padrao em " + minutos + " min");
+            ArmarRetorno(false);
+            Avisar();
+        }
+
+        public static void CancelarRetorno()
+        {
+            lock (_trava)
+            {
+                if (Pref.RetornoEmUtc == 0) return;
+                Pref.RetornoEmUtc = 0;
+                Pref.RetornoPuid = "";
+                if (_timerRetorno != null) { _timerRetorno.Dispose(); _timerRetorno = null; }
+            }
+            Pref.Salvar();
+            Avisar();
+        }
+
+        /// <summary>Como o timer de desligar: vencido ha mais de 15 min ao abrir, descarta.</summary>
+        private static void ArmarRetorno(bool abrindo)
+        {
+            long alvo;
+            lock (_trava) alvo = Pref.RetornoEmUtc;
+            if (alvo == 0) return;
+            TimeSpan falta = new DateTime(alvo, DateTimeKind.Utc) - DateTime.UtcNow;
+            if (abrindo && falta < TimeSpan.FromMinutes(-15))
+            {
+                Log.Write("casa: retorno vencido ha " + (int)-falta.TotalMinutes + " min, descartado");
+                CancelarRetorno();
+                return;
+            }
+            long ms = Math.Max(1000, (long)falta.TotalMilliseconds);
+            lock (_trava)
+            {
+                if (_timerRetorno != null) _timerRetorno.Dispose();
+                _timerRetorno = new Timer(delegate { ConferirRetorno(); }, null, ms, Timeout.Infinite);
+            }
+        }
+
+        /// <summary>O padrao de retorno como cena: liga, modo, temperatura, ventilador e sem noturno.</summary>
+        internal static CenaCasa PadraoDeRetorno(PreferenciasCasa p)
+        {
+            CenaCasa c = new CenaCasa();
+            c.Nome = T.CasaRetornoPadrao;
+            c.Modo = p.RetornoModo; c.Temp = p.RetornoTemp; c.Vento = p.RetornoVento; c.Noturno = 0;
+            return c;
+        }
+
+        private static void ConferirRetorno()
+        {
+            long alvo;
+            string puid;
+            lock (_trava) { alvo = Pref.RetornoEmUtc; puid = Pref.RetornoPuid; }
+            if (alvo == 0 || DateTime.UtcNow.Ticks < alvo || !Logado) return;
+            CancelarRetorno();
+            Aparelho a = Achar(puid);
+            string nome = a != null ? a.Nome : T.CasaAr;
+            Dictionary<string, int> cmd = PadraoDeRetorno(Pref).Comando(a);
+            if (cmd == null) { AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaTimerFalhou(T.CasaCenaIndisponivel)); return; }
+            Dictionary<string, string> p = new Dictionary<string, string>();
+            foreach (KeyValuePair<string, int> kv in cmd) p[kv.Key] = kv.Value.ToString(CultureInfo.InvariantCulture);
+            Enviar(puid, p, delegate(Exception ex)
+            {
+                if (ex == null) AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaRetornoFeito);
+                else AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaTimerFalhou(ex.Message));
+            });
+        }
+
         internal static void AvisoWindows(string titulo, string texto)
         {
             Log.Write("casa: aviso: " + titulo + " - " + texto);
@@ -491,6 +580,10 @@ namespace MhiagosControl
         public double Tarifa = 0.85;
         /// <summary>Aba da pagina Casa: 0 Painel, 1 Ajustes.</summary>
         public int AbaCasa;
+        /// <summary>Retorno ao padrao depois de uma cena por tempo, e o padrao (24 °C, Frio, ventilador baixo).</summary>
+        public long RetornoEmUtc;
+        public string RetornoPuid = "";
+        public int RetornoModo = 2, RetornoTemp = 24, RetornoVento = 2;
         /// <summary>Cartao de consumo do ar aberto (comeca fechado).</summary>
         public bool ConsumoArAberto;
         /// <summary>Secao de consumo e historico da lavadora aberta (comeca fechada).</summary>
@@ -547,6 +640,11 @@ namespace MhiagosControl
                         case "desligarem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.DesligarEmUtc = l; break;
                         case "desligarpuid": p.DesligarPuid = v; break;
                         case "abacasa": if (ehInt) p.AbaCasa = i == 1 ? 1 : 0; break;
+                        case "retornoem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.RetornoEmUtc = l; break;
+                        case "retornopuid": p.RetornoPuid = v; break;
+                        case "retornomodo": if (ehInt) p.RetornoModo = i; break;
+                        case "retornotemp": if (ehInt) p.RetornoTemp = Math.Max(16, Math.Min(32, i)); break;
+                        case "retornovento": if (ehInt) p.RetornoVento = i; break;
                         case "consumoaraberto": p.ConsumoArAberto = v == "1"; break;
                         case "consumolavadoraaberto": p.ConsumoLavadoraAberto = v == "1"; break;
                         case "cena": { CenaCasa cena = CenaCasa.DeLinha(v); if (cena != null) { if (!lidas) { p.Cenas.Clear(); lidas = true; } if (p.Cenas.Count < CenaCasa.MaxCenas) p.Cenas.Add(cena); } break; }
@@ -573,6 +671,11 @@ namespace MhiagosControl
             sb.AppendLine("desligarem=" + DesligarEmUtc.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("desligarpuid=" + (DesligarPuid ?? ""));
             sb.AppendLine("abacasa=" + AbaCasa.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("retornoem=" + RetornoEmUtc.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("retornopuid=" + (RetornoPuid ?? ""));
+            sb.AppendLine("retornomodo=" + RetornoModo.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("retornotemp=" + RetornoTemp.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("retornovento=" + RetornoVento.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("consumoaraberto=" + (ConsumoArAberto ? "1" : "0"));
             sb.AppendLine("consumolavadoraaberto=" + (ConsumoLavadoraAberto ? "1" : "0"));
             foreach (CenaCasa cena in Cenas) sb.AppendLine("cena=" + cena.Linha());

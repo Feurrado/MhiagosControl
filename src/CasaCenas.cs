@@ -18,6 +18,9 @@ namespace MhiagosControl
         public string Nome = "", Icone = "floco";
         public bool Desligar;
         public int Modo = -1, Temp = -1, Vento = -1, Noturno = -1;
+        /// <summary>Minutos ate voltar ao padrao (24 °C, Frio, ventilador baixo); 0 nao volta.</summary>
+        public int Duracao;
+        public static readonly int[] Duracoes = { 0, 15, 30, 60, 120 };
 
         public const int VentoMinimo = -2, VentoMaximo = -3;
         public const int MaxCenas = 8;
@@ -26,7 +29,7 @@ namespace MhiagosControl
         {
             CenaCasa c = new CenaCasa();
             c.Nome = Nome; c.Icone = Icone; c.Desligar = Desligar;
-            c.Modo = Modo; c.Temp = Temp; c.Vento = Vento; c.Noturno = Noturno;
+            c.Modo = Modo; c.Temp = Temp; c.Vento = Vento; c.Noturno = Noturno; c.Duracao = Duracao;
             return c;
         }
 
@@ -48,7 +51,7 @@ namespace MhiagosControl
         {
             string nome = (Nome ?? "").Replace("|", "/").Replace("\r", " ").Replace("\n", " ").Trim();
             return string.Join("|", new[] { nome, Icone ?? "floco", Desligar ? "1" : "0",
-                N(Modo), N(Temp), N(Vento), N(Noturno) });
+                N(Modo), N(Temp), N(Vento), N(Noturno), N(Duracao) });
         }
 
         private static string N(int v) { return v.ToString(CultureInfo.InvariantCulture); }
@@ -65,6 +68,9 @@ namespace MhiagosControl
             int.TryParse(c[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out r.Temp);
             int.TryParse(c[5], NumberStyles.Integer, CultureInfo.InvariantCulture, out r.Vento);
             int.TryParse(c[6], NumberStyles.Integer, CultureInfo.InvariantCulture, out r.Noturno);
+            // 8o campo desde o item 3; linhas antigas, de 7, ficam sem retorno.
+            if (c.Length > 7) int.TryParse(c[7], NumberStyles.Integer, CultureInfo.InvariantCulture, out r.Duracao);
+            if (r.Duracao < 0) r.Duracao = 0;
             return r;
         }
 
@@ -169,6 +175,7 @@ namespace MhiagosControl
             }
             if (Noturno == 1) l.Add(T.CasaNoturnoCurto);
             if (Noturno == 0) l.Add(T.CasaSemNoturnoCurto);
+            if (Duracao > 0) l.Add(T.CasaPorMinutos(Duracao));
             return l.Count > 0 ? string.Join(" · ", l.ToArray()) : T.CasaCenaSoLiga;
         }
     }
@@ -322,7 +329,7 @@ namespace MhiagosControl
             }
             if (i >= _cenas.Count) return;
             Dictionary<string, int> p = _cenas[i].Comando(_a);
-            if (p != null && Rodar != null) Rodar(this, new CenaEventArgs(p));
+            if (p != null && Rodar != null) Rodar(this, new CenaEventArgs(p, _cenas[i]));
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -385,7 +392,8 @@ namespace MhiagosControl
         private readonly Label _lbNome, _lbIcone, _lbAcao, _lbModo, _lbTemp, _lbVento, _lbNoturno;
         private readonly CampoDeTexto _nome;
         private readonly Blocos _icone, _modo, _vento;
-        private readonly Segmented _acao, _noturno;
+        private readonly Segmented _acao, _noturno, _duracao;
+        private readonly Label _lbDuracao;
         private readonly Toggle _ajustaTemp;
         private readonly Label _grau;
         private readonly NumberBox _temp;
@@ -430,6 +438,11 @@ namespace MhiagosControl
             _noturno = new Segmented();
             _noturno.SetItems(T.CasaManter, T.CasaLigar, T.CasaDesligarCurto);
             Controls.Add(_noturno);
+
+            _lbDuracao = Rotulo(T.CasaVoltarDepois);
+            _duracao = new Segmented();
+            _duracao.SetItems(T.CasaNunca, "15 min", "30 min", "1 h", "2 h");
+            Controls.Add(_duracao);
 
             _salvar = Botao(T.Save, true, false, delegate { if (Salvar != null) Salvar(this, EventArgs.Empty); });
             _cancelar = Botao(T.Cancel, false, false, delegate { if (Cancelar != null) Cancelar(this, EventArgs.Empty); });
@@ -500,6 +513,7 @@ namespace MhiagosControl
             _noturno.SelectedIndex = c.Noturno < 0 ? 0 : c.Noturno == 1 ? 1 : 2;
             _noturno.Visible = _lbNoturno.Visible = temNoturno;
 
+            _duracao.SelectedIndex = Math.Max(0, Array.IndexOf(CenaCasa.Duracoes, c.Duracao));
             _excluir.Visible = !Nova;
             _antes.Visible = _depois.Visible = podeMover && !Nova;
             Habilitar();
@@ -508,7 +522,7 @@ namespace MhiagosControl
         private void Habilitar()
         {
             bool ajusta = _acao.SelectedIndex == 0;
-            foreach (Control c in new Control[] { _modo, _ajustaTemp, _vento, _noturno }) c.Enabled = ajusta;
+            foreach (Control c in new Control[] { _modo, _ajustaTemp, _vento, _noturno, _duracao }) c.Enabled = ajusta;
             _temp.Enabled = ajusta && _ajustaTemp.Checked;
         }
 
@@ -524,6 +538,7 @@ namespace MhiagosControl
             c.Temp = _ajustaTemp.Checked ? _temp.Value : -1;
             c.Vento = _vento.Visible ? _vento.Selecionado : -1;
             c.Noturno = _noturno.Visible ? (_noturno.SelectedIndex == 0 ? -1 : _noturno.SelectedIndex == 1 ? 1 : 0) : -1;
+            c.Duracao = CenaCasa.Duracoes[Math.Max(0, Math.Min(CenaCasa.Duracoes.Length - 1, _duracao.SelectedIndex))];
             return c;
         }
 
@@ -544,6 +559,7 @@ namespace MhiagosControl
             y += Ui.S(32) + Ui.S(12);
             if (_vento.Visible) Linha(_lbVento, _vento, ref y, lw, cx, cw, Ui.S(40));
             if (_noturno.Visible) Linha(_lbNoturno, _noturno, ref y, lw, cx, Math.Min(cw, Ui.S(360)), Ui.S(32));
+            Linha(_lbDuracao, _duracao, ref y, lw, cx, Math.Min(cw, Ui.S(420)), Ui.S(32));
 
             y += Ui.S(6);
             int x = 0;
@@ -595,8 +611,8 @@ namespace MhiagosControl
     /// <summary>Timer de desligar: 30 min, 1 h, 2 h; com timer ativo, a contagem e o Cancelar.</summary>
     internal sealed class PainelDoTimer : Control
     {
-        private readonly FlatBtn _t30, _t60, _t120, _cancelar;
-        private readonly Label _contagem, _nota;
+        private readonly FlatBtn _t30, _t60, _t120, _cancelar, _cancelarRetorno;
+        private readonly Label _contagem, _nota, _retorno;
         private readonly System.Windows.Forms.Timer _relogio;
         private Aparelho _a;
 
@@ -613,6 +629,13 @@ namespace MhiagosControl
             _contagem = new Label();
             _contagem.Font = Ui.FontMed; _contagem.ForeColor = Ui.AccentText; _contagem.AutoSize = false; _contagem.BackColor = Color.Transparent;
             Controls.Add(_contagem);
+            _retorno = new Label();
+            _retorno.Font = Ui.FontMed; _retorno.ForeColor = Ui.AccentText; _retorno.AutoSize = false; _retorno.BackColor = Color.Transparent;
+            Controls.Add(_retorno);
+            _cancelarRetorno = new FlatBtn();
+            _cancelarRetorno.Text = T.CasaCancelarRetorno;
+            _cancelarRetorno.Click += delegate { ServicoCasa.CancelarRetorno(); };
+            Controls.Add(_cancelarRetorno);
             _nota = new Label();
             _nota.Text = T.CasaTimerNota;
             _nota.Font = Ui.FontSmall; _nota.ForeColor = Ui.Muted; _nota.AutoSize = false; _nota.BackColor = Color.Transparent;
@@ -652,8 +675,26 @@ namespace MhiagosControl
             get { DateTime? em = ServicoCasa.DesligarEm; return em.HasValue && _a != null && ServicoCasa.DesligarPuid == _a.Puid; }
         }
 
+        internal bool RetornoAtivo
+        {
+            get { DateTime? em = ServicoCasa.RetornoEm; return em.HasValue && _a != null && ServicoCasa.RetornoPuid == _a.Puid; }
+        }
+
+        private static string Falta(DateTime em)
+        {
+            TimeSpan falta = em - DateTime.Now;
+            if (falta < TimeSpan.Zero) falta = TimeSpan.Zero;
+            return falta.TotalHours >= 1 ? string.Format("{0} h {1:00} min", (int)falta.TotalHours, falta.Minutes)
+                                         : string.Format("{0}:{1:00}", falta.Minutes, falta.Seconds);
+        }
+
         private void Contagem()
         {
+            bool retorno = RetornoAtivo;
+            bool mudou = _retorno.Visible != retorno;
+            _retorno.Visible = _cancelarRetorno.Visible = retorno;
+            if (retorno) _retorno.Text = T.CasaRetornoAtivo(ServicoCasa.RetornoEm.Value.ToString("HH:mm"), Falta(ServicoCasa.RetornoEm.Value));
+            if (mudou && Parent != null) { Control c = Parent; while (c != null && !(c is CartaoDeAparelho)) c = c.Parent; if (c != null) ((CartaoDeAparelho)c).PedirArranjo(); }
             bool ativo = Ativo;
             _cancelar.Visible = ativo;
             if (ativo)
@@ -669,8 +710,9 @@ namespace MhiagosControl
             else
             {
                 _contagem.Text = T.CasaTimerInativo;
-                _relogio.Stop();
+                if (!retorno) _relogio.Stop();
             }
+            if (retorno && !_relogio.Enabled) _relogio.Start();
             _contagem.ForeColor = ativo ? Ui.AccentText : Ui.Muted;
         }
 
@@ -688,6 +730,13 @@ namespace MhiagosControl
             _contagem.SetBounds(0, y, Math.Max(Ui.S(40), w - (_cancelar.Visible ? cw + Ui.S(8) : 0)), Ui.S(24));
             _cancelar.SetBounds(w - cw, y - Ui.S(4), cw, h);
             y += Ui.S(30);
+            if (_retorno.Visible)
+            {
+                int rw = TextRenderer.MeasureText(_cancelarRetorno.Text, _cancelarRetorno.Font).Width + Ui.S(28);
+                _retorno.SetBounds(0, y + Ui.S(4), Math.Max(Ui.S(40), w - rw - Ui.S(8)), Ui.S(24));
+                _cancelarRetorno.SetBounds(w - rw, y, rw, h);
+                y += h + Ui.S(10);
+            }
             Size s = TextRenderer.MeasureText(_nota.Text, _nota.Font, new Size(w, 0), TextFormatFlags.WordBreak);
             _nota.SetBounds(0, y, w, s.Height + Ui.S(2));
             return _nota.Bottom;
@@ -819,5 +868,15 @@ namespace MhiagosControl
         public static string CasaTimerInativo { get { return P("Nenhum timer ativo.", "No timer set."); } }
         public static string CasaTimerAtivo(string hora, string falta) { return P("Desliga às " + hora + "  ·  em " + falta, "Turns off at " + hora + "  ·  in " + falta); }
         public static string CasaTimerNota { get { return P("Só funciona com o PC ligado e o Mhiagos rodando.", "Only works with the PC on and Mhiagos running."); } }
+        public static string CasaRetornoPadrao { get { return P("Padrão", "Default"); } }
+        public static string CasaRetornoTitulo(string nome) { return P(nome + ": de volta ao padrão", nome + ": back to default"); }
+        public static string CasaRetornoFeito { get { return P("A cena terminou e o ar voltou ao padrão.", "The scene ended and the AC is back to default."); } }
+        public static string CasaPorMinutos(int min) { return min >= 60 ? P("por " + (min / 60) + " h", "for " + (min / 60) + " h") : P("por " + min + " min", "for " + min + " min"); }
+        public static string CasaVoltarDepois { get { return P("Voltar ao padrão depois de", "Back to default after"); } }
+        public static string CasaNunca { get { return P("Nunca", "Never"); } }
+        public static string CasaRetornoAtivo(string hora, string falta) { return P("Volta ao padrão às " + hora + "  ·  em " + falta, "Back to default at " + hora + "  ·  in " + falta); }
+        public static string CasaCancelarRetorno { get { return P("Manter a cena", "Keep the scene"); } }
+        public static string CasaRetornoSecao { get { return P("Padrão depois das cenas", "Default after scenes"); } }
+        public static string CasaRetornoNota { get { return P("Para onde o ar volta quando uma cena com tempo termina. Mexer no ar na mão cancela a volta.", "Where the AC returns when a timed scene ends. Changing the AC by hand cancels the return."); } }
     }
 }

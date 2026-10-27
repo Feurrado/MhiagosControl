@@ -303,6 +303,8 @@ namespace MhiagosControl
         private void Enviar(object sender, ComandoEventArgs e)
         {
             CartaoDeAparelho cartao = (CartaoDeAparelho)sender;
+            // Mexer na mao no ar cancela o retorno de uma cena (decisao do guia).
+            if (!e.DeCena && cartao is CartaoDoAr && ServicoCasa.RetornoPuid == e.Puid) ServicoCasa.CancelarRetorno();
             cartao.Enviando(true);
             ServicoCasa.Enviar(e.Puid, e.Propriedades, delegate(Exception ex)
             {
@@ -801,6 +803,8 @@ namespace MhiagosControl
     {
         public readonly string Puid;
         public readonly Dictionary<string, string> Propriedades;
+        /// <summary>Veio de uma cena: nao cancela o retorno ao padrao (que a propria cena agenda).</summary>
+        public bool DeCena;
         public ComandoEventArgs(string puid, Dictionary<string, string> p) { Puid = puid; Propriedades = p; }
     }
 
@@ -857,7 +861,9 @@ namespace MhiagosControl
         }
 
         /// <summary>Varias propriedades num comando so (as cenas), com a previa otimista.</summary>
-        protected void MandarVarios(Dictionary<string, int> valores)
+        protected void MandarVarios(Dictionary<string, int> valores) { MandarVarios(valores, false); }
+
+        protected void MandarVarios(Dictionary<string, int> valores, bool deCena)
         {
             if (Carregando || A == null || valores == null || valores.Count == 0) return;
             Dictionary<string, string> p = new Dictionary<string, string>();
@@ -867,10 +873,15 @@ namespace MhiagosControl
                 A.Estado[kv.Key] = kv.Value.ToString();
             }
             Mostrar(A);
-            if (Comando != null) Comando(this, new ComandoEventArgs(A.Puid, p));
+            ComandoEventArgs e = new ComandoEventArgs(A.Puid, p);
+            e.DeCena = deCena;
+            if (Comando != null) Comando(this, e);
         }
 
         protected void AvisarAltura() { if (MudouAltura != null) MudouAltura(this, EventArgs.Empty); }
+
+        /// <summary>Um filho mudou de altura (a contagem do retorno apareceu): pede novo arranjo.</summary>
+        internal void PedirArranjo() { AvisarAltura(); }
 
         protected override void OnPaint(PaintEventArgs e)
         {

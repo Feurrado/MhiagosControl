@@ -637,6 +637,16 @@ namespace MhiagosControl
         /// <summary>Funcoes e Preferencias moram na aba Ajustes; o cartao continua dono delas.</summary>
         internal Secao SecaoFuncoes { get { return _secFuncoes; } }
         internal Secao SecaoPreferencias { get { return _secPref; } }
+        internal Secao SecaoRetorno { get { return _secRetorno; } }
+
+        // Padrao para onde o ar volta depois de uma cena com tempo (aba Ajustes).
+        private readonly Secao _secRetorno;
+        private readonly Blocos _rtModo;
+        private readonly NumberBox _rtTemp;
+        private readonly Segmented _rtVento;
+        private readonly Label _lbRtModo, _lbRtTemp, _lbRtVento, _rtNota;
+        private int[] _rtVentos = new int[0];
+        private string _rtAssinatura = "";
 
         /// <summary>Arranja o conteudo de uma secao hospedada fora do cartao e devolve a altura dele.</summary>
         internal int ConteudoExterno(Secao s, int w) { return Conteudo(s, w); }
@@ -710,13 +720,43 @@ namespace MhiagosControl
             _unidade.SelectedIndexChanged += delegate { Mandar("t_temp_type", _unidade.SelectedIndex); };
             _secPref.Controls.Add(_unidade);
 
+            // --- Padrao depois das cenas (mora na aba Ajustes)
+            _secRetorno = NovaSecao(T.CasaRetornoSecao);
+            _lbRtModo = RotuloEm(_secRetorno, T.CasaModo);
+            _rtModo = new Blocos();
+            _rtModo.Escolheu += delegate { if (Carregando) return; ServicoCasa.Pref.RetornoModo = _rtModo.Selecionado; ServicoCasa.Pref.Salvar(); };
+            _secRetorno.Controls.Add(_rtModo);
+            _lbRtTemp = RotuloEm(_secRetorno, T.CasaTemperatura + " (°C)");
+            _rtTemp = new NumberBox();
+            _rtTemp.Minimum = 16; _rtTemp.Maximum = 30;
+            _rtTemp.Value = Math.Max(16, Math.Min(30, ServicoCasa.Pref.RetornoTemp));
+            _rtTemp.ValueChanged += delegate { if (Carregando) return; ServicoCasa.Pref.RetornoTemp = _rtTemp.Value; ServicoCasa.Pref.Salvar(); };
+            _secRetorno.Controls.Add(_rtTemp);
+            _lbRtVento = RotuloEm(_secRetorno, T.CasaVentilador);
+            _rtVento = new Segmented();
+            _rtVento.SelectedIndexChanged += delegate
+            {
+                if (Carregando || _rtVento.SelectedIndex >= _rtVentos.Length) return;
+                ServicoCasa.Pref.RetornoVento = _rtVentos[_rtVento.SelectedIndex];
+                ServicoCasa.Pref.Salvar();
+            };
+            _secRetorno.Controls.Add(_rtVento);
+            _rtNota = RotuloEm(_secRetorno, T.CasaRetornoNota);
+            _rtNota.ForeColor = Ui.Muted;
+
             // --- Cenas
             _secCenas = NovaSecao(T.CasaCenas);
             _secCenas.Acao.Text = T.CasaEditar;
             _secCenas.Acao.Visible = true;
             _secCenas.Acao.Click += delegate { AlternarEdicao(); };
             _cenas = new PainelDeCenas();
-            _cenas.Rodar += delegate(object s, CenaEventArgs e) { MandarVarios(e.Propriedades); };
+            _cenas.Rodar += delegate(object s, CenaEventArgs e)
+            {
+                MandarVarios(e.Propriedades, true);
+                if (A == null) return;
+                if (e.Cena != null && e.Cena.Duracao > 0 && !e.Cena.Desligar) ServicoCasa.AgendarRetorno(A.Puid, e.Cena.Duracao);
+                else ServicoCasa.CancelarRetorno();
+            };
             _cenas.Editar += AbrirEditor;
             _secCenas.Controls.Add(_cenas);
 
@@ -764,6 +804,48 @@ namespace MhiagosControl
                 _alvoPendente = -1;
                 Mandar("t_temp", v);
             };
+        }
+
+        private static Label RotuloEm(Control pai, string t)
+        {
+            Label l = new Label();
+            l.Text = t; l.Font = Ui.FontSmall; l.ForeColor = Ui.Text; l.AutoSize = false; l.BackColor = Color.Transparent;
+            pai.Controls.Add(l);
+            return l;
+        }
+
+        /// <summary>Opcoes do padrao de retorno conforme o modelo (modos e velocidades aceitos).</summary>
+        private void PreencherRetorno()
+        {
+            List<int> modos = Valores("t_work_mode", new[] { 4, 2, 3, 0, 1 });
+            List<int> ventos = CenaCasa.Velocidades(A);
+            ventos.Remove(0);
+            string ass = string.Join(",", modos.ConvertAll<string>(delegate(int v) { return v.ToString(); }).ToArray()) + "|" +
+                string.Join(",", ventos.ConvertAll<string>(delegate(int v) { return v.ToString(); }).ToArray());
+            if (ass != _rtAssinatura)
+            {
+                _rtAssinatura = ass;
+                _rtModo.Itens.Clear();
+                foreach (int v in modos)
+                {
+                    Blocos.Item it = new Blocos.Item();
+                    it.Valor = v; it.Rotulo = TabelaDoAr.Modo(v, A.Tipo); it.Icone = TabelaDoAr.IconeDoModo(v, A.Tipo);
+                    _rtModo.Itens.Add(it);
+                }
+                _rtVentos = ventos.ToArray();
+                List<string> rot = new List<string>();
+                foreach (int v in _rtVentos) rot.Add(TabelaDoAr.Ventilador(v, A.Tipo));
+                _rtVento.SetItems(rot.ToArray());
+            }
+            int min, max;
+            CenaCasa.FaixaC(A, out min, out max);
+            _rtTemp.Minimum = min; _rtTemp.Maximum = max;
+            _rtTemp.Value = Math.Max(min, Math.Min(max, ServicoCasa.Pref.RetornoTemp));
+            _rtModo.Selecionado = ServicoCasa.Pref.RetornoModo;
+            _rtModo.Invalidate();
+            int iv = Array.IndexOf(_rtVentos, ServicoCasa.Pref.RetornoVento);
+            if (iv >= 0) _rtVento.SelectedIndex = iv;
+            _secRetorno.Visible = _rtModo.Itens.Count > 0 && Grava("t_temp");
         }
 
         private Secao NovaSecao(string titulo)
@@ -874,6 +956,7 @@ namespace MhiagosControl
         private void Gravar()
         {
             ServicoCasa.Pref.Salvar();
+            PreencherRetorno();
             _cenas.Mostrar(A, Lista);
         }
 
@@ -1047,6 +1130,7 @@ namespace MhiagosControl
             if (A.Tem("f_power_display")) leituras.Add(A.Int("f_power_display", 0) + " W");
             _lbLiga.Tag = leituras.Count > 0 ? string.Join("  ·  ", leituras.ToArray()) : null;
 
+            PreencherRetorno();
             _cenas.Mostrar(A, Lista);
             _secCenas.Visible = Lista.Count > 0 || _cenas.Editando || true;
             _timer.Mostrar(A);
@@ -1222,6 +1306,23 @@ namespace MhiagosControl
                 _lbUnidade.SetBounds(m, y, iw - uw - Ui.S(12), Ui.S(32));
                 _unidade.SetBounds(m + iw - uw, y, uw, Ui.S(32));
                 return Ui.S(32);
+            }
+            if (s == _secRetorno)
+            {
+                int lw = Ui.S(110);
+                // Modo com a largura toda: em meia janela, "Desumidificar" nao cabia ao lado do rotulo.
+                _lbRtModo.SetBounds(m, y, iw, Ui.S(18));
+                _rtModo.SetBounds(m, y + Ui.S(22), iw, Ui.S(64));
+                int y2 = y + Ui.S(22) + Ui.S(72);
+                _lbRtTemp.SetBounds(m, y2 + Ui.S(7), lw, Ui.S(18));
+                _rtTemp.SetBounds(m + lw, y2, Ui.S(110), Ui.S(32));
+                int y3 = y2 + Ui.S(40);
+                _lbRtVento.SetBounds(m, y3 + Ui.S(7), lw, Ui.S(18));
+                _rtVento.SetBounds(m + lw, y3, Math.Min(iw - lw, Ui.S(300)), Ui.S(32));
+                int y4 = y3 + Ui.S(42);
+                Size tn = TextRenderer.MeasureText(_rtNota.Text, _rtNota.Font, new Size(iw, 0), TextFormatFlags.WordBreak);
+                _rtNota.SetBounds(m, y4, iw, tn.Height + Ui.S(2));
+                return _rtNota.Bottom - y;
             }
             if (s == _secCenas)
             {
