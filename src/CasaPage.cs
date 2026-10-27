@@ -895,9 +895,8 @@ namespace MhiagosControl
             using (SolidBrush b = new SolidBrush(Ui.AccentSoft))
                 g.FillPath(b, p);
             if (Icone != null)
-                TextRenderer.DrawText(g, Icone, Ui.FontGlyph11, ic, Ui.AccentText,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-            else DesenharIcone(g, Rectangle.Inflate(ic, -Ui.S(9), -Ui.S(8)), Ui.AccentText);
+                IconesCasa.GlifoCentrado(g, Icone, Ui.FontGlyph11, ic, Ui.AccentText);
+            else DesenharIcone(g, Rectangle.Inflate(ic, -Ui.S(8), -Ui.S(8)), Ui.AccentText);
 
             string selo = _enviando ? T.CasaEnviando : (A.Online ? T.CasaOnline : T.CasaOffline);
             Color cor = _enviando ? Ui.Accent : (A.Online ? Color.FromArgb(0x2E, 0xA0, 0x43) : Ui.Muted);

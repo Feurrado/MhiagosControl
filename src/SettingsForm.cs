@@ -202,7 +202,7 @@ namespace MhiagosControl
             MinimumSize = new Size(Ui.S(880), Ui.S(660));
 
             Size guardado = TamanhoGuardado();
-            ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : new Size(Ui.S(1280), Ui.S(790)),
+            ClientSize = FitInitialClient(guardado != Size.Empty ? guardado : TamanhoPadrao,
                 Screen.FromPoint(Cursor.Position).WorkingArea.Size);
             Point? posicao = PosicaoGuardada();
             if (posicao.HasValue)
@@ -575,10 +575,22 @@ namespace MhiagosControl
         /// monitor, com o rodape e os botoes fora do alcance. Por isso a
         /// conferencia contra a area de trabalho atual, e nao so contra o minimo.
         /// </summary>
+        /// <summary>
+        /// Area cliente da primeira abertura: a janela inteira fica com
+        /// 1265 x 795 a 100% (a medida que o Thiago escolheu para a Visao geral
+        /// nova), descontadas a moldura visivel de 1 px e a barra de titulo de
+        /// 31 px do Windows 11.
+        /// </summary>
+        internal static Size TamanhoPadrao { get { return new Size(Ui.S(1263), Ui.S(763)); } }
+
+        /// <summary>O padrao anterior (1280 x 790 de area cliente): gravado assim, vale o novo.</summary>
+        internal static Size TamanhoPadraoAntigo { get { return new Size(Ui.S(1280), Ui.S(790)); } }
+
         private Size TamanhoGuardado()
         {
             int w = _cfg.WindowW, h = _cfg.WindowH;
             if (w <= 0 || h <= 0) return Size.Empty;
+            if (w == TamanhoPadraoAntigo.Width && h == TamanhoPadraoAntigo.Height) return Size.Empty;
 
             Rectangle tela = Screen.FromPoint(Cursor.Position).WorkingArea;
             if (w > tela.Width - 40) w = tela.Width - 40;
@@ -1145,8 +1157,25 @@ namespace MhiagosControl
             MetricCard c = new MetricCard();
             c.Editavel = false;
             c.Janela = MetricHistory.JanelaVisaoGeral;
+            ClicarAbreMetricas(c);
             _pgVisao.Controls.Add(c);
             return c;
+        }
+
+        /// <summary>Clique numa curva da Visao geral: abre Metricas com essa leitura na faixa de cima, se ela estiver na grade.</summary>
+        private void ClicarAbreMetricas(MetricCard c)
+        {
+            c.Clicavel = true;
+            c.Cursor = Cursors.Hand;
+            c.Click += delegate { AbrirLeituraEmMetricas(c.SensorId); };
+        }
+
+        internal void AbrirLeituraEmMetricas(string id)
+        {
+            AbrirPaginaPelaChave("metricas");
+            if (string.IsNullOrEmpty(id)) return;
+            foreach (MetricCard m in _cards)
+                if (m.SensorId == id) { EscolherLeituraDoNavegador(id); return; }
         }
 
         /// <summary>Aponta um cartao de curva para o sensor que esta num mostrador.</summary>
@@ -1260,6 +1289,7 @@ namespace MhiagosControl
 
                 _pgVisao.Controls.Add(c);
                 _vgTiles.Add(c);
+                ClicarAbreMetricas(c);
                 _vgIds.Add(s.Id);
                 indice++;
             }

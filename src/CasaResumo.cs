@@ -241,7 +241,7 @@ namespace MhiagosControl
             using (GraphicsPath p = Ui.RoundRect(r, Ui.S(10)))
             using (SolidBrush b = new SolidBrush(Ui.AccentSoft)) g.FillPath(b, p);
             if (desenho != null) desenho(g, RectangleF.Inflate(r, -Ui.S(9), -Ui.S(9)), Ui.AccentText);
-            else TextRenderer.DrawText(g, glifo, Ui.FontGlyph11, r, Ui.AccentText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            else IconesCasa.GlifoCentrado(g, glifo, Ui.FontGlyph11, r, Ui.AccentText);
         }
 
         private void DesenharAr(Graphics g, Rectangle b)
@@ -277,13 +277,7 @@ namespace MhiagosControl
             Rectangle ic = new Rectangle(b.X + m + (b.X > 0 ? Ui.S(6) : 0), (Height - Ui.S(36)) / 2, Ui.S(36), Ui.S(36));
             using (GraphicsPath p = Ui.RoundRect(ic, Ui.S(10)))
             using (SolidBrush br = new SolidBrush(Ui.AccentSoft)) g.FillPath(br, p);
-            Rectangle r = Rectangle.Inflate(ic, -Ui.S(9), -Ui.S(8));
-            using (Pen pen = new Pen(Ui.AccentText, Ui.S(2) * 0.75f))
-            {
-                using (GraphicsPath gp = Ui.RoundRect(r, Ui.S(3))) g.DrawPath(pen, gp);
-                int d = Math.Min(r.Width, r.Height) * 11 / 20;
-                g.DrawEllipse(pen, r.X + (r.Width - d) / 2, r.Bottom - d - Ui.S(3), d, d);
-            }
+            IconesCasa.Lavadora(g, Rectangle.Inflate(ic, -Ui.S(8), -Ui.S(8)), Ui.AccentText);
             int tx = ic.Right + Ui.S(12);
             int tw = Math.Max(Ui.S(40), _anel.Left - Ui.S(10) - tx);
             Size sn = TextRenderer.MeasureText(_lav.Nome, Ui.FontMed);

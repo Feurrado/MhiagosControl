@@ -645,7 +645,7 @@ namespace MhiagosControl
             Ui.Smooth(g);
             int m = Ui.S(16);
             Rectangle ic = Icone(g, m, (Height - Ui.S(40)) / 2);
-            TextRenderer.DrawText(g, "\uE9CA", Ui.FontGlyph11, ic, Ui.AccentText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            IconesCasa.GlifoCentrado(g, "\uE9CA", Ui.FontGlyph11, ic, Ui.AccentText);
             int tx = ic.Right + Ui.S(14);
             int alto = Ui.FontSection.Height + Ui.S(2) + Ui.FontSmall.Height;
             NomeELinha(g, _ar.Nome, Linha(), tx, (Height - alto) / 2, Math.Max(Ui.S(40), _menos.Left - Ui.S(12) - tx), Ui.Muted);
@@ -735,13 +735,7 @@ namespace MhiagosControl
             int m = Ui.S(16);
 
             Rectangle ic = Icone(g, m, Ui.S(14));
-            Rectangle r = Rectangle.Inflate(ic, -Ui.S(10), -Ui.S(9));
-            using (Pen pen = new Pen(Ui.AccentText, Ui.S(2) * 0.75f))
-            {
-                using (GraphicsPath gp = Ui.RoundRect(r, Ui.S(3))) g.DrawPath(pen, gp);
-                int d = Math.Min(r.Width, r.Height) * 11 / 20;
-                g.DrawEllipse(pen, r.X + (r.Width - d) / 2, r.Bottom - d - Ui.S(3), d, d);
-            }
+            IconesCasa.Lavadora(g, Rectangle.Inflate(ic, -Ui.S(9), -Ui.S(9)), Ui.AccentText);
 
             // o tempo que falta, a direita, e a hora do fim embaixo
             string tempo = Relogio(c.Restante);
@@ -820,7 +814,7 @@ namespace MhiagosControl
             Ui.Smooth(g);
             int m = Ui.S(16);
             Rectangle ic = Icone(g, m, (Height - Ui.S(40)) / 2);
-            TextRenderer.DrawText(g, "\uE80F", Ui.FontGlyph11, ic, Ui.AccentText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            IconesCasa.GlifoCentrado(g, "\uE80F", Ui.FontGlyph11, ic, Ui.AccentText);
             string link = T.VisaoAbrirCasa;
             Size sl = TextRenderer.MeasureText(link, Ui.FontMed);
             TextRenderer.DrawText(g, link, Ui.FontMed, new Point(Width - m - sl.Width, (Height - sl.Height) / 2), Ui.AccentText, TextFormatFlags.NoPrefix);

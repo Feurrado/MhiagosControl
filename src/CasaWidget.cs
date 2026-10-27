@@ -471,15 +471,8 @@ namespace MhiagosControl
         /// <summary>A maquininha (caixa com a porta redonda), em branco como os icones do widget de bateria.</summary>
         private static void IconeDaLavadora(Graphics g, RectangleF bolha, float s)
         {
-            float lado = bolha.Width * 0.46f;
-            RectangleF r = new RectangleF(bolha.X + (bolha.Width - lado * 0.86f) / 2f, bolha.Y + (bolha.Height - lado) / 2f, lado * 0.86f, lado);
-            using (Pen pen = new Pen(Color.White, 1.6f * s))
-            {
-                using (GraphicsPath gp = PintorDoWidget.Arredondado(r, 2.5f * s)) g.DrawPath(pen, gp);
-                float d = r.Width * 0.62f;
-                g.DrawEllipse(pen, r.X + (r.Width - d) / 2f, r.Bottom - d - 2f * s, d, d);
-                g.DrawLine(pen, r.X + 2.5f * s, r.Y + 3f * s, r.X + 5f * s, r.Y + 3f * s);
-            }
+            float m = bolha.Width * 0.26f;
+            IconesCasa.Lavadora(g, RectangleF.Inflate(bolha, -m, -m), Color.White);
         }
     }
 

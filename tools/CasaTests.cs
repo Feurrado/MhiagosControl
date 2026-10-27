@@ -233,6 +233,7 @@ namespace MhiagosControl
                                 "historico e consumo logo abaixo do ar " + sufixo);
                             if (hist != null) SemSobrepor(hist, "historico " + sufixo);
                             CaptureEvolution(form, "casa-aparelhos-" + sufixo);
+                            if (language == T.PtBr && largura == 1300) CapturarEm(System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe"), "icones"), ar, "icones-ar-chave-e-lua");
                             if (largura == 1300 && hist != null)
                             {
                                 // Item 4: o cartao de consumo comeca fechado, abre e lembra.
@@ -328,6 +329,7 @@ namespace MhiagosControl
                                 Verdade(!lv.ConsumoAberto && !((Label)Field(lv, "_consumo")).Visible && lv.CabecalhoDoConsumo.Visible,
                                     "consumo da lavadora comeca fechado " + sufixo);
                                 CaptureEvolution(lv, "casa-lavadora-" + sufixo);
+                                if (language == T.PtBr && estado == "secando" && largura == 1300) CapturarEm(System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe"), "icones"), lv, "icones-lavadora-casa");
                                 lv.AlternarConsumo(false);
                                 casa.Arranjar();
                                 Verdade(lv.ConsumoAberto && ((Label)Field(lv, "_consumo")).Visible && ServicoCasa.Pref.ConsumoLavadoraAberto,
@@ -431,6 +433,7 @@ namespace MhiagosControl
                                         SemSobrepor(arv, "cartao do ar " + sufixo);
                                         if (capturar && estado == "secando" && (largura == 1300 || escuro))
                                             CapturarEm(dirCap, form, "visao-geral-" + (escuro ? "escuro" : "claro") + "-" + largura);
+                                        if (capturar && estado == "secando" && largura == 1300 && escuro) CapturarEm(System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe"), "icones"), form, "icones-visao-geral");
                                     }
                             }
                         }
@@ -455,6 +458,23 @@ namespace MhiagosControl
                         InvokePrivate(arv.BotaoMais, "OnClick", EventArgs.Empty);
                         arv.MandarPendente();
                         Verdade(arv.UltimoComando != null && arv.UltimoComando.Count == 1 && arv.UltimoComando["t_temp"] == "24", "+ do ar manda t_temp 24 " + language);
+                        // Clique numa leitura em destaque ou numa curva do cooler abre Metricas.
+                        InvokePrivate(tiles[0], "OnClick", EventArgs.Empty);
+                        Verdade(nav.Selected != null && nav.Selected.Key == "metricas", "clique na leitura em destaque abre Metricas " + language);
+                        Verdade(tiles[0].Clicavel && tiles[0].Cursor == Cursors.Hand, "leitura em destaque com cursor de mao " + language);
+                        for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                        InvokePrivate(form, "ArranjarVisaoGeral");
+                        InvokePrivate((Control)Field(form, "_vgP1"), "OnClick", EventArgs.Empty);
+                        Verdade(nav.Selected != null && nav.Selected.Key == "metricas", "clique na curva do mostrador abre Metricas " + language);
+                        for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                        // Tamanho padrao da janela: 1265 x 795 por fora; o padrao antigo gravado migra.
+                        Igual(new Size(Ui.S(1263), Ui.S(763)), SettingsForm.TamanhoPadrao, "area cliente padrao da janela");
+                        int wAntes = cfgForm.WindowW, hAntes = cfgForm.WindowH;
+                        cfgForm.WindowW = SettingsForm.TamanhoPadraoAntigo.Width; cfgForm.WindowH = SettingsForm.TamanhoPadraoAntigo.Height;
+                        Verdade((Size)InvokePrivate(form, "TamanhoGuardado") == Size.Empty, "padrao antigo gravado vale o novo " + language);
+                        cfgForm.WindowW = Ui.S(1000); cfgForm.WindowH = Ui.S(700);
+                        Verdade((Size)InvokePrivate(form, "TamanhoGuardado") == new Size(Ui.S(1000), Ui.S(700)), "tamanho escolhido pela pessoa fica " + language);
+                        cfgForm.WindowW = wAntes; cfgForm.WindowH = hAntes;
                         Verdade(arv.Linha().Contains("Escritório") && arv.Linha().Contains(string.Format(T.CasaAmbienteCurto, "22 °C")), "linha do ar com comodo e ambiente " + language);
                         Verdade(lavv.Linha().Contains("rpm"), "linha da lavadora com a centrifugacao " + language);
                         Igual("01:25", CartaoDaLavadoraVisao.Relogio(85), "tempo da lavadora em hh:mm");

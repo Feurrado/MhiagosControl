@@ -636,13 +636,7 @@ namespace MhiagosControl
         /// <summary>A Segoe nao tem lavadora: porta redonda numa caixa, desenhada.</summary>
         protected override void DesenharIcone(Graphics g, Rectangle r, Color cor)
         {
-            using (Pen p = new Pen(cor, Ui.S(2) * 0.75f))
-            {
-                using (GraphicsPath gp = Ui.RoundRect(r, Ui.S(3))) g.DrawPath(p, gp);
-                int d = Math.Min(r.Width, r.Height) * 11 / 20;
-                g.DrawEllipse(p, r.X + (r.Width - d) / 2, r.Bottom - d - Ui.S(3), d, d);
-                g.DrawLine(p, r.X + Ui.S(3), r.Y + Ui.S(4), r.X + Ui.S(6), r.Y + Ui.S(4));
-            }
+            IconesCasa.Lavadora(g, r, cor);
         }
 
         private void Parametros(List<string[]> l)

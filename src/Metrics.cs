@@ -60,6 +60,9 @@ namespace MhiagosControl
         /// <summary>Leitura quente (temperatura): pinta em ambar em vez da cor de destaque.</summary>
         public bool Quente;
 
+        /// <summary>Nao editavel, mas o clique leva a algum lugar (a Visao geral abre Metricas): cursor de mao.</summary>
+        public bool Clicavel;
+
         private float _estMax = float.NaN, _estMed = float.NaN;
 
         private Rectangle _bRem, _bEsq, _bDir, _bTam;
@@ -213,7 +216,7 @@ namespace MhiagosControl
             {
                 _sobre = s;
                 _hoverX = hx;
-                Cursor = s >= 0 ? Cursors.Hand : Cursors.Default;
+                Cursor = s >= 0 || Clicavel ? Cursors.Hand : Cursors.Default;
                 Invalidate();
             }
             base.OnMouseMove(e);

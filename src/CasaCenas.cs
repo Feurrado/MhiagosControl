@@ -801,23 +801,6 @@ namespace MhiagosControl
 
     internal static partial class IconesCasa
     {
-        /// <summary>Chave de boca: cabo na diagonal e a cabeca aberta no alto.</summary>
-        public static void ChaveDeBoca(Graphics g, RectangleF r, Color c)
-        {
-            float s = Math.Min(r.Width, r.Height);
-            float esp = Math.Max(2f, s / 6.5f);
-            using (Pen p = new Pen(c, esp))
-            {
-                p.StartCap = p.EndCap = LineCap.Round;
-                // Cabo: do canto de baixo a esquerda ate perto da cabeca.
-                g.DrawLine(p, r.X + s * 0.12f, r.Bottom - s * 0.12f, r.X + s * 0.55f, r.Y + s * 0.45f);
-                // Cabeca: anel aberto para o canto de cima a direita (a boca).
-                float d = s * 0.5f;
-                RectangleF cab = new RectangleF(r.Right - d - s * 0.04f, r.Y + s * 0.04f, d, d);
-                g.DrawArc(p, cab, 25f, 290f);
-            }
-        }
-
         /// <summary>"Manter": circulo com um traco.</summary>
         public static void Manter(Graphics g, RectangleF r, Color c)
         {

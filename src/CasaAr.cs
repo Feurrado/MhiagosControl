@@ -249,17 +249,6 @@ namespace MhiagosControl
                 g.DrawLine(p, baixo, new PointF(r.X + r.Width * 0.62f, r.Y + r.Height * 0.38f));
             }
         }
-        public static void Lua(Graphics g, RectangleF r, Color c)
-        {
-            using (Pen p = Caneta(c, r))
-            using (GraphicsPath gp = new GraphicsPath())
-            {
-                gp.AddArc(r.X, r.Y, r.Width, r.Height, 60, 240);
-                gp.AddArc(r.X + r.Width * 0.3f, r.Y - r.Height * 0.05f, r.Width * 0.75f, r.Height * 0.75f, 300, -240);
-                gp.CloseFigure();
-                g.DrawPath(p, gp);
-            }
-        }
 
         /// <summary>n barras de altura crescente, as primeiras "cheias".</summary>
         public static void Barras(Graphics g, RectangleF r, Color c, int cheias, int total)
