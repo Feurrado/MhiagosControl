@@ -20,9 +20,13 @@ namespace MhiagosControl
     {
         /// <summary>
         /// Nomes CONFIRMADOS para o modelo do Thiago (025-1wj110009v0t), pelo
-        /// painel da maquina. Vazio ate ele confirmar.
+        /// painel da maquina.
         /// </summary>
-        internal static readonly Dictionary<int, string[]> Confirmados = new Dictionary<int, string[]>();
+        internal static readonly Dictionary<int, string[]> Confirmados = new Dictionary<int, string[]>
+        {
+            // Confirmado pelo Thiago em 26/10/2026: o ciclo das 21:20 (programa 7) foi Algodao.
+            { 7, new[] { "Algodão", "Cotton" } }
+        };
 
         /// <summary>
         /// Nomes PROVAVEIS, do dicionario do connectlife-ha para as lava e secas
