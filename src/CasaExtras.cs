@@ -21,11 +21,7 @@ namespace MhiagosControl
     {
         private Aparelho _a;
         private readonly Segmented _periodo;
-        private readonly Label _lbConsumo, _nota, _lbAjustes, _lbAlertas;
-        private readonly CampoDeTexto _wFrio, _wEco, _wVent, _tarifa;
-        private readonly Label _lwFrio, _lwEco, _lwVent, _ltarifa;
-        private readonly Toggle _alFalha, _alOffline, _alQuente, _alLavadora;
-        private readonly NumberBox _limite;
+        private readonly Label _lbConsumo, _nota;
         private Rectangle _grafico, _barras;
         private static readonly int[] Horas = { 6, 24, 24 * 7 };
         private static readonly int M = Ui.S(18);
@@ -43,30 +39,11 @@ namespace MhiagosControl
             Controls.Add(_periodo);
 
             _lbConsumo = Rotulo("", Ui.FontBase, Ui.Text);
-            _nota = Rotulo(T.CasaEstimativaNota, Ui.FontSmall, Ui.Muted);
-            _lbAjustes = Rotulo(T.CasaAjustesConsumo, Ui.FontSmall, Ui.Muted);
-
-            PreferenciasCasa p = ServicoCasa.Pref;
-            _lwFrio = Rotulo(T.CasaPotenciaFrio, Ui.FontSmall, Ui.Text);
-            _wFrio = Campo(p.PotenciaFrio.ToString(CultureInfo.InvariantCulture));
-            _lwEco = Rotulo(T.CasaPotenciaEco, Ui.FontSmall, Ui.Text);
-            _wEco = Campo(p.PotenciaEco.ToString(CultureInfo.InvariantCulture));
-            _lwVent = Rotulo(T.CasaPotenciaVentilar, Ui.FontSmall, Ui.Text);
-            _wVent = Campo(p.PotenciaVentilar.ToString(CultureInfo.InvariantCulture));
-            _ltarifa = Rotulo(T.CasaTarifa, Ui.FontSmall, Ui.Text);
-            _tarifa = Campo(p.Tarifa.ToString("0.00##", CultureInfo.CurrentCulture));
-
-            _lbAlertas = Rotulo(T.CasaAlertasTitulo, Ui.FontSmall, Ui.Muted);
-            _alFalha = Chave(T.CasaAlertaFalhaOpcao, p.AlertaFalha, delegate(bool v) { ServicoCasa.Pref.AlertaFalha = v; });
-            _alOffline = Chave(T.CasaAlertaOfflineOpcao, p.AlertaDesconectado, delegate(bool v) { ServicoCasa.Pref.AlertaDesconectado = v; });
-            _alQuente = Chave(T.CasaAlertaQuenteOpcao, p.AlertaQuente, delegate(bool v) { ServicoCasa.Pref.AlertaQuente = v; });
-            _alLavadora = Chave(T.CasaAlertaLavadoraFimOpcao, p.AlertaLavadoraFim, delegate(bool v) { ServicoCasa.Pref.AlertaLavadoraFim = v; });
-            _limite = new NumberBox();
-            _limite.Minimum = 20; _limite.Maximum = 40;
-            _limite.Value = p.LimiteQuente;
-            _limite.ValueChanged += delegate { ServicoCasa.Pref.LimiteQuente = _limite.Value; ServicoCasa.Pref.Salvar(); };
-            Controls.Add(_limite);
+            _nota = Rotulo(T.CasaEstimativaNotaAjustes, Ui.FontSmall, Ui.Muted);
         }
+
+        /// <summary>Recalcula com a potencia e a tarifa novas (vem da aba Ajustes).</summary>
+        public void Recalcular() { Mostrar(_a); }
 
         private Label Rotulo(string t, Font f, Color c)
         {
@@ -74,46 +51,6 @@ namespace MhiagosControl
             l.Text = t; l.Font = f; l.ForeColor = c; l.AutoSize = false; l.BackColor = Color.Transparent;
             Controls.Add(l);
             return l;
-        }
-
-        private CampoDeTexto Campo(string valor)
-        {
-            CampoDeTexto c = new CampoDeTexto();
-            c.Icone = null;
-            c.Texto = valor;
-            c.Confirmar += delegate { Gravar(); };
-            c.Leave += delegate { Gravar(); };
-            Controls.Add(c);
-            return c;
-        }
-
-        private Toggle Chave(string rotulo, bool valor, Action<bool> grava)
-        {
-            Toggle t = new Toggle();
-            t.Label = rotulo;
-            t.Checked = valor;
-            t.CheckedChanged += delegate { grava(t.Checked); ServicoCasa.Pref.Salvar(); };
-            Controls.Add(t);
-            return t;
-        }
-
-        /// <summary>Le os campos de potencia e tarifa; valor invalido volta ao anterior.</summary>
-        private void Gravar()
-        {
-            PreferenciasCasa p = ServicoCasa.Pref;
-            int w;
-            if (int.TryParse(_wFrio.Texto.Trim(), out w) && w >= 0 && w <= 10000) p.PotenciaFrio = w;
-            if (int.TryParse(_wEco.Texto.Trim(), out w) && w >= 0 && w <= 10000) p.PotenciaEco = w;
-            if (int.TryParse(_wVent.Texto.Trim(), out w) && w >= 0 && w <= 10000) p.PotenciaVentilar = w;
-            double t;
-            string tt = _tarifa.Texto.Trim().Replace("R$", "").Trim();
-            if (double.TryParse(tt.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out t) && t >= 0 && t < 100) p.Tarifa = t;
-            p.Salvar();
-            _wFrio.Texto = p.PotenciaFrio.ToString(CultureInfo.InvariantCulture);
-            _wEco.Texto = p.PotenciaEco.ToString(CultureInfo.InvariantCulture);
-            _wVent.Texto = p.PotenciaVentilar.ToString(CultureInfo.InvariantCulture);
-            _tarifa.Texto = p.Tarifa.ToString("0.00##", CultureInfo.CurrentCulture);
-            Mostrar(_a);
         }
 
         public void Mostrar(Aparelho a)
@@ -154,31 +91,6 @@ namespace MhiagosControl
             s = TextRenderer.MeasureText(_nota.Text, _nota.Font, new Size(iw, 0), TextFormatFlags.WordBreak);
             _nota.SetBounds(M, y, iw, s.Height + Ui.S(2));
             y = _nota.Bottom + Ui.S(14);
-
-            // Ajustes: quatro campos rotulados, em uma ou duas linhas.
-            _lbAjustes.SetBounds(M, y, iw, Ui.S(18));
-            y += Ui.S(22);
-            int col = iw >= Ui.S(760) ? 4 : 2;
-            int cw = (iw - (col - 1) * Ui.S(16)) / col;
-            Label[] rot = { _lwFrio, _lwEco, _lwVent, _ltarifa };
-            CampoDeTexto[] cmp = { _wFrio, _wEco, _wVent, _tarifa };
-            for (int i = 0; i < 4; i++)
-            {
-                int cx = M + (i % col) * (cw + Ui.S(16)), cy = y + (i / col) * Ui.S(62);
-                rot[i].SetBounds(cx, cy, cw, Ui.S(18));
-                cmp[i].SetBounds(cx, cy + Ui.S(20), cw, Ui.S(34));
-            }
-            y += ((4 + col - 1) / col) * Ui.S(62) + Ui.S(8);
-
-            _lbAlertas.SetBounds(M, y, iw, Ui.S(18));
-            y += Ui.S(22);
-            int tc = iw >= Ui.S(760) ? 2 : 1;
-            int tw = (iw - (tc - 1) * Ui.S(12)) / tc;
-            Toggle[] ts = { _alFalha, _alOffline, _alQuente, _alLavadora };
-            for (int i = 0; i < ts.Length; i++)
-                ts[i].SetBounds(M + (i % tc) * (tw + Ui.S(12)), y + (i / tc) * Ui.S(38), tw - (ts[i] == _alQuente ? Ui.S(96) : 0), Ui.S(32));
-            _limite.SetBounds(_alQuente.Right + Ui.S(6), _alQuente.Top, Ui.S(88), Ui.S(32));
-            y += ((ts.Length + tc - 1) / tc) * Ui.S(38) + Ui.S(10);
             return y;
         }
 
@@ -378,7 +290,8 @@ namespace MhiagosControl
         public static string CasaConsumoHoje(string h, string kwh, string reais) { return P("Hoje: ligado " + h + "  ·  ~" + kwh + " kWh  ·  ~R$ " + reais, "Today: on " + h + "  ·  ~" + kwh + " kWh  ·  ~R$ " + reais); }
         public static string CasaConsumoMes(string h, string kwh, string reais) { return P("Este mês: ligado " + h + "  ·  ~" + kwh + " kWh  ·  ~R$ " + reais, "This month: on " + h + "  ·  ~" + kwh + " kWh  ·  ~R$ " + reais); }
         public static string CasaEstimativaNota { get { return P("Consumo ESTIMADO: tempo ligado em cada modo × a potência abaixo. Este modelo não mede consumo. Só conta o tempo com o Mhiagos rodando.", "ESTIMATED usage: time on in each mode × the power below. This model does not measure usage. Only counts time while Mhiagos is running."); } }
-        public static string CasaAjustesConsumo { get { return P("Para a estimativa (valores padrão, editáveis)", "For the estimate (default values, editable)"); } }
+        public static string CasaAjustesConsumo { get { return P("Valores padrão, editáveis. O modelo não mede consumo: a estimativa é tempo ligado em cada modo × potência.", "Default values, editable. This model does not measure usage: the estimate is time on in each mode × power."); } }
+        public static string CasaEstimativaNotaAjustes { get { return P("Consumo ESTIMADO: tempo ligado em cada modo × a potência definida em Ajustes. Este modelo não mede consumo. Só conta o tempo com o Mhiagos rodando.", "ESTIMATED usage: time on in each mode × the power set in Settings. This model does not measure usage. Only counts time while Mhiagos is running."); } }
         public static string CasaPotenciaFrio { get { return P("Frio (W)", "Cool (W)"); } }
         public static string CasaPotenciaEco { get { return P("ECO (W)", "Eco (W)"); } }
         public static string CasaPotenciaVentilar { get { return P("Ventilar (W)", "Fan (W)"); } }

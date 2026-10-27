@@ -29,6 +29,8 @@ namespace MhiagosControl
         private readonly FlatBtn _btAtualizar, _btSair;
         private readonly List<CartaoDeAparelho> _cartoes = new List<CartaoDeAparelho>();
         private CartaoHistoricoDoAr _historico;
+        private readonly Segmented _abas;
+        private readonly AjustesDaCasa _ajustes;
         private readonly Label _vazio;
         private readonly EventHandler _mudou;
         private bool _logado;
@@ -44,6 +46,15 @@ namespace MhiagosControl
         internal CartaoDeLogin Login { get { return _login; } }
         internal List<CartaoDeAparelho> Cartoes { get { return _cartoes; } }
         internal CartaoHistoricoDoAr Historico { get { return _historico; } }
+        internal AjustesDaCasa Ajustes { get { return _ajustes; } }
+        internal Segmented Abas { get { return _abas; } }
+
+        /// <summary>0 Painel, 1 Ajustes.</summary>
+        internal int Aba
+        {
+            get { return _abas.SelectedIndex; }
+            set { _abas.SelectedIndex = value; }
+        }
 
         /// <summary>Testes: mostra os cartoes como se a nuvem tivesse respondido, sem nuvem.</summary>
         internal void MostrarSemNuvem(List<Aparelho> lista)
@@ -81,10 +92,28 @@ namespace MhiagosControl
             _btAtualizar.Click += delegate { ServicoCasa.Atualizar(); };
             Controls.Add(_btAtualizar);
 
+            // Sair da conta mora na aba Ajustes; o botao do cabecalho fica so como
+            // campo, escondido, para quem ainda o procura pelo nome.
             _btSair = new FlatBtn();
             _btSair.Text = T.CasaSair;
             _btSair.Click += delegate { ServicoCasa.Sair(); };
-            Controls.Add(_btSair);
+            _btSair.Visible = false;
+
+            _abas = new Segmented();
+            _abas.SetItems(T.CasaPainel, T.CasaAjustes);
+            _abas.SelectedIndex = ServicoCasa.Pref.AbaCasa == 1 ? 1 : 0;
+            _abas.SelectedIndexChanged += delegate
+            {
+                ServicoCasa.Pref.AbaCasa = _abas.SelectedIndex;
+                ServicoCasa.Pref.Salvar();
+                MostrarModo();
+            };
+            Controls.Add(_abas);
+
+            _ajustes = new AjustesDaCasa();
+            _ajustes.Sair += delegate { ServicoCasa.Sair(); };
+            _ajustes.ConsumoMudou += delegate { if (_historico != null) _historico.Recalcular(); };
+            Controls.Add(_ajustes);
 
             _vazio = new Label();
             _vazio.Font = Ui.FontBase;
@@ -148,10 +177,13 @@ namespace MhiagosControl
         private void MostrarModo()
         {
             _login.Visible = !_logado;
-            _titulo.Visible = _situacao.Visible = _btAtualizar.Visible = _btSair.Visible = _logado;
-            foreach (CartaoDeAparelho c in _cartoes) c.Visible = _logado;
-            if (_historico != null) _historico.Visible = _logado;
-            _vazio.Visible = _logado && _cartoes.Count == 0 && !ServicoCasa.Buscando && ServicoCasa.UltimaLeitura != DateTime.MinValue;
+            bool painel = _abas.SelectedIndex == 0;
+            _titulo.Visible = _situacao.Visible = _btAtualizar.Visible = _abas.Visible = _logado;
+            _btSair.Visible = false;
+            foreach (CartaoDeAparelho c in _cartoes) c.Visible = _logado && painel;
+            if (_historico != null) _historico.Visible = _logado && painel;
+            _ajustes.Visible = _logado && !painel;
+            _vazio.Visible = _logado && painel && _cartoes.Count == 0 && !ServicoCasa.Buscando && ServicoCasa.UltimaLeitura != DateTime.MinValue;
             _vazio.Text = T.CasaSemAparelhos;
             _login.Vigiar(!_logado && Visible);
             AtualizarSituacao();
@@ -212,6 +244,9 @@ namespace MhiagosControl
                     }
                 }
                 for (int i = 0; i < lista.Count; i++) _cartoes[i].Mostrar(lista[i]);
+                CartaoDoAr primeiro = null;
+                foreach (CartaoDeAparelho c in _cartoes) if (c is CartaoDoAr) { primeiro = (CartaoDoAr)c; break; }
+                _ajustes.Adotar(primeiro);
 
                 // Historico e consumo do primeiro ar da conta.
                 Aparelho primeiroAr = null;
@@ -325,13 +360,20 @@ namespace MhiagosControl
                     int x = (util - w) / 2;
                     int y = 0;
 
-                    int bw = BotaoW(_btSair), ba = BotaoW(_btAtualizar);
-                    _btSair.SetBounds(x + w - bw, y + Ui.S(4), bw, Ui.S(32));
-                    _btAtualizar.SetBounds(_btSair.Left - Ui.S(8) - ba, y + Ui.S(4), ba, Ui.S(32));
+                    int ba = BotaoW(_btAtualizar), aw = Ui.S(200);
+                    _btAtualizar.SetBounds(x + w - ba, y + Ui.S(4), ba, Ui.S(32));
+                    _abas.SetBounds(_btAtualizar.Left - Ui.S(10) - aw, y + Ui.S(4), aw, Ui.S(32));
                     int th = TextRenderer.MeasureText(_titulo.Text, _titulo.Font).Height;
-                    _titulo.SetBounds(x, y, Math.Max(Ui.S(60), _btAtualizar.Left - x - Ui.S(12)), th);
-                    _situacao.SetBounds(x + Ui.S(1), y + th, Math.Max(Ui.S(60), _btAtualizar.Left - x - Ui.S(12)), Ui.S(20));
+                    _titulo.SetBounds(x, y, Math.Max(Ui.S(60), _abas.Left - x - Ui.S(12)), th);
+                    _situacao.SetBounds(x + Ui.S(1), y + th, Math.Max(Ui.S(60), _abas.Left - x - Ui.S(12)), Ui.S(20));
                     y += Math.Max(th + Ui.S(20), Ui.S(40)) + Ui.Gap;
+
+                    if (_ajustes.Visible)
+                    {
+                        int ha = _ajustes.Arranjar(w);
+                        _ajustes.SetBounds(x, y, w, ha);
+                        y += ha + Ui.Gap;
+                    }
 
                     _vazio.SetBounds(x, y, w, Ui.S(40));
 

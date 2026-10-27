@@ -140,7 +140,7 @@ namespace MhiagosControl
                             foreach (Toggle t in (List<Toggle>)Field(ar, "_chaves")) ks.Add((string)t.Tag);
                             Verdade(ks.Contains("t_sleep") && !ks.Contains("t_beep") && !ks.Contains("t_device_info") && !ks.Contains("t_eco"),
                                 "interruptores do aparelho: so o noturno; nada que o modelo nao tenha");
-                            Verdade(((Toggle)Field(ar, "_semBipe")).Visible, "o bipe virou a preferencia Comandos sem bipe");
+                            Verdade(((Toggle)Field(ar, "_semBipe")).Parent == ar.Secoes[0] && ar.Secoes[0].Parent == casa.Ajustes, "o bipe virou a preferencia Comandos sem bipe, em Ajustes");
 
                             // Mostrador inteiro dentro do cartao, centrado na coluna, com o puxador cabendo.
                             RectangleF anel = dial.Anel();
@@ -158,25 +158,42 @@ namespace MhiagosControl
                             Verdade(((Toggle)Field(ar, "_semBipe")).Checked && ar.SemBipe, "a preferencia da pagina chega ao cartao");
                             casa.SemBipe = false;
 
-                            // Secoes de baixo: Funcoes, Preferencias, Cenas e Timer, sem sobrepor,
-                            // alinhadas em duas colunas na janela larga.
+                            // Painel: no cartao ficam Cenas e Timer, lado a lado na janela larga;
+                            // Funcoes e Preferencias moram na aba Ajustes.
                             Secao[] secoes = ar.Secoes;
                             foreach (Secao s in secoes)
                                 if (s.Visible) SemSobrepor(s, "secao " + s.Titulo + " " + sufixo);
-                            Verdade(secoes[0].Visible && secoes[1].Visible && secoes[2].Visible && secoes[3].Visible,
-                                "Funcoes, Preferencias, Cenas e Timer aparecem " + sufixo);
-                            Verdade(secoes[0].Top >= menos.Bottom && secoes[3].Bottom <= ar.Height, "secoes embaixo do painel, dentro do cartao " + sufixo);
+                            Verdade(secoes[0].Parent == casa.Ajustes && secoes[1].Parent == casa.Ajustes,
+                                "Funcoes e Preferencias hospedadas na aba Ajustes " + sufixo);
+                            Verdade(secoes[2].Visible && secoes[3].Visible && secoes[2].Parent == ar && secoes[3].Parent == ar,
+                                "Cenas e Timer no painel do ar " + sufixo);
+                            Verdade(secoes[2].Top >= menos.Bottom && secoes[3].Bottom <= ar.Height, "secoes embaixo do painel, dentro do cartao " + sufixo);
                             if (largura == 1300)
-                                Verdade(secoes[0].Top == secoes[1].Top && secoes[0].Height == secoes[1].Height &&
-                                    secoes[2].Top == secoes[3].Top && secoes[0].Left == secoes[2].Left && secoes[1].Left == secoes[3].Left,
-                                    "duas colunas alinhadas na janela larga");
+                                Verdade(secoes[2].Top == secoes[3].Top && secoes[2].Height == secoes[3].Height, "Cenas e Timer alinhados na janela larga");
                             else
-                                Verdade(secoes[1].Left == secoes[0].Left && secoes[1].Top > secoes[0].Bottom, "uma coluna na janela estreita");
+                                Verdade(secoes[3].Left == secoes[2].Left && secoes[3].Top > secoes[2].Bottom, "uma coluna na janela estreita");
+                            Verdade(!casa.Ajustes.Visible, "aba Painel nao mostra Ajustes");
+
+                            // Aba Ajustes: Funcoes, Preferencias, Alertas, Estimativa e Conta.
+                            casa.Aba = 1;
+                            casa.Arranjar();
+                            Verdade(casa.Ajustes.Visible && !ar.Visible && !casa.Cartoes[1].Visible && (casa.Historico == null || !casa.Historico.Visible),
+                                "aba Ajustes esconde os cartoes " + sufixo);
+                            foreach (Secao s in casa.Ajustes.Secoes)
+                                if (s.Visible) SemSobrepor(s, "ajustes " + s.Titulo + " " + sufixo);
+                            SemSobrepor(casa.Ajustes, "aba Ajustes " + sufixo);
+                            Verdade(casa.Ajustes.Right <= casa.Width - Pagina.LarguraDaBarra, "ajustes cabem na largura " + sufixo);
                             Segmented unidade = (Segmented)Field(ar, "_unidade");
                             Label lbUnidade = (Label)Field(ar, "_lbUnidade");
                             Verdade(unidade.Parent == secoes[1] && unidade.Top == lbUnidade.Top && unidade.Height == lbUnidade.Height &&
                                 unidade.Right == secoes[1].Width - MhiagosControl.Secao.Margem && lbUnidade.Left == MhiagosControl.Secao.Margem,
                                 "unidade: rotulo a esquerda e seletor a direita, mesma linha " + sufixo);
+                            if (largura == 1300)
+                                Verdade(secoes[0].Top == secoes[1].Top && secoes[0].Height == secoes[1].Height, "Funcoes e Preferencias alinhadas");
+                            CaptureEvolution(form, "casa-ajustes-" + sufixo);
+                            casa.Aba = 0;
+                            casa.Arranjar();
+                            Verdade(ar.Visible && !casa.Ajustes.Visible, "volta ao Painel " + sufixo);
                             BotaoChave chave = ar.Chave;
                             Verdade(chave.Visible && chave.Bottom <= Ui.S(64) && chave.Right < ar.Width - Ui.S(18) - Ui.S(60),
                                 "chave do diagnostico no cabecalho, antes do selo " + sufixo);

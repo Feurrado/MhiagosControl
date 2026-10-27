@@ -631,6 +631,13 @@ namespace MhiagosControl
         internal BotaoChave Chave { get { return _chave; } }
         internal Secao[] Secoes { get { return new[] { _secFuncoes, _secPref, _secCenas, _secTimer, _secEditor, _secDiag }; } }
 
+        /// <summary>Funcoes e Preferencias moram na aba Ajustes; o cartao continua dono delas.</summary>
+        internal Secao SecaoFuncoes { get { return _secFuncoes; } }
+        internal Secao SecaoPreferencias { get { return _secPref; } }
+
+        /// <summary>Arranja o conteudo de uma secao hospedada fora do cartao e devolve a altura dele.</summary>
+        internal int ConteudoExterno(Secao s, int w) { return Conteudo(s, w); }
+
         /// <summary>Preferencia do app, nao do aparelho: a pagina guarda na config.</summary>
         public bool SemBipe;
         public bool AceitaBipe { get { return Grava("t_beep"); } }
@@ -1128,7 +1135,8 @@ namespace MhiagosControl
             foreach (Secao[] linha in linhas)
             {
                 List<Secao> vis = new List<Secao>();
-                foreach (Secao s in linha) if (s.Visible) vis.Add(s);
+                // Secao hospedada na aba Ajustes nao entra no grid do cartao.
+                foreach (Secao s in linha) if (s.Visible && s.Parent == this) vis.Add(s);
                 if (vis.Count == 0) continue;
                 if (duas)
                 {
