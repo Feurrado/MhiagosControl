@@ -150,6 +150,61 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>
+        /// O cooler do menu (pagina Paineis): moldura quadrada arredondada com a
+        /// ventoinha dentro - aro, quatro pas curvas e o cubo. Traco fino como o
+        /// dos glifos de 11 pt do menu, para ficar no mesmo peso dos vizinhos.
+        /// </summary>
+        public static void Cooler(Graphics g, RectangleF r, Color c)
+        {
+            float s = Math.Min(r.Width, r.Height);
+            float esp = Math.Max(1.1f, s / 14f);
+            PointF m = new PointF(r.X + r.Width / 2f, r.Y + r.Height / 2f);
+            SmoothingMode antes = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (Pen p = new Pen(c, esp))
+            using (SolidBrush b = new SolidBrush(c))
+            {
+                p.LineJoin = LineJoin.Round;
+                p.StartCap = p.EndCap = LineCap.Round;
+                float lado = s * 0.92f - esp;
+                RectangleF moldura = new RectangleF(m.X - lado / 2f, m.Y - lado / 2f, lado, lado);
+                using (GraphicsPath gp = new GraphicsPath())
+                {
+                    float rr = lado * 0.22f;
+                    gp.AddArc(moldura.X, moldura.Y, 2 * rr, 2 * rr, 180, 90);
+                    gp.AddArc(moldura.Right - 2 * rr, moldura.Y, 2 * rr, 2 * rr, 270, 90);
+                    gp.AddArc(moldura.Right - 2 * rr, moldura.Bottom - 2 * rr, 2 * rr, 2 * rr, 0, 90);
+                    gp.AddArc(moldura.X, moldura.Bottom - 2 * rr, 2 * rr, 2 * rr, 90, 90);
+                    gp.CloseFigure();
+                    g.DrawPath(p, gp);
+                }
+                float aro = lado * 0.40f;
+                g.DrawEllipse(p, m.X - aro, m.Y - aro, 2 * aro, 2 * aro);
+                // quatro pas: cada uma sai do cubo e encosta no aro, curvada no sentido do giro
+                float cubo = aro * 0.24f;
+                for (int i = 0; i < 4; i++)
+                {
+                    double a = i * Math.PI / 2;
+                    using (GraphicsPath pa = new GraphicsPath())
+                    {
+                        PointF ini = Polar(m, cubo, a - 0.5), fim = Polar(m, aro * 0.92f, a + 0.55);
+                        pa.AddBezier(ini, Polar(m, aro * 0.55f, a - 0.35), Polar(m, aro * 0.95f, a + 0.05), fim);
+                        pa.AddBezier(fim, Polar(m, aro * 0.55f, a + 0.6), Polar(m, cubo * 1.6f, a + 0.55), Polar(m, cubo, a + 0.6));
+                        pa.CloseFigure();
+                        g.FillPath(b, pa);
+                    }
+                }
+                g.FillEllipse(b, m.X - cubo, m.Y - cubo, 2 * cubo, 2 * cubo);
+            }
+            g.SmoothingMode = antes;
+        }
+
+        private static PointF Polar(PointF c, float raio, double ang)
+        {
+            return new PointF(c.X + raio * (float)Math.Cos(ang), c.Y + raio * (float)Math.Sin(ang));
+        }
+
         /// <summary>Glifo da Segoe centrado pelo desenho (a caixa da fonte tem folga de linha e descia o icone).</summary>
         public static void GlifoCentrado(Graphics g, string glifo, Font f, RectangleF area, Color c)
         {

@@ -467,6 +467,36 @@ namespace MhiagosControl
                         InvokePrivate((Control)Field(form, "_vgP1"), "OnClick", EventArgs.Empty);
                         Verdade(nav.Selected != null && nav.Selected.Key == "metricas", "clique na curva do mostrador abre Metricas " + language);
                         for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                        // Cartao do cooler e previa levam a Paineis; a faixa de especificacoes, a Especificacoes.
+                        InvokePrivate(form, "ArranjarVisaoGeral");
+                        foreach (Control alvo in new Control[] { cooler, (Control)Field(form, "_vgPreview") })
+                        {
+                            InvokePrivate(alvo, "OnClick", EventArgs.Empty);
+                            Verdade(nav.Selected != null && nav.Selected.Key == "paineis" && alvo.Cursor == Cursors.Hand, "clique no cooler abre Paineis (" + alvo.GetType().Name + ") " + language);
+                            for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                        }
+                        InvokePrivate(specsN, "OnClick", EventArgs.Empty);
+                        Verdade(nav.Selected != null && nav.Selected.Key == "specs", "clique nas especificacoes abre Especificacoes " + language);
+                        if (((Label[])Field(form, "_vgSpecVal")).Length > 0)
+                        {
+                            for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                            InvokePrivate(((Label[])Field(form, "_vgSpecVal"))[0], "OnClick", EventArgs.Empty);
+                            Verdade(nav.Selected.Key == "specs", "clique num valor das especificacoes tambem " + language);
+                        }
+                        for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                        NavItem itPaineis = null;
+                        foreach (NavItem it in nav.Items) if (it.Key == "paineis") itPaineis = it;
+                        Verdade(itPaineis != null && itPaineis.Icone != null, "Paineis com o icone do cooler no menu " + language);
+                        if (language == T.PtBr && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR")))
+                        {
+                            string pc = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe");
+                            System.IO.Directory.CreateDirectory(pc);
+                            using (Bitmap b = new Bitmap(nav.Width, Math.Min(nav.Height, Ui.S(560))))
+                            {
+                                nav.DrawToBitmap(b, new Rectangle(0, 0, nav.Width, nav.Height));
+                                b.Save(System.IO.Path.Combine(pc, "paineis-icone.png"), System.Drawing.Imaging.ImageFormat.Png);
+                            }
+                        }
                         // Tamanho padrao da janela: 1265 x 795 por fora; o padrao antigo gravado migra.
                         Igual(new Size(Ui.S(1263), Ui.S(763)), SettingsForm.TamanhoPadrao, "area cliente padrao da janela");
                         int wAntes = cfgForm.WindowW, hAntes = cfgForm.WindowH;

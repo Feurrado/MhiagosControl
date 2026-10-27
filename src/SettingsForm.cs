@@ -334,6 +334,8 @@ namespace MhiagosControl
             visao.Text = T.NavOverview; visao.Glyph = "\uE80F"; visao.Page = BuildPageVisaoGeral();
             NavItem paineis = new NavItem();
             paineis.Text = T.NavPanels; paineis.Glyph = ""; paineis.Page = BuildPagePaineis();
+            // Um cooler desenhado: a fonte de icones nao tem ventoinha.
+            paineis.Icone = IconesCasa.Cooler;
             _pgPaineis = paineis.Page;
 
             NavItem perfis = new NavItem();
@@ -1125,8 +1127,27 @@ namespace MhiagosControl
 
             MontarSpecs();
 
+            // O cartao do cooler (fora das curvas, que abrem Metricas) leva a Paineis;
+            // a faixa de especificacoes, a pagina Especificacoes.
+            LevarAPagina(_cardCooler, "paineis");
+            LevarAPagina(_cardSpecs, "specs");
+
             AtualizarVisaoGeral(null);
             return _pgVisao;
+        }
+
+        /// <summary>Clique no controle ou nos filhos dele (menos curvas e o link que ja tem destino) abre a pagina.</summary>
+        private void LevarAPagina(Control c, string chave)
+        {
+            EventHandler abrir = delegate { AbrirPaginaPelaChave(chave); };
+            c.Cursor = Cursors.Hand;
+            c.Click += abrir;
+            foreach (Control f in c.Controls)
+            {
+                if (f is MetricCard || f == _vgAbrirPaineis) continue;
+                f.Cursor = Cursors.Hand;
+                f.Click += abrir;
+            }
         }
 
         /// <summary>
