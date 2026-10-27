@@ -756,38 +756,172 @@ namespace MhiagosControl
                 ConfigDoWidgetCasa lido = ConfigDoWidgetCasa.Carregar();
                 Verdade(lido.Ativo && lido.X == 100 && lido.Y == 200 && lido.Travado && !lido.NaFrente, "config do widget gravada e lida");
 
-                ServicoCasa.Simular(Exemplo());
-                using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
+                // o vidro vem da config do widget de bateria; aqui, a padrao numa pasta temporaria
+                string antesVidro = ConfigDoWidget.Caminho;
+                ConfigDoWidget.Caminho = System.IO.Path.Combine(pasta, "widget.ini");
+                try
                 {
-                    Verdade(w.Ar != null && w.Lavadora != null, "widget le o ar e a lavadora do servico");
-                    foreach (float escala in new float[] { 1f, 1.25f, 1.5f })
+                    string dir = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                    Size antigo = new Size(320, 156);
+                    List<Aparelho> exemplo = Exemplo();
+                    ServicoCasa.Simular(exemplo);
+                    using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
                     {
-                        w.Size = new Size((int)(Ui.S(320) * escala), (int)(Ui.S(156) * escala));
-                        using (Bitmap bm = new Bitmap(w.Width, w.Height))
-                        using (Graphics g = Graphics.FromImage(bm))
+                        Verdade(w.Ar != null && w.Lavadora != null, "widget le o ar e a lavadora do servico");
+                        Verdade(w.MostraLavadora, "lavadora secando aparece no widget");
+                        Size com = w.Medida();
+                        Verdade(com.Width < antigo.Width && com.Height < antigo.Height, "widget menor que o de antes (" + com.Width + "x" + com.Height + " contra 320x156)");
+                        foreach (float escala in new float[] { 1f, 1.25f, 1.5f })
                         {
-                            w.Pintar(g);
-                            string dir = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
-                            if (!string.IsNullOrEmpty(dir)) bm.Save(System.IO.Path.Combine(dir, "casa-widget-" + (int)(escala * 100) + ".png"));
+                            w.Escala = escala;
+                            Verdade(WidgetCabe(w), "widget sem corte nem sobreposicao com ciclo, escala " + escala);
+                            SalvarWidgetCasa(w, dir, "widget-casa-ciclo-" + (int)(escala * 100));
                         }
+                        w.Escala = 1f;
+                        // ar desligado
+                        w.Ar.Estado["t_power"] = "0";
+                        Verdade(WidgetCabe(w), "widget com o ar desligado");
+                        SalvarWidgetCasa(w, dir, "widget-casa-ar-desligado");
+                        w.Ar.Estado["t_power"] = "1";
+                        // pausada e com erro continuam sendo ciclo ativo
+                        w.Lavadora.Estado["machine_status"] = "3";
+                        Verdade(w.MostraLavadora && WidgetCabe(w), "lavadora pausada aparece");
+                        SalvarWidgetCasa(w, dir, "widget-casa-pausada");
+                        w.Lavadora.Estado["machine_status"] = "4"; w.Lavadora.Estado["error_code"] = "5";
+                        Verdade(w.MostraLavadora && WidgetCabe(w), "lavadora com erro aparece");
+                        w.Lavadora.Estado["machine_status"] = "2"; w.Lavadora.Estado["error_code"] = "0";
+                        // concluida, desligada e desconectada: a linha some e o widget encolhe
+                        w.Lavadora.Estado["machine_status"] = "1"; w.Lavadora.Estado["Current_program_phase"] = "10";
+                        Size sem = w.Medida();
+                        Verdade(!w.MostraLavadora && sem.Height < com.Height && sem.Width == com.Width, "lavadora concluida some e o widget encolhe");
+                        foreach (float escala in new float[] { 1f, 1.25f, 1.5f })
+                        {
+                            w.Escala = escala;
+                            Verdade(WidgetCabe(w), "widget so com o ar, escala " + escala);
+                            SalvarWidgetCasa(w, dir, "widget-casa-sem-ciclo-" + (int)(escala * 100));
+                        }
+                        w.Escala = 1f;
+                        w.Lavadora.Estado["machine_status"] = "0"; w.Lavadora.Estado["Current_program_phase"] = "0";
+                        Verdade(!w.MostraLavadora, "lavadora desligada nao aparece");
+                        w.Lavadora.Estado["machine_status"] = "2"; w.Lavadora.Estado["Current_program_phase"] = "8";
+                        w.Lavadora.Online = false;
+                        Verdade(!w.MostraLavadora, "lavadora desconectada nao aparece");
+                        w.Lavadora.Online = true;
+                        // a lavadora entra e sai sem o widget pular: o canto perto da borda fica parado
+                        Rectangle area = new Rectangle(0, 0, 1920, 1040);
+                        Rectangle embaixo = new Rectangle(new Point(1920 - 24 - sem.Width, 1040 - 24 - sem.Height), sem);
+                        Point p = WidgetDeBateria.AncorarCrescimento(embaixo, com, area);
+                        Verdade(p.X + com.Width == embaixo.Right && p.Y + com.Height == embaixo.Bottom, "crescer no canto de baixo a direita mantem o canto");
+                        Rectangle emcima = new Rectangle(new Point(1920 - 24 - sem.Width, 24), sem);
+                        p = WidgetDeBateria.AncorarCrescimento(emcima, com, area);
+                        Verdade(p.Y == emcima.Top && p.X + com.Width == emcima.Right, "crescer no canto de cima a direita mantem o topo");
+                        // clique no liga/desliga
+                        using (Bitmap bm = new Bitmap(com.Width, com.Height)) using (Graphics g = Graphics.FromImage(bm)) w.Pintar(g);
+                        w.Clicar(2);
+                        Verdade(w.UltimoComando != null && w.UltimoComando.Count == 1 && w.UltimoComando["t_power"] == "0", "liga/desliga no widget manda t_power");
+                        w.Ar.Estado["t_power"] = "1";
+                        // lado a lado com o widget de bateria, para comparar a familia
+                        if (!string.IsNullOrEmpty(dir)) LadoALadoComBateria(w, dir);
                     }
-                    w.Size = new Size(Ui.S(320), Ui.S(156));
-                    using (Bitmap bm = new Bitmap(w.Width, w.Height)) using (Graphics g = Graphics.FromImage(bm)) w.Pintar(g);
-                    w.Clicar(2);
-                    Verdade(w.UltimoComando != null && w.UltimoComando.Count == 1 && w.UltimoComando["t_power"] == "0", "liga/desliga no widget manda t_power");
-                    w.Ar.Estado["t_power"] = "1";
+                    // so a lavadora (sem ar): a linha dela sozinha
+                    ServicoCasa.Simular(new List<Aparelho> { Lavadora("secando") });
+                    using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
+                    {
+                        Verdade(w.Ar == null && w.MostraLavadora && WidgetCabe(w), "widget so com a lavadora");
+                        SalvarWidgetCasa(w, dir, "widget-casa-so-lavadora");
+                    }
+                    ServicoCasa.PararSimulacao();
+                    using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
+                    {
+                        Verdade(w.Ar == null && !w.MostraLavadora, "sem conta o widget mostra o convite");
+                        Verdade(WidgetCabe(w), "convite sem corte");
+                        SalvarWidgetCasa(w, dir, "widget-casa-sem-conta");
+                    }
                 }
-                ServicoCasa.PararSimulacao();
-                using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
-                {
-                    Verdade(w.Ar == null, "sem conta o widget mostra o convite");
-                    using (Bitmap bm = new Bitmap(w.Width, w.Height)) using (Graphics g = Graphics.FromImage(bm)) w.Pintar(g);
-                }
+                finally { ConfigDoWidget.Caminho = antesVidro; }
             }
             finally
             {
                 ServicoCasa.PararSimulacao();
                 ConfigDoWidgetCasa.Caminho = antes;
+            }
+        }
+        /// <summary>Botoes dentro da placa, sem encostar um no outro, e o desenho nao estoura.</summary>
+        private static bool WidgetCabe(WidgetDaCasa w)
+        {
+            Size tam = w.Medida();
+            using (Bitmap bm = new Bitmap(tam.Width, tam.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+            using (Graphics g = Graphics.FromImage(bm)) w.Pintar(g);
+            RectangleF placa = new RectangleF(0, 0, tam.Width, tam.Height);
+            List<RectangleF> bt = new List<RectangleF>();
+            foreach (string n in new string[] { "_rMenos", "_rMais", "_rLiga" })
+            {
+                RectangleF r = (RectangleF)Field(w, n);
+                if (r.IsEmpty) continue;
+                if (!placa.Contains(r)) return false;
+                bt.Add(r);
+            }
+            for (int i = 0; i < bt.Count; i++)
+                for (int j = i + 1; j < bt.Count; j++) if (bt[i].IntersectsWith(bt[j])) return false;
+            return true;
+        }
+
+        /// <summary>O widget sobre um fundo de papel de parede, como fica na area de trabalho.</summary>
+        private static Bitmap FundoDeParede(int w, int h)
+        {
+            Bitmap b = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(b))
+            using (System.Drawing.Drawing2D.LinearGradientBrush br = new System.Drawing.Drawing2D.LinearGradientBrush(
+                new Rectangle(0, 0, w, h), Color.FromArgb(38, 70, 110), Color.FromArgb(120, 70, 95), 35f))
+                g.FillRectangle(br, 0, 0, w, h);
+            return b;
+        }
+
+        private static void SalvarWidgetCasa(WidgetDaCasa w, string dir, string nome)
+        {
+            if (string.IsNullOrEmpty(dir)) return;
+            Size tam = w.Medida();
+            int pad = 24;
+            using (Bitmap fundo = FundoDeParede(tam.Width + 2 * pad, tam.Height + 2 * pad))
+            {
+                using (Bitmap bm = new Bitmap(tam.Width, tam.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                {
+                    using (Graphics g = Graphics.FromImage(bm)) { g.Clear(Color.Transparent); w.Pintar(g); }
+                    using (Graphics g = Graphics.FromImage(fundo)) g.DrawImage(bm, pad, pad);
+                }
+                fundo.Save(System.IO.Path.Combine(dir, nome + ".png"));
+            }
+        }
+
+        private static void LadoALadoComBateria(WidgetDaCasa w, string dir)
+        {
+            PintorDoWidget.Quadro q = new PintorDoWidget.Quadro();
+            q.Itens = new Periferico[] {
+                new Periferico("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 72, false, EstadoPeriferico.Normal),
+                new Periferico("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 41, false, EstadoPeriferico.Normal) };
+            q.Notas = new string[] { null, null };
+            q.Layout = LayoutDoWidget.Lista;
+            q.Escuro = Theme.IsDark; q.Nitido = true;
+            Size tb = PintorDoWidget.Medir(LayoutDoWidget.Lista, 2, 1f, false);
+            w.Escala = 1f;
+            Size tc = w.Medida();
+            int pad = 24;
+            using (Bitmap fundo = FundoDeParede(tb.Width + tc.Width + 3 * pad, Math.Max(tb.Height, tc.Height) + 2 * pad))
+            {
+                using (Graphics g = Graphics.FromImage(fundo))
+                {
+                    using (Bitmap a = new Bitmap(tb.Width, tb.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                    {
+                        using (Graphics ga = Graphics.FromImage(a)) { ga.Clear(Color.Transparent); PintorDoWidget.Pintar(ga, tb, q); }
+                        g.DrawImage(a, pad, pad);
+                    }
+                    using (Bitmap b = new Bitmap(tc.Width, tc.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                    {
+                        using (Graphics gb = Graphics.FromImage(b)) { gb.Clear(Color.Transparent); w.Pintar(gb); }
+                        g.DrawImage(b, 2 * pad + tb.Width, pad);
+                    }
+                }
+                fundo.Save(System.IO.Path.Combine(dir, "widget-casa-lado-a-lado-bateria.png"));
             }
         }
         /// <summary>Perifericos escondidos: o filtro, a pagina Baterias e o X11 que fica.</summary>

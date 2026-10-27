@@ -695,7 +695,7 @@ namespace MhiagosControl
         // ---------------- pecas ----------------
 
         /// <summary>Gota de vidro menor, dentro da placa, para o icone do aparelho.</summary>
-        private static void Bolha(Graphics g, RectangleF r, bool escuro)
+        internal static void Bolha(Graphics g, RectangleF r, bool escuro)
         {
             // miolo denso e neutro, sem contorno: o icone salta e nao sobram
             // dois circulos translucidos de tons diferentes. No vidro claro o
@@ -720,7 +720,7 @@ namespace MhiagosControl
         /// Texto com uma sombra de um pixel no vidro escuro: sobre um papel de
         /// parede claro e movimentado, o branco sozinho se perde.
         /// </summary>
-        private static void Texto(Graphics g, string texto, Font fonte, Color cor, bool escuro, RectangleF r,
+        internal static void Texto(Graphics g, string texto, Font fonte, Color cor, bool escuro, RectangleF r,
                                   StringAlignment h, StringAlignment v)
         {
             if (string.IsNullOrEmpty(texto) || r.Width <= 0) return;
@@ -746,7 +746,7 @@ namespace MhiagosControl
             }
         }
 
-        private static Pen Redonda(Color cor, float largura)
+        internal static Pen Redonda(Color cor, float largura)
         {
             Pen p = new Pen(cor, largura);
             p.StartCap = LineCap.Round;
@@ -777,17 +777,17 @@ namespace MhiagosControl
             return PeripheralStrip.Misturar(PeripheralStrip.CorFora(p), PeripheralStrip.Verde, carga);
         }
 
-        private static Color Primario(bool escuro)
+        internal static Color Primario(bool escuro)
         {
             return escuro ? Color.FromArgb(245, 255, 255, 255) : Color.FromArgb(235, 22, 24, 30);
         }
 
-        private static Color Secundario(bool escuro)
+        internal static Color Secundario(bool escuro)
         {
             return escuro ? Color.FromArgb(175, 255, 255, 255) : Color.FromArgb(160, 22, 24, 30);
         }
 
-        private static Color Trilho(bool escuro)
+        internal static Color Trilho(bool escuro)
         {
             return escuro ? Color.FromArgb(46, 255, 255, 255) : Color.FromArgb(30, 0, 0, 0);
         }
@@ -812,7 +812,7 @@ namespace MhiagosControl
         }
 
         /// <summary>As fontes de um desenho, no tamanho em pixels da escala da tela.</summary>
-        private sealed class Fontes : IDisposable
+        internal sealed class Fontes : IDisposable
         {
             public readonly Font Pct, Nome, Nota;
 
@@ -1104,14 +1104,14 @@ namespace MhiagosControl
             else if (!carregando && _animacao.Enabled) _animacao.Stop();
         }
 
-        private bool Escuro
+        private bool Escuro { get { return EscuroDe(_cfg); } }
+
+        /// <summary>A cor do vidro escolhida, com o automatico seguindo o tema do Windows.</summary>
+        internal static bool EscuroDe(ConfigDoWidget cfg)
         {
-            get
-            {
-                if (_cfg.Cor == CorDoVidro.Escura) return true;
-                if (_cfg.Cor == CorDoVidro.Clara) return false;
-                return Theme.IsDark;
-            }
+            if (cfg.Cor == CorDoVidro.Escura) return true;
+            if (cfg.Cor == CorDoVidro.Clara) return false;
+            return Theme.IsDark;
         }
 
         // ---------------- desenho ----------------
@@ -1184,7 +1184,10 @@ namespace MhiagosControl
             }
         }
 
-        private void AplicarBitmap(Bitmap bmp)
+        private void AplicarBitmap(Bitmap bmp) { AplicarBitmap(this, bmp); }
+
+        /// <summary>Entrega o quadro a uma janela em camadas (tambem o widget da casa).</summary>
+        internal static void AplicarBitmap(Form janela, Bitmap bmp)
         {
             IntPtr tela = GetDC(IntPtr.Zero);
             IntPtr mem = CreateCompatibleDC(tela);
@@ -1195,12 +1198,12 @@ namespace MhiagosControl
                 antigo = SelectObject(mem, hbmp);
                 SIZE tamanho = new SIZE(bmp.Width, bmp.Height);
                 POINT origem = new POINT(0, 0);
-                POINT topo = new POINT(Left, Top);
+                POINT topo = new POINT(janela.Left, janela.Top);
                 BLENDFUNCTION b = new BLENDFUNCTION();
                 b.BlendOp = AC_SRC_OVER;
                 b.SourceConstantAlpha = 255;
                 b.AlphaFormat = AC_SRC_ALPHA;
-                UpdateLayeredWindow(Handle, tela, ref topo, ref tamanho, mem, ref origem, 0, ref b, ULW_ALPHA);
+                UpdateLayeredWindow(janela.Handle, tela, ref topo, ref tamanho, mem, ref origem, 0, ref b, ULW_ALPHA);
             }
             finally
             {
@@ -1213,14 +1216,16 @@ namespace MhiagosControl
         /// <summary>
         /// Recorta a janela no formato da placa, para o clique.
         /// </summary>
-        private void AplicarRegiao(Size tam)
+        private void AplicarRegiao(Size tam) { AplicarRegiao(Handle, tam, _escala); }
+
+        internal static void AplicarRegiao(IntPtr janela, Size tam, float escala)
         {
-            int d = (int)Math.Round(PintorDoWidget.RaioDoVidro * 2f * _escala);
+            int d = (int)Math.Round(PintorDoWidget.RaioDoVidro * 2f * escala);
             try
             {
                 IntPtr rgn = CreateRoundRectRgn(0, 0, tam.Width + 1, tam.Height + 1, d, d);
                 // a regiao passa a ser do sistema: nao se apaga depois de entregar
-                if (SetWindowRgn(Handle, rgn, true) == 0) DeleteObject(rgn);
+                if (SetWindowRgn(janela, rgn, true) == 0) DeleteObject(rgn);
             }
             catch (Exception ex) { Log.Error("regiao do widget", ex); }
         }
@@ -1233,13 +1238,15 @@ namespace MhiagosControl
         /// em 8 px na escala 1: por isso a placa e desenhada com esse raio. No
         /// Windows 10 a chamada falha calada e o desfoque fica retangular.
         /// </summary>
-        private void ArredondarCantos()
+        private void ArredondarCantos() { ArredondarCantos(Handle); }
+
+        internal static void ArredondarCantos(IntPtr janela)
         {
             if (!Windows11) return;
             try
             {
                 int redondo = DWMWCP_ROUND;
-                DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref redondo, 4);
+                DwmSetWindowAttribute(janela, DWMWA_WINDOW_CORNER_PREFERENCE, ref redondo, 4);
             }
             catch (Exception ex) { Log.Error("cantos do widget", ex); }
         }
@@ -1249,13 +1256,15 @@ namespace MhiagosControl
         /// desfoque mais forte; no Windows 10 o acrilico atrasa ao arrastar, e
         /// os dois ficam no desfoque simples.
         /// </summary>
-        private void AplicarDesfoque()
+        private void AplicarDesfoque() { AplicarDesfoque(Handle, _cfg); }
+
+        internal static void AplicarDesfoque(IntPtr janela, ConfigDoWidget cfg)
         {
             try
             {
                 AccentPolicy ap = new AccentPolicy();
-                bool acrilico = _cfg.Fosco && !_cfg.Nitido && Windows11;
-                ap.AccentState = _cfg.Nitido ? ACCENT_DISABLED
+                bool acrilico = cfg.Fosco && !cfg.Nitido && Windows11;
+                ap.AccentState = cfg.Nitido ? ACCENT_DISABLED
                                : acrilico ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_ENABLE_BLURBEHIND;
                 // tinta quase nula: com alfa zero o acrilico some em algumas versoes
                 ap.GradientColor = acrilico ? 0x01000000u : 0u;
@@ -1268,7 +1277,7 @@ namespace MhiagosControl
                     d.Attribute = WCA_ACCENT_POLICY;
                     d.SizeOfData = tamanho;
                     d.Data = p;
-                    SetWindowCompositionAttribute(Handle, ref d);
+                    SetWindowCompositionAttribute(janela, ref d);
                 }
                 finally { Marshal.FreeHGlobal(p); }
             }

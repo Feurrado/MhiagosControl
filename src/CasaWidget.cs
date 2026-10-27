@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -125,37 +127,54 @@ namespace MhiagosControl
     }
 
     /// <summary>
-    /// Widget da casa na area de trabalho: o ar (ambiente, alvo com - e +,
-    /// liga/desliga) e a lavadora (fase, tempo restante, termino e barra).
-    /// Arrastar move (salvo), botao direito abre o menu.
+    /// Widget da casa na area de trabalho, da mesma familia do widget de
+    /// bateria: a mesma placa de vidro (PintorDoWidget.Vidro, com a cor e o
+    /// desfoque escolhidos para o de bateria em widget.ini), as mesmas fontes,
+    /// bolhas, texto com halo e janela em camadas.
+    ///
+    /// Uma linha para o ar (ambiente, modo, alvo com - e +, liga/desliga) e,
+    /// so com ciclo ativo, uma linha enxuta da lavadora (fase, tempo restante
+    /// e barra fina). Muda de tamanho pelo canto mais perto da borda da tela,
+    /// como o de bateria: nada pula de lugar.
     /// </summary>
     internal sealed class WidgetDaCasa : Form
     {
+        // medidas em pixels de 96 dpi, multiplicadas pela escala
+        internal const float Largura = 264f, LarguraVazia = 220f;
+        private const float Margem = 12f, LinhaAr = 40f, LinhaLav = 36f, Vao = 10f, Bolha = 32f;
+        private const float BotaoPeq = 26f, BotaoLiga = 30f, Alvo = 40f;
+
         private readonly ConfigDoWidgetCasa _cfg;
+        private ConfigDoWidget _vidro;
         private readonly EventHandler _mudou;
         private Aparelho _ar, _lav;
-        private Rectangle _rMenos, _rMais, _rLiga, _rNomeAr, _rNomeLav;
+        private RectangleF _rMenos, _rMais, _rLiga;
         private int _hover = -1;
         private int _alvoPendente = -1;
         private readonly Timer _espera, _relogio;
-        private Point _pegou;
-        private bool _arrastando, _moveu;
+        private readonly ToolTip _dica = new ToolTip();
+        private ContextMenu _menu;
+        private Bitmap _quadro;
+        private float _escala = 1f;
+        private bool _sobre, _pressionado, _arrastando;
+        private Point _inicioDoArrasto, _origemDoArrasto;
 
         internal Aparelho Ar { get { return _ar; } }
         internal Aparelho Lavadora { get { return _lav; } }
         internal Dictionary<string, string> UltimoComando;
 
+        /// <summary>Escala da tela; os testes trocam para conferir 125% e 150% sem abrir janela.</summary>
+        internal float Escala { get { return _escala; } set { _escala = Math.Max(1f, value); } }
+
         public WidgetDaCasa(ConfigDoWidgetCasa cfg)
         {
             _cfg = cfg;
+            _vidro = ConfigDoWidget.Carregar();
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
-            TopMost = cfg.NaFrente;
+            ControlBox = false; MinimizeBox = false; MaximizeBox = false;
             Text = T.CasaWidgetTitulo;
-            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            Size = new Size(Ui.S(320), Ui.S(156));
-            Posicionar();
 
             _espera = new Timer();
             _espera.Interval = 700;
@@ -167,9 +186,10 @@ namespace MhiagosControl
                 _alvoPendente = -1;
                 Mandar("t_temp", v);
             };
+            // o relogio refaz o "termina as" e acompanha a cor do vidro do widget de bateria
             _relogio = new Timer();
             _relogio.Interval = 30000;
-            _relogio.Tick += delegate { Invalidate(); };
+            _relogio.Tick += delegate { _vidro = ConfigDoWidget.Carregar(); Renderizar(); };
             _relogio.Start();
 
             _mudou = delegate { NaInterface(Puxar); };
@@ -177,15 +197,37 @@ namespace MhiagosControl
             Puxar();
         }
 
-        /// <summary>Sem barra de titulo e sem Alt+Tab: e um enfeite da area de trabalho.</summary>
         protected override CreateParams CreateParams
         {
             get
             {
                 CreateParams p = base.CreateParams;
-                p.ExStyle |= 0x80;   // WS_EX_TOOLWINDOW
+                p.ExStyle |= 0x80000 | 0x80 | 0x8000000;   // WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+                if (_cfg != null && _cfg.NaFrente) p.ExStyle |= 0x8;   // WS_EX_TOPMOST
                 return p;
             }
+        }
+
+        protected override bool ShowWithoutActivation { get { return true; } }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == 0x21) { m.Result = (IntPtr)3; return; }   // WM_MOUSEACTIVATE: MA_NOACTIVATE
+            base.WndProc(ref m);
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            using (Graphics g = Graphics.FromHwnd(Handle)) _escala = Math.Max(1f, g.DpiX / 96f);
+            WidgetDeBateria.ArredondarCantos(Handle);
+            WidgetDeBateria.AplicarDesfoque(Handle, _vidro);
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            Posicionar();
         }
 
         private void NaInterface(MethodInvoker m)
@@ -206,27 +248,14 @@ namespace MhiagosControl
                 ServicoCasa.Mudou -= _mudou;
                 _espera.Dispose();
                 _relogio.Dispose();
+                _dica.Dispose();
+                if (_menu != null) { _menu.Dispose(); _menu = null; }
+                if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
             }
             base.Dispose(disposing);
         }
 
-        private void Posicionar()
-        {
-            Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            Point p = _cfg.TemPosicao ? new Point(_cfg.X, _cfg.Y) : new Point(area.Right - Width - Ui.S(24), area.Top + Ui.S(24));
-            Rectangle r = new Rectangle(p, Size);
-            bool visivel = false;
-            foreach (Screen s in Screen.AllScreens) if (s.WorkingArea.IntersectsWith(r)) visivel = true;
-            if (!visivel) p = new Point(area.Right - Width - Ui.S(24), area.Top + Ui.S(24));
-            Location = p;
-        }
-
-        protected override void OnResize(EventArgs e)
-        {
-            base.OnResize(e);
-            using (GraphicsPath gp = Ui.RoundRect(new Rectangle(0, 0, Width, Height), Ui.S(14)))
-                Region = new Region(gp);
-        }
+        // ---------------- dados ----------------
 
         internal void Puxar()
         {
@@ -237,8 +266,37 @@ namespace MhiagosControl
                     if (_ar == null && a.ArCondicionado) _ar = a;
                     if (_lav == null && a.Lavadora) _lav = a;
                 }
-            Invalidate();
+            Renderizar();
         }
+
+        /// <summary>
+        /// A lavadora so entra com ciclo ativo: em funcionamento, pausada,
+        /// aguardando o inicio programado ou com erro. Parada, concluida,
+        /// desligada ou desconectada, a linha some.
+        /// </summary>
+        internal static bool CicloAtivo(Aparelho lav)
+        {
+            if (lav == null) return false;
+            CicloAtual c = CicloAtual.De(lav);
+            return c.Online && (c.Rodando || c.Erro);
+        }
+
+        internal bool MostraLavadora { get { return CicloAtivo(_lav); } }
+
+        /// <summary>Tamanho do widget: ar numa linha e a lavadora embaixo so com ciclo ativo.</summary>
+        internal static Size Medir(bool ar, bool lavadora, float escala)
+        {
+            float w, h;
+            if (!ar && !lavadora) { w = LarguraVazia; h = 2 * Margem + LinhaAr; }
+            else
+            {
+                w = Largura;
+                h = 2 * Margem + (ar ? LinhaAr : 0f) + (ar && lavadora ? Vao : 0f) + (lavadora ? LinhaLav : 0f);
+            }
+            return new Size((int)Math.Ceiling(w * escala), (int)Math.Ceiling(h * escala));
+        }
+
+        internal Size Medida() { return Medir(_ar != null, MostraLavadora, _escala); }
 
         private void Mudar(int passo)
         {
@@ -249,7 +307,7 @@ namespace MhiagosControl
             int atual = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 24);
             _alvoPendente = Math.Max(min, Math.Min(max, atual + passo));
             _espera.Stop(); _espera.Start();
-            Invalidate();
+            Renderizar();
         }
 
         private void Mandar(string chave, int valor)
@@ -260,19 +318,77 @@ namespace MhiagosControl
             _ar.Estado[chave] = p[chave];
             if (ServicoCasa.RetornoPuid == _ar.Puid) ServicoCasa.CancelarRetorno();
             UltimoComando = p;
-            Invalidate();
+            Renderizar();
             ServicoCasa.Enviar(_ar.Puid, p, null);
+        }
+
+        // ---------------- janela ----------------
+
+        private void Posicionar()
+        {
+            Size tam = Medida();
+            Rectangle area = Screen.PrimaryScreen.WorkingArea;
+            int m = (int)(24 * _escala);
+            Point p = WidgetDeBateria.DoCanto(new Point(area.Right - m, area.Top + m), tam, area);
+            if (_cfg.TemPosicao)
+            {
+                Rectangle a2 = Screen.FromPoint(new Point(_cfg.X - 1, _cfg.Y - 1)).WorkingArea;
+                Point q = WidgetDeBateria.DoCanto(new Point(_cfg.X, _cfg.Y), tam, a2);
+                if (WidgetDeBateria.Visivel(new Rectangle(q, tam))) p = q;
+            }
+            Bounds = new Rectangle(p, tam);
+            Renderizar();
+        }
+
+        internal void Renderizar()
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            try
+            {
+                Size tam = Medida();
+                if (tam != Size)
+                {
+                    // cresce e encolhe pelo canto mais perto da borda: a lavadora
+                    // entra e sai sem o widget pular de lugar
+                    Rectangle antes = Bounds;
+                    Rectangle area = Screen.FromRectangle(antes).WorkingArea;
+                    Point onde = WidgetDeBateria.AncorarCrescimento(antes, tam, area);
+                    onde = new Point(Math.Max(area.Left, Math.Min(onde.X, area.Right - tam.Width)),
+                                     Math.Max(area.Top, Math.Min(onde.Y, area.Bottom - tam.Height)));
+                    Bounds = new Rectangle(onde, tam);
+                    WidgetDeBateria.AplicarRegiao(Handle, tam, _escala);
+                }
+                if (_quadro == null || _quadro.Size != tam)
+                {
+                    if (_quadro != null) _quadro.Dispose();
+                    _quadro = new Bitmap(tam.Width, tam.Height, PixelFormat.Format32bppArgb);
+                }
+                using (Graphics g = Graphics.FromImage(_quadro))
+                {
+                    g.Clear(Color.Transparent);
+                    Pintar(g, tam);
+                }
+                WidgetDeBateria.AplicarBitmap(this, _quadro);
+            }
+            catch (Exception ex) { Log.Error("desenho do widget da casa", ex); }
+        }
+
+        private void GuardarPosicao()
+        {
+            Point c = WidgetDeBateria.CantoAncora(Bounds, Screen.FromRectangle(Bounds).WorkingArea);
+            _cfg.X = c.X; _cfg.Y = c.Y;
+            _cfg.Salvar();
         }
 
         // ---------------- mouse ----------------
 
+        /// <summary>0 menos, 1 mais, 2 liga/desliga, 3 abrir a pagina Casa (o resto da placa).</summary>
         private int Zona(Point p)
         {
             if (_rMenos.Contains(p)) return 0;
             if (_rMais.Contains(p)) return 1;
             if (_rLiga.Contains(p)) return 2;
-            if (_rNomeAr.Contains(p) || _rNomeLav.Contains(p)) return 3;
-            return -1;
+            return 3;
         }
 
         internal void Clicar(int zona)
@@ -288,43 +404,76 @@ namespace MhiagosControl
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left) { _pegou = e.Location; _arrastando = !_cfg.Travado && Zona(e.Location) < 0; _moveu = false; }
             base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left) return;
+            _pressionado = true;
+            _arrastando = false;
+            _inicioDoArrasto = Cursor.Position;
+            _origemDoArrasto = Location;
+            Capture = true;
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
-            if (_arrastando && e.Button == MouseButtons.Left)
+            base.OnMouseMove(e);
+            bool redesenhar = false;
+            if (!_sobre) { _sobre = true; redesenhar = true; }
+            if (_pressionado && !_cfg.Travado && Zona(PontoDoInicio()) == 3)
             {
-                Point d = new Point(e.X - _pegou.X, e.Y - _pegou.Y);
-                if (Math.Abs(d.X) + Math.Abs(d.Y) > 2) { _moveu = true; Location = new Point(Left + d.X, Top + d.Y); }
-                return;
+                Point agora = Cursor.Position;
+                int dx = agora.X - _inicioDoArrasto.X, dy = agora.Y - _inicioDoArrasto.Y;
+                if (!_arrastando && (Math.Abs(dx) > 4 || Math.Abs(dy) > 4)) { _arrastando = true; _dica.Hide(this); }
+                if (_arrastando)
+                {
+                    Rectangle area = Screen.FromPoint(agora).WorkingArea;
+                    Location = WidgetDeBateria.Encaixar(new Point(_origemDoArrasto.X + dx, _origemDoArrasto.Y + dy), Size, area, (int)(12 * _escala));
+                    return;
+                }
             }
             int z = Zona(e.Location);
-            if (z != _hover) { _hover = z; Cursor = z >= 0 ? Cursors.Hand : Cursors.Default; Invalidate(); }
-            base.OnMouseMove(e);
+            int h = z < 3 ? z : -1;
+            if (h != _hover)
+            {
+                _hover = h;
+                Cursor = Cursors.Hand;
+                _dica.SetToolTip(this, h == 0 ? T.CasaMenosGrau : h == 1 ? T.CasaMaisGrau : h == 2 ? T.CasaLigaDesliga : T.CasaResumoConvite);
+                redesenhar = true;
+            }
+            if (redesenhar) Renderizar();
         }
+
+        private Point PontoDoInicio() { return PointToClient(_inicioDoArrasto); }
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left)
-            {
-                if (_arrastando && _moveu) { _cfg.X = Left; _cfg.Y = Top; _cfg.Salvar(); }
-                else if (!_moveu) Clicar(Zona(e.Location));
-                _arrastando = false;
-            }
-            else if (e.Button == MouseButtons.Right) MostrarMenu(e.Location);
             base.OnMouseUp(e);
+            if (e.Button == MouseButtons.Right) { MostrarMenu(e.Location); return; }
+            if (e.Button != MouseButtons.Left || !_pressionado) return;
+            _pressionado = false;
+            Capture = false;
+            if (_arrastando) { _arrastando = false; GuardarPosicao(); return; }
+            Clicar(Zona(e.Location));
         }
 
-        protected override void OnMouseLeave(EventArgs e) { _hover = -1; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (_arrastando) return;
+            _sobre = false; _hover = -1;
+            Renderizar();
+        }
 
         /// <summary>Menu nativo, como o do widget de bateria (foreground do TrackPopupMenu).</summary>
         private void MostrarMenu(Point onde)
         {
             ContextMenu m = new ContextMenu();
             m.MenuItems.Add(T.CasaResumoConvite, delegate { Clicar(3); });
-            MenuItem frente = new MenuItem(T.CasaWidgetFrente, delegate { _cfg.NaFrente = !_cfg.NaFrente; TopMost = _cfg.NaFrente; _cfg.Salvar(); });
+            m.MenuItems.Add("-");
+            MenuItem frente = new MenuItem(T.CasaWidgetFrente, delegate
+            {
+                _cfg.NaFrente = !_cfg.NaFrente; _cfg.Salvar();
+                SetWindowPos(Handle, _cfg.NaFrente ? new IntPtr(-1) : new IntPtr(-2), 0, 0, 0, 0, 0x1 | 0x2 | 0x10);
+            });
             frente.Checked = _cfg.NaFrente;
             m.MenuItems.Add(frente);
             MenuItem trava = new MenuItem(T.CasaWidgetTravar, delegate { _cfg.Travado = !_cfg.Travado; _cfg.Salvar(); });
@@ -332,107 +481,155 @@ namespace MhiagosControl
             m.MenuItems.Add(trava);
             m.MenuItems.Add("-");
             m.MenuItems.Add(T.CasaWidgetFechar, delegate { GerenteDoWidgetCasa.Definir(false); });
+            SetForegroundWindow(Handle);
+            _dica.Hide(this);
+            if (_menu != null) _menu.Dispose();
+            _menu = m;
             m.Show(this, onde);
         }
 
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
         // ---------------- pintura ----------------
 
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            Pintar(e.Graphics);
-        }
+        /// <summary>Pinta no tamanho medido (os testes pintam num bitmap, sem janela).</summary>
+        internal void Pintar(Graphics g) { Pintar(g, Medida()); }
 
-        internal void Pintar(Graphics g)
+        internal void Pintar(Graphics g, Size tam)
         {
-            Ui.Smooth(g);
-            Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillRectangle(b, ClientRectangle);
-            using (GraphicsPath p = Ui.RoundRect(r, Ui.S(14)))
-            using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, p);
-            int m = Ui.S(14);
-            _rMenos = _rMais = _rLiga = _rNomeAr = _rNomeLav = Rectangle.Empty;
-            if (!ServicoCasa.Logado || (_ar == null && _lav == null))
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.TextRenderingHint = TextRenderingHint.AntiAlias;   // ClearType sobre transparente deixa franja
+            float s = _escala;
+            bool escuro = WidgetDeBateria.EscuroDe(_vidro);
+            PintorDoWidget.Vidro(g, new RectangleF(0, 0, tam.Width, tam.Height), s, escuro, _vidro.Fosco && !_vidro.Nitido, _vidro.Nitido, _sobre);
+            _rMenos = _rMais = _rLiga = RectangleF.Empty;
+            using (PintorDoWidget.Fontes f = new PintorDoWidget.Fontes(s))
+            using (Font glifo = new Font("Segoe MDL2 Assets", 13f * s, FontStyle.Regular, GraphicsUnit.Pixel))
             {
-                TextRenderer.DrawText(g, T.NavCasa, Ui.FontSection, new Rectangle(m, m, Width - 2 * m, Ui.S(24)), Ui.Text, TextFormatFlags.Left);
-                TextRenderer.DrawText(g, ServicoCasa.Logado ? T.CasaCarregando : T.CasaResumoSemConta, Ui.FontSmall,
-                    new Rectangle(m, m + Ui.S(30), Width - 2 * m, Height - 2 * m - Ui.S(30)), Ui.Muted, TextFormatFlags.Left | TextFormatFlags.WordBreak);
-                _rNomeAr = new Rectangle(m, m, Width - 2 * m, Ui.S(24));
-                return;
+                float x = Margem * s, w = tam.Width - 2 * Margem * s, y = Margem * s;
+                bool lav = MostraLavadora;
+                if (_ar == null && !lav)
+                {
+                    RectangleF b = new RectangleF(x, y + (LinhaAr - Bolha) / 2f * s, Bolha * s, Bolha * s);
+                    PintorDoWidget.Bolha(g, b, escuro);
+                    Glifo(g, "\uE80F", glifo, b, PintorDoWidget.Primario(escuro));
+                    string msg = !ServicoCasa.Logado ? T.VisaoSemConta : ServicoCasa.Buscando ? T.CasaCarregando : T.CasaSemAparelhos;
+                    float tx = b.Right + 10f * s;
+                    PintorDoWidget.Texto(g, T.NavCasa, f.Nome, PintorDoWidget.Primario(escuro), escuro,
+                        new RectangleF(tx, y, x + w - tx, 21f * s), StringAlignment.Near, StringAlignment.Center);
+                    PintorDoWidget.Texto(g, msg, f.Nota, PintorDoWidget.Secundario(escuro), escuro,
+                        new RectangleF(tx, y + 20f * s, x + w - tx, 19f * s), StringAlignment.Near, StringAlignment.Center);
+                    return;
+                }
+                if (_ar != null) { PintarAr(g, new RectangleF(x, y, w, LinhaAr * s), f, glifo, escuro); y += (LinhaAr + Vao) * s; }
+                if (lav) PintarLavadora(g, new RectangleF(x, y, w, LinhaLav * s), f, glifo, escuro);
             }
-            int meio = Height / 2;
-            Rectangle linhaAr = new Rectangle(m, 0, Width - 2 * m, meio);
-            Rectangle linhaLav = new Rectangle(m, meio, Width - 2 * m, Height - meio);
-            if (_ar != null && _lav != null)
-                using (Pen p = new Pen(Ui.Border)) g.DrawLine(p, m, meio, Width - m, meio);
-            if (_ar != null) PintarAr(g, _lav != null ? linhaAr : new Rectangle(m, 0, Width - 2 * m, Height));
-            if (_lav != null) PintarLavadora(g, _ar != null ? linhaLav : new Rectangle(m, 0, Width - 2 * m, Height));
         }
 
-        private void Botao(Graphics g, Rectangle r, string glifo, bool aceso, bool ativo, int zona)
+        private static void Glifo(Graphics g, string texto, Font fonte, RectangleF area, Color cor)
         {
-            Color fundo = !ativo ? Ui.SurfaceAlt : aceso ? Ui.Accent : (_hover == zona ? Ui.Hover : Ui.SurfaceAlt);
-            Color frente = !ativo ? Ui.Faint : aceso ? Color.White : Ui.Text;
-            using (SolidBrush b = new SolidBrush(fundo)) g.FillEllipse(b, r);
-            using (Pen p = new Pen(aceso ? fundo : Ui.Border)) g.DrawEllipse(p, r);
-            using (GraphicsPath gp = BotaoRedondo.Glifo(glifo, Ui.FontGlyph10, r))
-            using (SolidBrush b = new SolidBrush(frente)) g.FillPath(b, gp);
+            using (GraphicsPath gp = BotaoRedondo.Glifo(texto, fonte, area))
+            using (SolidBrush b = new SolidBrush(cor)) g.FillPath(b, gp);
         }
 
-        private void PintarAr(Graphics g, Rectangle b)
+        /// <summary>Botao redondo no vidro: a bolha do widget de bateria; aceso, na cor de destaque.</summary>
+        private void Botao(Graphics g, RectangleF r, string glifo, Font fonte, bool aceso, bool ativo, int zona, bool escuro)
         {
-            bool on = _ar.Online, ligado = _ar.Int("t_power", 0) != 0;
+            if (aceso)
+                using (SolidBrush b = new SolidBrush(Ui.Accent)) g.FillEllipse(b, r);
+            else
+            {
+                PintorDoWidget.Bolha(g, r, escuro);
+                if (ativo && _hover == zona)
+                    using (SolidBrush b = new SolidBrush(Color.FromArgb(escuro ? 40 : 60, 255, 255, 255))) g.FillEllipse(b, r);
+            }
+            Color frente = aceso ? Color.White : ativo ? PintorDoWidget.Primario(true) : Color.FromArgb(90, 255, 255, 255);
+            Glifo(g, glifo, fonte, r, frente);
+        }
+
+        private void PintarAr(Graphics g, RectangleF b, PintorDoWidget.Fontes f, Font glifo, bool escuro)
+        {
+            float s = _escala;
+            bool on = _ar.Online, ligado = on && _ar.Int("t_power", 0) != 0;
+            float cy = b.Y + b.Height / 2f;
+            RectangleF bolha = new RectangleF(b.X, cy - Bolha * s / 2f, Bolha * s, Bolha * s);
+            PintorDoWidget.Bolha(g, bolha, escuro);
+            Glifo(g, "\uE9CA", glifo, bolha, Color.White);
+
+            _rLiga = new RectangleF(b.Right - BotaoLiga * s, cy - BotaoLiga * s / 2f, BotaoLiga * s, BotaoLiga * s);
+            _rMais = new RectangleF(_rLiga.X - 8f * s - BotaoPeq * s, cy - BotaoPeq * s / 2f, BotaoPeq * s, BotaoPeq * s);
+            RectangleF alvo = new RectangleF(_rMais.X - Alvo * s, b.Y, Alvo * s, b.Height);
+            _rMenos = new RectangleF(alvo.X - BotaoPeq * s, _rMais.Y, BotaoPeq * s, BotaoPeq * s);
+            using (Font peq = new Font(glifo.FontFamily, 10f * s, FontStyle.Regular, GraphicsUnit.Pixel))
+            {
+                Botao(g, _rLiga, "\uE7E8", glifo, ligado, on, 2, escuro);
+                Botao(g, _rMais, "\uE710", peq, false, ligado, 1, escuro);
+                Botao(g, _rMenos, "\uE738", peq, false, ligado, 0, escuro);
+            }
+            int t = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0);
+            PintorDoWidget.Texto(g, t > 0 ? t + "°" : "--", f.Pct, ligado ? PintorDoWidget.Primario(escuro) : PintorDoWidget.Secundario(escuro), escuro,
+                alvo, StringAlignment.Center, StringAlignment.Center);
+
+            float tx = bolha.Right + 10f * s, tw = _rMenos.X - 6f * s - tx;
             string u = _ar.Int("t_temp_type", 0) == 1 ? "°F" : "°C";
-            int bt = Ui.S(28), lg = Ui.S(32);
-            int yc = b.Y + (b.Height - lg) / 2;
-            _rLiga = new Rectangle(b.Right - lg, yc, lg, lg);
-            _rMais = new Rectangle(_rLiga.Left - Ui.S(10) - bt, yc + (lg - bt) / 2, bt, bt);
-            _rMenos = new Rectangle(_rMais.Left - Ui.S(48) - bt, _rMais.Y, bt, bt);
-            Botao(g, _rLiga, "\uE7E8", ligado, on, 2);
-            Botao(g, _rMais, "\uE710", false, on && ligado, 1);
-            Botao(g, _rMenos, "\uE738", false, on && ligado, 0);
-            int alvo = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0);
-            TextRenderer.DrawText(g, alvo > 0 ? alvo + "°" : "--", Ui.FontValue, new Rectangle(_rMenos.Right, b.Y, _rMais.Left - _rMenos.Right, b.Height),
-                ligado ? Ui.Text : Ui.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-            int tw = _rMenos.Left - Ui.S(8) - b.X;
-            Size sn = TextRenderer.MeasureText(_ar.Nome, Ui.FontMed);
-            _rNomeAr = new Rectangle(b.X, b.Y + b.Height / 2 - Ui.S(22), Math.Min(tw, sn.Width), Ui.S(20));
-            TextRenderer.DrawText(g, _ar.Nome, Ui.FontMed, new Rectangle(b.X, b.Y + b.Height / 2 - Ui.S(22), tw, Ui.S(20)), Ui.Text,
-                TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-            string linha = !on ? T.CasaOffline : (_ar.Tem("f_temp_in") ? _ar.Num("f_temp_in", 0).ToString("0.#") + u + "  ·  " : "") +
-                (ligado ? TabelaDoAr.Modo(_ar.Int("t_work_mode", -1), _ar.Tipo) : T.CasaDesligado);
-            TextRenderer.DrawText(g, linha, Ui.FontSmall, new Rectangle(b.X, b.Y + b.Height / 2, tw, Ui.S(18)), Ui.Muted,
-                TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            string amb = _ar.Tem("f_temp_in") ? _ar.Num("f_temp_in", 0).ToString("0.#") + u : _ar.Nome;
+            string modo = !on ? T.CasaOffline : ligado ? TabelaDoAr.Modo(_ar.Int("t_work_mode", -1), _ar.Tipo) : T.CasaDesligado;
+            PintorDoWidget.Texto(g, amb, f.Nome, PintorDoWidget.Primario(escuro), escuro,
+                new RectangleF(tx, cy - 19f * s, tw, 19f * s), StringAlignment.Near, StringAlignment.Center);
+            PintorDoWidget.Texto(g, modo, f.Nota, PintorDoWidget.Secundario(escuro), escuro,
+                new RectangleF(tx, cy, tw, 18f * s), StringAlignment.Near, StringAlignment.Center);
         }
 
-        private void PintarLavadora(Graphics g, Rectangle b)
+        private void PintarLavadora(Graphics g, RectangleF b, PintorDoWidget.Fontes f, Font glifo, bool escuro)
         {
+            float s = _escala;
             CicloAtual c = CicloAtual.De(_lav);
-            Size sn = TextRenderer.MeasureText(_lav.Nome, Ui.FontMed);
-            int tw = b.Width;
-            _rNomeLav = new Rectangle(b.X, b.Y + Ui.S(10), Math.Min(tw, sn.Width), Ui.S(20));
-            string tempo = c.Online && c.Rodando && c.Restante > 0 ? CiclosDaLavadora.Duracao(TimeSpan.FromMinutes(c.Restante)) : "";
-            int wt = tempo.Length > 0 ? TextRenderer.MeasureText(tempo, Ui.FontValue).Width : 0;
-            TextRenderer.DrawText(g, _lav.Nome, Ui.FontMed, new Rectangle(b.X, b.Y + Ui.S(10), tw - wt - Ui.S(8), Ui.S(20)), Ui.Text,
-                TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            float cy = b.Y + b.Height / 2f;
+            RectangleF bolha = new RectangleF(b.X, cy - Bolha * s / 2f, Bolha * s, Bolha * s);
+            PintorDoWidget.Bolha(g, bolha, escuro);
+            IconeDaLavadora(g, bolha, s);
+
+            float tx = bolha.Right + 10f * s, tw = b.Right - tx;
+            string tempo = c.Restante > 0 && !c.Erro ? CiclosDaLavadora.Duracao(TimeSpan.FromMinutes(c.Restante)) : "";
+            float wt = 0f;
             if (tempo.Length > 0)
-                TextRenderer.DrawText(g, tempo, Ui.FontValue, new Rectangle(b.Right - wt, b.Y + Ui.S(8), wt, Ui.S(26)), Ui.Text, TextFormatFlags.Right);
-            string linha = c.Titulo();
-            if (tempo.Length > 0)
+                using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
+                    wt = g.MeasureString(tempo, f.Pct, PointF.Empty, sf).Width + 2f * s;
+            RectangleF linha = new RectangleF(tx, b.Y + 1f * s, tw, 21f * s);
+            if (wt > 0)
+                PintorDoWidget.Texto(g, tempo, f.Pct, PintorDoWidget.Primario(escuro), escuro,
+                    new RectangleF(b.Right - wt, linha.Y, wt, linha.Height), StringAlignment.Far, StringAlignment.Center);
+            string fase = c.Titulo();
+            if (tempo.Length > 0 && !c.Pausada && !c.Programado)
             {
                 DateTime leitura = ServicoCasa.UltimaLeitura == DateTime.MinValue ? DateTime.Now : ServicoCasa.UltimaLeitura;
-                linha += "  ·  " + T.LavTerminaAs(leitura.AddMinutes(c.Restante).ToString("HH:mm"));
+                fase += " · " + leitura.AddMinutes(c.Restante).ToString("HH:mm");
             }
-            TextRenderer.DrawText(g, linha, Ui.FontSmall, new Rectangle(b.X, b.Y + Ui.S(32), tw, Ui.S(18)), c.Erro ? Ui.Danger : Ui.Muted,
-                TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-            if (c.Rodando || c.Concluido)
+            PintorDoWidget.Texto(g, fase, f.Nota, c.Erro ? Color.FromArgb(255, 255, 120, 110) : PintorDoWidget.Primario(escuro), escuro,
+                new RectangleF(tx, linha.Y, Math.Max(0f, tw - wt - 6f * s), linha.Height), StringAlignment.Near, StringAlignment.Center);
+
+            // barra fina, com a mesma ponta redonda da capsula do widget de bateria
+            float h = 4f * s, by = b.Bottom - 7f * s;
+            Color cor = c.Erro ? Ui.Danger : c.Pausada ? Ui.Warn : Ui.Accent;
+            using (Pen trilho = PintorDoWidget.Redonda(PintorDoWidget.Trilho(escuro), h)) g.DrawLine(trilho, tx + h / 2f, by, b.Right - h / 2f, by);
+            float wp = (tw - h) * Math.Max(0f, Math.Min(1f, c.Progresso));
+            if (wp > 0.5f)
+                using (Pen pen = PintorDoWidget.Redonda(cor, h)) g.DrawLine(pen, tx + h / 2f, by, tx + h / 2f + wp, by);
+        }
+
+        /// <summary>A maquininha (caixa com a porta redonda), em branco como os icones do widget de bateria.</summary>
+        private static void IconeDaLavadora(Graphics g, RectangleF bolha, float s)
+        {
+            RectangleF r = RectangleF.Inflate(bolha, -9.5f * s, -8.5f * s);
+            using (Pen pen = new Pen(Color.White, 1.6f * s))
             {
-                Rectangle barra = new Rectangle(b.X, b.Bottom - Ui.S(18), b.Width, Ui.S(6));
-                using (GraphicsPath p = Ui.RoundRect(barra, Ui.S(3)))
-                using (SolidBrush br = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(br, p);
-                int w = (int)Math.Round(barra.Width * (c.Online ? c.Progresso : 0f));
-                if (w >= Ui.S(6))
-                    using (GraphicsPath p = Ui.RoundRect(new Rectangle(barra.X, barra.Y, w, barra.Height), Ui.S(3)))
-                    using (SolidBrush br = new SolidBrush(c.Erro ? Ui.Danger : c.Concluido ? Color.FromArgb(0x2E, 0xA0, 0x43) : Ui.Accent)) g.FillPath(br, p);
+                using (GraphicsPath gp = PintorDoWidget.Arredondado(r, 2.5f * s)) g.DrawPath(pen, gp);
+                float d = r.Width * 0.58f;
+                g.DrawEllipse(pen, r.X + (r.Width - d) / 2f, r.Bottom - d - 2f * s, d, d);
+                g.DrawLine(pen, r.X + 2.5f * s, r.Y + 3f * s, r.X + 5f * s, r.Y + 3f * s);
             }
         }
     }
