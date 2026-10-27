@@ -497,48 +497,55 @@ namespace MhiagosControl
                                 b.Save(System.IO.Path.Combine(pc, "paineis-icone.png"), System.Drawing.Imaging.ImageFormat.Png);
                             }
                         }
-                        // Card do escritorio: temperatura ambiente do ar, logo abaixo dele; no tamanho padrao, sem vao.
-                        CartaoDoEscritorioVisao esc = (CartaoDoEscritorioVisao)Field(form, "_vgEscritorio");
+                        // O escritorio no cartao do ar: "Escritorio 22,0 °C · leitura as HH:mm", sem cartao separado.
+                        string vinte2 = (22.0).ToString("0.0", new System.Globalization.CultureInfo(T.Pt ? "pt-BR" : "en-US")) + " °C";
                         foreach (string est in new string[] { "concluido", "secando" })
                         {
                             List<Aparelho> ls = Exemplo(); if (est != "secando") ls[0] = Lavadora(est);
                             ServicoCasa.Simular(ls);
                             form.ClientSize = SettingsForm.TamanhoPadrao;
                             InvokePrivate(form, "ArranjarVisaoGeral");
-                            Verdade(esc.Visible && esc.Top == arv.Bottom + Ui.S(12) && esc.Left == arv.Left && esc.Width == arv.Width, "escritorio logo abaixo do ar " + est + " " + language);
-                            Verdade(esc.TemLeitura && esc.Valor == (22.0).ToString("0.0") && esc.Estado == T.VisaoArLigadoEm("23 °C") && esc.Leitura.StartsWith(T.VisaoLeituraAs("")),
-                                "escritorio com 22,0 °C, ar ligado e hora da leitura " + est + " " + language);
+                            string[] pa = arv.Partes();
+                            Verdade(pa[0] == "Escritório" && pa[1] == vinte2 && pa[2].StartsWith(T.VisaoLeituraAs("")), "linha do ar com o escritorio e a leitura " + est + " " + language);
+                            Verdade(arv.Height == Ui.S(CartaoDoArVisao.Altura), "cartao do ar nao cresceu " + est + " " + language);
                             int topo = int.MaxValue, fundo = 0;
                             foreach (Control ctl in pg.Controls) if (ctl.Visible && ctl.Dock == DockStyle.None) { topo = Math.Min(topo, ctl.Top); fundo = Math.Max(fundo, ctl.Bottom); }
-                            if (est == "concluido")
-                            {
-                                Verdade(pg.Height - (fundo - topo) <= Ui.S(40) && pg.Height >= fundo - topo, "Visao geral cabe justa no tamanho padrao (sobra " + (pg.Height - (fundo - topo)) + " px) " + language);
-                                if (language == T.PtBr && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR")))
-                                    using (Bitmap b = new Bitmap(form.Width, form.Height))
-                                    {
-                                        form.DrawToBitmap(b, new Rectangle(0, 0, form.Width, form.Height));
-                                        b.Save(System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe"), "visao-geral-escritorio.png"), System.Drawing.Imaging.ImageFormat.Png);
-                                    }
-                            }
+                            Verdade(pg.Height >= fundo - topo, "Visao geral cabe sem rolar no tamanho padrao (" + (fundo - topo) + " de " + pg.Height + ") " + est + " " + language);
+                            if (est == "concluido" && language == T.PtBr && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR")))
+                                using (Bitmap b = new Bitmap(form.Width, form.Height))
+                                {
+                                    form.DrawToBitmap(b, new Rectangle(0, 0, form.Width, form.Height));
+                                    b.Save(System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe"), "visao-geral-escritorio.png"), System.Drawing.Imaging.ImageFormat.Png);
+                                }
                         }
                         List<Aparelho> semLeitura = Exemplo(); semLeitura[1].Online = false;
                         ServicoCasa.Simular(semLeitura);
                         InvokePrivate(form, "ArranjarVisaoGeral");
-                        Verdade(esc.Valor == "--" && esc.Leitura == T.VisaoSemLeitura, "escritorio sem leitura mostra -- " + language);
-                        InvokePrivate(esc, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, 5, 5, 0));
-                        Verdade(nav.Selected.Key == "casa", "clique no escritorio abre a Casa " + language);
-                        for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                        Verdade(arv.Partes()[1] == "--" && arv.Partes()[2] == T.VisaoSemLeitura, "sem leitura: -- e sem leitura " + language);
                         ServicoCasa.Simular(Exemplo());
-                        // Tamanho padrao 1263 x 685 de area cliente; gravado de antes da versao 2, abre no novo uma vez.
-                        Igual(new Size(Ui.S(1263), Ui.S(685)), SettingsForm.TamanhoPadrao, "area cliente padrao da janela");
+                        InvokePrivate(form, "ArranjarVisaoGeral");
+                        InvokePrivate(arv, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, 5, 5, 0));
+                        Verdade(nav.Selected.Key == "casa", "clique no cartao do ar fora dos botoes abre a Casa " + language);
+                        for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                        // Paineis cabe inteira (as duas colunas e a Previa) no tamanho padrao.
+                        form.ClientSize = SettingsForm.TamanhoPadrao;
+                        for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "paineis") nav.SelectedIndex = i;
+                        Application.DoEvents();
+                        Control pp = (Control)Field(form, "_pgPaineis");
+                        int fundoP = 0;
+                        foreach (Control ctl in pp.Controls) if (ctl.Visible && ctl.Dock == DockStyle.None) fundoP = Math.Max(fundoP, ctl.Bottom);
+                        Verdade(fundoP <= pp.Height, "Paineis sem cortar no tamanho padrao (" + fundoP + " de " + pp.Height + ") " + language);
+                        for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                        // Tamanho padrao 1263 x 738 de area cliente; gravado de antes da versao atual, abre no novo uma vez.
+                        Igual(new Size(Ui.S(1263), Ui.S(738)), SettingsForm.TamanhoPadrao, "area cliente padrao da janela");
                         Verdade(SettingsForm.TamanhoPadrao.Height >= Ui.S(660), "padrao respeita o minimo");
                         int wAntes = cfgForm.WindowW, hAntes = cfgForm.WindowH, vAntes = cfgForm.JanelaVersao;
                         cfgForm.WindowW = Ui.S(1000); cfgForm.WindowH = Ui.S(700); cfgForm.JanelaVersao = 0;
-                        Verdade((Size)InvokePrivate(form, "TamanhoGuardado") == Size.Empty, "tamanho de antes da versao 2 abre no padrao novo " + language);
+                        Verdade((Size)InvokePrivate(form, "TamanhoGuardado") == Size.Empty, "tamanho de versao anterior abre no padrao novo " + language);
                         cfgForm.JanelaVersao = SettingsForm.VersaoDaJanela;
                         Verdade((Size)InvokePrivate(form, "TamanhoGuardado") == new Size(Ui.S(1000), Ui.S(700)), "tamanho escolhido pela pessoa fica " + language);
                         cfgForm.WindowW = wAntes; cfgForm.WindowH = hAntes; cfgForm.JanelaVersao = vAntes;
-                        Verdade(arv.Linha().Contains("Escritório") && arv.Linha().Contains(string.Format(T.CasaAmbienteCurto, "22 °C")), "linha do ar com comodo e ambiente " + language);
+                        Verdade(arv.Linha().StartsWith("Escritório "), "linha do ar comeca pelo comodo " + language);
                         Verdade(lavv.Linha().Contains("rpm"), "linha da lavadora com a centrifugacao " + language);
                         Igual("01:25", CartaoDaLavadoraVisao.Relogio(85), "tempo da lavadora em hh:mm");
                         Verdade(Visao.Resumo().Contains(T.VisaoComodoA("escritório", "22 °C")) || !T.Pt, "resumo do cabecalho com o comodo " + language);

@@ -510,7 +510,7 @@ namespace MhiagosControl
     }
 
     /// <summary>
-    /// O ar na Visao geral: nome, "Escritorio · Frio · ambiente 27 °C", - e +
+    /// O ar na Visao geral: nome, "Escritorio 23,0 °C · leitura as 13:13", - e +
     /// em volta do alvo grande e a pilula Ligado/Desligado. Os comandos vao
     /// pelo ServicoCasa.Enviar, com a mesma previa otimista da pagina Casa.
     /// </summary>
@@ -626,15 +626,60 @@ namespace MhiagosControl
             _menos.SetBounds(_mais.Left - LarguraDoNumero - bt, (Height - bt) / 2, bt, bt);
         }
 
+        /// <summary>Comodo, temperatura do escritorio agora e hora da leitura (sem leitura: "--" e "sem leitura").</summary>
+        internal string[] Partes()
+        {
+            if (_ar == null) return new string[] { "", "", "" };
+            string comodo = string.IsNullOrEmpty(_ar.Comodo) ? T.VisaoAmbienteNome : _ar.Comodo;
+            bool tem = _ar.Online && _ar.Tem("f_temp_in");
+            string temp = tem ? _ar.Num("f_temp_in", 0).ToString("0.0", new CultureInfo(T.Pt ? "pt-BR" : "en-US"))
+                + (_ar.Int("t_temp_type", 0) == 1 ? " °F" : " °C") : "--";
+            DateTime l = ServicoCasa.UltimaLeitura;
+            string leitura = !tem || l == DateTime.MinValue ? T.VisaoSemLeitura : T.VisaoLeituraAs(l.ToString("HH:mm"));
+            return new string[] { comodo, temp, leitura };
+        }
+
+        /// <summary>A linha como texto corrido (testes e acessibilidade).</summary>
         internal string Linha()
         {
-            if (_ar == null) return "";
-            List<string> l = new List<string>();
-            if (!string.IsNullOrEmpty(_ar.Comodo)) l.Add(_ar.Comodo);
-            if (!_ar.Online) { l.Add(T.CasaOffline); return string.Join(" · ", l.ToArray()); }
-            l.Add(_ar.Int("t_power", 0) != 0 ? TabelaDoAr.Modo(_ar.Int("t_work_mode", -1), _ar.Tipo) : T.CasaDesligado);
-            if (_ar.Tem("f_temp_in")) l.Add(string.Format(T.CasaAmbienteCurto, Visao.Temperatura(_ar, _ar.Num("f_temp_in", 0))));
-            return string.Join(" · ", l.ToArray());
+            string[] p = Partes();
+            return p[0] + " " + p[1] + " · " + p[2];
+        }
+
+        /// <summary>Fora dos botoes, o cartao inteiro abre a pagina Casa.</summary>
+        protected override void OnMouseMove(MouseEventArgs e) { Cursor = Cursors.Hand; }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left) PedirCasa();
+        }
+
+        /// <summary>
+        /// "Escritorio 23,0 °C · leitura as 13:13": a temperatura em ambar e
+        /// seminegrito; o estado ja esta na pilula, nao se repete. Sem lugar, a
+        /// hora da leitura sai antes da temperatura.
+        /// </summary>
+        private void DesenharLinha(Graphics g, int x, int y, int largura)
+        {
+            string[] p = Partes();
+            TextFormatFlags f = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+            x += Ui.S(3);   // o nome acima tem a margem interna do TextRenderer; a linha alinha com ele
+            largura -= Ui.S(3);
+            Font fl = Ui.FontSmall, ft = Visao.MonoTexto;
+            int w0 = TextRenderer.MeasureText(g, p[0] + " ", fl, Size.Empty, f).Width;
+            int w1 = TextRenderer.MeasureText(g, p[1], ft, Size.Empty, f).Width;
+            // Sem lugar para "leitura as 13:13", fica so a hora; sem lugar nem para ela, nada.
+            string resto = "";
+            DateTime lida = ServicoCasa.UltimaLeitura;
+            string curta = p[1] != "--" && lida != DateTime.MinValue ? "  ·  " + lida.ToString("HH:mm") : "";
+            foreach (string op in new string[] { "  ·  " + p[2], curta })
+                if (op.Length > 0 && w0 + w1 + TextRenderer.MeasureText(g, op, fl, Size.Empty, f).Width <= largura) { resto = op; break; }
+            int hl = fl.Height, ht = ft.Height;
+            TextRenderer.DrawText(g, p[0] + " ", fl, new Rectangle(x, y, Math.Min(w0, largura), hl), Ui.Muted, f | TextFormatFlags.EndEllipsis);
+            if (w0 >= largura) return;
+            bool tem = p[1] != "--";
+            TextRenderer.DrawText(g, p[1], ft, new Point(x + w0, y + hl - ht), tem ? Visao.Quente : Ui.Faint, f);
+            if (resto.Length > 0) TextRenderer.DrawText(g, resto, fl, new Point(x + w0 + w1, y), Ui.Muted, f);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -648,7 +693,9 @@ namespace MhiagosControl
             IconesCasa.GlifoCentrado(g, "\uE9CA", Ui.FontGlyph11, ic, Ui.AccentText);
             int tx = ic.Right + Ui.S(14);
             int alto = Ui.FontSection.Height + Ui.S(2) + Ui.FontSmall.Height;
-            NomeELinha(g, _ar.Nome, Linha(), tx, (Height - alto) / 2, Math.Max(Ui.S(40), _menos.Left - Ui.S(12) - tx), Ui.Muted);
+            int wt = Math.Max(Ui.S(40), _menos.Left - Ui.S(12) - tx), yt = (Height - alto) / 2;
+            NomeELinha(g, _ar.Nome, "", tx, yt, wt, Ui.Muted);
+            DesenharLinha(g, tx, yt + Ui.FontSection.Height + Ui.S(2), wt);
 
             bool ligado = _ar.Online && _ar.Int("t_power", 0) != 0;
             int alvo = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0);
@@ -777,96 +824,6 @@ namespace MhiagosControl
                     : new Rectangle(m + (Width - 2 * m) * i / (n - 1) - larg / 2, y, larg, Ui.S(20));
                 TextRenderer.DrawText(g, _etapas[i], f, rr, cor, al | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             }
-        }
-    }
-
-    /// <summary>
-    /// A temperatura do escritorio agora: a ambiente lida pelo ar (a mesma do
-    /// "ambiente 23 °C"), grande e em ambar, com o estado do ar e a hora da
-    /// leitura ao lado. Clique abre a pagina Casa.
-    /// </summary>
-    internal sealed class CartaoDoEscritorioVisao : CartaoDaCasaVisao
-    {
-        public const int Altura = 84;
-        private Aparelho _ar;
-
-        internal Aparelho Ar { get { return _ar; } }
-
-        public CartaoDoEscritorioVisao() { Cursor = Cursors.Hand; Puxar(); }
-
-        internal override void Puxar()
-        {
-            _ar = null;
-            if (ServicoCasa.Logado)
-                foreach (Aparelho a in ServicoCasa.Aparelhos)
-                    if (a.ArCondicionado) { _ar = a; break; }
-            Invalidate();
-        }
-
-        protected override void OnMouseMove(MouseEventArgs e) { Cursor = Cursors.Hand; }
-
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Left) PedirCasa();
-        }
-
-        internal bool TemLeitura { get { return _ar != null && _ar.Online && _ar.Tem("f_temp_in"); } }
-
-        internal string Rotulo
-        {
-            get
-            {
-                string c = _ar != null && !string.IsNullOrEmpty(_ar.Comodo) ? _ar.Comodo : T.VisaoAmbienteNome;
-                return Visao.Maiusculas(c + " · " + T.VisaoTemperatura);
-            }
-        }
-
-        internal string Valor { get { return TemLeitura ? _ar.Num("f_temp_in", 0).ToString("0.0", CultureInfo.CurrentCulture) : "--"; } }
-
-        internal string Estado
-        {
-            get
-            {
-                if (_ar == null || !_ar.Online) return T.CasaOffline;
-                return _ar.Int("t_power", 0) != 0
-                    ? T.VisaoArLigadoEm(_ar.Int("t_temp", 0) + (_ar.Int("t_temp_type", 0) == 1 ? " °F" : " °C"))
-                    : T.VisaoArDesligado;
-            }
-        }
-
-        internal string Leitura
-        {
-            get
-            {
-                if (!TemLeitura) return T.VisaoSemLeitura;
-                DateTime l = ServicoCasa.UltimaLeitura;
-                return l == DateTime.MinValue ? T.VisaoSemLeitura : T.VisaoLeituraAs(l.ToString("HH:mm"));
-            }
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-            Graphics g = e.Graphics;
-            Ui.Smooth(g);
-            int m = Ui.S(16);
-            TextRenderer.DrawText(g, Rotulo, Visao.MonoRotulo, new Point(m, Ui.S(12)), Ui.Muted, TextFormatFlags.NoPrefix);
-            string v = Valor;
-            Size sv = TextRenderer.MeasureText(g, v, Visao.MonoGrande, Size.Empty, TextFormatFlags.NoPadding);
-            int yv = Ui.S(32);
-            TextRenderer.DrawText(g, v, Visao.MonoGrande, new Point(m, yv), TemLeitura ? Visao.Quente : Ui.Faint, TextFormatFlags.NoPadding);
-            if (TemLeitura)
-            {
-                string u = _ar.Int("t_temp_type", 0) == 1 ? "°F" : "°C";
-                Size su = TextRenderer.MeasureText(g, u, Visao.MonoPequena, Size.Empty, TextFormatFlags.NoPadding);
-                TextRenderer.DrawText(g, u, Visao.MonoPequena, new Point(m + sv.Width + Ui.S(4), yv + sv.Height - su.Height - Ui.S(3)), Ui.Muted, TextFormatFlags.NoPadding);
-            }
-            // estado do ar e hora da leitura, a direita, alinhados ao numero
-            int hl = Ui.FontSmall.Height;
-            int y2 = yv + sv.Height - hl;
-            Rectangle r1 = new Rectangle(m, y2 - hl - Ui.S(2), Width - 2 * m, hl), r2 = new Rectangle(m, y2, Width - 2 * m, hl);
-            TextRenderer.DrawText(g, Estado, Ui.FontSmall, r1, Ui.Text, TextFormatFlags.Right | TextFormatFlags.NoPrefix);
-            TextRenderer.DrawText(g, Leitura, Ui.FontSmall, r2, Ui.Muted, TextFormatFlags.Right | TextFormatFlags.NoPrefix);
         }
     }
 
@@ -1074,9 +1031,6 @@ namespace MhiagosControl
         public static string VisaoConectado { get { return P("conectado", "connected"); } }
         public static string VisaoDesconectado { get { return P("desconectado", "disconnected"); } }
         public static string VisaoConecteCasa { get { return P("Conecte a casa", "Connect your home"); } }
-        public static string VisaoTemperatura { get { return P("temperatura", "temperature"); } }
-        public static string VisaoArLigadoEm(string t) { return P("Ar ligado em ", "AC on at ") + t; }
-        public static string VisaoArDesligado { get { return P("Ar desligado", "AC off"); } }
         public static string VisaoSemLeitura { get { return P("sem leitura", "no reading"); } }
         public static string VisaoLeituraAs(string h) { return P("leitura às ", "read at ") + h; }
         public static string VisaoFim(string h) { return P("fim ", "ends ") + h; }
