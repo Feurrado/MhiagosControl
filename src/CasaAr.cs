@@ -254,10 +254,17 @@ namespace MhiagosControl
             using (Pen p = Caneta(c, r))
             using (GraphicsPath gp = new GraphicsPath())
             {
-                gp.AddArc(r.X, r.Y, r.Width, r.Height, 60, 240);
-                gp.AddArc(r.X + r.Width * 0.3f, r.Y - r.Height * 0.05f, r.Width * 0.75f, r.Height * 0.75f, 300, -240);
-                gp.CloseFigure();
-                g.DrawPath(p, gp);
+                // crescente: o disco menos outro deslocado para cima e a direita, centrado na caixa
+                float d = Math.Min(r.Width, r.Height);
+                RectangleF disco = new RectangleF(r.X + (r.Width - d) / 2f, r.Y + (r.Height - d) / 2f, d, d);
+                gp.AddEllipse(disco);
+                using (GraphicsPath corte = new GraphicsPath())
+                using (Region reg = new Region(gp))
+                {
+                    corte.AddEllipse(disco.X + d * 0.32f, disco.Y - d * 0.18f, d * 0.86f, d * 0.86f);
+                    reg.Exclude(corte);
+                    using (SolidBrush b = new SolidBrush(c)) g.FillRegion(b, reg);
+                }
             }
         }
 
@@ -1089,7 +1096,8 @@ namespace MhiagosControl
                 t.Enabled = on && Grava((string)t.Tag);
             }
             bool noturno = A.Int("t_sleep", 0) != 0;
-            _noturno.Visible = _lbNoturno.Visible = botaoNoturno;
+            _noturno.Visible = botaoNoturno;
+            _lbNoturno.Visible = false;   // so a lua; o nome fica na dica do botao
             _noturno.Aceso = noturno;
             _noturno.Enabled = on && ligado;
             _noturno.Invalidate();
@@ -1198,7 +1206,7 @@ namespace MhiagosControl
             int nw = Ui.S(44);
             _noturno.SetBounds(cx + cw - nw, y + (lw - nw) / 2, nw, nw);
             _lbNoturno.SetBounds(_noturno.Left - Ui.S(150) - Ui.S(10), y + (lw - Ui.S(20)) / 2, Ui.S(150), Ui.S(20));
-            int fimLiga = _noturno.Visible ? _lbNoturno.Left - Ui.S(8) : cx + cw;
+            int fimLiga = _noturno.Visible ? _noturno.Left - Ui.S(8) : cx + cw;
             _lbLiga.SetBounds(cx + lw + Ui.S(12), y + (lw - Ui.S(24)) / 2 - (_lbLiga.Tag != null ? Ui.S(8) : 0), Math.Max(Ui.S(60), fimLiga - cx - lw - Ui.S(12)), Ui.S(24));
             y += lw + Ui.S(14);
 
