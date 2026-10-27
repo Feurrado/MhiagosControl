@@ -84,7 +84,7 @@ namespace MhiagosControl
             string prefAntes = PreferenciasCasa.Arquivo, histAntes = HistoricoDoAr.Arquivo;
             PreferenciasCasa.Arquivo = System.IO.Path.Combine(pasta, "casa.ini");
             HistoricoDoAr.Arquivo = System.IO.Path.Combine(pasta, "casa-historico.txt");
-            ConfigDoWidgetCasa.Caminho = System.IO.Path.Combine(pasta, "widget-casa.ini");
+            CasaNoWidget.CaminhoAntigo = System.IO.Path.Combine(pasta, "widget-casa.ini");
             System.IO.File.Delete(PreferenciasCasa.Arquivo);
             System.IO.File.Delete(HistoricoDoAr.Arquivo);
             ServicoCasa.Pref = new PreferenciasCasa();
@@ -743,157 +743,185 @@ namespace MhiagosControl
         /// <summary>Item 9: widget da casa (configuracao, pintura e cliques), sem mostrar janela.</summary>
         private static void CasaWidget()
         {
-            Secao("casa: widget da area de trabalho");
+            Secao("casa: dentro do widget de bateria");
             string pasta = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mhiagos-widget-casa-" + Guid.NewGuid().ToString("N"));
             System.IO.Directory.CreateDirectory(pasta);
-            string antes = ConfigDoWidgetCasa.Caminho;
-            ConfigDoWidgetCasa.Caminho = System.IO.Path.Combine(pasta, "widget-casa.ini");
-            // o vidro e o formato vem da config do widget de bateria; aqui, numa pasta temporaria
-            string antesVidro = ConfigDoWidget.Caminho;
+            string antesVidro = ConfigDoWidget.Caminho, antesCasa = CasaNoWidget.CaminhoAntigo;
             ConfigDoWidget.Caminho = System.IO.Path.Combine(pasta, "widget.ini");
+            CasaNoWidget.CaminhoAntigo = System.IO.Path.Combine(pasta, "widget-casa.ini");
             try
             {
-                Verdade(!new ConfigDoWidgetCasa().NaFrente, "widget da casa nao fica na frente por padrao");
-                System.IO.File.WriteAllText(ConfigDoWidgetCasa.Caminho, "ativo=1\nnafrente=1\n");
-                Verdade(!ConfigDoWidgetCasa.Carregar().NaFrente, "o nafrente=1 antigo (gravado por padrao) e ignorado");
-                ConfigDoWidgetCasa cfg = new ConfigDoWidgetCasa();
-                cfg.Ativo = true; cfg.X = 100; cfg.Y = 200; cfg.Travado = true; cfg.NaFrente = true;
-                cfg.Salvar();
-                ConfigDoWidgetCasa lido = ConfigDoWidgetCasa.Carregar();
-                Verdade(lido.Ativo && lido.X == 100 && lido.Y == 200 && lido.Travado && lido.NaFrente, "config do widget gravada e lida");
-                System.IO.File.Delete(ConfigDoWidgetCasa.Caminho);
+                Verdade(new ConfigDoWidget().Casa && ConfigDoWidget.DeTexto("ativo=1").Casa, "casa no widget ligada por padrao (tambem num widget.ini antigo)");
+                Verdade(!ConfigDoWidget.DeTexto("casa=0").Casa, "casa desligada fica desligada");
+                Verdade(!new ConfigDoWidget().NaFrente, "widget fora do sempre na frente por padrao");
+
+                // migracao do widget separado
+                string antigo = CasaNoWidget.CaminhoAntigo;
+                System.IO.File.WriteAllText(antigo, "ativo=1\nnafrente=1\nx=2517\ny=847\n");
+                ConfigDoWidget m = new ConfigDoWidget(); m.Ativo = false; m.Casa = false;
+                Verdade(CasaNoWidget.Migrar(m) && m.Ativo && m.Casa && !m.NaFrente, "widget da casa ligado migra: liga o de bateria com a casa, sem trazer o na frente");
+                Verdade(!System.IO.File.Exists(antigo) && System.IO.File.Exists(antigo + ".migrado"), "widget-casa.ini vira .migrado, sem perder o arquivo");
+                Verdade(!CasaNoWidget.Migrar(m), "a migracao nao se repete");
+                System.IO.File.WriteAllText(antigo, "ativo=0\n");
+                ConfigDoWidget m2 = new ConfigDoWidget(); m2.Ativo = false;
+                Verdade(!CasaNoWidget.Migrar(m2) && !m2.Ativo, "widget da casa desligado nao liga nada");
 
                 string dir = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                Periferico x11 = new Periferico("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 41, false, EstadoPeriferico.Normal);
+                Periferico g325 = new Periferico("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 72, false, EstadoPeriferico.Normal);
                 ServicoCasa.Simular(Exemplo());
-                using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
+                using (ItensDaCasa casa = new ItensDaCasa())
                 {
-                    Verdade(w.Ar != null && w.Lavadora != null, "widget le o ar e a lavadora do servico");
+                    Verdade(casa.Ar != null && casa.Lavadora != null && casa.Itens().Length == 2, "itens da casa: ar e lavadora secando");
                     foreach (LayoutDoWidget formato in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
                     {
-                        w.Formato = formato;
                         string nf = formato == LayoutDoWidget.Aneis ? "aneis" : "lista";
-                        WidgetCasaNoFormato(w, formato, nf, dir);
+                        foreach (float tela in new float[] { 1f, 1.25f, 1.5f })
+                        {
+                            float s = tela * PintorDoWidget.Ampliacao;
+                            string sufixo = nf + "-" + (int)(tela * 100);
+                            // 2 perifericos + ar + lavadora em ciclo
+                            Verdade(QuadroCabe(new Periferico[] { g325, x11 }, casa, formato, s, dir, "widget-unico-" + sufixo + "-2per-ar-lavadora"),
+                                "2 perifericos, ar e lavadora sem corte nem sobreposicao, " + sufixo);
+                            Size com = Tamanho(new Periferico[] { x11 }, casa, formato, s);
+                            // 1 periferico + ar (lavadora concluida sai)
+                            casa.Lavadora.Estado["machine_status"] = "1"; casa.Lavadora.Estado["Current_program_phase"] = "10";
+                            Verdade(casa.Itens().Length == 1, "lavadora concluida sai do widget " + sufixo);
+                            Verdade(QuadroCabe(new Periferico[] { x11 }, casa, formato, s, dir, "widget-unico-" + sufixo + "-1per-ar"),
+                                "1 periferico e ar sem corte nem sobreposicao, " + sufixo);
+                            Size sem = Tamanho(new Periferico[] { x11 }, casa, formato, s);
+                            Verdade(sem.Height == Tamanho(new Periferico[] { x11 }, null, formato, s).Height || formato == LayoutDoWidget.Lista,
+                                "nos aneis a casa nao muda a altura " + sufixo);
+                            if (formato == LayoutDoWidget.Lista) Verdade(com.Height > sem.Height && com.Width == sem.Width, "lista cresce uma linha com a lavadora " + sufixo);
+                            else Verdade(com.Width > sem.Width && com.Height == sem.Height, "aneis crescem um anel com a lavadora " + sufixo);
+                            casa.Lavadora.Estado["machine_status"] = "2"; casa.Lavadora.Estado["Current_program_phase"] = "8";
+                            // so a casa (sem perifericos)
+                            Verdade(QuadroCabe(new Periferico[0], casa, formato, s, dir, "widget-unico-" + sufixo + "-so-casa"), "so a casa sem corte, " + sufixo);
+                            // so perifericos (casa desligada)
+                            casa.Ativa = false;
+                            Verdade(casa.Itens().Length == 0 && Tamanho(new Periferico[] { g325, x11 }, casa, formato, s) == Tamanho(new Periferico[] { g325, x11 }, null, formato, s),
+                                "casa desligada: o widget de bateria de sempre, " + sufixo);
+                            casa.Ativa = true;
+                        }
+                        // estados do ar e da lavadora
+                        float s1 = PintorDoWidget.Ampliacao;
+                        casa.Ar.Estado["t_power"] = "0";
+                        Verdade(QuadroCabe(new Periferico[] { x11 }, casa, formato, s1, dir, "widget-unico-" + nf + "-ar-desligado"), "ar desligado " + nf);
+                        casa.Ar.Estado["t_power"] = "1";
+                        casa.Lavadora.Estado["machine_status"] = "3";
+                        Verdade(casa.Itens().Length == 2 && QuadroCabe(new Periferico[] { x11 }, casa, formato, s1, dir, "widget-unico-" + nf + "-pausada"), "lavadora pausada aparece " + nf);
+                        casa.Lavadora.Estado["machine_status"] = "4"; casa.Lavadora.Estado["error_code"] = "5";
+                        Verdade(casa.Itens().Length == 2 && QuadroCabe(new Periferico[] { x11 }, casa, formato, s1, null, null), "lavadora com erro aparece " + nf);
+                        casa.Lavadora.Estado["machine_status"] = "2"; casa.Lavadora.Estado["error_code"] = "0";
+                        casa.Lavadora.Online = false;
+                        Verdade(casa.Itens().Length == 1, "lavadora desconectada sai " + nf);
+                        casa.Lavadora.Online = true;
+                        casa.Lavadora.Estado["machine_status"] = "0"; casa.Lavadora.Estado["Current_program_phase"] = "0";
+                        Verdade(casa.Itens().Length == 1, "lavadora desligada sai " + nf);
+                        casa.Lavadora.Estado["machine_status"] = "2"; casa.Lavadora.Estado["Current_program_phase"] = "8";
                     }
-                    w.Formato = LayoutDoWidget.Aneis;
                     // clique no liga/desliga
-                    w.Escala = 1f;
-                    using (Bitmap bm = new Bitmap(w.Medida().Width, w.Medida().Height)) using (Graphics g = Graphics.FromImage(bm)) w.Pintar(g);
-                    w.Clicar(2);
-                    Verdade(w.UltimoComando != null && w.UltimoComando.Count == 1 && w.UltimoComando["t_power"] == "0", "liga/desliga no widget manda t_power");
-                    w.Ar.Estado["t_power"] = "1";
-                    // a lavadora entra e sai sem o widget pular: o canto perto da borda fica parado
-                    Size com = w.Medida();
-                    w.Lavadora.Estado["machine_status"] = "1"; w.Lavadora.Estado["Current_program_phase"] = "10";
-                    Size sem = w.Medida();
-                    w.Lavadora.Estado["machine_status"] = "2"; w.Lavadora.Estado["Current_program_phase"] = "8";
+                    QuadroCabe(new Periferico[] { x11 }, casa, LayoutDoWidget.Aneis, 1f, null, null);
+                    casa.Clicar(2);
+                    Verdade(casa.UltimoComando != null && casa.UltimoComando.Count == 1 && casa.UltimoComando["t_power"] == "0", "liga/desliga no widget manda t_power");
+                    casa.Ar.Estado["t_power"] = "1";
+                    Verdade(casa.Zona(Point.Round(Centro(casa.ZonaLiga))) == 2 && casa.Zona(new Point(1, 1)) == -1, "zonas da casa: botao e fora");
+                    // crescer e encolher sem mover: o canto perto da borda fica parado
+                    Size a = Tamanho(new Periferico[] { x11 }, casa, LayoutDoWidget.Aneis, 1f);
+                    casa.Lavadora.Estado["machine_status"] = "1"; casa.Lavadora.Estado["Current_program_phase"] = "10";
+                    Size b = Tamanho(new Periferico[] { x11 }, casa, LayoutDoWidget.Aneis, 1f);
+                    casa.Lavadora.Estado["machine_status"] = "2"; casa.Lavadora.Estado["Current_program_phase"] = "8";
                     Rectangle area = new Rectangle(0, 0, 1920, 1040);
-                    Rectangle embaixo = new Rectangle(new Point(1920 - 24 - sem.Width, 1040 - 24 - sem.Height), sem);
-                    Point p = WidgetDeBateria.AncorarCrescimento(embaixo, com, area);
-                    Verdade(p.X + com.Width == embaixo.Right && p.Y + com.Height == embaixo.Bottom, "crescer no canto de baixo a direita mantem o canto");
-                    Rectangle emcima = new Rectangle(new Point(1920 - 24 - sem.Width, 24), sem);
-                    p = WidgetDeBateria.AncorarCrescimento(emcima, com, area);
-                    Verdade(p.Y == emcima.Top && p.X + com.Width == emcima.Right, "crescer no canto de cima a direita mantem o topo");
+                    Rectangle embaixo = new Rectangle(new Point(1920 - 48 - b.Width, 1040 - 48 - b.Height), b);
+                    Point p = WidgetDeBateria.AncorarCrescimento(embaixo, a, area);
+                    Verdade(p.X + a.Width == embaixo.Right && p.Y + a.Height == embaixo.Bottom, "a lavadora entra sem mover o canto de baixo a direita");
                 }
-                // sempre na frente: desligado por padrao, mesmo depois de atualizar; a opcao liga e desliga
-                using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
+                // a janela de verdade: fora da frente por padrao, a opcao da casa liga e desliga
+                ConfigDoWidget cfg = new ConfigDoWidget();
+                using (WidgetDeBateria w = new WidgetDeBateria(cfg))
                 {
-                    IntPtr h = w.Handle;
-                    Verdade(h != IntPtr.Zero && !w.NaFrenteAgora && !w.TopMost, "widget criado fora do sempre na frente");
-                    w.Puxar(); w.Renderizar();
-                    Verdade(!w.NaFrenteAgora, "atualizar o widget nao o traz para a frente");
-                    w.DefinirNaFrente(true);
-                    Verdade(w.NaFrenteAgora && ConfigDoWidgetCasa.Carregar().NaFrente, "sempre na frente liga e fica gravado");
-                    w.Puxar();
-                    Verdade(w.NaFrenteAgora, "com a opcao, continua na frente depois de atualizar");
-                    w.DefinirNaFrente(false);
-                    Verdade(!w.NaFrenteAgora && !ConfigDoWidgetCasa.Carregar().NaFrente, "desligar volta ao normal e fica gravado");
-                }
-                // so a lavadora (sem ar): a linha dela sozinha
-                ServicoCasa.Simular(new List<Aparelho> { Lavadora("secando") });
-                using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
-                {
-                    w.Formato = LayoutDoWidget.Aneis;
-                    Verdade(w.Ar == null && w.MostraLavadora && WidgetCabe(w), "widget so com a lavadora");
-                    Verdade(w.Medida() == PintorDoWidget.Medir(LayoutDoWidget.Aneis, 1, 1f, false), "so a lavadora tem o tamanho de um anel do widget de bateria");
-                    SalvarWidgetCasa(w, dir, "widget-casa-aneis-so-lavadora");
+                    w.Show();
+                    Application.DoEvents();
+                    Verdade(w.Visible && !w.NaFrenteAgora, "widget aberto fora do sempre na frente");
+                    w.Renderizar();
+                    Verdade(!w.NaFrenteAgora, "atualizar nao traz o widget para a frente");
+                    Verdade(w.Casa.Itens().Length == 2, "o widget mostra a casa por padrao");
+                    Size com = w.Size;
+                    w.TrocarCasa(false);
+                    Verdade(w.Casa.Itens().Length == 0 && !ConfigDoWidget.Carregar().Casa, "desligar a casa no widget tira os itens e grava");
+                    Verdade(w.Size != com, "o widget encolhe sem a casa");
+                    w.TrocarCasa(true);
+                    Verdade(w.Casa.Itens().Length == 2 && ConfigDoWidget.Carregar().Casa && w.Size == com, "religar a casa volta os itens e o tamanho");
+                    cfg.NaFrente = true; w.AplicarConfig();
+                    Verdade(w.NaFrenteAgora, "sempre na frente liga");
+                    cfg.NaFrente = false; w.AplicarConfig();
+                    Verdade(!w.NaFrenteAgora, "desligar volta ao fundo");
+                    w.Close();
                 }
                 ServicoCasa.PararSimulacao();
-                using (WidgetDaCasa w = new WidgetDaCasa(new ConfigDoWidgetCasa()))
-                {
-                    Verdade(w.Ar == null && !w.MostraLavadora, "sem conta o widget mostra o convite");
-                    Verdade(w.Medida() == PintorDoWidget.Medir(LayoutDoWidget.Aneis, 0, 1f, false), "convite no tamanho do vazio do widget de bateria");
-                    Verdade(WidgetCabe(w), "convite sem corte");
-                    SalvarWidgetCasa(w, dir, "widget-casa-sem-conta");
-                }
+                using (ItensDaCasa casa = new ItensDaCasa())
+                    Verdade(casa.Itens().Length == 0, "sem conta a casa nao entra no widget");
             }
             finally
             {
                 ServicoCasa.PararSimulacao();
-                ConfigDoWidgetCasa.Caminho = antes;
                 ConfigDoWidget.Caminho = antesVidro;
+                CasaNoWidget.CaminhoAntigo = antesCasa;
             }
         }
 
-        /// <summary>Os estados do widget num formato (aneis ou lista), com as medidas do widget de bateria.</summary>
-        private static void WidgetCasaNoFormato(WidgetDaCasa w, LayoutDoWidget formato, string nf, string dir)
+        private static float[] Uns(int n) { float[] u = new float[n]; for (int i = 0; i < n; i++) u[i] = 1f; return u; }
+
+        private static PointF Centro(RectangleF r) { return new PointF(r.X + r.Width / 2f, r.Y + r.Height / 2f); }
+
+        private static PintorDoWidget.Quadro QuadroDe(Periferico[] per, ItensDaCasa casa, LayoutDoWidget formato, float s)
         {
-            Verdade(w.MostraLavadora, "lavadora secando aparece no widget " + nf);
-            foreach (float escala in new float[] { 1f, 1.25f, 1.5f })
-            {
-                w.Escala = escala;
-                Size com = w.Medida(), bat = PintorDoWidget.Medir(formato, 2, escala, false);
-                if (formato == LayoutDoWidget.Lista) Verdade(com == bat, "lista com ciclo do tamanho de dois itens do widget de bateria, escala " + escala);
-                else Verdade(com.Height == bat.Height, "aneis com ciclo na altura do widget de bateria, escala " + escala);
-                Verdade(WidgetCabe(w), "widget sem corte nem sobreposicao com ciclo, " + nf + " escala " + escala);
-                SalvarWidgetCasa(w, dir, "widget-casa-" + nf + "-ciclo-" + (int)(escala * 100));
-                if (!string.IsNullOrEmpty(dir)) LadoALadoComBateria(w, formato, dir, "widget-casa-" + nf + "-lado-a-lado-" + (int)(escala * 100));
-            }
-            w.Escala = 1f;
-            w.Ar.Estado["t_power"] = "0";
-            Verdade(WidgetCabe(w), "widget com o ar desligado " + nf);
-            SalvarWidgetCasa(w, dir, "widget-casa-" + nf + "-ar-desligado");
-            w.Ar.Estado["t_power"] = "1";
-            w.Lavadora.Estado["machine_status"] = "3";
-            Verdade(w.MostraLavadora && WidgetCabe(w), "lavadora pausada aparece " + nf);
-            SalvarWidgetCasa(w, dir, "widget-casa-" + nf + "-pausada");
-            w.Lavadora.Estado["machine_status"] = "4"; w.Lavadora.Estado["error_code"] = "5";
-            Verdade(w.MostraLavadora && WidgetCabe(w), "lavadora com erro aparece " + nf);
-            w.Lavadora.Estado["machine_status"] = "2"; w.Lavadora.Estado["error_code"] = "0";
-            w.Lavadora.Estado["machine_status"] = "1"; w.Lavadora.Estado["Current_program_phase"] = "10";
-            foreach (float escala in new float[] { 1f, 1.25f, 1.5f })
-            {
-                w.Escala = escala;
-                Size sem = w.Medida(), bat = PintorDoWidget.Medir(formato, 1, escala, false);
-                if (formato == LayoutDoWidget.Lista) Verdade(!w.MostraLavadora && sem == bat, "lavadora concluida sai: lista do tamanho de um item, escala " + escala);
-                else Verdade(!w.MostraLavadora && sem.Height == bat.Height, "lavadora concluida sai: aneis na altura do widget de bateria, escala " + escala);
-                Verdade(WidgetCabe(w), "widget so com o ar, " + nf + " escala " + escala);
-                SalvarWidgetCasa(w, dir, "widget-casa-" + nf + "-sem-ciclo-" + (int)(escala * 100));
-            }
-            w.Escala = 1f;
-            w.Lavadora.Estado["machine_status"] = "0"; w.Lavadora.Estado["Current_program_phase"] = "0";
-            Verdade(!w.MostraLavadora, "lavadora desligada nao aparece " + nf);
-            w.Lavadora.Estado["machine_status"] = "2"; w.Lavadora.Estado["Current_program_phase"] = "8";
-            w.Lavadora.Online = false;
-            Verdade(!w.MostraLavadora, "lavadora desconectada nao aparece " + nf);
-            w.Lavadora.Online = true;
+            PintorDoWidget.Quadro q = new PintorDoWidget.Quadro();
+            q.Itens = per;
+            q.Notas = new string[per.Length];
+            q.Layout = formato;
+            q.Escuro = true; q.Nitido = true;
+            q.Escala = s;
+            q.Casa = casa;
+            return q;
         }
-        /// <summary>Botoes dentro da placa, sem encostar um no outro, e o desenho nao estoura.</summary>
-        private static bool WidgetCabe(WidgetDaCasa w)
+
+        private static Size Tamanho(Periferico[] per, ItensDaCasa casa, LayoutDoWidget formato, float s)
         {
-            Size tam = w.Medida();
+            return PintorDoWidget.Medir(QuadroDe(per, casa, formato, s));
+        }
+
+        /// <summary>Pinta o widget com a casa; os botoes ficam dentro da placa e nos itens dela, sem encostar um no outro.</summary>
+        private static bool QuadroCabe(Periferico[] per, ItensDaCasa casa, LayoutDoWidget formato, float s, string dir, string nome)
+        {
+            PintorDoWidget.Quadro q = QuadroDe(per, casa, formato, s);
+            Size tam = PintorDoWidget.Medir(q);
+            int pad = 24;
+            using (Bitmap fundo = FundoDeParede(tam.Width + 2 * pad, tam.Height + 2 * pad))
             using (Bitmap bm = new Bitmap(tam.Width, tam.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
-            using (Graphics g = Graphics.FromImage(bm)) w.Pintar(g);
+            {
+                using (Graphics g = Graphics.FromImage(bm)) { g.Clear(Color.Transparent); PintorDoWidget.Pintar(g, tam, q); }
+                if (!string.IsNullOrEmpty(dir) && nome != null)
+                {
+                    using (Graphics g = Graphics.FromImage(fundo)) g.DrawImage(bm, pad, pad);
+                    fundo.Save(System.IO.Path.Combine(dir, nome + ".png"));
+                }
+            }
             RectangleF placa = new RectangleF(0, 0, tam.Width, tam.Height);
             List<RectangleF> bt = new List<RectangleF>();
-            foreach (string n in new string[] { "_rMenos", "_rMais", "_rLiga" })
+            foreach (RectangleF r in new RectangleF[] { casa.ZonaMenos, casa.ZonaMais, casa.ZonaLiga })
             {
-                RectangleF r = (RectangleF)Field(w, n);
                 if (r.IsEmpty) continue;
                 if (!placa.Contains(r)) return false;
                 bt.Add(r);
             }
             for (int i = 0; i < bt.Count; i++)
                 for (int j = i + 1; j < bt.Count; j++) if (bt[i].IntersectsWith(bt[j])) return false;
+            // os itens da casa nao invadem os perifericos
+            RectangleF[] zp = PintorDoWidget.Zonas(formato, PintorDoWidget.ComCasa(Uns(per.Length), casa),
+                PintorDoWidget.ComCasa(formato, PintorDoWidget.Larguras(formato, per), casa), tam, s);
+            for (int i = 0; i < per.Length; i++)
+                foreach (RectangleF r in bt) if (zp[i].IntersectsWith(r)) return false;
             return true;
         }
 
@@ -906,53 +934,6 @@ namespace MhiagosControl
                 new Rectangle(0, 0, w, h), Color.FromArgb(38, 70, 110), Color.FromArgb(120, 70, 95), 35f))
                 g.FillRectangle(br, 0, 0, w, h);
             return b;
-        }
-
-        private static void SalvarWidgetCasa(WidgetDaCasa w, string dir, string nome)
-        {
-            if (string.IsNullOrEmpty(dir)) return;
-            Size tam = w.Medida();
-            int pad = 24;
-            using (Bitmap fundo = FundoDeParede(tam.Width + 2 * pad, tam.Height + 2 * pad))
-            {
-                using (Bitmap bm = new Bitmap(tam.Width, tam.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
-                {
-                    using (Graphics g = Graphics.FromImage(bm)) { g.Clear(Color.Transparent); w.Pintar(g); }
-                    using (Graphics g = Graphics.FromImage(fundo)) g.DrawImage(bm, pad, pad);
-                }
-                fundo.Save(System.IO.Path.Combine(dir, nome + ".png"));
-            }
-        }
-
-        private static void LadoALadoComBateria(WidgetDaCasa w, LayoutDoWidget formato, string dir, string nome)
-        {
-            PintorDoWidget.Quadro q = new PintorDoWidget.Quadro();
-            q.Itens = new Periferico[] {
-                new Periferico("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 72, false, EstadoPeriferico.Normal),
-                new Periferico("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 41, false, EstadoPeriferico.Normal) };
-            q.Notas = new string[] { null, null };
-            q.Layout = formato;
-            q.Escuro = Theme.IsDark; q.Nitido = true; q.Escala = w.Escala;
-            Size tb = PintorDoWidget.Medir(formato, 2, w.Escala, false);
-            Size tc = w.Medida();
-            int pad = 24;
-            using (Bitmap fundo = FundoDeParede(tb.Width + tc.Width + 3 * pad, Math.Max(tb.Height, tc.Height) + 2 * pad))
-            {
-                using (Graphics g = Graphics.FromImage(fundo))
-                {
-                    using (Bitmap a = new Bitmap(tb.Width, tb.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
-                    {
-                        using (Graphics ga = Graphics.FromImage(a)) { ga.Clear(Color.Transparent); PintorDoWidget.Pintar(ga, tb, q); }
-                        g.DrawImage(a, pad, pad);
-                    }
-                    using (Bitmap b = new Bitmap(tc.Width, tc.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
-                    {
-                        using (Graphics gb = Graphics.FromImage(b)) { gb.Clear(Color.Transparent); w.Pintar(gb); }
-                        g.DrawImage(b, 2 * pad + tb.Width, pad);
-                    }
-                }
-                fundo.Save(System.IO.Path.Combine(dir, nome + ".png"));
-            }
         }
         /// <summary>Perifericos escondidos: o filtro, a pagina Baterias e o X11 que fica.</summary>
         private static void PerifericosOcultos(string root)

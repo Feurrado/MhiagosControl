@@ -39,6 +39,8 @@ namespace MhiagosControl
         public CorDoVidro Cor = CorDoVidro.Automatica;
         public bool NaFrente = false;
         public bool Travado = false;
+        /// <summary>Os aparelhos da casa (ar e, em ciclo, a lavadora) depois dos perifericos.</summary>
+        public bool Casa = true;
 
         private static string _caminho;
 
@@ -93,6 +95,7 @@ namespace MhiagosControl
             sb.AppendLine("cor=" + (Cor == CorDoVidro.Escura ? "escura" : Cor == CorDoVidro.Clara ? "clara" : "auto"));
             sb.AppendLine("frente=" + (NaFrente ? "1" : "0"));
             sb.AppendLine("travado=" + (Travado ? "1" : "0"));
+            sb.AppendLine("casa=" + (Casa ? "1" : "0"));
             return sb.ToString();
         }
 
@@ -122,6 +125,7 @@ namespace MhiagosControl
                     case "cor": c.Cor = v == "escura" ? CorDoVidro.Escura : v == "clara" ? CorDoVidro.Clara : CorDoVidro.Automatica; break;
                     case "frente": c.NaFrente = v == "1"; break;
                     case "travado": c.Travado = v == "1"; break;
+                    case "casa": c.Casa = v == "1"; break;
                 }
             }
             if (!c.TemPosicao) { c.X = SemPosicao; c.Y = SemPosicao; }
@@ -141,6 +145,12 @@ namespace MhiagosControl
     internal static class PintorDoWidget
     {
         internal const float RaioDoVidro = 8f;
+        /// <summary>
+        /// O widget desenhado um pouco maior que as medidas abaixo (pedido do
+        /// Thiago ao juntar a casa): vale para tudo, aneis, fontes, bolhas e
+        /// margens, multiplicado junto com a escala da tela.
+        /// </summary>
+        internal const float Ampliacao = 1.15f;
         // internas: o widget da casa usa as mesmas medidas
         internal const float Margem = 16f;
 
@@ -398,6 +408,37 @@ namespace MhiagosControl
             /// lista - ver PresencaAnimada. Sem valor, todos estao inteiros.
             /// </summary>
             public float[] Presenca = new float[0];
+            /// <summary>Os aparelhos da casa, depois dos perifericos; null sem a casa.</summary>
+            public ItensDaCasa Casa;
+        }
+
+        /// <summary>As presencas dos perifericos com as da casa (sempre inteiras) no fim.</summary>
+        internal static float[] ComCasa(float[] pres, ItensDaCasa casa)
+        {
+            int n = casa != null ? casa.Itens().Length : 0;
+            float[] r = new float[pres.Length + n];
+            Array.Copy(pres, r, pres.Length);
+            for (int i = pres.Length; i < r.Length; i++) r[i] = 1f;
+            return r;
+        }
+
+        /// <summary>As larguras dos perifericos com as dos itens da casa no fim.</summary>
+        internal static float[] ComCasa(LayoutDoWidget layout, float[] larg, ItensDaCasa casa)
+        {
+            float[] c = casa != null ? casa.Larguras(layout) : new float[0];
+            float[] r = new float[larg.Length + c.Length];
+            Array.Copy(larg, r, larg.Length);
+            Array.Copy(c, 0, r, larg.Length, c.Length);
+            return r;
+        }
+
+        /// <summary>O tamanho do widget com os perifericos (e quem entra e sai) e a casa.</summary>
+        internal static Size Medir(Quadro q)
+        {
+            float[] pres = new float[q.Itens.Length];
+            for (int i = 0; i < pres.Length; i++) pres[i] = PresencaDe(q, i);
+            return Medir(q.Layout, ComCasa(pres, q.Casa), ComCasa(q.Layout, Larguras(q.Layout, q.Itens), q.Casa), q.Escala,
+                         FracaoDeNome(q.Itens, pres));
         }
 
         internal static float PresencaDe(Quadro q, int i)
@@ -460,9 +501,11 @@ namespace MhiagosControl
             float s = q.Escala;
             Vidro(g, new RectangleF(0, 0, tamanho.Width, tamanho.Height), s, q.Escuro, q.Fosco, q.Nitido, q.Sobre);
 
+            ItensDaCasa.Tipo[] casa = q.Casa != null ? q.Casa.Itens() : new ItensDaCasa.Tipo[0];
+            if (q.Casa != null) q.Casa.ComecarQuadro();
             using (Fontes f = new Fontes(s))
             {
-                if (q.Itens.Length == 0)
+                if (q.Itens.Length == 0 && casa.Length == 0)
                 {
                     Texto(g, T.WidgetNoDevices, f.Nota, q.Escuro ? Color.White : Color.FromArgb(255, 22, 24, 30), q.Escuro,
                           new RectangleF(0, 0, tamanho.Width, tamanho.Height), StringAlignment.Center, StringAlignment.Center);
@@ -470,7 +513,9 @@ namespace MhiagosControl
                 }
                 float[] pres = new float[q.Itens.Length];
                 for (int i = 0; i < pres.Length; i++) pres[i] = PresencaDe(q, i);
-                RectangleF[] zonas = Zonas(q.Layout, pres, Larguras(q.Layout, q.Itens), tamanho, s);
+                RectangleF[] zonas = Zonas(q.Layout, ComCasa(pres, q.Casa), ComCasa(q.Layout, Larguras(q.Layout, q.Itens), q.Casa), tamanho, s);
+                for (int k = 0; k < casa.Length; k++)
+                    q.Casa.Pintar(g, casa[k], zonas[q.Itens.Length + k], q.Layout, s, q.Escuro, f);
                 for (int i = 0; i < q.Itens.Length; i++)
                 {
                     string nota = i < q.Notas.Length ? q.Notas[i] : null;
@@ -910,6 +955,22 @@ namespace MhiagosControl
         /// <summary>O lugar na pilha de janelas (fundo, ou na frente com a opcao).</summary>
         private readonly Camada _camada;
 
+        /// <summary>O ar e a lavadora em ciclo, depois dos perifericos (opcao "Mostrar a casa no widget").</summary>
+        private readonly ItensDaCasa _casa = new ItensDaCasa();
+        private readonly EventHandler _casaMudou;
+        /// <summary>O clique comecou num botao da casa: nao arrasta.</summary>
+        private bool _noBotaoDaCasa;
+
+        internal ItensDaCasa Casa { get { return _casa; } }
+
+        /// <summary>A janela esta de fato acima das outras (WS_EX_TOPMOST)? Para os testes.</summary>
+        internal bool NaFrenteAgora
+        {
+            get { return IsHandleCreated && (GetWindowLong(Handle, -20) & WS_EX_TOPMOST) != 0; }
+        }
+
+        [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int indice);
+
         private readonly AvisosDoSistema _preferencias;
 
         /// <summary>O quadro desenhado, reaproveitado enquanto o tamanho nao muda.</summary>
@@ -941,6 +1002,18 @@ namespace MhiagosControl
             _entradas.Quadro += delegate { Reconstruir(); };
             _entradas.Removido += AoPassarPresenca;
             _camada = new Camada(this, delegate { return _cfg.NaFrente; });
+            _casa.Ativa = _cfg.Casa;
+            _casa.Redesenhar = delegate { Renderizar(); };
+            _casaMudou = delegate
+            {
+                try
+                {
+                    if (IsDisposed || !IsHandleCreated) return;
+                    BeginInvoke(new MethodInvoker(delegate { _casa.Puxar(); Renderizar(); }));
+                }
+                catch (InvalidOperationException) { }
+            };
+            ServicoCasa.Mudou += _casaMudou;
 
             _preferencias = new AvisosDoSistema(this);
         }
@@ -962,7 +1035,7 @@ namespace MhiagosControl
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            using (Graphics g = Graphics.FromHwnd(Handle)) _escala = Math.Max(1f, g.DpiX / 96f);
+            using (Graphics g = Graphics.FromHwnd(Handle)) _escala = Math.Max(1f, g.DpiX / 96f) * PintorDoWidget.Ampliacao;
             ArredondarCantos();
             AplicarDesfoque();
         }
@@ -986,6 +1059,8 @@ namespace MhiagosControl
                 _animacao.Stop(); _animacao.Dispose();
                 _entradas.Dispose();
                 _camada.Dispose();
+                ServicoCasa.Mudou -= _casaMudou;
+                _casa.Dispose();
                 if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
                 _dica.Dispose();
                 if (_menu != null) { _menu.Dispose(); _menu = null; }
@@ -1079,7 +1154,8 @@ namespace MhiagosControl
         /// <summary>O tamanho do widget agora, com quem entra e sai e os nomes por inteiro.</summary>
         private Size Medida()
         {
-            return PintorDoWidget.Medir(_cfg.Layout, _presenca, PintorDoWidget.Larguras(_cfg.Layout, _itens), _escala,
+            return PintorDoWidget.Medir(_cfg.Layout, PintorDoWidget.ComCasa(_presenca, _casa),
+                                        PintorDoWidget.ComCasa(_cfg.Layout, PintorDoWidget.Larguras(_cfg.Layout, _itens), _casa), _escala,
                                         PintorDoWidget.FracaoDeNome(_itens, _presenca));
         }
 
@@ -1137,6 +1213,7 @@ namespace MhiagosControl
                 q.Nitido = _cfg.Nitido;
                 q.Sobre = _sobre;
                 q.Escala = _escala;
+                q.Casa = _casa;
                 q.Fase = Ui.Animacoes ? (Environment.TickCount & int.MaxValue) % CicloMs / (float)CicloMs : 0f;
                 bool transicao = false;
                 q.Carga = new float[_itens.Length];
@@ -1409,6 +1486,8 @@ namespace MhiagosControl
             _arrastando = false;
             _inicioDoArrasto = Cursor.Position;
             _origemDoArrasto = Location;
+            int zc = _casa.Zona(e.Location);
+            _noBotaoDaCasa = zc >= 0 && zc < 3;
             Capture = true;
         }
 
@@ -1416,8 +1495,9 @@ namespace MhiagosControl
         {
             base.OnMouseMove(e);
             if (!_sobre) { _sobre = true; Renderizar(); }
+            if (!_pressionado && _casa.Sobre(_casa.Zona(e.Location))) Renderizar();
 
-            if (_pressionado && !_cfg.Travado)
+            if (_pressionado && !_cfg.Travado && !_noBotaoDaCasa)
             {
                 Point agora = Cursor.Position;
                 int dx = agora.X - _inicioDoArrasto.X, dy = agora.Y - _inicioDoArrasto.Y;
@@ -1471,6 +1551,9 @@ namespace MhiagosControl
                 GuardarPosicao();
                 return;
             }
+            // os botoes da casa mandam o comando; o resto de um item da casa abre a pagina Casa
+            int zc = _casa.Zona(e.Location);
+            if (zc >= 0) { _casa.Clicar(zc); return; }
             if (BateriasPedidas != null) BateriasPedidas();
         }
 
@@ -1479,6 +1562,7 @@ namespace MhiagosControl
             base.OnMouseLeave(e);
             if (_arrastando) return;
             _sobre = false;
+            _casa.Sobre(-1);
             _zonaDaDica = -1;
             _dica.SetToolTip(this, null);
             Renderizar();
@@ -1487,6 +1571,15 @@ namespace MhiagosControl
         /// <summary>Nome, carga e a previsao do aparelho sob o ponteiro.</summary>
         private void AtualizarDica(Point p)
         {
+            int zc = _casa.Zona(p);
+            if (zc >= 0)
+            {
+                // zonas da casa: 1000 + a zona dela, para nao cruzar com os perifericos
+                if (1000 + zc == _zonaDaDica) return;
+                _zonaDaDica = 1000 + zc;
+                _dica.SetToolTip(this, _casa.Dica(zc));
+                return;
+            }
             RectangleF[] zonas = PintorDoWidget.Zonas(_cfg.Layout, _presenca, PintorDoWidget.Larguras(_cfg.Layout, _itens), Medida(), _escala);
             int zona = -1;
             for (int i = 0; i < zonas.Length; i++) if (zonas[i].Contains(p)) { zona = i; break; }
@@ -1529,6 +1622,9 @@ namespace MhiagosControl
             MenuItem trava = new MenuItem(T.WidgetLock, delegate { _cfg.Travado = !_cfg.Travado; _cfg.Salvar(); });
             trava.Checked = _cfg.Travado;
             menu.MenuItems.Add(trava);
+            MenuItem casa = new MenuItem(T.CasaWidgetOpcao, delegate { TrocarCasa(!_cfg.Casa); });
+            casa.Checked = _cfg.Casa;
+            menu.MenuItems.Add(casa);
 
             menu.MenuItems.Add("-");
             menu.MenuItems.Add(new MenuItem(T.WidgetHide, delegate { if (OcultarPedido != null) OcultarPedido(); }));
@@ -1581,6 +1677,19 @@ namespace MhiagosControl
             Renderizar();
         }
 
+        /// <summary>Liga e desliga a casa no widget; a pagina Baterias e os Ajustes da Casa acompanham.</summary>
+        internal void TrocarCasa(bool casa)
+        {
+            _cfg.Casa = casa;
+            _cfg.Salvar();
+            _casa.Ativa = casa;
+            _casa.Puxar();
+            _zonaDaDica = -1;
+            Renderizar();
+            ManterNaTela();
+            CasaNoWidget.Avisar();
+        }
+
         private void TrocarFrente(bool frente)
         {
             _cfg.NaFrente = frente;
@@ -1596,6 +1705,8 @@ namespace MhiagosControl
         {
             if (IsDisposed || !IsHandleCreated) return;
             _zonaDaDica = -1;
+            _casa.Ativa = _cfg.Casa;
+            _casa.Puxar();
             AplicarDesfoque();
             AplicarFrente();
             Renderizar();

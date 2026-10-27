@@ -1802,7 +1802,7 @@ namespace MhiagosControl
 
         private IControleDoWidget _widget;
         private Card _cardWidget;
-        private Toggle _tgWidget, _tgWidgetFrente, _tgWidgetTrava;
+        private Toggle _tgWidget, _tgWidgetFrente, _tgWidgetTrava, _tgWidgetCasa;
         private Segmented _sgWidgetLayout, _sgWidgetVidro, _sgWidgetCor;
         /// <summary>Preenchendo os controles com a configuracao: as mudancas nao sao do usuario.</summary>
         private bool _sincronizandoWidget;
@@ -1821,8 +1821,13 @@ namespace MhiagosControl
 
             _tgWidget = new Toggle();
             _tgWidget.Label = T.WidgetShow;
-            _tgWidget.SetBounds(Ui.S(16), Ui.S(50), Ui.S(480), Ui.S(26));
+            _tgWidget.SetBounds(Ui.S(16), Ui.S(50), Ui.S(300), Ui.S(26));
             c.Controls.Add(_tgWidget);
+
+            _tgWidgetCasa = new Toggle();
+            _tgWidgetCasa.Label = T.CasaWidgetOpcao;
+            _tgWidgetCasa.SetBounds(Ui.S(330), Ui.S(50), Ui.S(240), Ui.S(26));
+            c.Controls.Add(_tgWidgetCasa);
 
             c.Controls.Add(MakeLabel(T.WidgetLayout, 16, 96, Ui.FontMed));
             _sgWidgetLayout = new Segmented();
@@ -1871,6 +1876,7 @@ namespace MhiagosControl
                 int livre = c.Width - Ui.S(16);
                 _sgWidgetVidro.Width = Math.Max(Ui.S(180), Math.Min(Ui.S(300), livre - Ui.S(260)));
                 _tgWidgetTrava.Width = Math.Max(Ui.S(140), Math.Min(Ui.S(240), livre - Ui.S(330)));
+                _tgWidgetCasa.Width = _tgWidgetTrava.Width;
                 nota.Width = Math.Max(Ui.S(120), Math.Min(Ui.S(480), livre - Ui.S(250)));
             };
 
@@ -1903,6 +1909,10 @@ namespace MhiagosControl
             };
             _tgWidgetFrente.CheckedChanged += delegate { MudarWidget(delegate(ConfigDoWidget w) { w.NaFrente = _tgWidgetFrente.Checked; }); };
             _tgWidgetTrava.CheckedChanged += delegate { MudarWidget(delegate(ConfigDoWidget w) { w.Travado = _tgWidgetTrava.Checked; }); };
+            _tgWidgetCasa.CheckedChanged += delegate { if (!_sincronizandoWidget && _tgWidgetCasa.Checked != CasaNoWidget.Ativo) CasaNoWidget.Definir(_tgWidgetCasa.Checked); };
+            EventHandler casaMudou = delegate { if (!c.IsDisposed) SincronizarWidget(); };
+            CasaNoWidget.Mudou += casaMudou;
+            c.Disposed += delegate { CasaNoWidget.Mudou -= casaMudou; };
             return c;
         }
 
@@ -1930,6 +1940,7 @@ namespace MhiagosControl
                 _sgWidgetCor.SelectedIndex = w.Cor == CorDoVidro.Escura ? 1 : w.Cor == CorDoVidro.Clara ? 2 : 0;
                 _tgWidgetFrente.Checked = w.NaFrente;
                 _tgWidgetTrava.Checked = w.Travado;
+                _tgWidgetCasa.Checked = w.Casa;
             }
             finally { _sincronizandoWidget = false; }
         }

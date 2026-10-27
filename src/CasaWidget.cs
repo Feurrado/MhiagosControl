@@ -2,185 +2,117 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
-using System.Drawing.Text;
 using System.Globalization;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 
 namespace MhiagosControl
 {
-    /// <summary>Configuracao do widget da casa, em widget-casa.ini (separado do de bateria).</summary>
-    internal sealed class ConfigDoWidgetCasa
-    {
-        public const int SemPosicao = int.MinValue;
-        /// <summary>Como o de bateria: fica na area de trabalho; na frente so se pedir.</summary>
-        public bool Ativo, NaFrente, Travado;
-        public int X = SemPosicao, Y = SemPosicao;
-
-        internal static string Caminho
-        {
-            get { return _caminho ?? Path.Combine(Paths.DataDir, "widget-casa.ini"); }
-            set { _caminho = value; }
-        }
-        private static string _caminho;
-
-        public bool TemPosicao { get { return X != SemPosicao && Y != SemPosicao; } }
-
-        public static ConfigDoWidgetCasa Carregar()
-        {
-            ConfigDoWidgetCasa c = new ConfigDoWidgetCasa();
-            try
-            {
-                if (!File.Exists(Caminho)) return c;
-                foreach (string linha in File.ReadAllLines(Caminho, Encoding.UTF8))
-                {
-                    int eq = linha.IndexOf('=');
-                    if (eq <= 0) continue;
-                    string k = linha.Substring(0, eq).Trim().ToLowerInvariant(), v = linha.Substring(eq + 1).Trim();
-                    int i;
-                    bool n = int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out i);
-                    switch (k)
-                    {
-                        case "ativo": c.Ativo = v == "1"; break;
-                        // "nafrente" era gravado ligado por padrao e prendia o widget na frente: ignorado
-                        case "frente": c.NaFrente = v == "1"; break;
-                        case "travado": c.Travado = v == "1"; break;
-                        case "x": if (n) c.X = i; break;
-                        case "y": if (n) c.Y = i; break;
-                    }
-                }
-            }
-            catch (Exception ex) { Log.Error("widget da casa: ler config", ex); }
-            return c;
-        }
-
-        public void Salvar()
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine("ativo=" + (Ativo ? "1" : "0"));
-            sb.AppendLine("frente=" + (NaFrente ? "1" : "0"));
-            sb.AppendLine("travado=" + (Travado ? "1" : "0"));
-            if (TemPosicao)
-            {
-                sb.AppendLine("x=" + X.ToString(CultureInfo.InvariantCulture));
-                sb.AppendLine("y=" + Y.ToString(CultureInfo.InvariantCulture));
-            }
-            try { GravacaoAtomica.Escrever(Caminho, sb.ToString(), new UTF8Encoding(false)); }
-            catch (Exception ex) { Log.Error("widget da casa: gravar config", ex); }
-        }
-    }
-
     /// <summary>
-    /// Liga e desliga o widget da casa de qualquer lugar (bandeja, aba Ajustes).
-    /// Tudo na thread da interface.
+    /// "Mostrar a casa no widget": a opcao mora no widget.ini do widget de
+    /// bateria (ConfigDoWidget.Casa); a bandeja entrega aqui o controle dele
+    /// para a aba Ajustes da Casa ligar e desligar sem conhecer a bandeja.
     /// </summary>
-    internal static class GerenteDoWidgetCasa
+    internal static class CasaNoWidget
     {
-        private static WidgetDaCasa _widget;
-        private static ConfigDoWidgetCasa _cfg;
+        public static IControleDoWidget Controle;
 
-        /// <summary>Mudou de ligado para desligado ou vice-versa (a bandeja marca o item do menu).</summary>
+        /// <summary>Mudou de ligado para desligado (Ajustes e pagina Baterias acompanham).</summary>
         public static event EventHandler Mudou;
 
-        public static ConfigDoWidgetCasa Config
-        {
-            get { return _cfg ?? (_cfg = ConfigDoWidgetCasa.Carregar()); }
-        }
-
-        public static bool Ativo { get { return Config.Ativo; } }
+        public static bool Ativo { get { return Controle != null && Controle.ConfigDoWidget.Casa; } }
 
         public static void Definir(bool ativo)
         {
-            Config.Ativo = ativo;
-            Config.Salvar();
-            if (ativo) Mostrar(); else Esconder();
-            if (Mudou != null) Mudou(null, EventArgs.Empty);
+            if (Controle == null) return;
+            Controle.ConfigDoWidget.Casa = ativo;
+            // pedir a casa no widget com ele desligado liga o widget
+            if (ativo && !Controle.ConfigDoWidget.Ativo) Controle.LigarWidget(true);
+            Controle.WidgetMudou();
+            Avisar();
         }
 
-        /// <summary>Abre se estiver ativo na config (no inicio do app).</summary>
-        public static void Restaurar() { if (Config.Ativo) Mostrar(); }
+        public static void Avisar() { if (Mudou != null) Mudou(null, EventArgs.Empty); }
 
-        private static void Mostrar()
-        {
-            if (_widget != null && !_widget.IsDisposed) return;
-            try
-            {
-                _widget = new WidgetDaCasa(Config);
-                _widget.FormClosed += delegate { _widget = null; };
-                _widget.Show();
-            }
-            catch (Exception ex) { Log.Error("widget da casa: abrir", ex); }
-        }
-
-        private static void Esconder()
-        {
-            if (_widget == null || _widget.IsDisposed) return;
-            _widget.Close();
-            _widget = null;
-        }
-
-        /// <summary>Pedido do widget para abrir a pagina Casa; a bandeja liga.</summary>
+        /// <summary>Clique na casa dentro do widget: a bandeja abre a pagina Casa.</summary>
         public static Action AbrirCasa;
 
-        internal static WidgetDaCasa Atual { get { return _widget; } }
+        // ---------------- migracao do widget separado ----------------
+
+        /// <summary>O widget-casa.ini do widget separado (2.29.0 de teste); os testes apontam para uma pasta temporaria.</summary>
+        internal static string CaminhoAntigo
+        {
+            get { return _caminhoAntigo ?? Path.Combine(Paths.DataDir, "widget-casa.ini"); }
+            set { _caminhoAntigo = value; }
+        }
+        private static string _caminhoAntigo;
+
+        /// <summary>
+        /// O widget da casa virou parte do de bateria. Quem tinha o separado
+        /// ligado ganha o de bateria ligado com a casa; a posicao dele nao vem
+        /// (o de bateria ja tem a sua). O arquivo vira .migrado: nada se perde
+        /// e a migracao nao se repete. Devolve true se mudou a config.
+        /// </summary>
+        internal static bool Migrar(ConfigDoWidget cfg)
+        {
+            string arq = CaminhoAntigo;
+            try
+            {
+                if (!File.Exists(arq)) return false;
+                bool ativo = false;
+                foreach (string linha in File.ReadAllLines(arq, Encoding.UTF8))
+                    if (linha.Trim().ToLowerInvariant() == "ativo=1") ativo = true;
+                string destino = arq + ".migrado";
+                if (File.Exists(destino)) File.Delete(destino);
+                File.Move(arq, destino);
+                Log.Write("widget da casa separado migrado para o widget de bateria (estava " + (ativo ? "ligado" : "desligado") + ")");
+                if (!ativo) return false;
+                cfg.Ativo = true;
+                cfg.Casa = true;
+                return true;
+            }
+            catch (Exception ex) { Log.Error("migrar o widget da casa", ex); return false; }
+        }
     }
 
     /// <summary>
-    /// Widget da casa na area de trabalho, da mesma familia do widget de
-    /// bateria: a mesma placa de vidro, as mesmas medidas (PintorDoWidget),
-    /// as mesmas fontes, bolhas e aneis, no formato escolhido para o de
-    /// bateria (aneis ou lista) e com a cor e o desfoque dele (widget.ini).
-    /// O ar e um item; a lavadora, so com ciclo ativo, e mais um.
-    ///
-    /// Fica na area de trabalho como o de bateria (WidgetDeBateria.Camada):
-    /// abaixo das janelas, sem roubar o foco; na frente so com a opcao.
+    /// Os aparelhos da casa como itens do widget de bateria, depois dos
+    /// perifericos: o ar sempre (anel com o alvo, - e + dos lados e o
+    /// liga/desliga no lugar do selo; na lista, uma linha com bolhas pequenas)
+    /// e a lavadora so com ciclo ativo (anel ou capsula do progresso).
+    /// Desenha com as pecas e medidas do PintorDoWidget; quem guarda a janela,
+    /// o lugar e o menu e o WidgetDeBateria.
     /// </summary>
-    internal sealed class WidgetDaCasa : Form
+    internal sealed class ItensDaCasa : IDisposable
     {
-        /// <summary>Bolhas de - e + (e do liga/desliga na lista): do tamanho do selo de carga do widget de bateria.</summary>
+        internal enum Tipo { Ar, Lavadora }
+
+        /// <summary>Bolhas de - e + (e do liga/desliga na lista): o tamanho do selo de carga, um pouco maior para o dedo.</summary>
         private const float Mini = 22f, VaoMini = 6f;
 
-        private readonly ConfigDoWidgetCasa _cfg;
-        private ConfigDoWidget _vidro;
-        private readonly EventHandler _mudou;
-        private readonly WidgetDeBateria.Camada _camada;
         private Aparelho _ar, _lav;
-        private RectangleF _rMenos, _rMais, _rLiga;
-        private int _hover = -1;
         private int _alvoPendente = -1;
-        private readonly Timer _espera, _relogio;
-        private readonly ToolTip _dica = new ToolTip();
-        private ContextMenu _menu;
-        private Bitmap _quadro;
-        private float _escala = 1f;
-        private bool _sobre, _pressionado, _arrastando;
-        private Point _inicioDoArrasto, _origemDoArrasto;
+        private int _hover = -1;
+        private readonly Timer _espera = new Timer();
+        private RectangleF _rMenos, _rMais, _rLiga;
+        private readonly List<RectangleF> _zonas = new List<RectangleF>();
+
+        /// <summary>Desligado pela opcao "Mostrar a casa no widget": nenhum item.</summary>
+        public bool Ativa = true;
+
+        /// <summary>O widget redesenha (mudou o alvo pendente, mandou um comando).</summary>
+        public Action Redesenhar;
 
         internal Aparelho Ar { get { return _ar; } }
         internal Aparelho Lavadora { get { return _lav; } }
         internal Dictionary<string, string> UltimoComando;
+        internal RectangleF ZonaMenos { get { return _rMenos; } }
+        internal RectangleF ZonaMais { get { return _rMais; } }
+        internal RectangleF ZonaLiga { get { return _rLiga; } }
 
-        /// <summary>Escala da tela; os testes trocam para conferir 125% e 150% sem abrir janela.</summary>
-        internal float Escala { get { return _escala; } set { _escala = Math.Max(1f, value); } }
-
-        /// <summary>O formato do widget de bateria (aneis ou lista); os testes trocam.</summary>
-        internal LayoutDoWidget Formato { get { return _vidro.Layout; } set { _vidro.Layout = value; } }
-
-        public WidgetDaCasa(ConfigDoWidgetCasa cfg)
+        public ItensDaCasa()
         {
-            _cfg = cfg;
-            _vidro = ConfigDoWidget.Carregar();
-            FormBorderStyle = FormBorderStyle.None;
-            ShowInTaskbar = false;
-            StartPosition = FormStartPosition.Manual;
-            ControlBox = false; MinimizeBox = false; MaximizeBox = false;
-            Text = T.CasaWidgetTitulo;
-            _camada = new WidgetDeBateria.Camada(this, delegate { return _cfg.NaFrente; });
-
-            _espera = new Timer();
             _espera.Interval = 700;
             _espera.Tick += delegate
             {
@@ -190,110 +122,21 @@ namespace MhiagosControl
                 _alvoPendente = -1;
                 Mandar("t_temp", v);
             };
-            // o relogio refaz o "termina as" e acompanha o vidro e o formato do widget de bateria
-            _relogio = new Timer();
-            _relogio.Interval = 30000;
-            _relogio.Tick += delegate
-            {
-                ConfigDoWidget v = ConfigDoWidget.Carregar();
-                bool desfoque = v.Nitido != _vidro.Nitido || v.Fosco != _vidro.Fosco;
-                _vidro = v;
-                if (desfoque && IsHandleCreated) WidgetDeBateria.AplicarDesfoque(Handle, _vidro);
-                Renderizar();
-            };
-            _relogio.Start();
-
-            _mudou = delegate { NaInterface(Puxar); };
-            ServicoCasa.Mudou += _mudou;
             Puxar();
         }
 
-        protected override CreateParams CreateParams
-        {
-            get
-            {
-                CreateParams p = base.CreateParams;
-                p.ExStyle |= 0x80000 | 0x80 | 0x8000000;   // WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
-                if (_cfg != null && _cfg.NaFrente) p.ExStyle |= 0x8;   // WS_EX_TOPMOST, so com a opcao
-                return p;
-            }
-        }
+        public void Dispose() { _espera.Dispose(); }
 
-        protected override bool ShowWithoutActivation { get { return true; } }
-
-        protected override void WndProc(ref Message m)
-        {
-            if (_camada != null && _camada.Mensagem(ref m)) return;
-            base.WndProc(ref m);
-        }
-
-        protected override void OnHandleCreated(EventArgs e)
-        {
-            base.OnHandleCreated(e);
-            using (Graphics g = Graphics.FromHwnd(Handle)) _escala = Math.Max(1f, g.DpiX / 96f);
-            WidgetDeBateria.ArredondarCantos(Handle);
-            WidgetDeBateria.AplicarDesfoque(Handle, _vidro);
-        }
-
-        protected override void OnLoad(EventArgs e)
-        {
-            base.OnLoad(e);
-            Posicionar();
-            _camada.Ligar();
-        }
-
-        /// <summary>A janela esta de fato acima das outras (WS_EX_TOPMOST)? Para os testes.</summary>
-        internal bool NaFrenteAgora
-        {
-            get { return IsHandleCreated && (GetWindowLong(Handle, -20) & 0x8) != 0; }
-        }
-
-        /// <summary>Liga ou desliga o "sempre na frente" e grava em widget-casa.ini.</summary>
-        internal void DefinirNaFrente(bool frente)
-        {
-            _cfg.NaFrente = frente;
-            _cfg.Salvar();
-            _camada.AplicarFrente();
-        }
-
-        private void NaInterface(MethodInvoker m)
-        {
-            try
-            {
-                if (IsDisposed) return;
-                if (!IsHandleCreated) { m(); return; }
-                if (InvokeRequired) BeginInvoke(m); else m();
-            }
-            catch (InvalidOperationException) { }
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                ServicoCasa.Mudou -= _mudou;
-                _espera.Dispose();
-                _relogio.Dispose();
-                _dica.Dispose();
-                _camada.Dispose();
-                if (_menu != null) { _menu.Dispose(); _menu = null; }
-                if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
-            }
-            base.Dispose(disposing);
-        }
-
-        // ---------------- dados ----------------
-
-        internal void Puxar()
+        /// <summary>Le o ar e a lavadora do servico (na thread da interface).</summary>
+        public void Puxar()
         {
             _ar = null; _lav = null;
-            if (ServicoCasa.Logado)
-                foreach (Aparelho a in ServicoCasa.Aparelhos)
-                {
-                    if (_ar == null && a.ArCondicionado) _ar = a;
-                    if (_lav == null && a.Lavadora) _lav = a;
-                }
-            Renderizar();
+            if (!ServicoCasa.Logado) return;
+            foreach (Aparelho a in ServicoCasa.Aparelhos)
+            {
+                if (_ar == null && a.ArCondicionado) _ar = a;
+                if (_lav == null && a.Lavadora) _lav = a;
+            }
         }
 
         /// <summary>
@@ -308,35 +151,39 @@ namespace MhiagosControl
             return c.Online && (c.Rodando || c.Erro);
         }
 
-        internal bool MostraLavadora { get { return CicloAtivo(_lav); } }
-
-        /// <summary>Coluna do ar nos aneis: o anel com uma bolha de - e de + de cada lado.</summary>
-        private static float ColunaDoAr { get { return PintorDoWidget.Anel + 2f * (Mini + 4f); } }
-
-        /// <summary>
-        /// Tamanho do widget, nas medidas do de bateria: cada aparelho e um item
-        /// (uma linha da lista ou uma coluna de anel). Sem nada, o mesmo vazio dele.
-        /// </summary>
-        internal static Size Medir(LayoutDoWidget formato, bool ar, bool lavadora, float escala)
+        /// <summary>Os itens que o widget mostra agora, na ordem.</summary>
+        public Tipo[] Itens()
         {
-            float m = PintorDoWidget.Margem, w, h;
-            int n = (ar ? 1 : 0) + (lavadora ? 1 : 0);
-            if (n == 0)
-                return PintorDoWidget.Medir(formato, 0, escala, false);
-            if (formato == LayoutDoWidget.Lista)
+            List<Tipo> l = new List<Tipo>();
+            if (Ativa && ServicoCasa.Logado)
             {
-                w = PintorDoWidget.LarguraDaLista;
-                h = 2 * m + n * PintorDoWidget.Linha + (n - 1) * PintorDoWidget.VaoDeLinha;
+                if (_ar != null) l.Add(Tipo.Ar);
+                if (CicloAtivo(_lav)) l.Add(Tipo.Lavadora);
             }
-            else
-            {
-                w = 2 * m + (ar ? ColunaDoAr : 0f) + (lavadora ? PintorDoWidget.Coluna : 0f) + (n - 1) * PintorDoWidget.VaoDeColuna;
-                h = 2 * m + PintorDoWidget.Anel + PintorDoWidget.VaoDoValor + PintorDoWidget.LinhaDoValor;
-            }
-            return new Size((int)Math.Ceiling(w * escala), (int)Math.Ceiling(h * escala));
+            return l.ToArray();
         }
 
-        internal Size Medida() { return Medir(_vidro.Layout, _ar != null, MostraLavadora, _escala); }
+        /// <summary>Coluna do ar nos aneis: o anel com uma bolha de - e de + de cada lado.</summary>
+        internal static float ColunaDoAr { get { return PintorDoWidget.Anel + 2f * (Mini + 4f); } }
+
+        /// <summary>Largura de cada item a 100%, como PintorDoWidget.Larguras faz com os perifericos.</summary>
+        public float[] Larguras(LayoutDoWidget layout)
+        {
+            Tipo[] t = Itens();
+            float[] l = new float[t.Length];
+            for (int i = 0; i < l.Length; i++)
+                l[i] = layout == LayoutDoWidget.Lista ? PintorDoWidget.LarguraDaLista
+                     : t[i] == Tipo.Ar ? ColunaDoAr : PintorDoWidget.Coluna;
+            return l;
+        }
+
+        // ---------------- comandos ----------------
+
+        private void FaixaDoAlvo(out int min, out int max)
+        {
+            CenaCasa.FaixaC(_ar, out min, out max);
+            if (_ar.Int("t_temp_type", 0) == 1) { min = (int)Math.Round(min * 9.0 / 5 + 32); max = (int)Math.Round(max * 9.0 / 5 + 32); }
+        }
 
         private void Mudar(int passo)
         {
@@ -346,13 +193,7 @@ namespace MhiagosControl
             int atual = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 24);
             _alvoPendente = Math.Max(min, Math.Min(max, atual + passo));
             _espera.Stop(); _espera.Start();
-            Renderizar();
-        }
-
-        private void FaixaDoAlvo(out int min, out int max)
-        {
-            CenaCasa.FaixaC(_ar, out min, out max);
-            if (_ar.Int("t_temp_type", 0) == 1) { min = (int)Math.Round(min * 9.0 / 5 + 32); max = (int)Math.Round(max * 9.0 / 5 + 32); }
+            if (Redesenhar != null) Redesenhar();
         }
 
         private void Mandar(string chave, int valor)
@@ -363,222 +204,79 @@ namespace MhiagosControl
             _ar.Estado[chave] = p[chave];
             if (ServicoCasa.RetornoPuid == _ar.Puid) ServicoCasa.CancelarRetorno();
             UltimoComando = p;
-            Renderizar();
+            if (Redesenhar != null) Redesenhar();
             ServicoCasa.Enviar(_ar.Puid, p, null);
-        }
-
-        // ---------------- janela ----------------
-
-        private void Posicionar()
-        {
-            Size tam = Medida();
-            Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            int m = (int)(48 * _escala);
-            Point p = WidgetDeBateria.DoCanto(new Point(area.Right - m, area.Top + m), tam, area);
-            if (_cfg.TemPosicao)
-            {
-                Rectangle a2 = Screen.FromPoint(new Point(_cfg.X - 1, _cfg.Y - 1)).WorkingArea;
-                Point q = WidgetDeBateria.DoCanto(new Point(_cfg.X, _cfg.Y), tam, a2);
-                if (WidgetDeBateria.Visivel(new Rectangle(q, tam))) p = q;
-            }
-            Bounds = new Rectangle(p, tam);
-            Renderizar();
-        }
-
-        internal void Renderizar()
-        {
-            if (IsDisposed || !IsHandleCreated) return;
-            try
-            {
-                Size tam = Medida();
-                if (tam != Size)
-                {
-                    // cresce e encolhe pelo canto mais perto da borda: a lavadora
-                    // entra e sai sem o widget pular de lugar
-                    Rectangle antes = Bounds;
-                    Rectangle area = Screen.FromRectangle(antes).WorkingArea;
-                    Point onde = WidgetDeBateria.AncorarCrescimento(antes, tam, area);
-                    onde = new Point(Math.Max(area.Left, Math.Min(onde.X, area.Right - tam.Width)),
-                                     Math.Max(area.Top, Math.Min(onde.Y, area.Bottom - tam.Height)));
-                    Bounds = new Rectangle(onde, tam);
-                    WidgetDeBateria.AplicarRegiao(Handle, tam, _escala);
-                }
-                if (_quadro == null || _quadro.Size != tam)
-                {
-                    if (_quadro != null) _quadro.Dispose();
-                    _quadro = new Bitmap(tam.Width, tam.Height, PixelFormat.Format32bppArgb);
-                }
-                using (Graphics g = Graphics.FromImage(_quadro))
-                {
-                    g.Clear(Color.Transparent);
-                    Pintar(g, tam);
-                }
-                WidgetDeBateria.AplicarBitmap(this, _quadro);
-            }
-            catch (Exception ex) { Log.Error("desenho do widget da casa", ex); }
-        }
-
-        private void GuardarPosicao()
-        {
-            Point c = WidgetDeBateria.CantoAncora(Bounds, Screen.FromRectangle(Bounds).WorkingArea);
-            _cfg.X = c.X; _cfg.Y = c.Y;
-            _cfg.Salvar();
         }
 
         // ---------------- mouse ----------------
 
-        /// <summary>0 menos, 1 mais, 2 liga/desliga, 3 abrir a pagina Casa (o resto da placa).</summary>
-        private int Zona(Point p)
+        /// <summary>0 menos, 1 mais, 2 liga/desliga, 3 em cima de um item da casa, -1 fora deles.</summary>
+        public int Zona(Point p)
         {
             if (_rMenos.Contains(p)) return 0;
             if (_rMais.Contains(p)) return 1;
             if (_rLiga.Contains(p)) return 2;
-            return 3;
+            foreach (RectangleF z in _zonas) if (z.Contains(p)) return 3;
+            return -1;
         }
 
-        internal void Clicar(int zona)
+        /// <summary>Os botoes; o 3 (o resto do item) abre a pagina Casa.</summary>
+        public void Clicar(int zona)
         {
             switch (zona)
             {
                 case 0: Mudar(-1); break;
                 case 1: Mudar(+1); break;
                 case 2: if (_ar != null && _ar.Online) Mandar("t_power", _ar.Int("t_power", 0) != 0 ? 0 : 1); break;
-                case 3: if (GerenteDoWidgetCasa.AbrirCasa != null) GerenteDoWidgetCasa.AbrirCasa(); break;
+                case 3: if (CasaNoWidget.AbrirCasa != null) CasaNoWidget.AbrirCasa(); break;
             }
         }
 
-        protected override void OnMouseDown(MouseEventArgs e)
+        /// <summary>Acende o botao sob o ponteiro; devolve true se precisa redesenhar.</summary>
+        public bool Sobre(int zona)
         {
-            base.OnMouseDown(e);
-            if (e.Button != MouseButtons.Left) return;
-            _pressionado = true;
-            _arrastando = false;
-            _inicioDoArrasto = Cursor.Position;
-            _origemDoArrasto = Location;
-            Capture = true;
+            int h = zona >= 0 && zona < 3 ? zona : -1;
+            if (h == _hover) return false;
+            _hover = h;
+            return true;
         }
 
-        protected override void OnMouseMove(MouseEventArgs e)
+        /// <summary>A dica do mouse: o que nao cabe na placa.</summary>
+        public string Dica(int zona)
         {
-            base.OnMouseMove(e);
-            bool redesenhar = false;
-            if (!_sobre) { _sobre = true; redesenhar = true; }
-            if (_pressionado && !_cfg.Travado && Zona(PointToClient(_inicioDoArrasto)) == 3)
-            {
-                Point agora = Cursor.Position;
-                int dx = agora.X - _inicioDoArrasto.X, dy = agora.Y - _inicioDoArrasto.Y;
-                if (!_arrastando && (Math.Abs(dx) > 4 || Math.Abs(dy) > 4)) { _arrastando = true; _dica.Hide(this); }
-                if (_arrastando)
-                {
-                    Rectangle area = Screen.FromPoint(agora).WorkingArea;
-                    Location = WidgetDeBateria.Encaixar(new Point(_origemDoArrasto.X + dx, _origemDoArrasto.Y + dy), Size, area, (int)(12 * _escala));
-                    return;
-                }
-            }
-            int z = Zona(e.Location);
-            int h = z < 3 ? z : -1;
-            if (h != _hover)
-            {
-                _hover = h;
-                Cursor = Cursors.Hand;
-                _dica.SetToolTip(this, h == 0 ? T.CasaMenosGrau : h == 1 ? T.CasaMaisGrau : h == 2 ? T.CasaLigaDesliga : Dica());
-                redesenhar = true;
-            }
-            if (redesenhar) Renderizar();
-        }
-
-        /// <summary>O que nao cabe na placa: nome, ambiente e modo do ar, fase e termino da lavadora.</summary>
-        private string Dica()
-        {
+            if (zona == 0) return T.CasaMenosGrau;
+            if (zona == 1) return T.CasaMaisGrau;
+            if (zona == 2) return T.CasaLigaDesliga;
             StringBuilder sb = new StringBuilder();
             if (_ar != null) sb.Append(_ar.Nome).Append("  ").Append(LinhaDoAr()).Append('\n');
-            if (MostraLavadora) sb.Append(_lav.Nome).Append("  ").Append(LinhaDaLavadora(CicloAtual.De(_lav))).Append('\n');
+            if (CicloAtivo(_lav)) sb.Append(_lav.Nome).Append("  ").Append(LinhaDaLavadora(CicloAtual.De(_lav))).Append('\n');
             return sb.Append(T.CasaResumoConvite).ToString();
         }
 
-        protected override void OnMouseUp(MouseEventArgs e)
-        {
-            base.OnMouseUp(e);
-            if (e.Button == MouseButtons.Right) { MostrarMenu(e.Location); return; }
-            if (e.Button != MouseButtons.Left || !_pressionado) return;
-            _pressionado = false;
-            Capture = false;
-            if (_arrastando) { _arrastando = false; GuardarPosicao(); return; }
-            Clicar(Zona(e.Location));
-        }
-
-        protected override void OnMouseLeave(EventArgs e)
-        {
-            base.OnMouseLeave(e);
-            if (_arrastando) return;
-            _sobre = false; _hover = -1;
-            Renderizar();
-        }
-
-        /// <summary>Menu nativo, como o do widget de bateria (foreground do TrackPopupMenu).</summary>
-        private void MostrarMenu(Point onde)
-        {
-            ContextMenu m = new ContextMenu();
-            m.MenuItems.Add(T.CasaResumoConvite, delegate { Clicar(3); });
-            m.MenuItems.Add("-");
-            MenuItem frente = new MenuItem(T.CasaWidgetFrente, delegate { DefinirNaFrente(!_cfg.NaFrente); });
-            frente.Checked = _cfg.NaFrente;
-            m.MenuItems.Add(frente);
-            MenuItem trava = new MenuItem(T.CasaWidgetTravar, delegate { _cfg.Travado = !_cfg.Travado; _cfg.Salvar(); });
-            trava.Checked = _cfg.Travado;
-            m.MenuItems.Add(trava);
-            m.MenuItems.Add("-");
-            m.MenuItems.Add(T.CasaWidgetFechar, delegate { GerenteDoWidgetCasa.Definir(false); });
-            // sem o primeiro plano o menu nao fecha ao clicar fora; a camada devolve o widget ao fundo
-            SetForegroundWindow(Handle);
-            _dica.Hide(this);
-            if (_menu != null) _menu.Dispose();
-            _menu = m;
-            m.Show(this, onde);
-        }
-
-        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
-        [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int indice);
-
         // ---------------- pintura ----------------
 
-        /// <summary>Pinta no tamanho medido (os testes pintam num bitmap, sem janela).</summary>
-        internal void Pintar(Graphics g) { Pintar(g, Medida()); }
-
-        internal void Pintar(Graphics g, Size tam)
+        /// <summary>Antes de cada quadro: as zonas sao as do desenho que vem.</summary>
+        public void ComecarQuadro()
         {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            g.TextRenderingHint = TextRenderingHint.AntiAlias;   // ClearType sobre transparente deixa franja
-            float s = _escala, m = PintorDoWidget.Margem * s;
-            bool escuro = WidgetDeBateria.EscuroDe(_vidro);
-            PintorDoWidget.Vidro(g, new RectangleF(0, 0, tam.Width, tam.Height), s, escuro, _vidro.Fosco && !_vidro.Nitido, _vidro.Nitido, _sobre);
             _rMenos = _rMais = _rLiga = RectangleF.Empty;
-            bool lav = MostraLavadora;
-            using (PintorDoWidget.Fontes f = new PintorDoWidget.Fontes(s))
+            _zonas.Clear();
+        }
+
+        public void Pintar(Graphics g, Tipo t, RectangleF z, LayoutDoWidget layout, float s, bool escuro, PintorDoWidget.Fontes f)
+        {
+            _zonas.Add(z);
             using (Font glifo = new Font("Segoe MDL2 Assets", 13f * s, FontStyle.Regular, GraphicsUnit.Pixel))
             using (Font peq = new Font("Segoe MDL2 Assets", 9f * s, FontStyle.Regular, GraphicsUnit.Pixel))
             {
-                if (_ar == null && !lav)
+                if (layout == LayoutDoWidget.Lista)
                 {
-                    // como o "nenhum aparelho" do widget de bateria: uma nota no meio da placa
-                    string msg = !ServicoCasa.Logado ? T.VisaoSemConta : ServicoCasa.Buscando ? T.CasaCarregando : T.CasaSemAparelhos;
-                    PintorDoWidget.Texto(g, T.NavCasa + " · " + msg, f.Nota, PintorDoWidget.Primario(escuro), escuro,
-                        new RectangleF(m / 2f, 0, tam.Width - m, tam.Height), StringAlignment.Center, StringAlignment.Center);
-                    return;
-                }
-                if (_vidro.Layout == LayoutDoWidget.Lista)
-                {
-                    float w = tam.Width - 2 * m, y = m, linha = PintorDoWidget.Linha * s;
-                    if (_ar != null) { ArNaLista(g, new RectangleF(m, y, w, linha), f, glifo, peq, escuro); y += linha + PintorDoWidget.VaoDeLinha * s; }
-                    if (lav) LavadoraNaLista(g, new RectangleF(m, y, w, linha), f, escuro);
+                    if (t == Tipo.Ar) ArNaLista(g, z, s, f, glifo, peq, escuro);
+                    else LavadoraNaLista(g, z, s, f, escuro);
                 }
                 else
                 {
-                    float x = m, h = tam.Height - 2 * m;
-                    if (_ar != null) { ArNoAnel(g, new RectangleF(x, m, ColunaDoAr * s, h), f, glifo, peq, escuro); x += (ColunaDoAr + PintorDoWidget.VaoDeColuna) * s; }
-                    if (lav) LavadoraNoAnel(g, new RectangleF(x, m, PintorDoWidget.Coluna * s, h), f, escuro);
+                    if (t == Tipo.Ar) ArNoAnel(g, z, s, f, glifo, peq, escuro);
+                    else LavadoraNoAnel(g, z, s, f, escuro);
                 }
             }
         }
@@ -611,6 +309,8 @@ namespace MhiagosControl
         {
             return c.Erro ? Ui.Danger : c.Pausada ? Ui.Warn : Ui.Accent;
         }
+
+        private int Alvo { get { return _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0); } }
 
         private static void Glifo(Graphics g, string texto, Font fonte, RectangleF area, Color cor)
         {
@@ -650,13 +350,13 @@ namespace MhiagosControl
         /// o termometro na bolha, o alvo embaixo (onde o de bateria poe a
         /// porcentagem), - e + dos lados e o liga/desliga no lugar do selo de carga.
         /// </summary>
-        private void ArNoAnel(Graphics g, RectangleF z, PintorDoWidget.Fontes f, Font glifo, Font peq, bool escuro)
+        private void ArNoAnel(Graphics g, RectangleF z, float s, PintorDoWidget.Fontes f, Font glifo, Font peq, bool escuro)
         {
-            float s = _escala, d = PintorDoWidget.Anel * s, st = PintorDoWidget.Traco * s;
+            float d = PintorDoWidget.Anel * s, st = PintorDoWidget.Traco * s;
             bool on = _ar.Online, ligado = on && _ar.Int("t_power", 0) != 0;
             float cx = z.X + z.Width / 2f;
             RectangleF anel = new RectangleF(cx - d / 2f + st / 2f, z.Y + st / 2f, d - st, d - st);
-            int t = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0), min, max;
+            int t = Alvo, min, max;
             FaixaDoAlvo(out min, out max);
             float fracao = max > min && t > 0 ? 0.15f + 0.85f * (t - min) / (float)(max - min) : 0f;
             Anel(g, anel, st, fracao, Ui.Accent, ligado, escuro);
@@ -680,9 +380,9 @@ namespace MhiagosControl
         }
 
         /// <summary>A lavadora como um item de anel: o arco e o progresso do ciclo, o tempo restante embaixo.</summary>
-        private void LavadoraNoAnel(Graphics g, RectangleF z, PintorDoWidget.Fontes f, bool escuro)
+        private void LavadoraNoAnel(Graphics g, RectangleF z, float s, PintorDoWidget.Fontes f, bool escuro)
         {
-            float s = _escala, d = PintorDoWidget.Anel * s, st = PintorDoWidget.Traco * s;
+            float d = PintorDoWidget.Anel * s, st = PintorDoWidget.Traco * s;
             CicloAtual c = CicloAtual.De(_lav);
             float cx = z.X + z.Width / 2f;
             RectangleF anel = new RectangleF(cx - d / 2f + st / 2f, z.Y + st / 2f, d - st, d - st);
@@ -701,9 +401,8 @@ namespace MhiagosControl
         /// O ar como uma linha da lista: nome e alvo na linha de cima (como nome
         /// e porcentagem), ambiente e modo embaixo, e - + e liga/desliga em bolhas pequenas.
         /// </summary>
-        private void ArNaLista(Graphics g, RectangleF z, PintorDoWidget.Fontes f, Font glifo, Font peq, bool escuro)
+        private void ArNaLista(Graphics g, RectangleF z, float s, PintorDoWidget.Fontes f, Font glifo, Font peq, bool escuro)
         {
-            float s = _escala;
             bool on = _ar.Online, ligado = on && _ar.Int("t_power", 0) != 0;
             float db = PintorDoWidget.BolhaDaLista * s;
             RectangleF bolha = new RectangleF(z.X, z.Y + (z.Height - db) / 2f, db, db);
@@ -711,7 +410,7 @@ namespace MhiagosControl
             Glifo(g, "\uE9CA", glifo, bolha, ligado ? Color.White : Color.FromArgb(150, 255, 255, 255));
 
             float x = bolha.Right + 12f * s;
-            int t = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0);
+            int t = Alvo;
             string valor = t > 0 ? t + "°" : "--";
             float largValor;
             using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
@@ -733,10 +432,9 @@ namespace MhiagosControl
                 new RectangleF(x, yb, Math.Max(0f, _rMenos.X - x - 6f * s), mini), StringAlignment.Near, StringAlignment.Center);
         }
 
-        /// <summary>A lavadora como uma linha da lista: fase e tempo, a capsula do progresso e o termino embaixo.</summary>
-        private void LavadoraNaLista(Graphics g, RectangleF z, PintorDoWidget.Fontes f, bool escuro)
+        /// <summary>A lavadora como uma linha da lista: nome e tempo, a capsula do progresso e a fase embaixo.</summary>
+        private void LavadoraNaLista(Graphics g, RectangleF z, float s, PintorDoWidget.Fontes f, bool escuro)
         {
-            float s = _escala;
             CicloAtual c = CicloAtual.De(_lav);
             float db = PintorDoWidget.BolhaDaLista * s;
             RectangleF bolha = new RectangleF(z.X, z.Y + (z.Height - db) / 2f, db, db);
@@ -784,11 +482,8 @@ namespace MhiagosControl
 
     public static partial class T
     {
-        public static string CasaWidgetTitulo { get { return P("Widget da casa", "Home widget"); } }
-        public static string CasaWidgetFrente { get { return P("Sempre na frente", "Always on top"); } }
-        public static string CasaWidgetTravar { get { return P("Travar posição", "Lock position"); } }
-        public static string CasaWidgetFechar { get { return P("Fechar o widget", "Close widget"); } }
-        public static string CasaWidgetOpcao { get { return P("Widget da casa na área de trabalho", "Home widget on the desktop"); } }
-        public static string CasaWidgetNota { get { return P("Ar e lavadora num quadrinho que fica na área de trabalho. Arraste para mover; botão direito para opções.", "AC and washer in a small tile on the desktop. Drag to move; right-click for options."); } }
+        public static string CasaWidgetTitulo { get { return P("Widget na área de trabalho", "Desktop widget"); } }
+        public static string CasaWidgetOpcao { get { return P("Mostrar a casa no widget", "Show home in the widget"); } }
+        public static string CasaWidgetNota { get { return P("O ar e, durante um ciclo, a lavadora aparecem no widget de bateria, depois dos periféricos. As outras opções ficam na página Baterias e no botão direito do widget.", "The AC and, during a cycle, the washer appear in the battery widget after the peripherals. The other options are on the Batteries page and in the widget's right-click menu."); } }
     }
 }

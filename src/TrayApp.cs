@@ -103,7 +103,7 @@ namespace MhiagosControl
         private ReadingSnapshot _snapshot = ReadingSnapshot.Empty;
 
         private List<SensorEntry> _cache = new List<SensorEntry>();
-        private ToolStripMenuItem _miPause, _miAutostart, _miProfiles, _miWidget, _miWidgetCasa;
+        private ToolStripMenuItem _miPause, _miAutostart, _miProfiles, _miWidget;
         private bool _sensorsOk = false;
         private bool _openWhenReady = false;
         private SettingsForm _settingsForm;
@@ -159,6 +159,9 @@ namespace MhiagosControl
             _icon.BalloonTipClicked += delegate { ExecutarAcaoDoBalao(); };
             _icon.BalloonTipClosed += delegate { _acaoDoBalao = null; };
             _cfgWidget = ConfigDoWidget.Carregar();
+            // o widget da casa separado (2.29.0 de teste) virou parte do de bateria
+            if (CasaNoWidget.Migrar(_cfgWidget)) _cfgWidget.Salvar();
+            CasaNoWidget.Controle = this;
             BuildMenu();
 
             IniciarVigiaDeAtivacao();
@@ -418,9 +421,6 @@ namespace MhiagosControl
             _miWidget = MenuTema.Item(T.TrayBatteryWidget, new EventHandler(OnToggleWidget));
             _miWidget.Checked = _cfgWidget.Ativo;
             menu.Items.Add(_miWidget);
-            _miWidgetCasa = MenuTema.Item(T.CasaWidgetTitulo, delegate { GerenteDoWidgetCasa.Definir(!GerenteDoWidgetCasa.Ativo); });
-            _miWidgetCasa.Checked = GerenteDoWidgetCasa.Ativo;
-            menu.Items.Add(_miWidgetCasa);
             MenuTema.Separador(menu.Items);
 
             _miPause = MenuTema.Item(T.TrayPause, new EventHandler(OnPause));
@@ -1083,10 +1083,8 @@ namespace MhiagosControl
                     Notificar(titulo, texto, ToolTipIcon.Warning, "casa: " + titulo + " - " + texto);
                 };
                 ServicoCasa.Iniciar();
-                // Widget da casa: o clique no nome abre a pagina Casa, fora do clique (a janela e modal).
-                GerenteDoWidgetCasa.AbrirCasa = delegate { Marshal(delegate { _paginaPedida = "casa"; PedirConfiguracao(); }); };
-                GerenteDoWidgetCasa.Mudou += delegate { if (_miWidgetCasa != null) _miWidgetCasa.Checked = GerenteDoWidgetCasa.Ativo; };
-                _marshal.BeginInvoke(new MethodInvoker(GerenteDoWidgetCasa.Restaurar));
+                // A casa no widget de bateria: o clique num item dela abre a pagina Casa, fora do clique (a janela e modal).
+                CasaNoWidget.AbrirCasa = delegate { Marshal(delegate { _paginaPedida = "casa"; PedirConfiguracao(); }); };
             }
             catch (Exception ex) { Log.Error("iniciar a pagina Casa", ex); }
         }

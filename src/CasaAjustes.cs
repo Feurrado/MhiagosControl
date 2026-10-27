@@ -72,7 +72,11 @@ namespace MhiagosControl
             _nota.ForeColor = Ui.Muted;
 
             _secWidget = NovaSecao(T.CasaWidgetTitulo);
-            _widget = Chave(_secWidget, T.CasaWidgetOpcao, GerenteDoWidgetCasa.Ativo, delegate(bool v) { GerenteDoWidgetCasa.Definir(v); });
+            _widget = Chave(_secWidget, T.CasaWidgetOpcao, CasaNoWidget.Ativo, delegate(bool v) { if (v != CasaNoWidget.Ativo) CasaNoWidget.Definir(v); });
+            // o menu do widget e a pagina Baterias tambem mudam a opcao
+            EventHandler sincronizar = delegate { if (!IsDisposed && _widget.Checked != CasaNoWidget.Ativo) _widget.Checked = CasaNoWidget.Ativo; };
+            CasaNoWidget.Mudou += sincronizar;
+            Disposed += delegate { CasaNoWidget.Mudou -= sincronizar; };
             _widgetNota = Rotulo(_secWidget, T.CasaWidgetNota);
             _widgetNota.ForeColor = Ui.Muted;
 
