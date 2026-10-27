@@ -138,29 +138,19 @@ namespace MhiagosControl
             return null;
         }
 
-        /// <summary>"A roupa fica pronta as 22:45 · escritorio a 27 °C", so com os trechos que existirem.</summary>
+        /// <summary>"A roupa fica pronta as 22:45" com ciclo em andamento; a temperatura do escritorio fica no cartao do ar.</summary>
         public static string Resumo()
         {
             List<string> l = new List<string>();
             if (!ServicoCasa.Logado) return "";
-            Aparelho ar = null, lav = null;
+            Aparelho lav = null;
             foreach (Aparelho a in ServicoCasa.Aparelhos)
-            {
-                if (ar == null && a.ArCondicionado) ar = a;
                 if (lav == null && a.Lavadora) lav = a;
-            }
             if (lav != null)
             {
                 CicloAtual c = CicloAtual.De(lav);
                 if (c.Online && c.Rodando && c.Restante > 0)
                     l.Add(T.VisaoRoupaPronta(FimDoCiclo(c).ToString("HH:mm")));
-            }
-            if (ar != null && ar.Online && ar.Tem("f_temp_in"))
-            {
-                string comodo = string.IsNullOrEmpty(ar.Comodo) ? T.VisaoAmbienteNome : ar.Comodo;
-                if (T.Pt && comodo.Length > 1 && char.IsUpper(comodo[0]) && !char.IsUpper(comodo[1]))
-                    comodo = char.ToLower(comodo[0]) + comodo.Substring(1);
-                l.Add(T.VisaoComodoA(comodo, Temperatura(ar, ar.Num("f_temp_in", 0))));
             }
             return string.Join("  ·  ", l.ToArray());
         }
@@ -1021,7 +1011,6 @@ namespace MhiagosControl
         public static string VisaoAtencaoAr { get { return P("O ar-condicionado acusou falha", "The air conditioner reported a fault"); } }
         public static string VisaoAtencaoBateria(string nome) { return string.Format(P("Bateria baixa no {0}", "{0} battery is low"), nome); }
         public static string VisaoRoupaPronta(string h) { return string.Format(P("A roupa fica pronta às {0}", "Laundry done at {0}"), h); }
-        public static string VisaoComodoA(string comodo, string t) { return string.Format(P("{0} a {1}", "{0} at {1}"), comodo, t); }
         public static string VisaoAmbienteNome { get { return P("ambiente", "indoors"); } }
         public static string VisaoEventos { get { return P("EVENTOS", "EVENTS"); } }
         public static string VisaoSemEventos { get { return P("Nada novo desde que o app abriu.", "Nothing new since the app started."); } }

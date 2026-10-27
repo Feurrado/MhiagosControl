@@ -548,7 +548,7 @@ namespace MhiagosControl
                         Verdade(arv.Linha().StartsWith("Escritório "), "linha do ar comeca pelo comodo " + language);
                         Verdade(lavv.Linha().Contains("rpm"), "linha da lavadora com a centrifugacao " + language);
                         Igual("01:25", CartaoDaLavadoraVisao.Relogio(85), "tempo da lavadora em hh:mm");
-                        Verdade(Visao.Resumo().Contains(T.VisaoComodoA("escritório", "22 °C")) || !T.Pt, "resumo do cabecalho com o comodo " + language);
+                        Verdade(Visao.Resumo() == T.VisaoRoupaPronta(Visao.FimDoCiclo(CicloAtual.De(Exemplo()[0])).ToString("HH:mm")), "resumo do cabecalho so com a roupa, sem o escritorio " + language);
                         // Sem conta: convite no lugar do ar e da lavadora.
                         ServicoCasa.PararSimulacao();
                         foreach (int largura in new int[] { 1300, 880 })
