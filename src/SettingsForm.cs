@@ -578,21 +578,25 @@ namespace MhiagosControl
         /// conferencia contra a area de trabalho atual, e nao so contra o minimo.
         /// </summary>
         /// <summary>
-        /// Area cliente da primeira abertura: a janela inteira fica com
-        /// 1265 x 795 a 100% (a medida que o Thiago escolheu para a Visao geral
-        /// nova), descontadas a moldura visivel de 1 px e a barra de titulo de
-        /// 31 px do Windows 11.
+        /// Area cliente da primeira abertura: 1263 x 685 a 100% (a janela inteira
+        /// com 1265 x 717, contando a moldura de 1 px e a barra de titulo de 31 px
+        /// do Windows 11). A altura e a da Visao geral nova sem ciclo da lavadora,
+        /// medida, com 16 px de folga: sem vao embaixo nem em cima.
         /// </summary>
-        internal static Size TamanhoPadrao { get { return new Size(Ui.S(1263), Ui.S(763)); } }
+        internal static Size TamanhoPadrao { get { return new Size(Ui.S(1263), Ui.S(685)); } }
 
-        /// <summary>O padrao anterior (1280 x 790 de area cliente): gravado assim, vale o novo.</summary>
-        internal static Size TamanhoPadraoAntigo { get { return new Size(Ui.S(1280), Ui.S(790)); } }
+        /// <summary>
+        /// Versao do tamanho padrao. Gravado com versao menor (os padroes
+        /// anteriores, ou um tamanho de antes da Visao geral nova), a janela abre
+        /// uma vez no padrao novo; dai em diante vale o que a pessoa ajustar.
+        /// </summary>
+        internal const int VersaoDaJanela = 2;
 
         private Size TamanhoGuardado()
         {
             int w = _cfg.WindowW, h = _cfg.WindowH;
             if (w <= 0 || h <= 0) return Size.Empty;
-            if (w == TamanhoPadraoAntigo.Width && h == TamanhoPadraoAntigo.Height) return Size.Empty;
+            if (_cfg.JanelaVersao < VersaoDaJanela) return Size.Empty;
 
             Rectangle tela = Screen.FromPoint(Cursor.Position).WorkingArea;
             if (w > tela.Width - 40) w = tela.Width - 40;
@@ -656,13 +660,14 @@ namespace MhiagosControl
             if (WindowState != FormWindowState.Normal) return;
             if (!IsHandleCreated) return;
             if (_cfg.WindowW == ClientSize.Width && _cfg.WindowH == ClientSize.Height
-                && _cfg.WindowX == Location.X && _cfg.WindowY == Location.Y) return;
+                && _cfg.WindowX == Location.X && _cfg.WindowY == Location.Y && _cfg.JanelaVersao == VersaoDaJanela) return;
             try
             {
                 _cfg.WindowW = ClientSize.Width;
                 _cfg.WindowH = ClientSize.Height;
                 _cfg.WindowX = Location.X;
                 _cfg.WindowY = Location.Y;
+                _cfg.JanelaVersao = VersaoDaJanela;
                 string erro;
                 if (!_session.TrySavePreferences(delegate(Config draft, Config target)
                 {
@@ -670,6 +675,7 @@ namespace MhiagosControl
                     target.WindowH = draft.WindowH;
                     target.WindowX = draft.WindowX;
                     target.WindowY = draft.WindowY;
+                    target.JanelaVersao = draft.JanelaVersao;
                 }, out erro)) Log.Write("tamanho da janela nao persistiu: " + erro);
             }
             catch (Exception ex) { Log.Error("gravar tamanho da janela", ex); }
@@ -1006,6 +1012,7 @@ namespace MhiagosControl
         // perifericos e eventos. A classica usa a faixa e o resumo acima.
         private CabecalhoDaVisao _vgCabecalho;
         private CartaoDoArVisao _vgAr;
+        private CartaoDoEscritorioVisao _vgEscritorio;
         private CartaoDaLavadoraVisao _vgLav;
         private ConviteDaCasa _vgConvite;
         private CaixaDePerifericos _vgPerif;
@@ -1103,14 +1110,15 @@ namespace MhiagosControl
             EventosDaVisao.Iniciar();
             _vgCabecalho = new CabecalhoDaVisao();
             _vgAr = new CartaoDoArVisao();
+            _vgEscritorio = new CartaoDoEscritorioVisao();
             _vgLav = new CartaoDaLavadoraVisao();
             _vgConvite = new ConviteDaCasa();
             EventHandler casa = delegate { AbrirPaginaPelaChave("casa"); };
-            _vgAr.AbrirCasa += casa; _vgLav.AbrirCasa += casa; _vgConvite.AbrirCasa += casa;
+            _vgAr.AbrirCasa += casa; _vgEscritorio.AbrirCasa += casa; _vgLav.AbrirCasa += casa; _vgConvite.AbrirCasa += casa;
             _vgPerif = new CaixaDePerifericos();
             _vgPerif.BateriasPedidas += delegate { AbrirPaginaPelaChave("baterias"); };
             _vgEventos = new CaixaDeEventos();
-            foreach (Control c in new Control[] { _vgCabecalho, _vgAr, _vgLav, _vgConvite, _vgPerif, _vgEventos })
+            foreach (Control c in new Control[] { _vgCabecalho, _vgAr, _vgEscritorio, _vgLav, _vgConvite, _vgPerif, _vgEventos })
             {
                 c.Visible = false;
                 _pgVisao.Controls.Add(c);
@@ -1343,7 +1351,7 @@ namespace MhiagosControl
         /// </summary>
         private void EstiloDaVisao(bool nova)
         {
-            foreach (Control c in new Control[] { _vgCabecalho, _vgAr, _vgLav, _vgConvite, _vgPerif, _vgEventos })
+            foreach (Control c in new Control[] { _vgCabecalho, _vgAr, _vgEscritorio, _vgLav, _vgConvite, _vgPerif, _vgEventos })
                 if (c != null && !nova) c.Visible = false;
             _cardPerif.Visible = !nova;
             if (_cardCasa != null) _cardCasa.Visible = !nova;
@@ -1547,7 +1555,7 @@ namespace MhiagosControl
 
                 // Esquerda: o ar, a lavadora so com ciclo, ou o convite sem conta.
                 // Le de novo: sair da conta nem sempre passa pelo aviso do servico.
-                _vgAr.Puxar(); _vgLav.Puxar();
+                _vgAr.Puxar(); _vgEscritorio.Puxar(); _vgLav.Puxar();
                 int ye = y;
                 bool temAr = _vgAr.Ar != null, temCiclo = _vgLav.TemCiclo;
                 bool convite = !temAr && !temCiclo && (!ServicoCasa.Logado || ServicoCasa.Aparelhos.Count == 0);
@@ -1555,6 +1563,9 @@ namespace MhiagosControl
                 _vgLav.Visible = temCiclo;
                 _vgConvite.Visible = convite;
                 if (temAr) { _vgAr.SetBounds(x0, ye, wEsq, Ui.S(CartaoDoArVisao.Altura)); ye = _vgAr.Bottom + Esp; }
+                // A temperatura do escritorio agora, logo abaixo do ar que a mede.
+                _vgEscritorio.Visible = temAr;
+                if (temAr) { _vgEscritorio.SetBounds(x0, ye, wEsq, Ui.S(CartaoDoEscritorioVisao.Altura)); ye = _vgEscritorio.Bottom + Esp; }
                 if (temCiclo) { _vgLav.SetBounds(x0, ye, wEsq, Ui.S(CartaoDaLavadoraVisao.Altura)); ye = _vgLav.Bottom + Esp; }
                 if (convite) { _vgConvite.SetBounds(x0, ye, wEsq, Ui.S(ConviteDaCasa.Altura)); ye = _vgConvite.Bottom + Esp; }
                 int wc = (wEsq - Esp) / 2, hCaixa = Ui.S(CaixaDePerifericos.Altura);

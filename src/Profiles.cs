@@ -177,6 +177,8 @@ namespace MhiagosControl
         /// de uma janela redimensionavel.
         /// </summary>
         public int WindowW = 0, WindowH = 0;
+        /// <summary>Versao do tamanho padrao com que WindowW/WindowH foram gravados (ver SettingsForm.VersaoDaJanela).</summary>
+        public int JanelaVersao = 0;
         public int WindowX = int.MinValue, WindowY = int.MinValue;   // posicao da janela; MinValue = nunca guardada
         public string LastPage = "";
 
@@ -235,6 +237,7 @@ namespace MhiagosControl
             MetricRange = other.MetricRange;
             MetricNavId = other.MetricNavId;
             WindowW = other.WindowW;
+            JanelaVersao = other.JanelaVersao;
             WindowH = other.WindowH;
             WindowX = other.WindowX;
             WindowY = other.WindowY;
@@ -582,6 +585,7 @@ namespace MhiagosControl
                         else if (k == "metricrange") c.MetricRange = MetricHistory.JanelaValida(ParseInt(v));
                         else if (k == "metricnav") c.MetricNavId = v;
                         else if (k == "windoww") c.WindowW = ParseInt(v);
+                        else if (k == "janelaversao") c.JanelaVersao = ParseInt(v);
                         else if (k == "windowh") c.WindowH = ParseInt(v);
                         else if (k == "windowx") c.WindowX = ParseInt(v);
                         else if (k == "windowy") c.WindowY = ParseInt(v);
@@ -797,6 +801,7 @@ namespace MhiagosControl
                 sb.AppendLine("metricrange=" + MetricRange.ToString(CultureInfo.InvariantCulture));
                 if (!string.IsNullOrEmpty(MetricNavId)) sb.AppendLine("metricnav=" + MetricNavId);
                 sb.AppendLine("windoww=" + WindowW.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("janelaversao=" + JanelaVersao.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("windowh=" + WindowH.ToString(CultureInfo.InvariantCulture));
                 if (WindowX != int.MinValue && WindowY != int.MinValue)
                 {

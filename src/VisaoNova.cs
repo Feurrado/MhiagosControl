@@ -780,6 +780,96 @@ namespace MhiagosControl
         }
     }
 
+    /// <summary>
+    /// A temperatura do escritorio agora: a ambiente lida pelo ar (a mesma do
+    /// "ambiente 23 °C"), grande e em ambar, com o estado do ar e a hora da
+    /// leitura ao lado. Clique abre a pagina Casa.
+    /// </summary>
+    internal sealed class CartaoDoEscritorioVisao : CartaoDaCasaVisao
+    {
+        public const int Altura = 84;
+        private Aparelho _ar;
+
+        internal Aparelho Ar { get { return _ar; } }
+
+        public CartaoDoEscritorioVisao() { Cursor = Cursors.Hand; Puxar(); }
+
+        internal override void Puxar()
+        {
+            _ar = null;
+            if (ServicoCasa.Logado)
+                foreach (Aparelho a in ServicoCasa.Aparelhos)
+                    if (a.ArCondicionado) { _ar = a; break; }
+            Invalidate();
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e) { Cursor = Cursors.Hand; }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left) PedirCasa();
+        }
+
+        internal bool TemLeitura { get { return _ar != null && _ar.Online && _ar.Tem("f_temp_in"); } }
+
+        internal string Rotulo
+        {
+            get
+            {
+                string c = _ar != null && !string.IsNullOrEmpty(_ar.Comodo) ? _ar.Comodo : T.VisaoAmbienteNome;
+                return Visao.Maiusculas(c + " · " + T.VisaoTemperatura);
+            }
+        }
+
+        internal string Valor { get { return TemLeitura ? _ar.Num("f_temp_in", 0).ToString("0.0", CultureInfo.CurrentCulture) : "--"; } }
+
+        internal string Estado
+        {
+            get
+            {
+                if (_ar == null || !_ar.Online) return T.CasaOffline;
+                return _ar.Int("t_power", 0) != 0
+                    ? T.VisaoArLigadoEm(_ar.Int("t_temp", 0) + (_ar.Int("t_temp_type", 0) == 1 ? " °F" : " °C"))
+                    : T.VisaoArDesligado;
+            }
+        }
+
+        internal string Leitura
+        {
+            get
+            {
+                if (!TemLeitura) return T.VisaoSemLeitura;
+                DateTime l = ServicoCasa.UltimaLeitura;
+                return l == DateTime.MinValue ? T.VisaoSemLeitura : T.VisaoLeituraAs(l.ToString("HH:mm"));
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Graphics g = e.Graphics;
+            Ui.Smooth(g);
+            int m = Ui.S(16);
+            TextRenderer.DrawText(g, Rotulo, Visao.MonoRotulo, new Point(m, Ui.S(12)), Ui.Muted, TextFormatFlags.NoPrefix);
+            string v = Valor;
+            Size sv = TextRenderer.MeasureText(g, v, Visao.MonoGrande, Size.Empty, TextFormatFlags.NoPadding);
+            int yv = Ui.S(32);
+            TextRenderer.DrawText(g, v, Visao.MonoGrande, new Point(m, yv), TemLeitura ? Visao.Quente : Ui.Faint, TextFormatFlags.NoPadding);
+            if (TemLeitura)
+            {
+                string u = _ar.Int("t_temp_type", 0) == 1 ? "°F" : "°C";
+                Size su = TextRenderer.MeasureText(g, u, Visao.MonoPequena, Size.Empty, TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(g, u, Visao.MonoPequena, new Point(m + sv.Width + Ui.S(4), yv + sv.Height - su.Height - Ui.S(3)), Ui.Muted, TextFormatFlags.NoPadding);
+            }
+            // estado do ar e hora da leitura, a direita, alinhados ao numero
+            int hl = Ui.FontSmall.Height;
+            int y2 = yv + sv.Height - hl;
+            Rectangle r1 = new Rectangle(m, y2 - hl - Ui.S(2), Width - 2 * m, hl), r2 = new Rectangle(m, y2, Width - 2 * m, hl);
+            TextRenderer.DrawText(g, Estado, Ui.FontSmall, r1, Ui.Text, TextFormatFlags.Right | TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(g, Leitura, Ui.FontSmall, r2, Ui.Muted, TextFormatFlags.Right | TextFormatFlags.NoPrefix);
+        }
+    }
+
     /// <summary>Sem conta da casa (ou sem aparelhos): convite discreto que abre a pagina Casa.</summary>
     internal sealed class ConviteDaCasa : CartaoDaCasaVisao
     {
@@ -984,6 +1074,11 @@ namespace MhiagosControl
         public static string VisaoConectado { get { return P("conectado", "connected"); } }
         public static string VisaoDesconectado { get { return P("desconectado", "disconnected"); } }
         public static string VisaoConecteCasa { get { return P("Conecte a casa", "Connect your home"); } }
+        public static string VisaoTemperatura { get { return P("temperatura", "temperature"); } }
+        public static string VisaoArLigadoEm(string t) { return P("Ar ligado em ", "AC on at ") + t; }
+        public static string VisaoArDesligado { get { return P("Ar desligado", "AC off"); } }
+        public static string VisaoSemLeitura { get { return P("sem leitura", "no reading"); } }
+        public static string VisaoLeituraAs(string h) { return P("leitura às ", "read at ") + h; }
         public static string VisaoFim(string h) { return P("fim ", "ends ") + h; }
 
         public static string DashboardMetricMono(int index, string fallback)
