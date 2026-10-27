@@ -212,6 +212,18 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>Ciclos, litros e kWh dos ciclos registrados no mes da data dada.</summary>
+        public static double[] DoMes(string puid, DateTime dia)
+        {
+            double[] r = new double[3];
+            lock (_trava)
+            {
+                Carregar();
+                foreach (Ciclo x in Lista(puid))
+                    if (x.Inicio.Year == dia.Year && x.Inicio.Month == dia.Month) { r[0]++; r[1] += x.Agua; r[2] += x.Energia; }
+            }
+            return r;
+        }
         public static void Conferir(Aparelho a, PreferenciasCasa p) { Conferir(a, p, DateTime.Now); }
 
         internal static void Conferir(Aparelho a, PreferenciasCasa p, DateTime agora)
@@ -279,6 +291,55 @@ namespace MhiagosControl
         }
     }
 
+    /// <summary>
+    /// Cabecalho de uma secao recolhivel dentro de um cartao: titulo, resumo a
+    /// direita do titulo e a seta. O clique e de quem usa (Click).
+    /// </summary>
+    internal sealed class CabecalhoRecolhivel : Control
+    {
+        public string Titulo = "", Resumo = "";
+        public bool Aberto;
+        private Transicao _t;
+        private Transicao TH { get { return _t ?? (_t = new Transicao(this)); } }
+
+        public CabecalhoRecolhivel()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
+            Cursor = Cursors.Hand;
+            TabStop = true;
+            AccessibleRole = AccessibleRole.PushButton;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { TH.Ir(1f); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { TH.Ir(0f); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space) { OnClick(EventArgs.Empty); e.Handled = true; }
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            using (SolidBrush b = new SolidBrush(Ui.Misturar(Ui.Surface, Ui.Hover, TH.Valor))) g.FillRectangle(b, ClientRectangle);
+            using (Pen p = new Pen(Ui.Border)) g.DrawLine(p, 0, 0, Width, 0);
+            AccessibleName = Titulo;
+            Size t = TextRenderer.MeasureText(Titulo, Ui.FontMed);
+            TextRenderer.DrawText(g, Titulo, Ui.FontMed, new Rectangle(0, 0, t.Width + Ui.S(4), Height), Ui.Text,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            Rectangle seta = new Rectangle(Width - Ui.S(22), (Height - Ui.S(22)) / 2, Ui.S(22), Ui.S(22));
+            TextRenderer.DrawText(g, Aberto ? "\uE70E" : "\uE70D", Ui.FontGlyph9, seta, Ui.Muted,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            int rx = t.Width + Ui.S(12);
+            if (Resumo.Length > 0)
+                TextRenderer.DrawText(g, Resumo, Ui.FontSmall, new Rectangle(rx, 0, Math.Max(0, seta.Left - rx - Ui.S(8)), Height), Ui.Muted,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            if (Focused && ShowFocusCues) using (Pen p = new Pen(Ui.Accent, 2f)) g.DrawRectangle(p, 1, 1, Width - 3, Height - 3);
+        }
+    }
     /// <summary>Anel de progresso do ciclo, com o tempo restante no meio.</summary>
     internal sealed class AnelDoCiclo : Control
     {
@@ -411,6 +472,29 @@ namespace MhiagosControl
         private readonly List<Label[]> _params = new List<Label[]>();
         private readonly FlatBtn _btTudo;
         private bool _aberto;
+        private readonly CabecalhoRecolhivel _cabConsumo;
+        private readonly Label _consumo;
+        private readonly AnimacaoDeRecolher _animConsumo;
+
+        internal CabecalhoRecolhivel CabecalhoDoConsumo { get { return _cabConsumo; } }
+        public bool ConsumoAberto { get { return _animConsumo.Aberto; } }
+
+        /// <summary>Abre ou fecha a secao de consumo e historico, lembrando em casa.ini.</summary>
+        public void AlternarConsumo(bool animar)
+        {
+            bool abrir = !_animConsumo.Aberto;
+            ServicoCasa.Pref.ConsumoLavadoraAberto = abrir;
+            ServicoCasa.Pref.Salvar();
+            _animConsumo.Ir(abrir, animar && IsHandleCreated && Visible);
+        }
+
+        private void AjustarConsumo()
+        {
+            bool algo = _animConsumo.Valor > 0.001f;
+            _consumo.Visible = _ciclos.Visible = _lbCiclos.Visible = algo;
+            _cabConsumo.Aberto = _animConsumo.Aberto;
+            _cabConsumo.Invalidate();
+        }
 
         public override int Tipo { get { return 1; } }
         protected override string Icone { get { return null; } }
@@ -431,6 +515,22 @@ namespace MhiagosControl
             _btTudo.Click += delegate { _aberto = !_aberto; Preencher(); AvisarAltura(); };
             Controls.Add(_btTudo);
             _tudo = Rotulo("", Ui.FontSmall, Ui.Muted);
+
+            _cabConsumo = new CabecalhoRecolhivel();
+            _cabConsumo.Titulo = T.LavConsumoTitulo;
+            _cabConsumo.Click += delegate { AlternarConsumo(true); };
+            Controls.Add(_cabConsumo);
+            _consumo = Rotulo("", Ui.FontBase, Ui.Text);
+            // Comeca fechada, como o consumo do ar, e lembra a escolha.
+            _animConsumo = new AnimacaoDeRecolher(ServicoCasa.Pref.ConsumoLavadoraAberto);
+            _animConsumo.Quadro += delegate { AjustarConsumo(); AvisarAltura(); };
+            AjustarConsumo();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _animConsumo.Dispose();
+            base.Dispose(disposing);
         }
 
         /// <summary>A Segoe nao tem lavadora: porta redonda numa caixa, desenhada.</summary>
@@ -537,9 +637,19 @@ namespace MhiagosControl
             if (porta != null) p.Add(new[] { T.CasaPorta, TabelaDaLavadora.Porta(A.Int(porta, 0)) });
             string trava = A.Primeiro("Child_lock", "ChildLockActive", "Child_lock_setting_status");
             if (trava != null) p.Add(new[] { T.CasaTrava, A.Int(trava, 0) != 0 ? T.LavAtiva : T.LavDesativada });
-            if (c.Agua.HasValue && (c.Agua.Value > 0 || c.Rodando)) p.Add(new[] { T.LavAgua, c.Agua.Value.ToString("0.#") + " L" });
-            if (c.Energia.HasValue && (c.Energia.Value > 0 || c.Rodando)) p.Add(new[] { T.LavEnergia, c.Energia.Value.ToString("0.00") + " kWh" });
             Parametros(p);
+
+            // --- consumo do ciclo e do mes (secao recolhivel)
+            List<string> cons = new List<string>();
+            if (c.Agua.HasValue && (c.Agua.Value > 0 || c.Rodando)) cons.Add(T.LavAgua + ": " + c.Agua.Value.ToString("0.#") + " L");
+            if (c.Energia.HasValue && (c.Energia.Value > 0 || c.Rodando)) cons.Add(T.LavEnergia + ": " + c.Energia.Value.ToString("0.00") + " kWh");
+            double[] mes = CiclosDaLavadora.DoMes(A.Puid, DateTime.Today);
+            cons.Add(T.LavMes((int)mes[0], mes[1].ToString("0"), mes[2].ToString("0.00")));
+            _consumo.Text = string.Join("\n", cons.ToArray());
+            _cabConsumo.Resumo = c.Agua.HasValue || c.Energia.HasValue
+                ? T.LavResumoConsumo(c.Agua.HasValue ? c.Agua.Value.ToString("0") : "--", c.Energia.HasValue ? c.Energia.Value.ToString("0.00") : "--")
+                : T.LavMesCurto((int)mes[0]);
+            _cabConsumo.Invalidate();
             _lbParams.Visible = p.Count > 0;
 
             // --- avisos: limpeza do tambor e erro
@@ -610,10 +720,6 @@ namespace MhiagosControl
                 y += ((i + col - 1) / col) * Ui.S(46) + Ui.S(8);
             }
 
-            _lbCiclos.SetBounds(M, y, iw, Ui.S(18));
-            y += Ui.S(22);
-            y = Bloco(_ciclos, M, y, iw) + Ui.S(12);
-
             if (_btTudo.Visible)
             {
                 int bw = TextRenderer.MeasureText(_btTudo.Text, _btTudo.Font).Width + Ui.S(28);
@@ -621,6 +727,16 @@ namespace MhiagosControl
                 y += Ui.S(40);
             }
             if (_tudo.Visible) y = Bloco(_tudo, M, y, iw) + Ui.S(6);
+
+            // Consumo e historico: cabecalho sempre visivel, conteudo animado no fim do cartao.
+            _cabConsumo.SetBounds(M, y, iw, Ui.S(38));
+            y += Ui.S(38);
+            int topo = y + Ui.S(8);
+            int yc = Bloco(_consumo, M, topo, iw) + Ui.S(10);
+            _lbCiclos.SetBounds(M, yc, iw, Ui.S(18));
+            yc += Ui.S(22);
+            yc = Bloco(_ciclos, M, yc, iw) + Ui.S(6);
+            y += (int)Math.Round((yc - y) * _animConsumo.Valor);
             return y + Ui.S(10);
         }
 
@@ -635,6 +751,10 @@ namespace MhiagosControl
     public static partial class T
     {
         public static string LavProgramaN { get { return P("Programa {0}", "Program {0}"); } }
+        public static string LavConsumoTitulo { get { return P("Consumo e histórico", "Usage and history"); } }
+        public static string LavResumoConsumo(string agua, string kwh) { return P("ciclo: " + agua + " L · " + kwh + " kWh", "cycle: " + agua + " L · " + kwh + " kWh"); }
+        public static string LavMesCurto(int n) { return P(n + " ciclos este mês", n + " cycles this month"); }
+        public static string LavMes(int n, string agua, string kwh) { return P("Este mês (ciclos registrados pelo Mhiagos): " + n + "  ·  " + agua + " L  ·  " + kwh + " kWh", "This month (cycles recorded by Mhiagos): " + n + "  ·  " + agua + " L  ·  " + kwh + " kWh"); }
         public static string LavSemPrograma { get { return P("Sem programa", "No program"); } }
         public static string LavFasePesando { get { return P("Pesando a roupa", "Weighing"); } }
         public static string LavFasePrelavagem { get { return P("Pré-lavagem", "Prewash"); } }

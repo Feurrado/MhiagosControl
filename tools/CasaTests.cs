@@ -284,7 +284,19 @@ namespace MhiagosControl
                                 }
                                 if (estado == "offline")
                                     Verdade(anel.Apagado && titulo.Text == T.LavDesconectada, "desconectada: anel apagado " + sufixo);
+                                // Item 5: consumo e historico da lavadora, recolhivel, comeca fechado.
+                                Verdade(!lv.ConsumoAberto && !((Label)Field(lv, "_consumo")).Visible && lv.CabecalhoDoConsumo.Visible,
+                                    "consumo da lavadora comeca fechado " + sufixo);
                                 CaptureEvolution(lv, "casa-lavadora-" + sufixo);
+                                lv.AlternarConsumo(false);
+                                casa.Arranjar();
+                                Verdade(lv.ConsumoAberto && ((Label)Field(lv, "_consumo")).Visible && ServicoCasa.Pref.ConsumoLavadoraAberto,
+                                    "consumo da lavadora abre e lembra " + sufixo);
+                                SemSobrepor(lv, "lavadora com consumo aberto " + sufixo);
+                                if (estado == "secando") Verdade(((Label)Field(lv, "_consumo")).Text.Contains("168"), "agua do ciclo na secao de consumo");
+                                CaptureEvolution(lv, "casa-lavadora-consumo-" + sufixo);
+                                lv.AlternarConsumo(false);
+                                casa.Arranjar();
                             }
                         }
                         casa.MostrarSemNuvem(Exemplo());
