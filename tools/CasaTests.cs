@@ -391,10 +391,30 @@ namespace MhiagosControl
                                 Verdade(v != null && v.Length > 0, "chip " + fx.Chips[i].Chave + " com texto " + sufixo);
                             }
                             CaptureEvolution(form, "visao-" + sufixo);
+                            // Cooler recolhido: vira barra de titulo na largura toda, sem sobrepor nada.
+                            Card cooler = (Card)Field(form, "_cardCooler");
+                            cfgForm.VisaoCoolerRecolhido = true;
+                            InvokePrivate(form, "ArranjarVisaoGeral");
+                            Verdade(cooler.Height <= cooler.TitleHeight + 2 && !((Control)Field(form, "_vgPreview")).Visible, "cooler recolhido so com o titulo " + sufixo);
+                            Verdade(((Control)Field(form, "_vgRecolher")).Visible, "seta de recolher visivel " + sufixo);
+                            vis.Clear();
+                            foreach (Control ctl in pg.Controls) if (ctl.Visible) vis.Add(ctl);
+                            ok = true;
+                            for (int i = 0; i < vis.Count; i++)
+                            {
+                                if (vis[i].Right > pg.Width || vis[i].Left < 0) ok = false;
+                                for (int j = i + 1; j < vis.Count; j++) if (vis[i].Bounds.IntersectsWith(vis[j].Bounds)) ok = false;
+                            }
+                            Verdade(ok, "cooler recolhido sem sobreposicao " + sufixo);
+                            CaptureEvolution(form, "visao-" + sufixo + "-cooler-recolhido");
+                            cfgForm.VisaoCoolerRecolhido = false;
+                            InvokePrivate(form, "ArranjarVisaoGeral");
+                            Verdade(cooler.Height > cooler.TitleHeight * 3 && ((Control)Field(form, "_vgPreview")).Visible, "cooler reaberto " + sufixo);
                         }
                         cfgForm.VisaoGeralNova = false;
                         InvokePrivate(form, "ArranjarVisaoGeral");
                         Verdade(!((Control)Field(form, "_faixaStatus")).Visible, "desligar volta a Visao geral classica " + language);
+                        Verdade(!((Control)Field(form, "_vgRecolher")).Visible && ((Control)Field(form, "_vgPreview")).Visible, "classica sem seta de recolher " + language);
                         ServicoCasa.PararSimulacao();
                         ResumoDaCasa rs = (ResumoDaCasa)Field(form, "_cardCasa");
                         rs.Puxar();

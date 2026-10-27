@@ -988,6 +988,7 @@ namespace MhiagosControl
         private PeripheralStrip _cardPerif;
         private ResumoDaCasa _cardCasa;
         private FaixaDeStatus _faixaStatus;
+        private Label _vgRecolher;
         private PanelPreview _vgPreview;
         private Label _vgPerfil, _vgPainel;
         private Label[] _vgSpecCap, _vgSpecVal;
@@ -1028,6 +1029,21 @@ namespace MhiagosControl
             // que havia para escolher.
             _vgPreview = new PanelPreview();
             _cardCooler.Controls.Add(_vgPreview);
+
+            // Visao geral nova: o cooler recolhe pelo titulo (seta a direita).
+            _vgRecolher = new Label();
+            _vgRecolher.Font = Ui.FontGlyph9;
+            _vgRecolher.ForeColor = Ui.Muted;
+            _vgRecolher.BackColor = Color.Transparent;
+            _vgRecolher.TextAlign = ContentAlignment.MiddleCenter;
+            _vgRecolher.Cursor = Cursors.Hand;
+            _vgRecolher.Visible = false;
+            _vgRecolher.Click += delegate { AlternarCoolerRecolhido(); };
+            _cardCooler.Controls.Add(_vgRecolher);
+            _cardCooler.MouseDown += delegate(object s, MouseEventArgs e)
+            {
+                if (_cfg.VisaoGeralNova && e.Button == MouseButtons.Left && e.Y < _cardCooler.TitleHeight) AlternarCoolerRecolhido();
+            };
 
             // Duas linhas, e nao quatro.
             //
@@ -1285,6 +1301,8 @@ namespace MhiagosControl
             if (_pgVisao.Width <= 0 || _pgVisao.Height <= 0) return;
             if (_faixaStatus != null) _faixaStatus.Visible = _cfg.VisaoGeralNova;
             if (_cfg.VisaoGeralNova) { ArranjarVisaoGeralNova(); return; }
+            if (_vgRecolher != null) _vgRecolher.Visible = false;
+            if (_vgPreview != null) _vgPreview.Visible = true;
 
             int Esp = Ui.S(8);
             int AlturaBloco = Ui.S(104);
@@ -1398,6 +1416,17 @@ namespace MhiagosControl
         /// curvas) e o cooler, menor - com perifericos e especificacoes embaixo.
         /// Usa os mesmos controles da classica; so muda a hierarquia.
         /// </summary>
+        /// <summary>Recolhe ou abre o cartao do cooler na Visao geral nova; grava na hora.</summary>
+        internal void AlternarCoolerRecolhido()
+        {
+            if (!_cfg.VisaoGeralNova) return;
+            _cfg.VisaoCoolerRecolhido = !_cfg.VisaoCoolerRecolhido;
+            string erro;
+            if (!_session.TrySavePreferences(delegate(Config draft, Config target) { target.VisaoCoolerRecolhido = draft.VisaoCoolerRecolhido; }, out erro))
+                Log.Write("cooler recolhido nao persistiu: " + erro);
+            ArranjarVisaoGeral();
+        }
+
         private void ArranjarVisaoGeralNova()
         {
             int Esp = Ui.S(8);
@@ -1422,9 +1451,12 @@ namespace MhiagosControl
                 _cardCasa.SetBounds(x0, y, alvo, AlturaCasa);
                 y += AlturaCasa + Esp;
 
-                int hMeio = _pgVisao.Height - y - Esp - AlturaPerif - Esp - AlturaSpecs;
+                bool recolhido = _cfg.VisaoCoolerRecolhido;
+                int AlturaCoolerBarra = _cardCooler.TitleHeight + 1;
+                int hMeio = _pgVisao.Height - y - Esp - AlturaPerif - Esp - AlturaSpecs - (recolhido ? AlturaCoolerBarra + Esp : 0);
                 if (hMeio < MeioMin) hMeio = MeioMin;
-                int wEsq = alvo * 58 / 100, wDir = alvo - wEsq - Esp;
+                // Recolhido, o cooler vira uma barra e o Computador fica com a largura toda.
+                int wEsq = recolhido ? alvo : alvo * 58 / 100, wDir = alvo - wEsq - Esp;
 
                 // Computador: destaques em cima, as duas curvas lado a lado embaixo.
                 int n = _vgTiles.Count;
@@ -1449,9 +1481,23 @@ namespace MhiagosControl
                 int linhasCooler = 0;
                 if (_vgPerfil != null && _vgPerfil.Visible) linhasCooler++;
                 if (_vgPainel != null && _vgPainel.Visible) linhasCooler++;
-                int hCooler = Math.Min(fimEsq - y, Ui.S(46) + (wDir - Ui.S(32)) + Ui.S(14) + linhasCooler * Ui.S(26) + Ui.S(14));
-                _cardCooler.SetBounds(x0 + wEsq + Esp, y, wDir, Math.Max(Ui.S(200), hCooler));
-                y = Math.Max(fimEsq, _cardCooler.Bottom) + Esp;
+                if (recolhido)
+                {
+                    _cardCooler.SetBounds(x0, fimEsq + Esp, alvo, AlturaCoolerBarra);
+                    y = _cardCooler.Bottom + Esp;
+                }
+                else
+                {
+                    int hCooler = Math.Min(fimEsq - y, Ui.S(46) + (wDir - Ui.S(32)) + Ui.S(14) + linhasCooler * Ui.S(26) + Ui.S(14));
+                    _cardCooler.SetBounds(x0 + wEsq + Esp, y, wDir, Math.Max(Ui.S(200), hCooler));
+                    y = Math.Max(fimEsq, _cardCooler.Bottom) + Esp;
+                }
+                _vgRecolher.Visible = true;
+                _vgRecolher.Text = recolhido ? "\uE70D" : "\uE70E";
+                _vgRecolher.SetBounds(_cardCooler.Width - Ui.S(36), Ui.S(6), Ui.S(28), Ui.S(24));
+                _vgRecolher.BringToFront();
+                // Recolhido, a previa e as linhas ficam fora da area visivel do cartao.
+                _vgPreview.Visible = !recolhido;
 
                 _cardPerif.SetBounds(x0, y, alvo, AlturaPerif);
                 y += AlturaPerif + Esp;
