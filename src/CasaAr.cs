@@ -603,7 +603,10 @@ namespace MhiagosControl
         private static readonly string[] Internas = { "t_device_info", "t_temp_type", "t_power", "t_temp", "t_work_mode", "t_fan_speed", "t_beep" };
 
         private readonly Mostrador _dial;
-        private readonly BotaoRedondo _menos, _mais, _liga;
+        private readonly BotaoRedondo _menos, _mais, _liga, _noturno;
+        private readonly Label _lbNoturno;
+        private readonly ToolTip _dicaNoturno = new ToolTip();
+        internal BotaoRedondo BotaoNoturno { get { return _noturno; } }
         private readonly Label _lbModo, _lbVento, _lbAlerta, _lbLiga;
         private readonly Blocos _modo, _vento;
         private readonly Segmented _unidade;
@@ -660,6 +663,16 @@ namespace MhiagosControl
             Controls.Add(_menos); Controls.Add(_mais); Controls.Add(_liga);
             _lbLiga = Rotulo("", Ui.FontMed, Ui.Text);
             _lbLiga.TextAlign = ContentAlignment.MiddleLeft;
+
+            // Noturno em um clique. t_sleep vai sozinho no comando (ServicoCasa.Partes).
+            _noturno = new BotaoRedondo("");
+            _noturno.Desenho = IconesCasa.Lua;
+            _noturno.AccessibleName = T.CasaFuncao("t_sleep");
+            _noturno.Click += delegate { Mandar("t_sleep", A != null && A.Int("t_sleep", 0) != 0 ? 0 : 1); };
+            _dicaNoturno.SetToolTip(_noturno, T.CasaFuncao("t_sleep"));
+            Controls.Add(_noturno);
+            _lbNoturno = Rotulo("", Ui.FontSmall, Ui.Muted);
+            _lbNoturno.TextAlign = ContentAlignment.MiddleRight;
 
             _lbModo = Rotulo(T.CasaModo, Ui.FontSmall, Ui.Muted);
             _modo = new Blocos();
@@ -809,7 +822,7 @@ namespace MhiagosControl
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _espera.Dispose(); _dica.Dispose(); }
+            if (disposing) { _espera.Dispose(); _dica.Dispose(); _dicaNoturno.Dispose(); }
             base.Dispose(disposing);
         }
 
@@ -977,11 +990,14 @@ namespace MhiagosControl
 
             // --- interruptores: os conhecidos e qualquer outro 0/1 gravavel que o modelo declarar
             List<string> chaves = new List<string>();
-            foreach (string k in Interruptores) if (A.Tem(k) || (Meta(k) != null && Meta(k).Grava)) chaves.Add(k);
+            // O noturno tem botao proprio no painel; nao repete como interruptor.
+            bool botaoNoturno = CenaCasa.Aceita(A, "t_sleep", 1);
+            foreach (string k in Interruptores)
+                if ((A.Tem(k) || (Meta(k) != null && Meta(k).Grava)) && !(k == "t_sleep" && botaoNoturno)) chaves.Add(k);
             if (A.Meta != null)
                 foreach (MetaPropriedade m in A.Meta.Values)
                     if (m.Grava && m.Valores.Count == 2 && m.Valores.Contains(0) && m.Valores.Contains(1) &&
-                        !chaves.Contains(m.Chave) && Array.IndexOf(Internas, m.Chave) < 0)
+                        !chaves.Contains(m.Chave) && Array.IndexOf(Internas, m.Chave) < 0 && !(m.Chave == "t_sleep" && botaoNoturno))
                         chaves.Add(m.Chave);
             SincronizarChaves(chaves);
             foreach (Toggle t in _chaves)
@@ -989,12 +1005,20 @@ namespace MhiagosControl
                 t.Checked = A.Int((string)t.Tag, 0) != 0;
                 t.Enabled = on && Grava((string)t.Tag);
             }
+            bool noturno = A.Int("t_sleep", 0) != 0;
+            _noturno.Visible = _lbNoturno.Visible = botaoNoturno;
+            _noturno.Aceso = noturno;
+            _noturno.Enabled = on && ligado;
+            _noturno.Invalidate();
+            _lbNoturno.Text = noturno ? T.CasaNoturnoLigado : T.CasaFuncao("t_sleep");
+            _lbNoturno.ForeColor = noturno ? Ui.AccentText : Ui.Muted;
             _semBipe.Visible = Grava("t_beep");
             _ajustando = true;
             try { _semBipe.Checked = SemBipe; }
             finally { _ajustando = false; }
             _semBipe.Enabled = on;
-            _secFuncoes.Visible = _chaves.Count > 0 || _semBipe.Visible;
+            // Visible de um filho reflete o pai escondido (aba Painel): decide pelo modelo.
+            _secFuncoes.Visible = _chaves.Count > 0 || Grava("t_beep");
 
             bool unidade = Grava("t_temp_type") || A.Tem("t_temp_type");
             _secPref.Visible = unidade;
@@ -1087,7 +1111,11 @@ namespace MhiagosControl
 
             int lw = Ui.S(56);
             _liga.SetBounds(cx, y, lw, lw);
-            _lbLiga.SetBounds(cx + lw + Ui.S(12), y + (lw - Ui.S(24)) / 2 - (_lbLiga.Tag != null ? Ui.S(8) : 0), cw - lw - Ui.S(12), Ui.S(24));
+            int nw = Ui.S(44);
+            _noturno.SetBounds(cx + cw - nw, y + (lw - nw) / 2, nw, nw);
+            _lbNoturno.SetBounds(_noturno.Left - Ui.S(150) - Ui.S(10), y + (lw - Ui.S(20)) / 2, Ui.S(150), Ui.S(20));
+            int fimLiga = _noturno.Visible ? _lbNoturno.Left - Ui.S(8) : cx + cw;
+            _lbLiga.SetBounds(cx + lw + Ui.S(12), y + (lw - Ui.S(24)) / 2 - (_lbLiga.Tag != null ? Ui.S(8) : 0), Math.Max(Ui.S(60), fimLiga - cx - lw - Ui.S(12)), Ui.S(24));
             y += lw + Ui.S(14);
 
             if (_modo.Visible)
@@ -1184,7 +1212,7 @@ namespace MhiagosControl
             if (s == _secFuncoes)
             {
                 List<Toggle> todas = new List<Toggle>(_chaves);
-                if (_semBipe.Visible) todas.Add(_semBipe);
+                if (Grava("t_beep")) todas.Add(_semBipe);
                 for (int i = 0; i < todas.Count; i++) todas[i].SetBounds(m, y + i * Ui.S(36), iw, Ui.S(32));
                 return Math.Max(Ui.S(32), todas.Count * Ui.S(36) - Ui.S(4));
             }
@@ -1234,6 +1262,7 @@ namespace MhiagosControl
     public static partial class T
     {
         public static string CasaModoN { get { return P("Modo {0}", "Mode {0}"); } }
+        public static string CasaNoturnoLigado { get { return P("Noturno ligado", "Sleep on"); } }
         public static string CasaEco { get { return P("ECO", "Eco"); } }
         public static string CasaSemBipe { get { return P("Comandos sem bipe", "Silent commands (no beep)"); } }
         public static string CasaVelocidadeN { get { return P("Nível {0}", "Level {0}"); } }

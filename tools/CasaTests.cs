@@ -138,8 +138,21 @@ namespace MhiagosControl
                             Verdade(dial.Min == 16 && dial.Max == 30 && dial.Valor == 23, "mostrador na faixa do modelo");
                             List<string> ks = new List<string>();
                             foreach (Toggle t in (List<Toggle>)Field(ar, "_chaves")) ks.Add((string)t.Tag);
-                            Verdade(ks.Contains("t_sleep") && !ks.Contains("t_beep") && !ks.Contains("t_device_info") && !ks.Contains("t_eco"),
-                                "interruptores do aparelho: so o noturno; nada que o modelo nao tenha");
+                            Verdade(!ks.Contains("t_sleep") && !ks.Contains("t_beep") && !ks.Contains("t_device_info") && !ks.Contains("t_eco"),
+                                "interruptores do aparelho: nenhum repetido; nada que o modelo nao tenha");
+                            // Item 2: botao de noturno no painel, na linha do liga/desliga.
+                            BotaoRedondo bn = ar.BotaoNoturno;
+                            Verdade(bn.Visible && !bn.Aceso && bn.Right <= ar.Width - Ui.S(18) && bn.Bottom < ((Blocos)Field(ar, "_modo")).Top,
+                                "botao de noturno visivel, apagado, na linha do liga/desliga " + sufixo);
+                            List<ComandoEventArgs> cmds = new List<ComandoEventArgs>();
+                            EventHandler<ComandoEventArgs> pega = delegate(object s2, ComandoEventArgs e2) { cmds.Add(e2); };
+                            ar.Comando += pega;
+                            InvokePrivate(bn, "OnClick", EventArgs.Empty);
+                            ar.Comando -= pega;
+                            Verdade(cmds.Count == 1 && cmds[0].Propriedades.Count == 1 && cmds[0].Propriedades["t_sleep"] == "1" && bn.Aceso,
+                                "clique manda so t_sleep=1 e acende " + sufixo);
+                            ar.Aparelho.Estado["t_sleep"] = "0";
+                            ar.Atualizar();
                             Verdade(((Toggle)Field(ar, "_semBipe")).Parent == ar.Secoes[0] && ar.Secoes[0].Parent == casa.Ajustes, "o bipe virou a preferencia Comandos sem bipe, em Ajustes");
 
                             // Mostrador inteiro dentro do cartao, centrado na coluna, com o puxador cabendo.

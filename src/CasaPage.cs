@@ -972,6 +972,8 @@ namespace MhiagosControl
     internal sealed class BotaoRedondo : Control
     {
         public bool Grande, Aceso;
+        /// <summary>Icone desenhado no lugar do glifo (a lua do noturno, por exemplo).</summary>
+        public Action<Graphics, RectangleF, Color> Desenho;
         private readonly string _glifo;
         private Transicao _t;
         private Transicao TH { get { return _t ?? (_t = new Transicao(this)); } }
@@ -1025,6 +1027,12 @@ namespace MhiagosControl
             using (Pen p = new Pen(borda)) g.DrawEllipse(p, r);
             if (Focused && ShowFocusCues)
                 using (Pen p = new Pen(Ui.Accent, 2f)) g.DrawEllipse(p, Rectangle.Inflate(r, -2, -2));
+            if (Desenho != null)
+            {
+                float m = Width * 0.3f;
+                Desenho(g, new RectangleF(m, m, Width - 2 * m, Height - 2 * m), frente);
+                return;
+            }
             using (GraphicsPath gp = Glifo(_glifo, Grande ? Ui.FontGlyph18 : Ui.FontGlyph11, new RectangleF(0, 0, Width - 1, Height - 1)))
             using (SolidBrush b = new SolidBrush(frente))
                 g.FillPath(b, gp);
