@@ -420,9 +420,11 @@ namespace MhiagosControl
                     g.DrawArc(p, r, -90f, 360f * Math.Min(1f, Progresso));
                 }
             Rectangle m = Rectangle.Round(r);
-            Size sg = TextRenderer.MeasureText(g, Grande, FonteGrande, Size.Empty, TextFormatFlags.NoPadding);
-            int y = m.Y + m.Height / 2 - sg.Height / 2 - Ui.S(8);
-            TextRenderer.DrawText(g, Grande, FonteGrande, new Rectangle(m.X, y, m.Width, sg.Height), Apagado ? Ui.Muted : Ui.Text,
+            // Anel pequeno (o da Visao geral): fonte menor, para o tempo caber dentro.
+            Font fg = Width < Ui.S(140) ? Ui.FontSemi : FonteGrande;
+            Size sg = TextRenderer.MeasureText(g, Grande, fg, Size.Empty, TextFormatFlags.NoPadding);
+            int y = m.Y + m.Height / 2 - sg.Height / 2 - (Pequeno.Length > 0 || Rodape.Length > 0 ? Ui.S(8) : 0);
+            TextRenderer.DrawText(g, Grande, fg, new Rectangle(m.X, y, m.Width, sg.Height), Apagado ? Ui.Muted : Ui.Text,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, Pequeno, Ui.FontSmall, new Rectangle(m.X, y + sg.Height + Ui.S(2), m.Width, Ui.S(18)), Ui.Muted,
                 TextFormatFlags.HorizontalCenter);

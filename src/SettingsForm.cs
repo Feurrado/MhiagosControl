@@ -986,6 +986,7 @@ namespace MhiagosControl
 
         private Card _cardCooler, _cardSpecs;
         private PeripheralStrip _cardPerif;
+        private ResumoDaCasa _cardCasa;
         private PanelPreview _vgPreview;
         private Label _vgPerfil, _vgPainel;
         private Label[] _vgSpecCap, _vgSpecVal;
@@ -1054,6 +1055,12 @@ namespace MhiagosControl
             _cardPerif = new PeripheralStrip();
             _cardPerif.BateriasPedidas += delegate { AbrirPaginaPelaChave("baterias"); };
             _pgVisao.Controls.Add(_cardPerif);
+
+            // A casa (ar e lavadora) entre os perifericos e as especificacoes:
+            // estado e controle basico sem trocar de pagina.
+            _cardCasa = new ResumoDaCasa();
+            _cardCasa.AbrirCasa += delegate { AbrirPaginaPelaChave("casa"); };
+            _pgVisao.Controls.Add(_cardCasa);
 
             _cardSpecs = new Card();
             _cardSpecs.Title = null;    // tira sozinho: e uma tira de referencia
@@ -1234,6 +1241,8 @@ namespace MhiagosControl
             int AlturaBloco = Ui.S(104);
             int AlturaSpecs = Ui.S(56);
             int AlturaPerif = Ui.S(80);
+            int AlturaCasa = _cardCasa != null ? Ui.S(ResumoDaCasa.Altura) : 0;
+            int EspCasa = _cardCasa != null ? Esp : 0;
             int MeioMin = Ui.S(240);
 
             int disp = _pgVisao.Width - Ui.S(4);
@@ -1260,13 +1269,13 @@ namespace MhiagosControl
 
                 int yMeio = (n > 0 ? AlturaBloco + Esp : 0);
                 int ySpecs = _pgVisao.Height - AlturaSpecs;
-                int yPerif = ySpecs - Esp - AlturaPerif;
+                int yPerif = ySpecs - Esp - AlturaCasa - EspCasa - AlturaPerif;
                 int hMeio = yPerif - Esp - yMeio;
                 if (hMeio < MeioMin)
                 {
                     hMeio = MeioMin;
                     yPerif = yMeio + hMeio + Esp;
-                    ySpecs = yPerif + AlturaPerif + Esp;
+                    ySpecs = yPerif + AlturaPerif + Esp + AlturaCasa + EspCasa;
                 }
 
                 // Duas colunas na faixa do meio. A esquerda e mais estreita: o
@@ -1300,7 +1309,7 @@ namespace MhiagosControl
                 int hIdeal = Ui.S(46) + (wEsq - Ui.S(32)) + Ui.S(14) + linhasCooler * Ui.S(26) + Ui.S(14);
                 if (hIdeal < hMeio) hMeio = Math.Max(hIdeal, MeioMin);
                 yPerif = yMeio + hMeio + Esp;
-                ySpecs = yPerif + AlturaPerif + Esp;
+                ySpecs = yPerif + AlturaPerif + Esp + AlturaCasa + EspCasa;
 
                 _cardCooler.SetBounds(x0, yMeio, wEsq, hMeio);
 
@@ -1310,6 +1319,7 @@ namespace MhiagosControl
                     _vgP2.SetBounds(x0 + wEsq + Esp, yMeio + hCurva + Esp, wDir, hMeio - hCurva - Esp);
 
                 _cardPerif.SetBounds(x0, yPerif, alvo, AlturaPerif);
+                if (_cardCasa != null) _cardCasa.SetBounds(x0, yPerif + AlturaPerif + Esp, alvo, AlturaCasa);
                 _cardSpecs.SetBounds(x0, ySpecs, alvo, AlturaSpecs);
 
                 // O bloco inteiro centrado tambem na vertical: na horizontal ja
@@ -1323,6 +1333,7 @@ namespace MhiagosControl
                     if (_vgP1 != null) _vgP1.Top += y0;
                     if (_vgP2 != null) _vgP2.Top += y0;
                     _cardPerif.Top += y0;
+                    if (_cardCasa != null) _cardCasa.Top += y0;
                     _cardSpecs.Top += y0;
                 }
 

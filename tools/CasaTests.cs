@@ -338,6 +338,34 @@ namespace MhiagosControl
                             }
                         }
                         casa.MostrarSemNuvem(Exemplo());
+
+                        // Item 8: a casa na Visao geral, entre perifericos e especificacoes.
+                        for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
+                        foreach (int largura in new int[] { 1300, 880 })
+                        {
+                            form.Size = new Size(largura, 900);
+                            InvokePrivate(form, "ArranjarVisaoGeral");
+                            string sufixo = "visao-" + language + "-" + largura;
+                            ResumoDaCasa rc = (ResumoDaCasa)Field(form, "_cardCasa");
+                            Control perif = (Control)Field(form, "_cardPerif"), specs = (Control)Field(form, "_cardSpecs");
+                            rc.Puxar();
+                            Verdade(rc.Visible && rc.Ar != null && rc.Lavadora != null, "resumo com o ar e a lavadora " + sufixo);
+                            Verdade(rc.Top >= perif.Bottom && rc.Bottom <= specs.Top && rc.Left == perif.Left && rc.Width == perif.Width,
+                                "resumo entre perifericos e especificacoes, mesma largura " + sufixo);
+                            SemSobrepor(rc, "resumo da casa " + sufixo);
+                            CaptureEvolution(form, "casa-" + sufixo);
+                            InvokePrivate(rc.BotaoLiga, "OnClick", EventArgs.Empty);
+                            Verdade(rc.UltimoComando != null && rc.UltimoComando.Count == 1 && rc.UltimoComando["t_power"] == "0",
+                                "liga/desliga no resumo manda t_power " + sufixo);
+                            rc.Ar.Estado["t_power"] = "1";
+                            rc.Puxar();
+                        }
+                        ServicoCasa.PararSimulacao();
+                        ResumoDaCasa rs = (ResumoDaCasa)Field(form, "_cardCasa");
+                        rs.Puxar();
+                        Verdade(rs.Ar == null && ((FlatBtn)Field(rs, "_convite")).Visible, "sem conta: convite para a pagina Casa " + language);
+                        SemSobrepor(rs, "resumo sem conta " + language);
+                        CaptureEvolution(form, "casa-visao-sem-conta-" + language);
                     }
                 }
             }
