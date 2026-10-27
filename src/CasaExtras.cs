@@ -366,6 +366,10 @@ namespace MhiagosControl
         public static string CasaAlertaQuenteOpcao { get { return P("Quente e desligado (°C)", "Hot while off (°C)"); } }
 
         /// <summary>Nome da falha oficial: os conhecidos traduzidos, os outros como a Hisense mandou.</summary>
+        public static string CasaSemErro { get { return P("Nenhum erro agora", "No error now"); } }
+        public static string CasaErroCodigo { get { return P("Erro {0}", "Error {0}"); } }
+        public static string CasaCodigosConhecidos(int n) { return P(n + " códigos de erro conhecidos para este modelo (autodiagnóstico da Hisense).", n + " known error codes for this model (Hisense self-check)."); }
+
         public static string CasaFalhaOficial(string chave, string ingles)
         {
             string conhecido = CasaFalha(chave, null);
@@ -385,9 +389,18 @@ namespace MhiagosControl
 
         public static string CasaOrientacao(string chave, string ingles)
         {
-            if (chave.IndexOf("after_sales", StringComparison.OrdinalIgnoreCase) >= 0)
+            // Frases da lavadora (orientacao por codigo de erro) e do ar.
+            string t = ingles ?? "";
+            string persiste = t.IndexOf("persists", StringComparison.OrdinalIgnoreCase) >= 0 ? P(" Se persistir, procure a assistência técnica.", " If it persists, contact after-sales service.") : "";
+            if (t.IndexOf("water inlet", StringComparison.OrdinalIgnoreCase) >= 0)
+                return P("Conecte a mangueira de entrada, abra a torneira e aperte iniciar, ou limpe a válvula de entrada.", "Connect the inlet hose, open the tap and press start, or clean the inlet valve.") + persiste;
+            if (t.IndexOf("drainage pump", StringComparison.OrdinalIgnoreCase) >= 0)
+                return P("Limpe a bomba de drenagem.", "Clean the drain pump.") + persiste;
+            if (t.IndexOf("Disconnect the plug", StringComparison.OrdinalIgnoreCase) >= 0)
+                return P("Tire da tomada, espere 3 segundos e ligue de novo.", "Unplug, wait 3 seconds, plug back in and turn on.") + persiste;
+            if (chave.IndexOf("after_sales", StringComparison.OrdinalIgnoreCase) >= 0 && persiste.Length == 0)
                 return P("Procure a assistência técnica.", "Please contact after-sales service for assistance.");
-            return ingles;
+            return t;
         }
     }
 }

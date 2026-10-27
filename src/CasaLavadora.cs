@@ -517,6 +517,23 @@ namespace MhiagosControl
         private readonly List<Label[]> _params = new List<Label[]>();
         private readonly FlatBtn _btTudo;
         private bool _aberto;
+        private readonly BotaoChave _chave;
+        private readonly ToolTip _dica = new ToolTip();
+        private readonly Label _diag, _lbDiag;
+        private bool _diagAberto;
+        internal BotaoChave Chave { get { return _chave; } }
+
+        /// <summary>Mostra ou esconde o diagnostico (so leitura: a lavadora esta em "so monitorar").</summary>
+        internal void AlternarDiagnostico()
+        {
+            _diagAberto = !_diagAberto;
+            _chave.Aberto = _diagAberto;
+            _chave.Invalidate();
+            _diag.Visible = _lbDiag.Visible = _diagAberto;
+            if (_diagAberto && A != null) _diag.Text = Diagnostico.Texto(A);
+            AvisarAltura();
+        }
+
         private readonly CabecalhoRecolhivel _cabConsumo;
         private readonly Label _consumo;
         private readonly AnimacaoDeRecolher _animConsumo;
@@ -561,6 +578,14 @@ namespace MhiagosControl
             Controls.Add(_btTudo);
             _tudo = Rotulo("", Ui.FontSmall, Ui.Muted);
 
+            _chave = new BotaoChave();
+            _chave.Click += delegate { AlternarDiagnostico(); };
+            _dica.SetToolTip(_chave, T.CasaDiagnostico);
+            Controls.Add(_chave);
+            _lbDiag = Rotulo(T.CasaDiagnostico, Ui.FontMed, Ui.Text);
+            _diag = Rotulo("", Ui.FontSmall, Ui.Text);
+            _lbDiag.Visible = _diag.Visible = false;
+
             _cabConsumo = new CabecalhoRecolhivel();
             _cabConsumo.Titulo = T.LavConsumoTitulo;
             _cabConsumo.Click += delegate { AlternarConsumo(true); };
@@ -574,7 +599,7 @@ namespace MhiagosControl
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _animConsumo.Dispose();
+            if (disposing) { _animConsumo.Dispose(); _dica.Dispose(); }
             base.Dispose(disposing);
         }
 
@@ -703,6 +728,9 @@ namespace MhiagosControl
             if (c.Erro && c.CodigoDeErro != 0) av.Add(string.Format(T.LavErroCodigo, c.CodigoDeErro));
             _aviso.Text = av.Count > 0 ? "⚠  " + string.Join("  ·  ", av.ToArray()) : "";
             _aviso.Visible = av.Count > 0;
+            _chave.Falha = Diagnostico.TemFalha(A);
+            _chave.Invalidate();
+            if (_diagAberto) _diag.Text = Diagnostico.Texto(A);
 
             // --- ultimos ciclos registrados pelo Mhiagos
             List<CiclosDaLavadora.Ciclo> ult = CiclosDaLavadora.Ultimos(A.Puid, 5);
@@ -731,6 +759,13 @@ namespace MhiagosControl
             int y0 = Cabeca + Ui.S(18);
             bool lado = iw >= Ui.S(600);
             int anel = Ui.S(200);
+
+            // Chave do diagnostico no cabecalho, a esquerda do selo (como no ar).
+            int seloW = 0;
+            foreach (string s in new[] { T.CasaOnline, T.CasaOffline, T.CasaEnviando })
+                seloW = Math.Max(seloW, TextRenderer.MeasureText(s, Ui.FontSmall).Width + Ui.S(22));
+            int kc = Ui.S(32);
+            _chave.SetBounds(w - M - seloW - Ui.S(10) - kc, (Cabeca - kc) / 2, kc, kc);
             int ax = lado ? M : M + (iw - anel) / 2;
             _anel.SetBounds(ax, y0, anel, anel);
 
@@ -763,6 +798,12 @@ namespace MhiagosControl
                     i++;
                 }
                 y += ((i + col - 1) / col) * Ui.S(46) + Ui.S(8);
+            }
+
+            if (_diag.Visible)
+            {
+                _lbDiag.SetBounds(M, y, iw, Ui.S(22));
+                y = Bloco(_diag, M, y + Ui.S(26), iw) + Ui.S(14);
             }
 
             if (_btTudo.Visible)

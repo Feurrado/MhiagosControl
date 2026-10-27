@@ -207,7 +207,7 @@ namespace MhiagosControl
                 }
                 foreach (Aparelho a in lista)
                 {
-                    if (a.Lavadora) { CiclosDaLavadora.Conferir(a, Pref); continue; }
+                    if (a.Lavadora) { CiclosDaLavadora.Conferir(a, Pref); Diagnostico.Atualizar(nuvem, a); continue; }
                     if (!a.ArCondicionado) continue;
                     HistoricoDoAr.Registrar(a, DateTime.Now);
                     Diagnostico.Atualizar(nuvem, a);
@@ -814,13 +814,40 @@ namespace MhiagosControl
 
         internal static void Definir(string puid, List<FalhaOficial> l) { lock (_trava) _listas[puid] = l; }
 
-        /// <summary>Alguma falha ativa agora (f_e_* acusando)?</summary>
+        /// <summary>Alguma falha ativa agora (f_e_* acusando, error_code diferente de 0 ou item da lista oficial)?</summary>
         public static bool TemFalha(Aparelho a)
         {
             if (a == null) return false;
             foreach (KeyValuePair<string, string> kv in a.Estado)
                 if (kv.Key.StartsWith("f_e_") && a.Int(kv.Key, 0) != 0) return true;
+            if (a.Int("error_code", 0) != 0) return true;
+            List<FalhaOficial> lista = Lista(a.Puid);
+            if (lista != null)
+                foreach (FalhaOficial f in lista) if (Ativa(a, f)) return true;
             return false;
+        }
+
+        /// <summary>A falha da lista oficial esta acusando: o estado tem o valor de falha.</summary>
+        internal static bool Ativa(Aparelho a, FalhaOficial f)
+        {
+            string v;
+            return a.Estado.TryGetValue(f.Chave, out v) && v == f.ValorDeFalha;
+        }
+
+        /// <summary>
+        /// Lista que e um dicionario de codigos (a da lavadora: todos os itens com
+        /// statusKey error_code, cada um com um statusValue): mostra so o codigo atual.
+        /// </summary>
+        private static bool PorCodigo(List<FalhaOficial> l) { return ChaveDeCodigo(l) != null; }
+
+        /// <summary>A chave que se repete em 3 ou mais itens (error_code na lavadora), ou nulo.</summary>
+        private static string ChaveDeCodigo(List<FalhaOficial> l)
+        {
+            if (l == null) return null;
+            Dictionary<string, int> n = new Dictionary<string, int>();
+            foreach (FalhaOficial f in l) { int k; n.TryGetValue(f.Chave, out k); n[f.Chave] = k + 1; }
+            foreach (KeyValuePair<string, int> kv in n) if (kv.Value >= 3) return kv.Key;
+            return null;
         }
 
         /// <summary>O diagnostico em texto: cada falha da lista oficial e o estado dela agora.</summary>
@@ -834,12 +861,40 @@ namespace MhiagosControl
                 // Sem a lista oficial ainda: as f_e_* que o aparelho publica.
                 foreach (KeyValuePair<string, string> kv in a.Estado)
                     if (kv.Key.StartsWith("f_e_") && kv.Key != "f_e_push")
-                        l.Add((a.Int(kv.Key, 0) != 0 ? "\u25CF  " + T.CasaFalhaAtiva : "\u25CB  " + T.CasaFalhaOk) + "  ·  " + T.CasaFalha(kv.Key, null));
+                        l.Add((a.Int(kv.Key, 0) != 0 ? "\u25CF  " + T.CasaFalhaAtiva : "\u25CB  " + T.CasaFalhaOk) + "  ·  " + T.CasaFalha(kv.Key, null));                // Lavadora (e quem mais publicar error_code) sem a lista oficial ainda.
+                if (a.Tem("error_code"))
+                    l.Add(a.Int("error_code", 0) == 0 ? "\u25CB  " + T.CasaSemErro : "\u25CF  " + string.Format(T.CasaErroCodigo, a.Int("error_code", 0)));
+            }
+            else if (PorCodigo(lista))
+            {
+                string chave = ChaveDeCodigo(lista);
+                int atual = a.Int(chave, 0);
+                FalhaOficial achada = null;
+                int codigos = 0;
+                foreach (FalhaOficial f in lista)
+                {
+                    if (f.Chave != chave) continue;
+                    codigos++;
+                    if (Ativa(a, f)) achada = f;
+                }
+                if (atual == 0) l.Add("\u25CB  " + T.CasaSemErro);
+                else
+                {
+                    l.Add("\u25CF  " + (achada != null ? achada.Nome + (achada.Categoria.Length > 0 ? " (" + achada.Categoria + ")" : "") : string.Format(T.CasaErroCodigo, atual)));
+                    if (achada != null && achada.Orientacao.Length > 0) l.Add("      " + achada.Orientacao);
+                }
+                // Os demais itens (sabao, amaciante) so aparecem quando acusam.
+                foreach (FalhaOficial f in lista)
+                {
+                    if (f.Chave == chave || !Ativa(a, f)) continue;
+                    l.Add("\u25CF  " + f.Nome + (f.Orientacao.Length > 0 ? "\n      " + f.Orientacao : ""));
+                }
+                l.Add(T.CasaCodigosConhecidos(codigos));
             }
             else
                 foreach (FalhaOficial f in lista)
                 {
-                    bool ativa = a.Tem(f.Chave) && a.Estado[f.Chave] == f.ValorDeFalha;
+                    bool ativa = Ativa(a, f);
                     string s = (ativa ? "\u25CF  " + T.CasaFalhaAtiva : "\u25CB  " + T.CasaFalhaOk) + "  ·  " + f.Nome;
                     if (f.Categoria.Length > 0) s += " (" + f.Categoria + ")";
                     if (ativa && f.Orientacao.Length > 0) s += "\n      " + f.Orientacao;
@@ -868,7 +923,9 @@ namespace MhiagosControl
                 f.Chave = Json.Texto(i, "statusKey") ?? "";
                 f.ValorDeFalha = Json.Texto(i, "statusValue") ?? "1";
                 // Os textos oficiais vem em ingles; os conhecidos sao traduzidos.
-                f.Nome = T.CasaFalhaOficial(f.Chave, Json.Texto(i, "fault") ?? f.Chave);
+                string falha = Json.Texto(i, "fault") ?? "";
+                f.Nome = falha.Length > 0 ? T.CasaFalhaOficial(f.Chave, falha) :
+                    (f.Chave == "error_code" ? string.Format(T.CasaErroCodigo, f.ValorDeFalha) : T.CasaFalhaOficial(f.Chave, f.Chave));
                 f.Categoria = T.CasaCategoria(Json.Texto(i, "content") ?? "");
                 f.Orientacao = T.CasaOrientacao(Json.Texto(i, "guideKey") ?? "", Json.Texto(i, "guide") ?? "");
                 if (f.Chave.Length > 0) l.Add(f);

@@ -313,7 +313,16 @@ namespace MhiagosControl
                                 }
                                 if (estado == "offline")
                                     Verdade(anel.Apagado && titulo.Text == T.LavDesconectada, "desconectada: anel apagado " + sufixo);
-                                // Item 5: consumo e historico da lavadora, recolhivel, comeca fechado.
+                                // Item 7: chave do diagnostico no cabecalho da lavadora.
+                                Verdade(lv.Chave.Visible && lv.Chave.Bottom <= Ui.S(64) && lv.Chave.Right < lv.Width - Ui.S(18) - Ui.S(60),
+                                    "chave do diagnostico na lavadora " + sufixo);
+                                lv.AlternarDiagnostico();
+                                casa.Arranjar();
+                                SemSobrepor(lv, "lavadora com diagnostico " + sufixo);
+                                Verdade(((Label)Field(lv, "_diag")).Visible && ((Label)Field(lv, "_diag")).Text.Length > 0, "diagnostico aberto " + sufixo);
+                                if (estado == "secando" && largura == 1300) CaptureEvolution(lv, "casa-lavadora-diagnostico-" + sufixo);
+                                lv.AlternarDiagnostico();
+                                casa.Arranjar();                                // Item 5: consumo e historico da lavadora, recolhivel, comeca fechado.
                                 Verdade(!lv.ConsumoAberto && !((Label)Field(lv, "_consumo")).Visible && lv.CabecalhoDoConsumo.Visible,
                                     "consumo da lavadora comeca fechado " + sufixo);
                                 CaptureEvolution(lv, "casa-lavadora-" + sufixo);
@@ -728,6 +737,26 @@ namespace MhiagosControl
             Aparelho erro = Lavadora("secando"); erro.Estado["machine_status"] = "4"; erro.Estado["error_code"] = "12";
             Verdade(CicloAtual.De(erro).Erro && CicloAtual.De(erro).Titulo().Contains("12"), "erro com codigo");
 
+            // Item 7: autodiagnostico da lavadora, pela resposta real gravada em docs.
+            string arq = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\docs\connectlife-lavadora-levantamento.json");
+            Verdade(System.IO.File.Exists(arq), "levantamento da lavadora disponivel para o teste");
+            if (System.IO.File.Exists(arq))
+            {
+                Dictionary<string, object> lev = (Dictionary<string, object>)Json.Ler(System.IO.File.ReadAllText(arq));
+                Dictionary<string, object> resp = (Dictionary<string, object>)lev["respostas"];
+                List<FalhaOficial> fl = Diagnostico.Interpretar((Dictionary<string, object>)resp["selfcheck"]);
+                Verdade(fl.Count == 30 && fl[0].Chave == "error_code", "30 itens na lista oficial, a maioria em error_code");
+                FalhaOficial e1 = null;
+                foreach (FalhaOficial x in fl) if (x.Chave == "error_code" && x.ValorDeFalha == "1") e1 = x;
+                Verdade(e1 != null && e1.Orientacao.Contains(T.Pt ? "torneira" : "tap"), "codigo 1: orientacao da entrada de agua traduzida");
+                Aparelho lvd = Lavadora("secando");
+                Diagnostico.Definir(lvd.Puid, fl);
+                Verdade(!Diagnostico.TemFalha(lvd) && Diagnostico.Texto(lvd).Contains(T.CasaSemErro), "sem erro: nenhum erro agora");
+                lvd.Estado["error_code"] = "1";
+                Verdade(Diagnostico.TemFalha(lvd) && Diagnostico.Texto(lvd).Contains(string.Format(T.CasaErroCodigo, 1)) &&
+                    Diagnostico.Texto(lvd).Contains(e1.Orientacao), "erro 1: codigo e orientacao no diagnostico");
+                Diagnostico.Definir(lvd.Puid, new List<FalhaOficial>());
+            }
             // Ciclos: comeca ao rodar, termina ao parar, avisa uma vez.
             string pasta = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mhiagos-casa-teste3");
             System.IO.Directory.CreateDirectory(pasta);
