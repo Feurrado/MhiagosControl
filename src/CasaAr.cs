@@ -277,6 +277,10 @@ namespace MhiagosControl
         public double? Ambiente;
         public string Unidade = "°C", Legenda = "";
         public bool Ligado = true;
+        private LigadoAnimado _lig;
+        private NumeroDeslizante _num;
+        private LigadoAnimado Lig { get { return _lig ?? (_lig = new LigadoAnimado(this)); } }
+        private NumeroDeslizante Num { get { return _num ?? (_num = new NumeroDeslizante(this)); } }
         public Color Cor = Ui.Accent;
         public event EventHandler Escolheu;
         public event EventHandler Arrastando;
@@ -376,7 +380,10 @@ namespace MhiagosControl
             using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillRectangle(b, ClientRectangle);
             Ui.Smooth(g);
             RectangleF a = Anel();
-            Color cor = Ligado && Enabled ? Cor : Ui.Faint;
+            // ligar e desligar fazem fade (~250 ms) do cinza para a cor do modo
+            Lig.Definir(Ligado);
+            float lig = Enabled ? Lig.Valor : 0f;
+            Color cor = Ui.Misturar(Ui.Faint, Cor, lig);
 
             using (Pen trilho = new Pen(Ui.SurfaceAlt, Espessura))
             {
@@ -411,13 +418,15 @@ namespace MhiagosControl
             // Centro: legenda, alvo e ambiente.
             int cyMeio = meio.Y + meio.Height / 2;
             TextRenderer.DrawText(g, Legenda, Ui.FontSmall, new Rectangle(meio.X, cyMeio - Ui.S(58), meio.Width, Ui.S(18)),
-                Ligado ? Ui.Muted : Ui.Faint, TextFormatFlags.HorizontalCenter);
+                Ui.Misturar(Ui.Faint, Ui.Muted, lig), TextFormatFlags.HorizontalCenter);
             string alvo = Valor.ToString(CultureInfo.InvariantCulture);
             Size sa = TextRenderer.MeasureText(g, alvo, FonteAlvo, Size.Empty, TextFormatFlags.NoPadding);
             Size su = TextRenderer.MeasureText(g, Unidade, FonteUnidade, Size.Empty, TextFormatFlags.NoPadding);
             int x0 = meio.X + (meio.Width - sa.Width - su.Width) / 2;
             int ya = cyMeio - sa.Height / 2 - Ui.S(4);
-            TextRenderer.DrawText(g, alvo, FonteAlvo, new Point(x0, ya), Ligado ? Ui.Text : Ui.Muted, TextFormatFlags.NoPadding);
+            // o alvo desliza ao mudar: sobe saindo por cima, desce saindo por baixo
+            Num.Desenhar(g, alvo, FonteAlvo, new Point(x0, ya), new Rectangle(meio.X, ya - Ui.S(4), meio.Width, sa.Height + Ui.S(8)),
+                Ui.Misturar(Ui.Muted, Ui.Text, lig), Ui.Surface, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, Unidade, FonteUnidade, new Point(x0 + sa.Width, ya + Ui.S(6)), Ui.Muted, TextFormatFlags.NoPadding);
             if (Ambiente.HasValue)
                 TextRenderer.DrawText(g, string.Format(T.CasaAmbienteCurto, Ambiente.Value.ToString("0.#") + Unidade), Ui.FontBase,

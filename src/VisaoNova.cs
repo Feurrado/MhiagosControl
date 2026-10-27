@@ -141,18 +141,9 @@ namespace MhiagosControl
         /// <summary>"A roupa fica pronta as 22:45" com ciclo em andamento; a temperatura do escritorio fica no cartao do ar.</summary>
         public static string Resumo()
         {
-            List<string> l = new List<string>();
-            if (!ServicoCasa.Logado) return "";
-            Aparelho lav = null;
-            foreach (Aparelho a in ServicoCasa.Aparelhos)
-                if (lav == null && a.Lavadora) lav = a;
-            if (lav != null)
-            {
-                CicloAtual c = CicloAtual.De(lav);
-                if (c.Online && c.Rodando && c.Restante > 0)
-                    l.Add(T.VisaoRoupaPronta(FimDoCiclo(c).ToString("HH:mm")));
-            }
-            return string.Join("  ·  ", l.ToArray());
+            // Nada por ora: a temperatura do escritorio esta no cartao do ar e a hora
+            // em que a roupa fica pronta, no cartao da lavadora (e no widget).
+            return "";
         }
 
         public static DateTime FimDoCiclo(CicloAtual c)
@@ -396,6 +387,13 @@ namespace MhiagosControl
         public bool Pilula, Aceso;
         private readonly string _glifo;
         private bool _sobre;
+        private LigadoAnimado _aceso;
+        private FlashDoBotao _flash;
+        private LigadoAnimado TA { get { return _aceso ?? (_aceso = new LigadoAnimado(this)); } }
+        private FlashDoBotao Flash { get { return _flash ?? (_flash = new FlashDoBotao(this)); } }
+
+        /// <summary>O - e o + piscam ao clique; a pilula anima pela troca de Aceso.</summary>
+        protected override void OnClick(EventArgs e) { if (Enabled && !Pilula) Flash.Disparar(); base.OnClick(e); }
 
         public BotaoDaVisao(string glifo)
         {
@@ -423,17 +421,21 @@ namespace MhiagosControl
             Rectangle r = new Rectangle(1, 1, Width - 3, Height - 3);
             if (Pilula)
             {
+                TA.Definir(Aceso);
+                float a = Enabled ? TA.Valor : 0f;
                 using (GraphicsPath p = Ui.RoundRect(r, r.Height / 2))
                 {
-                    Color fundo = !Enabled ? Ui.SurfaceAlt : Aceso ? Ui.AccentSoft : _sobre ? Ui.Hover : Ui.Surface;
+                    Color fundo = !Enabled ? Ui.SurfaceAlt : Ui.Misturar(_sobre ? Ui.Hover : Ui.Surface, Ui.AccentSoft, a);
                     using (SolidBrush b = new SolidBrush(fundo)) g.FillPath(b, p);
-                    using (Pen pen = new Pen(Aceso && Enabled ? Ui.AccentSoft : Ui.Border)) g.DrawPath(pen, p);
+                    using (Pen pen = new Pen(Ui.Misturar(Ui.Border, Ui.AccentSoft, a))) g.DrawPath(pen, p);
                 }
-                TextRenderer.DrawText(g, Text, Ui.FontMed, r, !Enabled ? Ui.Faint : Aceso ? Ui.AccentText : Ui.Muted,
+                TextRenderer.DrawText(g, Text, Ui.FontMed, r, !Enabled ? Ui.Faint : Ui.Misturar(Ui.Muted, Ui.AccentText, a),
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
                 return;
             }
             if (_sobre && Enabled) using (SolidBrush b = new SolidBrush(Ui.AccentSoft)) g.FillEllipse(b, r);
+            float fl = Flash.Intensidade;
+            if (fl > 0f) using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(140 * fl), Ui.Accent))) g.FillEllipse(b, r);
             using (Pen pen = new Pen(Enabled ? Ui.Accent : Ui.Border, 1.5f)) g.DrawEllipse(pen, r);
             TextRenderer.DrawText(g, _glifo, Ui.FontGlyph9, r, Enabled ? Ui.AccentText : Ui.Faint,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
@@ -511,6 +513,10 @@ namespace MhiagosControl
         private readonly BotaoDaVisao _menos, _mais, _liga;
         private readonly System.Windows.Forms.Timer _espera;
         private int _alvoPendente = -1;
+        private LigadoAnimado _lig;
+        private NumeroDeslizante _num;
+        internal LigadoAnimado Lig { get { return _lig ?? (_lig = new LigadoAnimado(this)); } }
+        internal NumeroDeslizante Num { get { return _num ?? (_num = new NumeroDeslizante(this)); } }
 
         internal Aparelho Ar { get { return _ar; } }
         internal BotaoDaVisao BotaoLiga { get { return _liga; } }
@@ -679,19 +685,31 @@ namespace MhiagosControl
             Graphics g = e.Graphics;
             Ui.Smooth(g);
             int m = Ui.S(16);
-            Rectangle ic = Icone(g, m, (Height - Ui.S(40)) / 2);
-            IconesCasa.GlifoCentrado(g, "\uE9CA", Ui.FontGlyph11, ic, Ui.AccentText);
+            // Ligar e desligar: o icone vai do cinza ao azul (e volta) em ~250 ms, com um pulso ao ligar.
+            bool ligadoAgora = _ar.Online && _ar.Int("t_power", 0) != 0;
+            Lig.Definir(ligadoAgora);
+            float lig = Lig.Valor;
+            Rectangle ic = new Rectangle(m, (Height - Ui.S(40)) / 2, Ui.S(40), Ui.S(40));
+            float pu = Lig.Pulso;
+            if (pu >= 0f)
+                using (GraphicsPath pp = Ui.RoundRect(Rectangle.Inflate(ic, (int)(Ui.S(7) * pu), (int)(Ui.S(7) * pu)), Ui.S(11) + (int)(Ui.S(7) * pu)))
+                using (Pen pen = new Pen(Color.FromArgb((int)(160 * (1f - pu)), Ui.Accent), 2f)) g.DrawPath(pen, pp);
+            using (GraphicsPath gi = Ui.RoundRect(ic, Ui.S(11)))
+            using (SolidBrush bi = new SolidBrush(Ui.Misturar(Ui.SurfaceAlt, Ui.AccentSoft, lig))) g.FillPath(bi, gi);
+            IconesCasa.GlifoCentrado(g, "\uE9CA", Ui.FontGlyph11, ic, Ui.Misturar(Ui.Faint, Ui.AccentText, lig));
             int tx = ic.Right + Ui.S(14);
             int alto = Ui.FontSection.Height + Ui.S(2) + Ui.FontSmall.Height;
             int wt = Math.Max(Ui.S(40), _menos.Left - Ui.S(12) - tx), yt = (Height - alto) / 2;
             NomeELinha(g, _ar.Nome, "", tx, yt, wt, Ui.Muted);
             DesenharLinha(g, tx, yt + Ui.FontSection.Height + Ui.S(2), wt);
 
-            bool ligado = _ar.Online && _ar.Int("t_power", 0) != 0;
             int alvo = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0);
             Rectangle num = new Rectangle(_menos.Right, 0, _mais.Left - _menos.Right, Height);
-            TextRenderer.DrawText(g, alvo > 0 ? alvo + "°" : "--", Visao.MonoGrande, num, ligado ? Ui.Accent : Ui.Faint,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            // o alvo desliza ao subir ou descer, e passa do cinza a cor ativa ao ligar
+            string ta = alvo > 0 ? alvo + "°" : "--";
+            Size st = TextRenderer.MeasureText(g, ta, Visao.MonoGrande, Size.Empty, TextFormatFlags.NoPadding);
+            Num.Desenhar(g, ta, Visao.MonoGrande, new Point(num.X + (num.Width - st.Width) / 2, (Height - st.Height) / 2),
+                new Rectangle(num.X, Ui.S(8), num.Width, Height - Ui.S(16)), Ui.Misturar(Ui.Faint, Ui.Accent, lig), Ui.Surface, TextFormatFlags.NoPadding);
         }
     }
 

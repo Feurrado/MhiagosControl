@@ -986,6 +986,10 @@ namespace MhiagosControl
         public Action<Graphics, RectangleF, Color> Desenho;
         private readonly string _glifo;
         private Transicao _t;
+        private LigadoAnimado _aceso;
+        private FlashDoBotao _flash;
+        private LigadoAnimado TA { get { return _aceso ?? (_aceso = new LigadoAnimado(this)); } }
+        private FlashDoBotao Flash { get { return _flash ?? (_flash = new FlashDoBotao(this)); } }
         private Transicao TH { get { return _t ?? (_t = new Transicao(this)); } }
 
         public BotaoRedondo(string glifo)
@@ -1004,6 +1008,8 @@ namespace MhiagosControl
         protected override void OnMouseLeave(EventArgs e) { TH.Ir(0f); base.OnMouseLeave(e); }
         protected override void OnEnabledChanged(EventArgs e) { Cursor = Enabled ? Cursors.Hand : Cursors.Default; Invalidate(); base.OnEnabledChanged(e); }
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        /// <summary>O - e o + piscam ao clique; o liga/desliga anima pela troca de Aceso.</summary>
+        protected override void OnClick(EventArgs e) { if (Enabled && !Aceso) Flash.Disparar(); base.OnClick(e); }
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
         protected override void OnKeyDown(KeyEventArgs e)
         {
@@ -1022,18 +1028,24 @@ namespace MhiagosControl
             Ui.Smooth(g);
             Rectangle r = new Rectangle(1, 1, Width - 3, Height - 3);
             Color fundo, frente, borda;
+            // aceso e apagado misturam pelo estado animado (~250 ms), e nao trocam de golpe
+            TA.Definir(Aceso);
+            float a = TA.Valor;
             if (!Enabled) { fundo = Ui.SurfaceAlt; frente = Ui.Faint; borda = Ui.Border; }
-            else if (Aceso)
-            {
-                fundo = Ui.Misturar(Ui.Accent, Ui.AccentHover, TH.Valor);
-                frente = Color.White; borda = fundo;
-            }
             else
             {
-                fundo = Ui.Misturar(Ui.SurfaceAlt, Ui.Hover, TH.Valor);
-                frente = Grande ? Ui.Muted : Ui.Text; borda = Ui.Border;
+                Color fOn = Ui.Misturar(Ui.Accent, Ui.AccentHover, TH.Valor), fOff = Ui.Misturar(Ui.SurfaceAlt, Ui.Hover, TH.Valor);
+                fundo = Ui.Misturar(fOff, fOn, a);
+                frente = Ui.Misturar(Grande ? Ui.Muted : Ui.Text, Color.White, a);
+                borda = Ui.Misturar(Ui.Border, fOn, a);
             }
             using (SolidBrush b = new SolidBrush(fundo)) g.FillEllipse(b, r);
+            float fl = Flash.Intensidade;
+            if (fl > 0f) using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(110 * fl), Ui.Accent))) g.FillEllipse(b, r);
+            float pu = TA.Pulso;
+            if (pu >= 0f)
+                using (Pen p = new Pen(Color.FromArgb((int)(150 * (1f - pu)), Ui.Accent), 2f))
+                    g.DrawEllipse(p, RectangleF.Inflate(r, -Width * 0.12f * (1f - pu), -Height * 0.12f * (1f - pu)));
             using (Pen p = new Pen(borda)) g.DrawEllipse(p, r);
             if (Focused && ShowFocusCues)
                 using (Pen p = new Pen(Ui.Accent, 2f)) g.DrawEllipse(p, Rectangle.Inflate(r, -2, -2));

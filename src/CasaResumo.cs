@@ -24,6 +24,10 @@ namespace MhiagosControl
         private readonly FlatBtn _convite;
         private readonly System.Windows.Forms.Timer _espera, _relogio;
         private int _alvoPendente = -1;
+        private LigadoAnimado _lig;
+        private NumeroDeslizante _num;
+        private LigadoAnimado Lig { get { return _lig ?? (_lig = new LigadoAnimado(this)); } }
+        private NumeroDeslizante Num { get { return _num ?? (_num = new NumeroDeslizante(this)); } }
         private Rectangle _blocoAr, _blocoLav, _nomeAr, _nomeLav;
 
         public const int Altura = 104;
@@ -266,8 +270,12 @@ namespace MhiagosControl
                 TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
             int alvo = _alvoPendente >= 0 ? _alvoPendente : _ar.Int("t_temp", 0);
             Rectangle num = new Rectangle(_menos.Right, _liga.Top, _mais.Left - _menos.Right, _liga.Height);
-            TextRenderer.DrawText(g, alvo > 0 ? alvo + "°" : "--", Ui.FontValue, num, ligado ? Ui.Text : Ui.Muted,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            // o alvo desliza ao mudar e passa do cinza a cor do texto ao ligar
+            Lig.Definir(ligado);
+            string ta = alvo > 0 ? alvo + "°" : "--";
+            Size st = TextRenderer.MeasureText(g, ta, Ui.FontValue, Size.Empty, TextFormatFlags.NoPadding);
+            Num.Desenhar(g, ta, Ui.FontValue, new Point(num.X + (num.Width - st.Width) / 2, num.Y + (num.Height - st.Height) / 2), num,
+                Ui.Misturar(Ui.Muted, Ui.Text, Lig.Valor), Ui.Surface, TextFormatFlags.NoPadding);
         }
 
         private void DesenharLavadora(Graphics g, Rectangle b)

@@ -163,6 +163,13 @@ namespace MhiagosControl
         public float Valor { get { return _valor; } }
         public bool Animando { get { return _valor != _ate; } }
 
+        /// <summary>Vai a v sem animar (estado inicial, sem transicao ao abrir).</summary>
+        public void Fixar(float v)
+        {
+            _valor = _de = _ate = v;
+            _assinada = false;
+        }
+
         /// <summary>Volta a zero sem animar (para recomecar o fade em outro alvo).</summary>
         public void Zerar()
         {

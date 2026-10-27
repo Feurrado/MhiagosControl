@@ -21,6 +21,71 @@ namespace MhiagosControl
             PerifericosOcultos(root);
             CasaWidget();
             CasaPagina(root);
+            CasaAnimacaoDoAr();
+        }
+
+        /// <summary>Animacoes do ar: o alvo que desliza, o ligar com fade e pulso, o flash do - e +.</summary>
+        private static void CasaAnimacaoDoAr()
+        {
+            Secao("casa: animacoes do ar (liga/desliga e temperatura)");
+            Igual(1, NumeroDeslizante.Comparar("24°", "23°"), "subir desliza para cima");
+            Igual(-1, NumeroDeslizante.Comparar("22°", "23°"), "descer desliza para baixo");
+            Igual(0, NumeroDeslizante.Comparar("--", "23°"), "sem numero nao escolhe direcao");
+            Verdade(Motion.Padrao(0f) == 0f && Motion.Padrao(1f) == 1f && Motion.Padrao(0.5f) > 0.5f && Motion.Padrao(0.25f) < Motion.Padrao(0.5f),
+                "easing comeca em 0, termina em 1, acelera e freia");
+            bool? antes = Ui.AnimacoesForcadas;
+            using (Form f = new Form())
+            {
+                f.ShowInTaskbar = false; f.StartPosition = FormStartPosition.Manual; f.Location = new Point(-30000, -30000);
+                Panel p = new Panel(); p.Size = new Size(100, 60); f.Controls.Add(p);
+                f.Show();
+                try
+                {
+                    Ui.AnimacoesForcadas = true;
+                    NumeroDeslizante n = new NumeroDeslizante(p);
+                    n.Definir("23°");
+                    Verdade(!n.Animando, "primeiro valor nao anima");
+                    n.Definir("24°");
+                    Verdade(n.Animando && n.Direcao == 1 && n.Antigo == "23°", "subir anima a troca de 23 para 24");
+                    n.Definir("25°");
+                    Verdade(n.Animando && n.Antigo == "24°" && n.Direcao == 1, "clique seguido encadeia a partir do numero da tela, sem perder valor");
+                    n.Definir("24°");
+                    Verdade(n.Direcao == -1 && n.Antigo == "25°", "voltar no meio do caminho inverte a direcao");
+                    Transicao t = (Transicao)Field(n, "_t");
+                    t.Passo(Motion.Agora + 10000);
+                    Verdade(!n.Animando, "a troca termina sozinha (" + NumeroDeslizante.DuracaoMs + " ms)");
+
+                    LigadoAnimado lig = new LigadoAnimado(p);
+                    lig.Definir(false);
+                    Verdade(lig.Valor == 0f && !lig.Animando && lig.Pulso < 0f, "abrir desligado nao anima");
+                    lig.Definir(true);
+                    Verdade(lig.Animando && lig.Pulso >= 0f, "ligar faz o fade e o pulso");
+                    ((Transicao)Field(lig, "_t")).Passo(Motion.Agora + LigadoAnimado.DuracaoMs / 2);
+                    Verdade(lig.Valor > 0.2f && lig.Valor < 1f, "no meio do fade de ligar");
+                    float meio = lig.Valor;
+                    lig.Definir(false);
+                    Verdade(lig.Animando && lig.Valor == meio, "desligar no meio do fade volta de onde estava, sem salto");
+                    ((Transicao)Field(lig, "_t")).Passo(Motion.Agora + 10000);
+                    Verdade(lig.Valor == 0f && !lig.Animando, "desligado chega a 0");
+
+                    FlashDoBotao fl = new FlashDoBotao(p);
+                    fl.Disparar();
+                    Verdade(fl.Intensidade > 0.9f, "o - e + acendem no clique");
+
+                    // Sem animacoes no Windows: troca direta.
+                    Ui.AnimacoesForcadas = false;
+                    NumeroDeslizante d = new NumeroDeslizante(p);
+                    d.Definir("23°"); d.Definir("24°");
+                    Verdade(!d.Animando, "sem animacoes o numero so troca");
+                    LigadoAnimado l2 = new LigadoAnimado(p);
+                    l2.Definir(false); l2.Definir(true);
+                    Verdade(l2.Valor == 1f && !l2.Animando && l2.Pulso < 0f, "sem animacoes o ligar e direto, sem pulso");
+                    FlashDoBotao f2 = new FlashDoBotao(p);
+                    f2.Disparar();
+                    Igual(0f, f2.Intensidade, "sem animacoes nao ha flash");
+                }
+                finally { Ui.AnimacoesForcadas = antes; f.Close(); }
+            }
         }
 
         private static void CasaCodigoDoLogin()
@@ -548,7 +613,7 @@ namespace MhiagosControl
                         Verdade(arv.Linha().StartsWith("Escritório "), "linha do ar comeca pelo comodo " + language);
                         Verdade(lavv.Linha().Contains("rpm"), "linha da lavadora com a centrifugacao " + language);
                         Igual("01:25", CartaoDaLavadoraVisao.Relogio(85), "tempo da lavadora em hh:mm");
-                        Verdade(Visao.Resumo() == T.VisaoRoupaPronta(Visao.FimDoCiclo(CicloAtual.De(Exemplo()[0])).ToString("HH:mm")), "resumo do cabecalho so com a roupa, sem o escritorio " + language);
+                        Verdade(Visao.Resumo() == "", "cabecalho sem resumo a direita (nem roupa nem escritorio) " + language);
                         // Sem conta: convite no lugar do ar e da lavadora.
                         ServicoCasa.PararSimulacao();
                         foreach (int largura in new int[] { 1300, 880 })
