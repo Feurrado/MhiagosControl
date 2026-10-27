@@ -304,13 +304,8 @@ namespace MhiagosControl
             _caixas.Clear();
             int col = Colunas(Width);
             int bw = (Width - (col - 1) * Ui.S(8)) / col;
-            int ultima = (Itens - 1) / col, naUltima = Itens - ultima * col;
             for (int i = 0; i < Itens; i++)
-            {
-                // a ultima fileira incompleta fica centrada
-                int desloc = i / col == ultima ? (col - naUltima) * (bw + Ui.S(8)) / 2 : 0;
-                _caixas.Add(new Rectangle(desloc + (i % col) * (bw + Ui.S(8)), (i / col) * Ui.S(72), bw - 1, Ui.S(64) - 1));
-            }
+                _caixas.Add(new Rectangle((i % col) * (bw + Ui.S(8)), (i / col) * Ui.S(72), bw - 1, Ui.S(64) - 1));
         }
 
         private int Hit(Point p) { Caixas(); for (int i = 0; i < _caixas.Count; i++) if (_caixas[i].Contains(p)) return i; return -1; }
@@ -367,19 +362,16 @@ namespace MhiagosControl
                     continue;
                 }
                 CenaCasa c = _cenas[i];
-                // icone e textos como um bloco centrado no cartao
-                string resumo = disponivel || Editando ? c.Resumo(_a) : T.CasaCenaIndisponivel;
-                int livre = r.Width - Ui.S(24) - Ui.S(44) - (Editando ? Ui.S(26) : 0);
-                int tw = Math.Min(livre, Math.Max(TextRenderer.MeasureText(c.Nome, Ui.FontMed).Width, TextRenderer.MeasureText(resumo, Ui.FontSmall).Width));
-                int bloco = Ui.S(44) + tw;
-                Rectangle ic = new Rectangle(r.X + Math.Max(Ui.S(12), (r.Width - (Editando ? Ui.S(26) : 0) - bloco) / 2), r.Y + (r.Height - Ui.S(34)) / 2, Ui.S(34), Ui.S(34));
+                Rectangle ic = new Rectangle(r.X + Ui.S(12), r.Y + (r.Height - Ui.S(34)) / 2, Ui.S(34), Ui.S(34));
                 using (SolidBrush b = new SolidBrush(disponivel ? Ui.AccentSoft : Ui.SurfaceAlt)) g.FillEllipse(b, ic);
                 IconesDeCena.Desenho(c.Icone)(g, RectangleF.Inflate(ic, -Ui.S(9), -Ui.S(9)), disponivel ? Ui.AccentText : Ui.Faint);
                 int tx = ic.Right + Ui.S(10);
+                int tw = r.Right - tx - (Editando ? Ui.S(26) : Ui.S(8));
                 TextRenderer.DrawText(g, c.Nome, Ui.FontMed, new Rectangle(tx, r.Y + Ui.S(11), tw, Ui.S(22)), frente,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
+                    TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+                string resumo = disponivel || Editando ? c.Resumo(_a) : T.CasaCenaIndisponivel;
                 TextRenderer.DrawText(g, resumo, Ui.FontSmall, new Rectangle(tx, r.Y + Ui.S(33), tw, Ui.S(18)), Ui.Muted,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
+                    TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
                 if (Editando)
                     TextRenderer.DrawText(g, "\uE70F", Ui.FontGlyph9, new Rectangle(r.Right - Ui.S(28), r.Y, Ui.S(22), r.Height), Ui.Muted,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
