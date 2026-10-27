@@ -718,6 +718,11 @@ namespace MhiagosControl
             Verdade(Math.Abs(c.Agua.Value - 168.13) < 0.001 && Math.Abs(c.Energia.Value - 2.48) < 0.001, "agua e energia do ciclo");
             Igual("90 °C", TabelaDaLavadora.Temperatura(9), "temperatura 9 = 90 °C");
             Igual("1400 rpm", TabelaDaLavadora.Centrifugacao(14), "centrifugacao 14 = 1400 rpm");
+            Igual(string.Format(T.LavProgramaProvavel, 7, T.Pt ? "Algodão" : "Cotton"), TabelaDaLavadora.Programa(7), "programa 7: provavel Algodao, marcado como provavel");
+            Igual(string.Format(T.LavProgramaN, 99), TabelaDaLavadora.Programa(99), "programa desconhecido vai pelo numero");
+            TabelaDaLavadora.Confirmados[7] = new[] { "Algodão", "Cotton" };
+            Igual(T.Pt ? "Algodão" : "Cotton", TabelaDaLavadora.Programa(7), "confirmado aparece sem o provavel");
+            TabelaDaLavadora.Confirmados.Remove(7);
             Igual(T.LavConcluida, CicloAtual.De(Lavadora("concluido")).Titulo(), "concluido");
             Igual(T.LavDesconectada, CicloAtual.De(Lavadora("offline")).Titulo(), "desconectada");
             Aparelho erro = Lavadora("secando"); erro.Estado["machine_status"] = "4"; erro.Estado["error_code"] = "12";

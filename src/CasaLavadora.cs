@@ -18,9 +18,54 @@ namespace MhiagosControl
     /// </summary>
     internal static class TabelaDaLavadora
     {
+        /// <summary>
+        /// Nomes CONFIRMADOS para o modelo do Thiago (025-1wj110009v0t), pelo
+        /// painel da maquina. Vazio ate ele confirmar.
+        /// </summary>
+        internal static readonly Dictionary<int, string[]> Confirmados = new Dictionary<int, string[]>();
+
+        /// <summary>
+        /// Nomes PROVAVEIS, do dicionario do connectlife-ha para as lava e secas
+        /// da mesma familia (025-1wj120514v0t e 025-1wj120495v0t concordam nos ids
+        /// em comum; 7 = cotton). Nao ha arquivo para 1wj110009v0t, e outra familia
+        /// (1wj100649v0t) numera diferente: por isso aparecem como "provavel".
+        /// Par pt/en.
+        /// </summary>
+        internal static readonly Dictionary<int, string[]> Provaveis = new Dictionary<int, string[]>
+        {
+            { 1, new[] { "Algodão + secagem", "Cotton dry" } },
+            { 2, new[] { "Sintético + secagem", "Synthetic dry" } },
+            { 4, new[] { "Refrescar", "Refresh" } },
+            { 5, new[] { "Antialérgico", "Allergy care" } },
+            { 6, new[] { "Limpeza do tambor", "Drum clean" } },
+            { 7, new[] { "Algodão", "Cotton" } },
+            { 8, new[] { "Sintético", "Synthetic" } },
+            { 9, new[] { "Eco 40-60", "Eco 40-60" } },
+            { 10, new[] { "Lã", "Wool" } },
+            { 11, new[] { "Rápido 15'", "Quick 15'" } },
+            { 12, new[] { "Misto", "Mix" } },
+            { 14, new[] { "Centrifugar", "Spin" } },
+            { 16, new[] { "Bebê", "Baby care" } },
+            { 18, new[] { "Roupa esportiva", "Sportswear" } },
+            { 19, new[] { "Edredom", "Down" } },
+            { 20, new[] { "Enxaguar e centrifugar", "Rinse and spin" } },
+            { 21, new[] { "Delicadas", "Delicates" } },
+            { 22, new[] { "Lavar e secar 60'", "Clean and dry 60'" } },
+            { 24, new[] { "Camisas", "Shirts" } },
+            { 41, new[] { "Power 49'", "Power 49'" } },
+            { 42, new[] { "Automático", "Auto" } },
+            { 44, new[] { "Roupa de cama", "Bedding" } },
+            { 45, new[] { "Jeans", "Jeans" } },
+            { 55, new[] { "Lavagem à mão", "Hand wash" } }
+        };
+
         public static string Programa(int id)
         {
-            return id <= 0 ? T.LavSemPrograma : string.Format(T.LavProgramaN, id);
+            if (id <= 0) return T.LavSemPrograma;
+            string[] n;
+            if (Confirmados.TryGetValue(id, out n)) return T.Pt ? n[0] : n[1];
+            if (Provaveis.TryGetValue(id, out n)) return string.Format(T.LavProgramaProvavel, id, T.Pt ? n[0] : n[1]);
+            return string.Format(T.LavProgramaN, id);
         }
 
         public static string Fase(int f)
@@ -751,6 +796,7 @@ namespace MhiagosControl
     public static partial class T
     {
         public static string LavProgramaN { get { return P("Programa {0}", "Program {0}"); } }
+        public static string LavProgramaProvavel { get { return P("Programa {0} (provável: {1})", "Program {0} (likely: {1})"); } }
         public static string LavConsumoTitulo { get { return P("Consumo e histórico", "Usage and history"); } }
         public static string LavResumoConsumo(string agua, string kwh) { return P("ciclo: " + agua + " L · " + kwh + " kWh", "cycle: " + agua + " L · " + kwh + " kWh"); }
         public static string LavMesCurto(int n) { return P(n + " ciclos este mês", n + " cycles this month"); }
