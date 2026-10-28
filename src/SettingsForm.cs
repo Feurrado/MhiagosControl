@@ -500,6 +500,10 @@ namespace MhiagosControl
         private void ShowPage()
         {
             NavItem sel = _nav.Selected;
+            // Retrato da pagina que sai, para o fade curto ate a nova (sem animacoes no Windows: nulo).
+            Control saindo = null;
+            foreach (Control c in _host.Controls) if (c.Visible && !(c is TransicaoDePagina)) { saindo = c; break; }
+            Bitmap retrato = saindo != null && sel != null && sel.Page != saindo && _paginaPronta ? TransicaoDePagina.Fotografar(saindo) : null;
             foreach (Control c in _host.Controls) c.Visible = false;
             if (sel != null && sel.Page != null)
             {
@@ -527,7 +531,11 @@ namespace MhiagosControl
                 // Paginas ocultas nao recebem trabalho de desenho a cada segundo;
                 // quem acaba de aparecer recebe um retrato novo imediatamente.
                 AtualizarPaginaAtiva(true);
+                AjustarRelogio();
+                TransicaoDePagina.Comecar(sel.Page, retrato);
+                retrato = null;
             }
+            if (retrato != null) retrato.Dispose();
             if (_profileList != null) RefreshProfileList();
         }
 
@@ -650,6 +658,48 @@ namespace MhiagosControl
         /// O Resize dispara dezenas de vezes durante um arraste de borda, e cada
         /// gravacao e um arquivo escrito em disco.
         /// </summary>
+        /// <summary>
+        /// Cadencia do relogio da janela: 4 Hz nas paginas com leitura ao vivo
+        /// (Visao geral, Metricas, Paineis), 1 Hz nas outras, e parado com a
+        /// janela minimizada ou escondida - o historico das metricas continua sendo
+        /// gravado por fora, e o primeiro tique ao voltar traz tudo em dia.
+        /// </summary>
+        private void AjustarRelogio()
+        {
+            if (_tick == null) return;
+            Control ativa = _nav != null && _nav.Selected != null ? _nav.Selected.Page : null;
+            bool aoVivo = ativa == _pgVisao || ativa == _pgMetricas || ativa == _pgPaineis;
+            int intervalo = aoVivo ? 250 : 1000;
+            if (_tick.Interval != intervalo) _tick.Interval = intervalo;
+            bool parar = WindowState == FormWindowState.Minimized || !Visible;
+            if (parar && _tick.Enabled) { _tick.Stop(); _relogioPausado = true; }
+            else if (!parar && _relogioPausado)
+            {
+                // so religa o que esta pausa desligou (os testes param o relogio de proposito)
+                _relogioPausado = false;
+                _tick.Start();
+                // voltou: a pagina recebe um retrato novo agora, e nao no proximo tique
+                if (IsHandleCreated) BeginInvoke((MethodInvoker)delegate { try { AtualizarPaginaAtiva(true); } catch (Exception ex) { Log.Error("retomar a janela", ex); } });
+            }
+        }
+
+        private bool _relogioPausado;
+
+        internal bool RelogioLigado { get { return _tick != null && _tick.Enabled; } }
+        internal int IntervaloDoRelogio { get { return _tick != null ? _tick.Interval : 0; } }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            AjustarRelogio();
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            AjustarRelogio();
+        }
+
         protected override void OnResizeEnd(EventArgs e)
         {
             base.OnResizeEnd(e);

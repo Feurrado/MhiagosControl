@@ -175,6 +175,11 @@ namespace MhiagosControl
             MostrarModo();
         }
 
+        /// <summary>A ultima leitura recebida mudou algum cartao (ou a lista); sem isso, nada a rearranjar.</summary>
+        private bool _receberMudou = true;
+        private bool _logadoAnterior, _painelAnterior;
+        private bool _jaArranjou;
+
         private void MostrarModo()
         {
             _login.Visible = !_logado;
@@ -188,7 +193,11 @@ namespace MhiagosControl
             _vazio.Text = T.CasaSemAparelhos;
             _login.Vigiar(!_logado && Visible);
             AtualizarSituacao();
-            Arranjar();
+            // Rearranja so se a leitura mudou algum cartao, ou se trocou o modo (login, aba).
+            bool modo = _logado != _logadoAnterior || painel != _painelAnterior;
+            _logadoAnterior = _logado; _painelAnterior = painel;
+            if (_receberMudou || modo || !_jaArranjou || !_logado) { _jaArranjou = true; Arranjar(); }
+            _receberMudou = true;
         }
 
         // ---------------- nuvem ----------------
@@ -244,7 +253,9 @@ namespace MhiagosControl
                         Controls.Add(c);
                     }
                 }
-                for (int i = 0; i < lista.Count; i++) _cartoes[i].Mostrar(lista[i]);
+                bool algum = mudou;
+                for (int i = 0; i < lista.Count; i++) algum |= _cartoes[i].MostrarSeMudou(lista[i]);
+                _receberMudou = algum;
                 CartaoDoAr primeiro = null;
                 foreach (CartaoDeAparelho c in _cartoes) if (c is CartaoDoAr) { primeiro = (CartaoDoAr)c; break; }
                 _ajustes.Adotar(primeiro);
@@ -835,10 +846,43 @@ namespace MhiagosControl
         public void Mostrar(Aparelho a)
         {
             A = a;
+            _assinatura = Assinatura();
             Carregando = true;
             try { Preencher(); }
             finally { Carregando = false; }
             Invalidate();
+        }
+
+        private string _assinatura;
+
+        /// <summary>Testes: quantas vezes o cartao foi preenchido de verdade.</summary>
+        internal int Preenchimentos;
+
+        /// <summary>
+        /// O que o cartao mostra, resumido: estado lido, conexao, metadados e falha.
+        /// Leitura nova igual a anterior nao repreenche nem rearranja o cartao - a
+        /// nuvem e lida a cada 30-60 s e quase sempre devolve o mesmo.
+        /// </summary>
+        protected virtual string Assinatura()
+        {
+            if (A == null) return "";
+            List<string> k = new List<string>(A.Estado.Keys);
+            k.Sort(StringComparer.Ordinal);
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            sb.Append(A.Online ? "1" : "0").Append(A.Meta != null ? "m" : "-").Append(A.Nome).Append(Diagnostico.TemFalha(A) ? "f" : "");
+            foreach (string c in k) sb.Append('|').Append(c).Append('=').Append(A.Estado[c]);
+            return sb.ToString();
+        }
+
+        /// <summary>Mostra a leitura nova so se ela muda o que o cartao mostra; devolve se mudou.</summary>
+        internal bool MostrarSeMudou(Aparelho a)
+        {
+            Aparelho antes = A;
+            A = a;
+            if (antes != null && _assinatura != null && Assinatura() == _assinatura) return false;
+            Mostrar(a);
+            Preenchimentos++;
+            return true;
         }
 
         protected abstract void Preencher();

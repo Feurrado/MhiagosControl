@@ -592,6 +592,13 @@ namespace MhiagosControl
         }
 
         public override int Tipo { get { return 1; } }
+
+        /// <summary>Em ciclo, o tempo restante e a hora do fim andam com a hora da leitura.</summary>
+        protected override string Assinatura()
+        {
+            CicloAtual c = CicloAtual.De(A);
+            return base.Assinatura() + (c.Online && c.Rodando ? "|" + ServicoCasa.UltimaLeitura.ToString("HH:mm") : "");
+        }
         protected override string Icone { get { return null; } }
 
         public CartaoDaLavadora()

@@ -22,6 +22,120 @@ namespace MhiagosControl
             CasaWidget();
             CasaPagina(root);
             CasaAnimacaoDoAr();
+            CasaFluidez(root);
+        }
+
+        /// <summary>Fluidez: cache das curvas, quadro do widget, Casa sem refazer o que nao mudou, relogio da janela e fade da troca de pagina.</summary>
+        private static void CasaFluidez(string root)
+        {
+            Secao("fluidez: caches, relogio da janela e troca de pagina");
+            // Cache do fundo das curvas: repintar sem amostra nova nao redesenha a curva.
+            ResetHistory("cpu");
+            DateTime t0 = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+            for (int k = 0; k < 40; k++) { float v = 30 + k % 7; MetricHistory.AmostrarEm(delegate { return v; }, t0.AddSeconds(k * MetricHistory.PassoSeg)); }
+            using (MetricCard mc = new MetricCard())
+            using (Bitmap b = new Bitmap(220, 96))
+            {
+                mc.Editavel = false; mc.SensorId = "cpu"; mc.Size = b.Size; mc.Compacto = true;
+                mc.Push(40f);
+                mc.DrawToBitmap(b, new Rectangle(Point.Empty, b.Size));
+                mc.Push(41f);
+                mc.DrawToBitmap(b, new Rectangle(Point.Empty, b.Size));
+                Igual(1, mc.FundosDesenhados, "valor novo sem amostra nova reaproveita a curva guardada");
+                MetricHistory.AmostrarEm(delegate { return 50f; }, t0.AddSeconds(41 * MetricHistory.PassoSeg));
+                mc.DrawToBitmap(b, new Rectangle(Point.Empty, b.Size));
+                Igual(2, mc.FundosDesenhados, "amostra nova redesenha a curva");
+                mc.Size = new Size(240, 96);
+                using (Bitmap b2 = new Bitmap(240, 96)) mc.DrawToBitmap(b2, new Rectangle(0, 0, 240, 96));
+                Igual(3, mc.FundosDesenhados, "tamanho novo redesenha a curva");
+            }
+            ResetHistory();
+
+            // Widget: a DIB do quadro e criada uma vez por tamanho.
+            string antesW = ConfigDoWidget.Caminho, antesC = CasaNoWidget.CaminhoAntigo;
+            string pasta = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mhiagos-fluidez-" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(pasta);
+            ConfigDoWidget.Caminho = System.IO.Path.Combine(pasta, "widget.ini");
+            CasaNoWidget.CaminhoAntigo = System.IO.Path.Combine(pasta, "widget-casa.ini");
+            try
+            {
+                ConfigDoWidget cw = new ConfigDoWidget(); cw.Ativo = true;
+                using (WidgetDeBateria w = new WidgetDeBateria(cw))
+                {
+                    w.Show(); w.Location = new Point(-30000, -30000);
+                    EsperarQuadros(100);
+                    int antes = w.QuadrosCriados;
+                    for (int i = 0; i < 5; i++) w.Renderizar();
+                    Igual(antes, w.QuadrosCriados, "widget reaproveita a DIB do quadro entre quadros");
+                    Verdade(Field(w, "_quadro") != null, "o widget tem quadro");
+                    w.Close();
+                }
+            }
+            finally { ConfigDoWidget.Caminho = antesW; CasaNoWidget.CaminhoAntigo = antesC; }
+
+            // Casa: leitura igual nao repreenche os cartoes; mudanca so repreenche o que mudou.
+            string prefAntes = PreferenciasCasa.Arquivo, histAntes = HistoricoDoAr.Arquivo, cicAntes = CiclosDaLavadora.Arquivo;
+            PreferenciasCasa.Arquivo = System.IO.Path.Combine(pasta, "casa.ini");
+            HistoricoDoAr.Arquivo = System.IO.Path.Combine(pasta, "hist.txt");
+            CiclosDaLavadora.Arquivo = System.IO.Path.Combine(pasta, "ciclos.txt");
+            PaginaCasa.IgnorarCofre = true;
+            try
+            {
+                using (Form f = new Form())
+                {
+                    f.ShowInTaskbar = false; f.StartPosition = FormStartPosition.Manual; f.Location = new Point(-30000, -30000); f.Size = new Size(1300, 900);
+                    PaginaCasa casa = new PaginaCasa(); casa.Dock = DockStyle.Fill; f.Controls.Add(casa);
+                    f.Show();
+                    casa.MostrarSemNuvem(Exemplo());
+                    int ar0 = casa.Cartoes[0].Preenchimentos, lav0 = casa.Cartoes[1].Preenchimentos;
+                    casa.MostrarSemNuvem(Exemplo());
+                    Verdade(casa.Cartoes[0].Preenchimentos == ar0 && casa.Cartoes[1].Preenchimentos == lav0, "leitura igual nao repreenche os cartoes da Casa");
+                    List<Aparelho> l = Exemplo(); l[1].Estado["t_temp"] = "25";
+                    casa.MostrarSemNuvem(l);
+                    Verdade(casa.Cartoes[0].Preenchimentos == ar0 + 1 && casa.Cartoes[1].Preenchimentos == lav0, "so o cartao que mudou e repreenchido");
+                    f.Close();
+                }
+            }
+            finally
+            {
+                ServicoCasa.PararSimulacao();
+                PaginaCasa.IgnorarCofre = false;
+                PreferenciasCasa.Arquivo = prefAntes; HistoricoDoAr.Arquivo = histAntes; CiclosDaLavadora.Arquivo = cicAntes;
+            }
+
+            // Relogio da janela e fade da troca de pagina.
+            Config config = AuditConfig(root, "fluidez");
+            bool? antesAnim = Ui.AnimacoesForcadas;
+            using (SettingsForm form = BugForm(config, new FreshData()))
+            {
+                EsperarQuadros(80);   // OnShown: a janela so anima trocas depois de exibida
+                NavBar nav = (NavBar)Field(form, "_nav");
+                Action<string> ir = delegate(string chave) { for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == chave) nav.SelectedIndex = i; };
+                ir("casa");
+                Igual(1000, form.IntervaloDoRelogio, "relogio a 1 Hz numa pagina sem leitura ao vivo");
+                ir("visao");
+                Igual(250, form.IntervaloDoRelogio, "relogio a 4 Hz na Visao geral");
+                ((Timer)Field(form, "_tick")).Start();
+                form.WindowState = FormWindowState.Minimized;
+                Verdade(!form.RelogioLigado, "minimizada, o relogio da janela para");
+                form.WindowState = FormWindowState.Normal;
+                Verdade(form.RelogioLigado, "restaurada, o relogio volta");
+                ((Timer)Field(form, "_tick")).Stop();
+                try
+                {
+                    Ui.AnimacoesForcadas = false;
+                    ir("metricas");
+                    Verdade(TransicaoDePagina.Atual == null, "sem animacoes, a troca de pagina e direta");
+                    Ui.AnimacoesForcadas = true;
+                    ir("visao");
+                    Verdade(TransicaoDePagina.Atual != null && TransicaoDePagina.Atual.Visible, "com animacoes, a troca de pagina faz o fade");
+                    Verdade(((Control)Field(form, "_pgVisao")).Visible, "a pagina nova ja esta no lugar por baixo do fade");
+                    EsperarQuadros(TransicaoDePagina.DuracaoMs + 250);
+                    Verdade(TransicaoDePagina.Atual == null, "o fade termina sozinho");
+                }
+                finally { Ui.AnimacoesForcadas = antesAnim; }
+                form.Close();
+            }
         }
 
         /// <summary>Animacoes do ar: o alvo que desliza, o ligar com fade e pulso, o flash do - e +.</summary>

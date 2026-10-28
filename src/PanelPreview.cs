@@ -70,18 +70,38 @@ namespace MhiagosControl
             if (Width < 40 || Height < 30) return;
 
             Graphics g = e.Graphics;
-            Render(g);
-
-            // Arredondar por mascara de anel ou por recorte pintava meia-tinta
-            // do cartao em TODA a volta: a aresta pousa exatamente no limite do
-            // controle e o antisserrilhado lhe da cobertura parcial. Repintar
-            // so os quatro cantos, com as cunhas avancando para FORA, deixa a
-            // suavizacao restrita a curva - que e onde ela e desejada.
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            using (SolidBrush b = new SolidBrush(Parent != null ? Parent.BackColor : Ui.Surface))
-            using (GraphicsPath gp = CornerWedges(Width, Height, Ui.S(8)))
-                g.FillPath(b, gp);
+            // O quadro inteiro (foto, digitos, brilho, cantos) guardado ate mudar um
+            // valor, a unidade, o tamanho ou o tema: a Visao geral repinta a cada
+            // tique, e os digitos com brilho eram o pedaco mais caro da pagina.
+            Color fundoPai = Parent != null ? Parent.BackColor : Ui.Surface;
+            string chave = string.Concat(Width, "x", Height, "|", Value1, "|", Value2, "|", Fahrenheit, Percent, ShowCooler, "|", fundoPai.ToArgb(), "|", Ui.Dark);
+            if (_quadro == null || _quadro.Width != Width || _quadro.Height != Height || chave != _chaveDoQuadro)
+            {
+                if (_quadro == null || _quadro.Width != Width || _quadro.Height != Height)
+                {
+                    if (_quadro != null) _quadro.Dispose();
+                    _quadro = new Bitmap(Width, Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                }
+                using (Graphics gq = Graphics.FromImage(_quadro))
+                {
+                    gq.Clear(fundoPai);
+                    Render(gq);
+                    gq.SmoothingMode = SmoothingMode.AntiAlias;
+                    using (SolidBrush b = new SolidBrush(fundoPai))
+                    using (GraphicsPath gp = CornerWedges(Width, Height, Ui.S(8)))
+                        gq.FillPath(b, gp);
+                }
+                _chaveDoQuadro = chave;
+                QuadrosPintados++;
+            }
+            g.DrawImageUnscaled(_quadro, 0, 0);
         }
+
+        private Bitmap _quadro;
+        private string _chaveDoQuadro;
+
+        /// <summary>Testes: quantas vezes o quadro foi desenhado de verdade.</summary>
+        internal int QuadrosPintados;
 
         /// <summary>As sobras entre o retangulo do controle e os cantos arredondados.</summary>
         private static GraphicsPath CornerWedges(int w, int h, int r)
@@ -174,6 +194,7 @@ namespace MhiagosControl
             {
                 if (_cache != null) { _cache.Dispose(); _cache = null; }
                 if (_unitFont != null) { _unitFont.Dispose(); _unitFont = null; }
+                if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
             }
             base.Dispose(disposing);
         }

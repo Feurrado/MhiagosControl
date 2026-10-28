@@ -1062,7 +1062,7 @@ namespace MhiagosControl
                 _camada.Dispose();
                 ServicoCasa.Mudou -= _casaMudou;
                 _casa.Dispose();
-                if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
+                LiberarQuadro();
                 _dica.Dispose();
                 if (_menu != null) { _menu.Dispose(); _menu = null; }
                 if (_preferencias != null) _preferencias.Dispose();
@@ -1235,11 +1235,10 @@ namespace MhiagosControl
                 // O mesmo bitmap enquanto o tamanho nao muda: carregando, o
                 // widget pinta 25 quadros por segundo, e alocar uma imagem
                 // ARGB inteira em cada um so dava trabalho ao coletor.
-                if (_quadro == null || _quadro.Size != tam)
-                {
-                    if (_quadro != null) _quadro.Dispose();
-                    _quadro = new Bitmap(tam.Width, tam.Height, PixelFormat.Format32bppArgb);
-                }
+                // A DIB do quadro e criada uma vez por tamanho, ja num DC de memoria: o GDI+
+                // pinta direto na memoria que o UpdateLayeredWindow le, sem GetHbitmap
+                // (copia e conversao do bitmap inteiro) nem DC novo a cada quadro.
+                GarantirQuadro(tam);
                 using (Graphics g = Graphics.FromImage(_quadro))
                 {
                     g.Clear(Color.Transparent);
@@ -1247,7 +1246,7 @@ namespace MhiagosControl
                 }
                 // o ar da casa animando (ligar, desligar, alvo) tambem pede quadros
                 if (_casa.Animando) _transicao = true;
-                AplicarBitmap(_quadro);
+                AplicarQuadro(tam);
                 // o ultimo quadro da transicao desliga o relogio se nada mais carrega
                 AjustarAnimacao();
             }
@@ -1258,6 +1257,71 @@ namespace MhiagosControl
                 Log.Error("desenho do widget", ex);
             }
         }
+
+        private IntPtr _dib, _dcDoQuadro, _antesDoDib;
+
+        /// <summary>Testes: quantas vezes a DIB do quadro foi (re)criada.</summary>
+        internal int QuadrosCriados;
+
+        private void GarantirQuadro(Size tam)
+        {
+            if (_quadro != null && _quadro.Size == tam && _dib != IntPtr.Zero) return;
+            LiberarQuadro();
+            BITMAPINFOHEADER bi = new BITMAPINFOHEADER();
+            bi.biSize = Marshal.SizeOf(typeof(BITMAPINFOHEADER));
+            bi.biWidth = tam.Width;
+            bi.biHeight = -tam.Height;   // de cima para baixo, como o Bitmap do GDI+
+            bi.biPlanes = 1;
+            bi.biBitCount = 32;
+            IntPtr tela = GetDC(IntPtr.Zero);
+            try
+            {
+                IntPtr bits;
+                _dib = CreateDIBSection(tela, ref bi, 0, out bits, IntPtr.Zero, 0);
+                if (_dib == IntPtr.Zero || bits == IntPtr.Zero) throw new InvalidOperationException("CreateDIBSection falhou");
+                _dcDoQuadro = CreateCompatibleDC(tela);
+                _antesDoDib = SelectObject(_dcDoQuadro, _dib);
+                // PArgb: o UpdateLayeredWindow quer alfa pre-multiplicado, que e como o GDI+ guarda esse formato
+                _quadro = new Bitmap(tam.Width, tam.Height, tam.Width * 4, PixelFormat.Format32bppPArgb, bits);
+                QuadrosCriados++;
+            }
+            finally { ReleaseDC(IntPtr.Zero, tela); }
+        }
+
+        private void AplicarQuadro(Size tam)
+        {
+            IntPtr tela = GetDC(IntPtr.Zero);
+            try
+            {
+                SIZE tamanho = new SIZE(tam.Width, tam.Height);
+                POINT origem = new POINT(0, 0);
+                POINT topo = new POINT(Left, Top);
+                BLENDFUNCTION b = new BLENDFUNCTION();
+                b.BlendOp = AC_SRC_OVER;
+                b.SourceConstantAlpha = 255;
+                b.AlphaFormat = AC_SRC_ALPHA;
+                UpdateLayeredWindow(Handle, tela, ref topo, ref tamanho, _dcDoQuadro, ref origem, 0, ref b, ULW_ALPHA);
+            }
+            finally { ReleaseDC(IntPtr.Zero, tela); }
+        }
+
+        private void LiberarQuadro()
+        {
+            if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
+            if (_dcDoQuadro != IntPtr.Zero) { SelectObject(_dcDoQuadro, _antesDoDib); DeleteDC(_dcDoQuadro); _dcDoQuadro = IntPtr.Zero; }
+            if (_dib != IntPtr.Zero) { DeleteObject(_dib); _dib = IntPtr.Zero; }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BITMAPINFOHEADER
+        {
+            public int biSize, biWidth, biHeight;
+            public short biPlanes, biBitCount;
+            public int biCompression, biSizeImage, biXPelsPerMeter, biYPelsPerMeter, biClrUsed, biClrImportant;
+        }
+
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFOHEADER bmi, uint usage, out IntPtr bits, IntPtr secao, uint deslocamento);
 
         private void AplicarBitmap(Bitmap bmp) { AplicarBitmap(this, bmp); }
 

@@ -136,6 +136,55 @@ namespace MhiagosControl
             return _valor.HasValue ? Formatar(_valor.Value) : "--";
         }
 
+        // ---------------- cache do fundo ----------------
+
+        private Bitmap _cache;
+        private string _chaveDoCache;
+
+        /// <summary>Testes: quantas vezes o fundo (moldura, grade e curva) foi redesenhado de verdade.</summary>
+        internal int FundosDesenhados;
+
+        /// <summary>
+        /// Moldura, grade e curva guardadas num bitmap ate mudar o que elas mostram
+        /// (amostra nova no historico, tamanho, cor, tema, janela de tempo). O tique
+        /// da janela repinta o cartao quatro vezes por segundo porque o NUMERO muda;
+        /// a curva so muda a cada amostra (5 s), e era ela o grosso da pintura.
+        /// Com o ponteiro em cima (o balao do detalhe), desenha direto.
+        /// </summary>
+        private void PintarFundo(Graphics g, Color cor, Action<Graphics> desenhar)
+        {
+            if (_hoverX >= 0 || Width <= 0 || Height <= 0)
+            {
+                desenhar(g);
+                return;
+            }
+            string chave = string.Concat(Width, "x", Height, "|", MetricHistory.Revision, "|", cor.ToArgb(), "|", Ui.Surface.ToArgb(), "|",
+                Ui.Window.ToArgb(), "|", Ui.Border.ToArgb(), "|", Compacto, SemMoldura, _selecionado, "|", FimBalde, "|", Janela, "|", SensorId);
+            if (_cache == null || _cache.Width != Width || _cache.Height != Height || chave != _chaveDoCache)
+            {
+                if (_cache == null || _cache.Width != Width || _cache.Height != Height)
+                {
+                    if (_cache != null) _cache.Dispose();
+                    _cache = new Bitmap(Width, Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                }
+                using (Graphics gg = Graphics.FromImage(_cache))
+                {
+                    gg.Clear(SemMoldura ? Ui.Surface : Ui.Window);
+                    Ui.Smooth(gg);
+                    desenhar(gg);
+                }
+                _chaveDoCache = chave;
+                FundosDesenhados++;
+            }
+            g.DrawImageUnscaled(_cache, 0, 0);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _cache != null) { _cache.Dispose(); _cache = null; }
+            base.Dispose(disposing);
+        }
+
         // ---------------- edicao ----------------
 
         /// <summary>
@@ -328,17 +377,20 @@ namespace MhiagosControl
             bool detalhado = Height >= Ui.S(140);
             int topo = detalhado ? Ui.S(66) : Height / 2;
 
-            using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))
+            PintarFundo(g, cor, delegate(Graphics gg)
             {
-                using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillPath(b, p);
+                using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))
+                {
+                    using (SolidBrush b = new SolidBrush(Ui.Surface)) gg.FillPath(b, p);
 
-                Region antigo = g.Clip;
-                g.SetClip(p, CombineMode.Intersect);
-                DesenharSerie(g, cor, topo, detalhado);
-                g.Clip = antigo;
+                    Region antigo = gg.Clip;
+                    gg.SetClip(p, CombineMode.Intersect);
+                    DesenharSerie(gg, cor, topo, detalhado);
+                    gg.Clip = antigo;
 
-                using (Pen pen = _selecionado ? new Pen(Ui.Accent, 1.6f) : new Pen(Ui.Border)) g.DrawPath(pen, p);
-            }
+                    using (Pen pen = _selecionado ? new Pen(Ui.Accent, 1.6f) : new Pen(Ui.Border)) gg.DrawPath(pen, p);
+                }
+            });
 
             // O rotulo cede espaco quando os botoes estao a mostra, em vez de
             // ficar por baixo deles.
@@ -370,20 +422,23 @@ namespace MhiagosControl
         private void PintarCompacto(Graphics g, Rectangle r, Color cor)
         {
             int topo = Math.Max(Ui.S(52), Height - Ui.S(46));
-            if (SemMoldura)
+            PintarFundo(g, cor, delegate(Graphics gg)
             {
-                DesenharSerie(g, cor, topo, false);
-            }
-            else
+                if (SemMoldura)
+                {
+                    DesenharSerie(gg, cor, topo, false);
+                    return;
+                }
                 using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))
                 {
-                    using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillPath(b, p);
-                    Region antigo = g.Clip;
-                    g.SetClip(p, CombineMode.Intersect);
-                    DesenharSerie(g, cor, topo, false);
-                    g.Clip = antigo;
-                    using (Pen pen = new Pen(Ui.Border)) g.DrawPath(pen, p);
+                    using (SolidBrush b = new SolidBrush(Ui.Surface)) gg.FillPath(b, p);
+                    Region antigo = gg.Clip;
+                    gg.SetClip(p, CombineMode.Intersect);
+                    DesenharSerie(gg, cor, topo, false);
+                    gg.Clip = antigo;
+                    using (Pen pen = new Pen(Ui.Border)) gg.DrawPath(pen, p);
                 }
+            });
 
             int m = Ui.S(12);
             TextRenderer.DrawText(g, Titulo, Visao.MonoRotulo, new Rectangle(m, Ui.S(9), Width - 2 * m, Ui.S(16)),

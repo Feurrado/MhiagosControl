@@ -41,6 +41,7 @@ namespace MhiagosControl
                 EsperarQuadros(300);
 
                 // troca de pagina: selecionar e pintar a janela inteira
+                Ui.AnimacoesForcadas = false;   // o custo da troca em si; o fade e medido na janela real
                 foreach (NavItem it in nav.Items)
                 {
                     List<double> ms = new List<double>();
@@ -59,6 +60,7 @@ namespace MhiagosControl
                     Console.WriteLine("troca para " + it.Key + ": " + Mediana(ms).ToString("0.0") + " ms (troca + pintura da janela)");
                 }
 
+                Ui.AnimacoesForcadas = null;
                 // pintura da Visao geral sozinha e o tique de 1 s
                 for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
                 Application.DoEvents();
@@ -80,6 +82,24 @@ namespace MhiagosControl
                     arr.Add(sw.Elapsed.TotalMilliseconds);
                 }
                 Console.WriteLine("pintura da Visao geral: " + Mediana(pint).ToString("0.0") + " ms");
+                // quem pesa na pintura: cada filho visivel sozinho (e os de dentro do cartao do cooler)
+                List<KeyValuePair<double, string>> pesos = new List<KeyValuePair<double, string>>();
+                List<Control> filhos = new List<Control>();
+                foreach (Control c in pg.Controls) if (c.Visible) { filhos.Add(c); foreach (Control d in c.Controls) if (d.Visible) filhos.Add(d); }
+                foreach (Control c in filhos)
+                {
+                    if (c.Width <= 0 || c.Height <= 0) continue;
+                    List<double> v = new List<double>();
+                    for (int k = 0; k < 5; k++)
+                    {
+                        Stopwatch sw = Stopwatch.StartNew();
+                        using (Bitmap b = new Bitmap(c.Width, c.Height)) c.DrawToBitmap(b, new Rectangle(0, 0, c.Width, c.Height));
+                        v.Add(sw.Elapsed.TotalMilliseconds);
+                    }
+                    pesos.Add(new KeyValuePair<double, string>(Mediana(v), c.GetType().Name + " " + c.Width + "x" + c.Height));
+                }
+                pesos.Sort(delegate(KeyValuePair<double, string> a, KeyValuePair<double, string> b) { return b.Key.CompareTo(a.Key); });
+                for (int k = 0; k < Math.Min(6, pesos.Count); k++) Console.WriteLine("   " + pesos[k].Value + ": " + pesos[k].Key.ToString("0.0") + " ms");
                 Console.WriteLine("tique da Visao geral (AtualizarVisaoGeral + repinturas pendentes): " + Mediana(tique).ToString("0.0") + " ms");
                 Console.WriteLine("arranjo da Visao geral (a cada aviso da casa): " + Mediana(arr).ToString("0.0") + " ms");
 
