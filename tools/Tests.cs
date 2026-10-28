@@ -45,6 +45,8 @@ namespace MhiagosControl
                 return CapturaDePresenca(args);
             if (args.Length > 1 && args[0] == "--anim-real")
                 return CapturaDaAnimacaoReal(args);
+            if (args.Length > 1 && args[0] == "--clima-fluxo")
+                return FluxoDoClima(args[1]);
             if (args.Length > 1 && args[0] == "--clima")
             {
                 // Chamada real a Open-Meteo pelo mesmo codigo do app (busca + temperatura), sem gravar nada.

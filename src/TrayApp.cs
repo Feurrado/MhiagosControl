@@ -1689,6 +1689,17 @@ namespace MhiagosControl
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 
+                // Excecao sem tratamento: na thread da interface, registra e segue (o app nao
+                // cai por um clique); em thread de fundo o .NET encerra o processo, mas o
+                // motivo fica no log em vez de so no Visualizador de Eventos.
+                Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                Application.ThreadException += delegate(object s, ThreadExceptionEventArgs e) { Log.Error("excecao na interface (ignorada)", e.Exception); };
+                AppDomain.CurrentDomain.UnhandledException += delegate(object s, UnhandledExceptionEventArgs e)
+                {
+                    Exception ex = e.ExceptionObject as Exception;
+                    if (ex != null) Log.Error("excecao sem tratamento" + (e.IsTerminating ? " (o app vai fechar)" : ""), ex);
+                };
+
                 try
                 {
                     TrayContext contexto = new TrayContext(new Sensors(), new HidPanel(), activation);

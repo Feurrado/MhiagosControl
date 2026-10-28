@@ -63,26 +63,50 @@ namespace MhiagosControl
         internal void Buscar()
         {
             string nome = _busca.Texto;
-            if (string.IsNullOrEmpty(nome) || nome.Trim().Length < 2) return;
+            if (string.IsNullOrEmpty(nome) || nome.Trim().Length < 2 || _ocupado) return;
             int pedido = ++_pedido;
+            _ocupado = true;
+            _btBuscar.Enabled = false;
             _estado.Text = T.ClimaBuscando;
+            if (Rearranjar != null) Rearranjar();
             ThreadPool.QueueUserWorkItem(delegate
             {
+                // Nada aqui pode escapar: excecao numa thread de fundo derruba o processo.
                 List<LugarDoClima> r = null;
                 bool falhou = false;
                 try { r = Clima.BuscarCidade(nome); }
                 catch (Exception ex) { falhou = true; Log.Write("clima: busca de cidade falhou (" + ex.GetType().Name + ")"); }
-                Motion.NaInterface(delegate
+                MethodInvoker volta = delegate
                 {
-                    if (Secao.IsDisposed || pedido != _pedido) return;
-                    Mostrar(r ?? new List<LugarDoClima>(), falhou);
-                });
+                    try
+                    {
+                        _ocupado = false;
+                        if (Secao.IsDisposed) return;
+                        _btBuscar.Enabled = true;
+                        if (pedido != _pedido) return;
+                        Mostrar(r ?? new List<LugarDoClima>(), falhou);
+                    }
+                    catch (Exception ex) { Log.Error("clima: mostrar resultados", ex); }
+                };
+                try
+                {
+                    // de volta a thread da interface pelo proprio controle; sem handle, pelo contexto da interface
+                    if (Secao.IsHandleCreated && !Secao.IsDisposed) Secao.BeginInvoke(volta);
+                    else Motion.NaInterface(volta);
+                }
+                catch (Exception ex) { Log.Error("clima: voltar a interface", ex); }
             });
         }
+
+        private bool _ocupado;
+
+        /// <summary>Testes: a busca terminou (resultado ou falha) e o botao voltou.</summary>
+        internal bool Ocupado { get { return _ocupado; } }
 
         /// <summary>Poe os resultados como botoes (tambem usado pelos testes, sem rede).</summary>
         internal void Mostrar(List<LugarDoClima> lugares, bool falhou)
         {
+            if (Secao.IsHandleCreated && Secao.InvokeRequired) { Secao.BeginInvoke((MethodInvoker)delegate { Mostrar(lugares, falhou); }); return; }
             foreach (FlatBtn b in _resultados) { Secao.Controls.Remove(b); b.Dispose(); }
             _resultados.Clear();
             _lugares = lugares;

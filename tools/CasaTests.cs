@@ -1261,6 +1261,42 @@ namespace MhiagosControl
                 sc.Escolher(ls[0]);
                 Verdade(Clima.TemCidade && Math.Abs(ServicoCasa.Pref.ClimaLon - recife.Lon) < 1e-9, "escolher grava a cidade");
                 sc.Secao.Dispose();
+                // O crash de 28/10: a busca voltava com os resultados numa thread de fundo e
+                // criava os botoes ali (ArgumentException em ControlCollection.Add). Agora volta
+                // pela thread da interface; com acento, com falha de rede e com dois cliques.
+                using (Form f = new Form())
+                {
+                    f.ShowInTaskbar = false; f.StartPosition = FormStartPosition.Manual; f.Location = new Point(-30000, -30000); f.Size = new Size(700, 600);
+                    SecaoDoClima sb = new SecaoDoClima();
+                    sb.Secao.Bounds = new Rectangle(0, 0, 600, 500);
+                    f.Controls.Add(sb.Secao);
+                    f.Show();
+                    List<string> pedidas = new List<string>();
+                    Clima.Baixar = delegate(string u)
+                    {
+                        lock (pedidas) pedidas.Add(u);
+                        System.Threading.Thread.Sleep(80);
+                        return "{\"results\":[{\"name\":\"São Paulo\",\"latitude\":-23.5475,\"longitude\":-46.63611,\"country\":\"Brasil\",\"admin1\":\"São Paulo\"},{\"name\":\"Belém\",\"latitude\":-1.45583,\"longitude\":-48.50444,\"country\":\"Brasil\"}]}";
+                    };
+                    CampoDeTexto campo = (CampoDeTexto)Field(sb, "_busca");
+                    campo.Texto = "São Paulo";
+                    sb.Buscar();
+                    sb.Buscar();   // segundo clique durante a busca: ignorado
+                    for (int k = 0; k < 150 && sb.Ocupado; k++) EsperarQuadros(20);
+                    EsperarQuadros(50);
+                    int botoesSb = 0;
+                    foreach (Control c in sb.Secao.Controls) if (c is FlatBtn && c.Text.Contains("Brasil")) botoesSb++;
+                    Verdade(!sb.Ocupado && botoesSb == 2 && sb.Lugares.Count == 2, "busca com acento volta pela interface com os dois resultados, sem derrubar");
+                    Verdade(pedidas.Count == 1 && pedidas[0].Contains("name=S%C3%A3o%20Paulo"), "nome com acento vai codificado na URL e o segundo clique nao repete a busca");
+                    Verdade(((FlatBtn)Field(sb, "_btBuscar")).Enabled, "botao Buscar volta a funcionar");
+                    Clima.Baixar = delegate(string u) { throw new System.Net.WebException("sem rede"); };
+                    campo.Texto = "Recife";
+                    sb.Buscar();
+                    for (int k = 0; k < 150 && sb.Ocupado; k++) EsperarQuadros(20);
+                    EsperarQuadros(50);
+                    Verdade(((Label)Field(sb, "_estado")).Text == T.ClimaFalhaBusca && sb.Lugares.Count == 0, "sem rede: mensagem amigavel, sem derrubar");
+                    f.Close();
+                }
             }
             finally
             {

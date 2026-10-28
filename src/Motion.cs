@@ -105,7 +105,11 @@ namespace MhiagosControl
         /// </summary>
         public static void PrenderNaInterface()
         {
-            if (System.Threading.SynchronizationContext.Current == null) return;
+            // A bandeja nasce antes de qualquer controle: ainda nao ha contexto do WinForms
+            // nesta thread. Sem ele, NaInterface rodava o pedido na thread de fundo - e foi
+            // assim que a busca de cidade derrubou o app (controle criado fora da interface).
+            if (System.Threading.SynchronizationContext.Current == null)
+                System.Threading.SynchronizationContext.SetSynchronizationContext(new System.Windows.Forms.WindowsFormsSynchronizationContext());
             _interface = System.Threading.SynchronizationContext.Current;
             _threadDaInterface = System.Threading.Thread.CurrentThread.ManagedThreadId;
         }
