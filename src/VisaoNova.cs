@@ -666,20 +666,46 @@ namespace MhiagosControl
             TextFormatFlags f = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
             x += Ui.S(3);   // o nome acima tem a margem interna do TextRenderer; a linha alinha com ele
             largura -= Ui.S(3);
-            Font fl = Ui.FontSmall, ft = Visao.MonoTexto;
-            int w0 = TextRenderer.MeasureText(g, p[0] + " ", fl, Size.Empty, f).Width;
-            int w1 = TextRenderer.MeasureText(g, p[1], ft, Size.Empty, f).Width;
-            // Sem lugar para "Recife · 13:15", fica so a cidade; sem lugar nem para ela, nada.
-            string resto = "";
-            string curta = Clima.TemCidade ? "  ·  " + Clima.Cidade : "";
-            foreach (string op in new string[] { "  ·  " + p[2], curta })
-                if (op.Length > 0 && w0 + w1 + TextRenderer.MeasureText(g, op, fl, Size.Empty, f).Width <= largura) { resto = op; break; }
-            int hl = fl.Height, ht = ft.Height;
-            TextRenderer.DrawText(g, p[0] + " ", fl, new Rectangle(x, y, Math.Min(w0, largura), hl), Ui.Muted, f | TextFormatFlags.EndEllipsis);
-            if (w0 >= largura) return;
+            // "La fora  28,4 °C  ·  Recife  ·  16:15": a temperatura em seminegrito ambar (nao
+            // mono, que abria vaos entre os algarismos), o resto em texto pequeno, todos na
+            // MESMA linha de base e com o mesmo vao entre os pedacos.
+            Font fl = Ui.FontSmall, ft = Ui.FontSemi;
+            List<string> resto = new List<string>(p[2].Split(new string[] { " · " }, StringSplitOptions.RemoveEmptyEntries));
+            int vao = Ui.S(5);
+            int wp = Largura(g, p[0], fl, f), wt = Largura(g, p[1], ft, f), wPonto = Largura(g, "·", fl, f);
+            // sem lugar, saem pedacos do fim (a hora, depois a cidade)
+            while (resto.Count > 0)
+            {
+                int w = wp + vao + wt;
+                foreach (string s in resto) w += vao + wPonto + vao + Largura(g, s, fl, f);
+                if (w <= largura) break;
+                resto.RemoveAt(resto.Count - 1);
+            }
+            int linhaDeBase = y + Subida(g, fl);
+            int cx = x;
+            TextRenderer.DrawText(g, p[0], fl, new Point(cx, linhaDeBase - Subida(g, fl)), Ui.Muted, f);
+            cx += wp + vao;
             bool tem = p[1] != "--";
-            TextRenderer.DrawText(g, p[1], ft, new Point(x + w0, y + hl - ht), tem ? Visao.Quente : Ui.Faint, f);
-            if (resto.Length > 0) TextRenderer.DrawText(g, resto, fl, new Point(x + w0 + w1, y), Ui.Muted, f);
+            TextRenderer.DrawText(g, p[1], ft, new Point(cx, linhaDeBase - Subida(g, ft)), tem ? Visao.Quente : Ui.Faint, f);
+            cx += wt;
+            foreach (string s in resto)
+            {
+                cx += vao;
+                TextRenderer.DrawText(g, "·", fl, new Point(cx, linhaDeBase - Subida(g, fl)), Ui.Muted, f);
+                cx += wPonto + vao;
+                TextRenderer.DrawText(g, s, fl, new Point(cx, linhaDeBase - Subida(g, fl)), Ui.Muted, f);
+                cx += Largura(g, s, fl, f);
+            }
+        }
+
+        private static int Largura(Graphics g, string s, Font f, TextFormatFlags fl) { return TextRenderer.MeasureText(g, s, f, Size.Empty, fl).Width; }
+
+        /// <summary>Do topo do texto (sem folga) ate a linha de base, em pixels.</summary>
+        internal static int Subida(Graphics g, Font f)
+        {
+            FontFamily fam = f.FontFamily;
+            float px = f.SizeInPoints * g.DpiY / 72f;
+            return (int)Math.Round(px * fam.GetCellAscent(f.Style) / fam.GetEmHeight(f.Style));
         }
 
         /// <summary>Medicao: duracao de cada pintura do cartao (ms).</summary>

@@ -444,8 +444,18 @@ namespace MhiagosControl
             if (x0 < z.X) x0 = z.X;
             NumeroDoAr(g, alvoTxt, f.Pct, Ui.Misturar(PintorDoWidget.Secundario(escuro), PintorDoWidget.Primario(escuro), lig), escuro,
                 new RectangleF(x0, lValor.Y, wAlvo + 2f * s, lValor.Height), StringAlignment.Near);
+            // na mesma linha de base do alvo (centrado na altura da linha): sobe ou desce pela diferenca de subida das fontes
+            float hAlvo = f.Pct.GetHeight(g), hAmb = f.Nota.GetHeight(g);
+            float baseAlvo = lValor.Y + (lValor.Height - hAlvo) / 2f + SubidaF(g, f.Pct);
+            float yAmb = baseAlvo - SubidaF(g, f.Nota);
             PintorDoWidget.Texto(g, amb, f.Nota, PintorDoWidget.Secundario(escuro), escuro,
-                new RectangleF(x0 + wAlvo + gap, lValor.Y + 2f * s, Math.Max(0f, z.Right - (x0 + wAlvo + gap)), lValor.Height), StringAlignment.Near, StringAlignment.Center);
+                new RectangleF(x0 + wAlvo + gap, yAmb, Math.Max(0f, z.Right - (x0 + wAlvo + gap)), hAmb), StringAlignment.Near, StringAlignment.Near);
+        }
+
+        private static float SubidaF(Graphics g, Font f)
+        {
+            FontFamily fam = f.FontFamily;
+            return f.SizeInPoints * g.DpiY / 72f * fam.GetCellAscent(f.Style) / fam.GetEmHeight(f.Style);
         }
 
         /// <summary>A temperatura la fora, curta ("28,4°"); sem cidade ou sem leitura, "--".</summary>
