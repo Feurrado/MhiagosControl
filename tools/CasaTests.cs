@@ -123,15 +123,14 @@ namespace MhiagosControl
                 ((Timer)Field(form, "_tick")).Stop();
                 try
                 {
-                    Ui.AnimacoesForcadas = false;
-                    ir("metricas");
-                    Verdade(TransicaoDePagina.Atual == null, "sem animacoes, a troca de pagina e direta");
+                    // Troca de pagina instantanea (o fade de 150 ms saiu: travava): com animacoes ligadas,
+                    // a pagina nova ja esta visivel e e o unico filho visivel do hospedeiro.
                     Ui.AnimacoesForcadas = true;
+                    ir("metricas");
                     ir("visao");
-                    Verdade(TransicaoDePagina.Atual != null && TransicaoDePagina.Atual.Visible, "com animacoes, a troca de pagina faz o fade");
-                    Verdade(((Control)Field(form, "_pgVisao")).Visible, "a pagina nova ja esta no lugar por baixo do fade");
-                    EsperarQuadros(TransicaoDePagina.DuracaoMs + 250);
-                    Verdade(TransicaoDePagina.Atual == null, "o fade termina sozinho");
+                    int visiveis = 0;
+                    foreach (Control c in ((Control)Field(form, "_host")).Controls) if (c.Visible) visiveis++;
+                    Verdade(((Control)Field(form, "_pgVisao")).Visible && visiveis == 1, "troca de pagina instantanea, sem folha por cima");
                 }
                 finally { Ui.AnimacoesForcadas = antesAnim; }
                 form.Close();

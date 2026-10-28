@@ -75,6 +75,13 @@ namespace MhiagosControl
                 }
                 }
                 Ui.AnimacoesForcadas = null;
+                MedirAnimacao("janela: ligar", delegate { InvokePrivate(arv.BotaoLiga, "OnClick", EventArgs.Empty); }, false);
+                EsperarQuadros(600);
+                MedirAnimacao("janela: desligar", delegate { InvokePrivate(arv.BotaoLiga, "OnClick", EventArgs.Empty); }, false);
+                EsperarQuadros(600);
+                MedirAnimacao("janela: +1", delegate { InvokePrivate(arv.BotaoMais, "OnClick", EventArgs.Empty); }, false);
+                arv.MandarPendente();
+                EsperarQuadros(600);
                 Gravar(pasta, "janela-ligar", arv, delegate { InvokePrivate(arv.BotaoLiga, "OnClick", EventArgs.Empty); });
                 EsperarQuadros(900);
                 Gravar(pasta, "janela-mais", arv, delegate { InvokePrivate(arv.BotaoMais, "OnClick", EventArgs.Empty); });
@@ -93,6 +100,10 @@ namespace MhiagosControl
                 w.Show();
                 w.TopMost = true;
                 EsperarQuadros(1200);
+                MedirAnimacao("widget: ligar", delegate { w.Casa.Clicar(2); }, true);
+                EsperarQuadros(600);
+                MedirAnimacao("widget: desligar", delegate { w.Casa.Clicar(2); }, true);
+                EsperarQuadros(600);
                 Gravar(pasta, "widget-ligar", w, delegate { w.Casa.Clicar(2); });
                 EsperarQuadros(900);
                 Gravar(pasta, "widget-mais", w, delegate { w.Casa.Clicar(1); });
@@ -115,6 +126,30 @@ namespace MhiagosControl
             foreach (Screen s in Screen.AllScreens)
                 if (r.L <= s.Bounds.Left && r.T <= s.Bounds.Top && r.R >= s.Bounds.Right && r.B >= s.Bounds.Bottom) return true;
             return false;
+        }
+
+        /// <summary>
+        /// Clica e, por 800 ms, so mede (sem fotografar, que travaria a thread):
+        /// o intervalo entre batidas do relogio de animacao (ou entre quadros do
+        /// widget) e quanto cada pintura custou.
+        /// </summary>
+        private static void MedirAnimacao(string nome, MethodInvoker clicar, bool widget)
+        {
+            List<long> em = new List<long>();
+            List<double> custo = new List<double>();
+            if (widget) { WidgetDeBateria.QuadrosEm = em; WidgetDeBateria.QuadrosMs = custo; }
+            else { Motion.Tiques = em; CartaoDoArVisao.PinturasMs = custo; }
+            clicar();
+            EsperarQuadros(800);
+            Motion.Tiques = null; CartaoDoArVisao.PinturasMs = null; WidgetDeBateria.QuadrosEm = null; WidgetDeBateria.QuadrosMs = null;
+            List<double> dt = new List<double>();
+            for (int i = 1; i < em.Count; i++) dt.Add(em[i] - em[i - 1]);
+            double max = 0, soma = 0; int longos = 0;
+            foreach (double d in dt) { soma += d; if (d > max) max = d; if (d > 40) longos++; }
+            double cmax = 0, csoma = 0;
+            foreach (double c in custo) { csoma += c; if (c > cmax) cmax = c; }
+            Console.WriteLine(nome + ": " + em.Count + " batidas, intervalo medio " + (dt.Count > 0 ? (soma / dt.Count).ToString("0.0") : "-") + " ms, maior " + max.ToString("0") +
+                " ms, " + longos + " acima de 40 ms; " + custo.Count + " pinturas, media " + (custo.Count > 0 ? (csoma / custo.Count).ToString("0.0") : "-") + " ms, maior " + cmax.ToString("0.0") + " ms");
         }
 
         /// <summary>Quadros seguidos da janela (so copia da tela, sem conferir), para pegar o fade de 150 ms.</summary>

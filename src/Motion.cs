@@ -87,11 +87,13 @@ namespace MhiagosControl
         {
             Timer t = new Timer();
             t.Interval = 10;
-            t.Tick += delegate { _ultimoTique = _cronometro.ElapsedMilliseconds; Passo(_ultimoTique); };
+            t.Tick += delegate { _ultimoTique = _cronometro.ElapsedMilliseconds; if (Tiques != null) Tiques.Add(_ultimoTique); Passo(_ultimoTique); };
             return t;
         }
 
         private static long _ultimoTique;
+        /// <summary>Medicao: com uma lista aqui, cada batida do relogio anota o instante (ms).</summary>
+        internal static List<long> Tiques;
         private static int _threadDaInterface;
         private static System.Threading.SynchronizationContext _interface;
 

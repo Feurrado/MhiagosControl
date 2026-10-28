@@ -920,7 +920,11 @@ namespace MhiagosControl
     public sealed class WidgetDeBateria : Form
     {
         private const int IntervaloDeLeitura = 2000;
-        private const int IntervaloDeAnimacao = 40;
+        // Transicoes (ar ligando, alvo mudando, carga entrando): 15 ms, que o Windows
+        // arredonda para 15,6 - ~60 quadros por segundo. A 40 ms o timer caia em 47 e o
+        // widget animava a 21 qps, aos trancos (medido na tela, 28/10). Cada quadro custa
+        // ~2 ms e a transicao dura menos de 1 s.
+        private const int IntervaloDeAnimacao = 15;
         private const int IntervaloDaRespiracao = 80;
         private const int CicloMs = 2400;
         private const int Arrasto = 4;
@@ -1188,7 +1192,18 @@ namespace MhiagosControl
 
         // ---------------- desenho ----------------
 
+        /// <summary>Medicao: instantes (ms do relogio de movimento) e duracao de cada quadro.</summary>
+        internal static List<long> QuadrosEm;
+        internal static List<double> QuadrosMs;
+
         internal void Renderizar()
+        {
+            System.Diagnostics.Stopwatch medir = QuadrosEm != null ? System.Diagnostics.Stopwatch.StartNew() : null;
+            try { RenderizarAgora(); }
+            finally { if (medir != null) { QuadrosEm.Add(Motion.Agora); QuadrosMs.Add(medir.Elapsed.TotalMilliseconds); } }
+        }
+
+        private void RenderizarAgora()
         {
             if (IsDisposed || !IsHandleCreated) return;
             try

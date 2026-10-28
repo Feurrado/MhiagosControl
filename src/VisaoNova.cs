@@ -683,7 +683,17 @@ namespace MhiagosControl
             if (resto.Length > 0) TextRenderer.DrawText(g, resto, fl, new Point(x + w0 + w1, y), Ui.Muted, f);
         }
 
+        /// <summary>Medicao: duracao de cada pintura do cartao (ms).</summary>
+        internal static List<double> PinturasMs;
+
         protected override void OnPaint(PaintEventArgs e)
+        {
+            System.Diagnostics.Stopwatch medir = PinturasMs != null ? System.Diagnostics.Stopwatch.StartNew() : null;
+            try { PintarAr(e); }
+            finally { if (medir != null) PinturasMs.Add(medir.Elapsed.TotalMilliseconds); }
+        }
+
+        private void PintarAr(PaintEventArgs e)
         {
             base.OnPaint(e);
             if (_ar == null) return;

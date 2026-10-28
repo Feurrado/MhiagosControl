@@ -500,10 +500,6 @@ namespace MhiagosControl
         private void ShowPage()
         {
             NavItem sel = _nav.Selected;
-            // Retrato da pagina que sai, para o fade curto ate a nova (sem animacoes no Windows: nulo).
-            Control saindo = null;
-            foreach (Control c in _host.Controls) if (c.Visible && !(c is TransicaoDePagina)) { saindo = c; break; }
-            Bitmap retrato = saindo != null && sel != null && sel.Page != saindo && _paginaPronta ? TransicaoDePagina.Fotografar(saindo) : null;
             foreach (Control c in _host.Controls) c.Visible = false;
             if (sel != null && sel.Page != null)
             {
@@ -532,10 +528,7 @@ namespace MhiagosControl
                 // quem acaba de aparecer recebe um retrato novo imediatamente.
                 AtualizarPaginaAtiva(true);
                 AjustarRelogio();
-                TransicaoDePagina.Comecar(sel.Page, retrato);
-                retrato = null;
             }
-            if (retrato != null) retrato.Dispose();
             if (_profileList != null) RefreshProfileList();
         }
 
