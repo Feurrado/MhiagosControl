@@ -921,6 +921,7 @@ namespace MhiagosControl
     {
         private const int IntervaloDeLeitura = 2000;
         private const int IntervaloDeAnimacao = 40;
+        private const int IntervaloDaRespiracao = 80;
         private const int CicloMs = 2400;
         private const int Arrasto = 4;
 
@@ -1166,6 +1167,11 @@ namespace MhiagosControl
             foreach (Periferico p in _itens) if (p.Carregando && p.Bateria.HasValue) carregando = true;
             carregando |= _transicao;
             carregando &= Ui.Animacoes;   // sem animacoes no Windows, o quadro fica parado
+            // So o brilho da carga respirando (seno lento) dispensa 25 quadros por segundo:
+            // 12 bastam e cortam pela metade a CPU do widget parado com algo carregando.
+            // Transicao (entrada, ar ligando, alvo mudando) volta aos 25.
+            int intervalo = _transicao ? IntervaloDeAnimacao : IntervaloDaRespiracao;
+            if (_animacao.Interval != intervalo) _animacao.Interval = intervalo;
             if (carregando && !_animacao.Enabled) _animacao.Start();
             else if (!carregando && _animacao.Enabled) _animacao.Stop();
         }

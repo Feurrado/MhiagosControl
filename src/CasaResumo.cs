@@ -79,7 +79,8 @@ namespace MhiagosControl
             try
             {
                 if (IsDisposed) return;
-                if (!IsHandleCreated) { m(); return; }
+                // sem handle ainda: nada de mexer no controle da thread do servico; vai para a da interface
+                if (!IsHandleCreated) { Motion.NaInterface(m); return; }
                 if (InvokeRequired) BeginInvoke(m); else m();
             }
             catch (InvalidOperationException) { }

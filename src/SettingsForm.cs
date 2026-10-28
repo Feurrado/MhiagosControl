@@ -1772,7 +1772,6 @@ namespace MhiagosControl
             if (_vgPerif != null) _vgPerif.Atualizar(Perifericos.Atual);
             EventosDaVisao.ObservarPerifericos(Perifericos.Atual);
             _cardCooler.Conectado = status != null ? status.Connected : !string.IsNullOrEmpty(HidPanel.UltimoIdentificado);
-            if (_vgCabecalho != null && _vgCabecalho.Visible) _vgCabecalho.Invalidate();
 
             ApontarMostrador(_vgP1, id1, T.OnPanel(T.Top));
             ApontarMostrador(_vgP2, id2, T.OnPanel(T.Bottom));

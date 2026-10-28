@@ -45,6 +45,8 @@ namespace MhiagosControl
                 return CapturaDePresenca(args);
             if (args.Length > 1 && args[0] == "--anim-real")
                 return CapturaDaAnimacaoReal(args);
+            if (args.Length > 0 && args[0] == "--medir-fluidez")
+                return MedicaoDeFluidez(args);
             if (args.Length > 2 && (args[0] == "--captura-escala" || args[0] == "--captura-tela" || args[0] == "--medir-pintura"))
                 return CapturaDeEscala(args);
             // Sem animacao por padrao: a opcao do Windows muda de maquina para

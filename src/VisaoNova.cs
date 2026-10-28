@@ -53,7 +53,8 @@ namespace MhiagosControl
             try
             {
                 if (c.IsDisposed) return;
-                if (!c.IsHandleCreated) { m(); return; }
+                // sem handle ainda: nada de mexer no controle da thread do servico; vai para a da interface
+                if (!c.IsHandleCreated) { Motion.NaInterface(delegate { if (!c.IsDisposed) m(); }); return; }
                 if (c.InvokeRequired) c.BeginInvoke(m); else m();
             }
             catch (InvalidOperationException) { }
@@ -76,6 +77,9 @@ namespace MhiagosControl
 
         private static string _nome;
         private static bool _buscou;
+
+        /// <summary>O nome completo chegou da consulta (em segundo plano): o cabecalho repinta na hora, sem esperar o relogio de 15 s.</summary>
+        public static event EventHandler NomeChegou;
 
         /// <summary>
         /// O primeiro nome do usuario do Windows. A conta local guarda o nome
@@ -108,7 +112,7 @@ namespace MhiagosControl
                     foreach (ManagementBaseObject o in s.Get())
                     {
                         string f = o["FullName"] as string;
-                        if (!string.IsNullOrEmpty(f) && f.Trim().Length > 0) { _nome = PrimeiroNome(f); break; }
+                        if (!string.IsNullOrEmpty(f) && f.Trim().Length > 0) { _nome = PrimeiroNome(f); EventHandler h = NomeChegou; if (h != null) h(null, EventArgs.Empty); break; }
                     }
             }
             catch (Exception ex) { Log.Error("nome do usuario", ex); }
@@ -319,11 +323,12 @@ namespace MhiagosControl
             _relogio.Start();
             _mudou = delegate { Visao.NaInterface(this, Invalidate); };
             ServicoCasa.Mudou += _mudou;
+            Visao.NomeChegou += _mudou;
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { ServicoCasa.Mudou -= _mudou; _relogio.Dispose(); }
+            if (disposing) { ServicoCasa.Mudou -= _mudou; Visao.NomeChegou -= _mudou; _relogio.Dispose(); }
             base.Dispose(disposing);
         }
 

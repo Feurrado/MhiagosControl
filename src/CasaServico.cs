@@ -109,8 +109,13 @@ namespace MhiagosControl
         {
             EventHandler h = Mudou;
             if (h == null) return;
-            try { h(null, EventArgs.Empty); }
-            catch (Exception ex) { Log.Error("casa: aviso de mudanca", ex); }
+            // Um a um: um assinante que falha (o registro de eventos, uma pagina) nao
+            // pode deixar os outros - a Visao geral, o widget - sem a leitura nova.
+            foreach (EventHandler um in h.GetInvocationList())
+            {
+                try { um(null, EventArgs.Empty); }
+                catch (Exception ex) { Log.Error("casa: aviso de mudanca", ex); }
+            }
         }
 
         // ---------------- login ----------------

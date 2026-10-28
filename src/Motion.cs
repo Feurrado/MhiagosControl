@@ -108,6 +108,18 @@ namespace MhiagosControl
             _threadDaInterface = System.Threading.Thread.CurrentThread.ManagedThreadId;
         }
 
+        /// <summary>
+        /// Roda m na thread da interface: direto se ja esta nela (ou se ninguem a
+        /// prendeu, como nos testes), senao repassado. Para quem recebe aviso de
+        /// outra thread e ainda nao tem handle para usar BeginInvoke.
+        /// </summary>
+        public static void NaInterface(System.Windows.Forms.MethodInvoker m)
+        {
+            if (m == null) return;
+            if (_interface == null || System.Threading.Thread.CurrentThread.ManagedThreadId == _threadDaInterface) { m(); return; }
+            _interface.Post(delegate { m(); }, null);
+        }
+
         /// <summary>Diagnostico: com o arquivo "animacao-debug" na pasta de dados, as animacoes do ar anotam no log.</summary>
         internal static bool Diagnostico;
 
