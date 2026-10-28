@@ -205,6 +205,35 @@ namespace MhiagosControl
             return new PointF(c.X + raio * (float)Math.Cos(ang), c.Y + raio * (float)Math.Sin(ang));
         }
 
+        /// <summary>
+        /// O - ou o + de um botao redondo, desenhado como tracos e nao como glifo:
+        /// as metricas da Segoe deixavam o sinal um ou dois pixels fora do meio.
+        /// Centro exato do circulo em float, pontas redondas, ~45% do diametro.
+        /// </summary>
+        public static void Sinal(Graphics g, RectangleF circulo, bool mais, Color c, float espessura)
+        {
+            float cx = circulo.X + circulo.Width / 2f, cy = circulo.Y + circulo.Height / 2f;
+            float meio = Math.Min(circulo.Width, circulo.Height) * 0.45f / 2f;
+            SmoothingMode antes = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (Pen p = new Pen(c, espessura))
+            {
+                p.StartCap = p.EndCap = LineCap.Round;
+                g.DrawLine(p, cx - meio, cy, cx + meio, cy);
+                if (mais) g.DrawLine(p, cx, cy - meio, cx, cy + meio);
+            }
+            g.SmoothingMode = antes;
+        }
+
+        /// <summary>O glifo e o menos ou o mais da Segoe (E738 ou E710)? Entao vai como Sinal.</summary>
+        public static bool EhSinal(string glifo, out bool mais)
+        {
+            mais = false;
+            if (string.IsNullOrEmpty(glifo) || glifo.Length != 1) return false;
+            if (glifo[0] == (char)0xE710) { mais = true; return true; }
+            return glifo[0] == (char)0xE738;
+        }
+
         /// <summary>Glifo da Segoe centrado pelo desenho (a caixa da fonte tem folga de linha e descia o icone).</summary>
         public static void GlifoCentrado(Graphics g, string glifo, Font f, RectangleF area, Color c)
         {

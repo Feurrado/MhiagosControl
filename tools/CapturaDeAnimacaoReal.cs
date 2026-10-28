@@ -75,6 +75,7 @@ namespace MhiagosControl
                 }
                 }
                 Ui.AnimacoesForcadas = null;
+                Ampliar(arv, Path.Combine(Path.GetDirectoryName(pasta.TrimEnd(Path.DirectorySeparatorChar)), "sinais"), "cartao-do-ar-x3");
                 MedirAnimacao("janela: ligar", delegate { InvokePrivate(arv.BotaoLiga, "OnClick", EventArgs.Empty); }, false);
                 EsperarQuadros(600);
                 MedirAnimacao("janela: desligar", delegate { InvokePrivate(arv.BotaoLiga, "OnClick", EventArgs.Empty); }, false);
@@ -100,6 +101,7 @@ namespace MhiagosControl
                 w.Show();
                 w.TopMost = true;
                 EsperarQuadros(1200);
+                Ampliar(w, Path.Combine(Path.GetDirectoryName(pasta.TrimEnd(Path.DirectorySeparatorChar)), "sinais"), "widget-x3");
                 MedirAnimacao("widget: ligar", delegate { w.Casa.Clicar(2); }, true);
                 EsperarQuadros(600);
                 MedirAnimacao("widget: desligar", delegate { w.Casa.Clicar(2); }, true);
@@ -126,6 +128,28 @@ namespace MhiagosControl
             foreach (Screen s in Screen.AllScreens)
                 if (r.L <= s.Bounds.Left && r.T <= s.Bounds.Top && r.R >= s.Bounds.Right && r.B >= s.Bounds.Bottom) return true;
             return false;
+        }
+
+        /// <summary>Foto da tela (ou do quadro do widget) ampliada 3x sem suavizar, para conferir o centro dos sinais.</summary>
+        private static void Ampliar(Control c, string pasta, string nome)
+        {
+            Directory.CreateDirectory(pasta);
+            Bitmap doWidget = c is WidgetDeBateria ? (Bitmap)Field(c, "_quadro") : null;
+            Rectangle r = c.RectangleToScreen(c.ClientRectangle);
+            using (Bitmap b = doWidget != null ? new Bitmap(doWidget) : new Bitmap(r.Width, r.Height))
+            {
+                if (doWidget == null) using (Graphics g = Graphics.FromImage(b)) g.CopyFromScreen(r.Location, Point.Empty, r.Size);
+                using (Bitmap z = new Bitmap(b.Width * 3, b.Height * 3))
+                {
+                    using (Graphics g = Graphics.FromImage(z))
+                    {
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                        g.DrawImage(b, new Rectangle(0, 0, z.Width, z.Height));
+                    }
+                    z.Save(Path.Combine(pasta, nome + ".png"), ImageFormat.Png);
+                }
+            }
         }
 
         /// <summary>

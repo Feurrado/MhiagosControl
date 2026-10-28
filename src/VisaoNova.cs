@@ -442,8 +442,11 @@ namespace MhiagosControl
             float fl = Flash.Intensidade;
             if (fl > 0f) using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(210 * fl), Ui.Accent))) g.FillEllipse(b, r);
             using (Pen pen = new Pen(Enabled ? Ui.Accent : Ui.Border, 1.5f)) g.DrawEllipse(pen, r);
-            TextRenderer.DrawText(g, _glifo, Ui.FontGlyph9, r, Enabled ? Ui.AccentText : Ui.Faint,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            bool mais;
+            if (IconesCasa.EhSinal(_glifo, out mais))
+                IconesCasa.Sinal(g, r, mais, Enabled ? Ui.AccentText : Ui.Faint, 1.5f);
+            else
+                IconesCasa.GlifoCentrado(g, _glifo, Ui.FontGlyph9, r, Enabled ? Ui.AccentText : Ui.Faint);
             if (Focused && ShowFocusCues)
                 using (Pen pen = new Pen(Ui.AccentText)) { pen.DashStyle = DashStyle.Dot; g.DrawEllipse(pen, Rectangle.Inflate(r, -3, -3)); }
         }

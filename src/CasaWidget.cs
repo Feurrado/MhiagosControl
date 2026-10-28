@@ -377,7 +377,10 @@ namespace MhiagosControl
                 if (ativo && _hover == zona)
                     using (SolidBrush b = new SolidBrush(Color.FromArgb(escuro ? 40 : 60, 255, 255, 255))) g.FillEllipse(b, r);
             }
-            Glifo(g, glifo, fonte, r, ativo || aceso ? Color.White : Color.FromArgb(110, 255, 255, 255));
+            Color cg = ativo || aceso ? Color.White : Color.FromArgb(110, 255, 255, 255);
+            bool mais;
+            if (IconesCasa.EhSinal(glifo, out mais)) IconesCasa.Sinal(g, r, mais, cg, Math.Max(1.5f, r.Width / 14f));
+            else Glifo(g, glifo, fonte, r, cg);
         }
 
         /// <summary>O anel do widget de bateria: trilho apagado na cor, arco com brilho suave por baixo.</summary>

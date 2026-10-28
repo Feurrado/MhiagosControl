@@ -1100,6 +1100,13 @@ namespace MhiagosControl
                 Desenho(g, new RectangleF(m, m, Width - 2 * m, Height - 2 * m), frente);
                 return;
             }
+            bool mais;
+            if (IconesCasa.EhSinal(_glifo, out mais))
+            {
+                // - e + como tracos no centro exato do circulo (o glifo da fonte ficava fora do meio)
+                IconesCasa.Sinal(g, r, mais, frente, Math.Max(1.6f, Width / 16f));
+                return;
+            }
             using (GraphicsPath gp = Glifo(_glifo, Grande ? Ui.FontGlyph18 : Ui.FontGlyph11, new RectangleF(0, 0, Width - 1, Height - 1)))
             using (SolidBrush b = new SolidBrush(frente))
                 g.FillPath(b, gp);
