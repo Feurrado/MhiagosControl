@@ -19,6 +19,7 @@ namespace MhiagosControl
             CasaServicoOffline();
             CasaLavadora(root);
             PerifericosOcultos(root);
+            CasaClima();
             CasaWidget();
             CasaPagina(root);
             CasaAnimacaoDoAr();
@@ -761,7 +762,6 @@ namespace MhiagosControl
                             }
                         }
                         // O escritorio no cartao do ar: "Escritorio 22,0 °C · leitura as HH:mm", sem cartao separado.
-                        string vinte2 = (22.0).ToString("0.0", new System.Globalization.CultureInfo(T.Pt ? "pt-BR" : "en-US")) + " °C";
                         foreach (string est in new string[] { "concluido", "secando" })
                         {
                             List<Aparelho> ls = Exemplo(); if (est != "secando") ls[0] = Lavadora(est);
@@ -769,7 +769,7 @@ namespace MhiagosControl
                             form.ClientSize = SettingsForm.TamanhoPadrao;
                             InvokePrivate(form, "ArranjarVisaoGeral");
                             string[] pa = arv.Partes();
-                            Verdade(pa[0] == "Escritório" && pa[1] == vinte2 && pa[2].StartsWith(T.VisaoLeituraAs("")), "linha do ar com o escritorio e a leitura " + est + " " + language);
+                            Verdade(pa[0] == T.ClimaLaFora && pa[1] == Clima.Texto() && pa[2] == Clima.Origem(), "linha do ar com a temperatura de fora " + est + " " + language);
                             Verdade(arv.Height == Ui.S(CartaoDoArVisao.Altura), "cartao do ar nao cresceu " + est + " " + language);
                             int topo = int.MaxValue, fundo = 0;
                             foreach (Control ctl in pg.Controls) if (ctl.Visible && ctl.Dock == DockStyle.None) { topo = Math.Min(topo, ctl.Top); fundo = Math.Max(fundo, ctl.Bottom); }
@@ -784,7 +784,7 @@ namespace MhiagosControl
                         List<Aparelho> semLeitura = Exemplo(); semLeitura[1].Online = false;
                         ServicoCasa.Simular(semLeitura);
                         InvokePrivate(form, "ArranjarVisaoGeral");
-                        Verdade(arv.Partes()[1] == "--" && arv.Partes()[2] == T.VisaoSemLeitura, "sem leitura: -- e sem leitura " + language);
+                        Verdade(Clima.TemCidade || (arv.Partes()[1] == "--" && arv.Partes()[2] == T.ClimaDefinaCidade), "sem cidade: -- e o convite para definir a cidade " + language);
                         ServicoCasa.Simular(Exemplo());
                         InvokePrivate(form, "ArranjarVisaoGeral");
                         InvokePrivate(arv, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, 5, 5, 0));
@@ -808,7 +808,7 @@ namespace MhiagosControl
                         cfgForm.JanelaVersao = SettingsForm.VersaoDaJanela;
                         Verdade((Size)InvokePrivate(form, "TamanhoGuardado") == new Size(Ui.S(1000), Ui.S(700)), "tamanho escolhido pela pessoa fica " + language);
                         cfgForm.WindowW = wAntes; cfgForm.WindowH = hAntes; cfgForm.JanelaVersao = vAntes;
-                        Verdade(arv.Linha().StartsWith("Escritório "), "linha do ar comeca pelo comodo " + language);
+                        Verdade(arv.Linha().StartsWith(T.ClimaLaFora + " "), "linha do ar comeca por la fora " + language);
                         Verdade(lavv.Linha().Contains("rpm"), "linha da lavadora com a centrifugacao " + language);
                         Igual("01:25", CartaoDaLavadoraVisao.Relogio(85), "tempo da lavadora em hh:mm");
                         Verdade(Visao.Resumo() == "", "cabecalho sem resumo a direita (nem roupa nem escritorio) " + language);
@@ -1175,6 +1175,102 @@ namespace MhiagosControl
             return lav;
         }
 
+        /// <summary>Temperatura la fora (Open-Meteo): JSON, cidade, cache, leitura antiga, falha de rede, pt e en. Sem rede: o HTTP e trocado.</summary>
+        private static void CasaClima()
+        {
+            Secao("casa: clima la fora (Open-Meteo)");
+            ClimaAgora a = Clima.InterpretarAtual("{\"latitude\":-8.05,\"current_units\":{\"temperature_2m\":\"°C\"},\"current\":{\"time\":\"2026-10-28T16:15\",\"interval\":900,\"temperature_2m\":28.4,\"weather_code\":2,\"is_day\":1}}");
+            Verdade(a != null && Math.Abs(a.Temperatura - 28.4) < 1e-9 && a.Codigo == 2 && a.Dia, "le temperatura, codigo do tempo e dia/noite");
+            Verdade(Clima.InterpretarAtual("{\"error\":true,\"reason\":\"x\"}") == null && Clima.InterpretarAtual("nao e json") == null && Clima.InterpretarAtual("") == null,
+                "resposta sem temperatura vira nula");
+            List<LugarDoClima> ls = Clima.InterpretarBusca("{\"results\":[{\"name\":\"Recife\",\"latitude\":-8.05389,\"longitude\":-34.88111,\"country\":\"Brasil\",\"admin1\":\"Pernambuco\"},{\"name\":\"Sem coordenada\"},{\"name\":\"Recife\",\"latitude\":38.9,\"longitude\":-77.0,\"country\":\"Estados Unidos\"}]}");
+            Verdade(ls.Count == 2 && ls[0].Descricao == "Recife, Pernambuco, Brasil" && Math.Abs(ls[0].Lat + 8.05389) < 1e-9 && ls[1].Descricao == "Recife, Estados Unidos",
+                "busca de cidade: nome, estado e pais; sem coordenada fica de fora");
+            Verdade(Clima.InterpretarBusca("{\"generationtime_ms\":0.5}").Count == 0, "busca sem resultado: lista vazia");
+
+            string pasta = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mhiagos-clima-" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(pasta);
+            string arqAntes = PreferenciasCasa.Arquivo;
+            PreferenciasCasa prefAntes = ServicoCasa.Pref;
+            Func<string, string> baixarAntes = Clima.Baixar;
+            Func<DateTime> agoraAntes = Clima.Agora;
+            string idioma = T.Language;
+            try
+            {
+                PreferenciasCasa.Arquivo = System.IO.Path.Combine(pasta, "casa.ini");
+                ServicoCasa.Pref = new PreferenciasCasa();
+                Clima.Limpar();
+                List<string> urls = new List<string>();
+                Clima.Baixar = delegate(string u) { urls.Add(u); return "{\"current\":{\"temperature_2m\":28.4,\"weather_code\":61,\"is_day\":0}}"; };
+                DateTime t0 = new DateTime(2026, 10, 28, 19, 0, 0, DateTimeKind.Utc);
+                Clima.Agora = delegate { return t0; };
+
+                T.Language = T.PtBr;
+                Clima.Atualizar();
+                Verdade(!Clima.TemCidade && urls.Count == 0 && Clima.Curto() == "--" && Clima.Texto() == "--" && Clima.Origem() == T.ClimaDefinaCidade,
+                    "sem cidade: nao consulta, mostra -- e pede a cidade");
+
+                LugarDoClima recife = ls[0];
+                ServicoCasa.Pref.ClimaCidade = recife.Nome; ServicoCasa.Pref.ClimaLat = recife.Lat; ServicoCasa.Pref.ClimaLon = recife.Lon;
+                Clima.Atualizar();
+                Verdade(urls.Count == 1 && urls[0].StartsWith("https://api.open-meteo.com/v1/forecast?latitude=-8.0539&longitude=-34.8811&current=temperature_2m,weather_code,is_day"),
+                    "consulta a Open-Meteo com as coordenadas da cidade");
+                Igual("28,4°", Clima.Curto(), "pt: 28,4°");
+                Igual("28,4 °C", Clima.Texto(), "pt: 28,4 °C");
+                Verdade(Clima.Origem().StartsWith("Recife · ") && !Clima.Antiga, "origem com a cidade e a hora da leitura");
+                T.Language = T.EnUs;
+                Igual("28.4°", Clima.Curto(), "en: 28.4°");
+                T.Language = T.PtBr;
+
+                // a leitura fica guardada em casa.ini e volta sem rede
+                PreferenciasCasa lido = PreferenciasCasa.Carregar();
+                Verdade(lido.ClimaCidade == "Recife" && Math.Abs(lido.ClimaLat - recife.Lat) < 1e-9 && Math.Abs(lido.ClimaTemp - 28.4) < 1e-9 && lido.ClimaCodigo == 61 && !lido.ClimaDia,
+                    "cidade e ultima leitura gravadas em casa.ini");
+                ServicoCasa.Pref = lido;
+                Clima.Limpar();
+                Igual("28,4°", Clima.Curto(), "ao reabrir, a ultima leitura guardada aparece");
+
+                // falha de rede: mantem a ultima, que vira antiga com o tempo
+                Clima.Baixar = delegate(string u) { throw new System.Net.WebException("sem rede"); };
+                Clima.Agora = delegate { return t0.AddMinutes(Clima.AntigaMin + 5); };
+                Clima.Atualizar();
+                Verdade(Clima.Curto() == "28,4°" && Clima.Antiga && Clima.Origem().Contains(T.ClimaAntiga("").Trim().TrimEnd(',')),
+                    "sem rede: fica a ultima leitura, marcada como antiga");
+
+                // resposta estranha nao apaga a leitura
+                Clima.Baixar = delegate(string u) { return "{\"current\":{}}"; };
+                Clima.Atualizar();
+                Igual("28,4°", Clima.Curto(), "resposta sem temperatura nao apaga a ultima leitura");
+
+                // trocar de cidade apaga a leitura velha
+                Clima.Baixar = delegate(string u) { throw new System.Net.WebException("sem rede"); };
+                Clima.DefinirCidade(ls[1]);
+                Verdade(Clima.Cidade == "Recife" && Math.Abs(ServicoCasa.Pref.ClimaLat - 38.9) < 1e-9 && Clima.Curto() == "--", "outra cidade: leitura velha apagada");
+                Clima.DefinirCidade(null);
+                Verdade(!Clima.TemCidade && Clima.Curto() == "--", "sem cidade de novo: --");
+
+                // secao de Ajustes: resultados viram botoes e a escolha grava a cidade
+                SecaoDoClima sc = new SecaoDoClima();
+                sc.Secao.Size = new Size(600, 400);
+                sc.Mostrar(ls, false);
+                int botoes = 0;
+                foreach (Control c in sc.Secao.Controls) if (c is FlatBtn && c.Text.StartsWith("Recife")) botoes++;
+                Igual(2, botoes, "dois resultados viram dois botoes");
+                sc.Arranjar(sc.Secao, 600);
+                SemSobrepor(sc.Secao, "secao do clima com resultados");
+                sc.Escolher(ls[0]);
+                Verdade(Clima.TemCidade && Math.Abs(ServicoCasa.Pref.ClimaLon - recife.Lon) < 1e-9, "escolher grava a cidade");
+                sc.Secao.Dispose();
+            }
+            finally
+            {
+                Clima.Baixar = baixarAntes; Clima.Agora = agoraAntes;
+                ServicoCasa.Pref = prefAntes; PreferenciasCasa.Arquivo = arqAntes;
+                Clima.Limpar();
+                T.Language = idioma;
+            }
+        }
+
         /// <summary>Item 9: widget da casa (configuracao, pintura e cliques), sem mostrar janela.</summary>
         private static void CasaWidget()
         {
@@ -1208,10 +1304,7 @@ namespace MhiagosControl
                 using (ItensDaCasa casa = new ItensDaCasa())
                 {
                     Verdade(casa.Ar != null && casa.Lavadora != null && casa.Itens().Length == 2, "itens da casa: ar e lavadora secando");
-                    Igual((22.0).ToString("0.0") + "°", casa.Ambiente(), "widget mostra a temperatura do escritorio junto do alvo");
-                    casa.Ar.Online = false;
-                    Igual("--", casa.Ambiente(), "sem leitura do escritorio: --");
-                    casa.Ar.Online = true;
+                    Igual(Clima.Curto(), casa.Ambiente(), "widget mostra a temperatura de fora junto do alvo");
                     foreach (LayoutDoWidget formato in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
                     {
                         string nf = formato == LayoutDoWidget.Aneis ? "aneis" : "lista";

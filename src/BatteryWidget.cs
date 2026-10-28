@@ -1019,6 +1019,7 @@ namespace MhiagosControl
                 catch (InvalidOperationException) { }
             };
             ServicoCasa.Mudou += _casaMudou;
+            Clima.Mudou += _casaMudou;
 
             _preferencias = new AvisosDoSistema(this);
         }
@@ -1065,6 +1066,7 @@ namespace MhiagosControl
                 _entradas.Dispose();
                 _camada.Dispose();
                 ServicoCasa.Mudou -= _casaMudou;
+                Clima.Mudou -= _casaMudou;
                 _casa.Dispose();
                 LiberarQuadro();
                 _dica.Dispose();

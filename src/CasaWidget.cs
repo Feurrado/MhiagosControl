@@ -285,8 +285,7 @@ namespace MhiagosControl
         private string LinhaDoAr()
         {
             bool on = _ar.Online, ligado = on && _ar.Int("t_power", 0) != 0;
-            string u = _ar.Int("t_temp_type", 0) == 1 ? "°F" : "°C";
-            string amb = _ar.Tem("f_temp_in") && on ? _ar.Num("f_temp_in", 0).ToString("0.0") + u + " · " : "-- · ";
+            string amb = T.ClimaLaFora + " " + Clima.Texto() + " · ";
             return amb + (!on ? T.CasaOffline : ligado ? TabelaDoAr.Modo(_ar.Int("t_work_mode", -1), _ar.Tipo) : T.CasaDesligado);
         }
 
@@ -449,11 +448,11 @@ namespace MhiagosControl
                 new RectangleF(x0 + wAlvo + gap, lValor.Y + 2f * s, Math.Max(0f, z.Right - (x0 + wAlvo + gap)), lValor.Height), StringAlignment.Near, StringAlignment.Center);
         }
 
-        /// <summary>A temperatura do escritorio agora, curta ("22,0°"); sem leitura, "--".</summary>
+        /// <summary>A temperatura la fora, curta ("28,4°"); sem cidade ou sem leitura, "--".</summary>
         internal string Ambiente()
         {
-            if (_ar == null || !_ar.Online || !_ar.Tem("f_temp_in")) return "--";
-            return _ar.Num("f_temp_in", 0).ToString("0.0", System.Globalization.CultureInfo.CurrentCulture) + "°";
+            // A temperatura la fora (Open-Meteo), e nao a do escritorio: "28,4°", ou "--".
+            return Clima.Curto();
         }
 
         /// <summary>A lavadora como um item de anel: o arco e o progresso do ciclo, o tempo restante embaixo.</summary>

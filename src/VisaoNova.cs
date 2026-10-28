@@ -464,13 +464,14 @@ namespace MhiagosControl
             Title = null;
             _mudou = delegate { Visao.NaInterface(this, Puxar); };
             ServicoCasa.Mudou += _mudou;
+            Clima.Mudou += _mudou;
         }
 
         internal abstract void Puxar();
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) ServicoCasa.Mudou -= _mudou;
+            if (disposing) { ServicoCasa.Mudou -= _mudou; Clima.Mudou -= _mudou; }
             base.Dispose(disposing);
         }
 
@@ -634,13 +635,9 @@ namespace MhiagosControl
         internal string[] Partes()
         {
             if (_ar == null) return new string[] { "", "", "" };
-            string comodo = string.IsNullOrEmpty(_ar.Comodo) ? T.VisaoAmbienteNome : _ar.Comodo;
-            bool tem = _ar.Online && _ar.Tem("f_temp_in");
-            string temp = tem ? _ar.Num("f_temp_in", 0).ToString("0.0", new CultureInfo(T.Pt ? "pt-BR" : "en-US"))
-                + (_ar.Int("t_temp_type", 0) == 1 ? " °F" : " °C") : "--";
-            DateTime l = ServicoCasa.UltimaLeitura;
-            string leitura = !tem || l == DateTime.MinValue ? T.VisaoSemLeitura : T.VisaoLeituraAs(l.ToString("HH:mm"));
-            return new string[] { comodo, temp, leitura };
+            // A temperatura LA FORA (Open-Meteo, cidade de Casa > Ajustes) no lugar da do
+            // escritorio; a interna continua no mostrador da pagina Casa.
+            return new string[] { T.ClimaLaFora, Clima.Texto(), Clima.Origem() };
         }
 
         /// <summary>A linha como texto corrido (testes e acessibilidade).</summary>
@@ -672,10 +669,9 @@ namespace MhiagosControl
             Font fl = Ui.FontSmall, ft = Visao.MonoTexto;
             int w0 = TextRenderer.MeasureText(g, p[0] + " ", fl, Size.Empty, f).Width;
             int w1 = TextRenderer.MeasureText(g, p[1], ft, Size.Empty, f).Width;
-            // Sem lugar para "leitura as 13:13", fica so a hora; sem lugar nem para ela, nada.
+            // Sem lugar para "Recife · 13:15", fica so a cidade; sem lugar nem para ela, nada.
             string resto = "";
-            DateTime lida = ServicoCasa.UltimaLeitura;
-            string curta = p[1] != "--" && lida != DateTime.MinValue ? "  ·  " + lida.ToString("HH:mm") : "";
+            string curta = Clima.TemCidade ? "  ·  " + Clima.Cidade : "";
             foreach (string op in new string[] { "  ·  " + p[2], curta })
                 if (op.Length > 0 && w0 + w1 + TextRenderer.MeasureText(g, op, fl, Size.Empty, f).Width <= largura) { resto = op; break; }
             int hl = fl.Height, ht = ft.Height;

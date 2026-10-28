@@ -71,6 +71,7 @@ namespace MhiagosControl
 
             _mudou = delegate { NaInterface(Puxar); };
             ServicoCasa.Mudou += _mudou;
+            Clima.Mudou += _mudou;
             Puxar();
         }
 
@@ -91,6 +92,7 @@ namespace MhiagosControl
             if (disposing)
             {
                 ServicoCasa.Mudou -= _mudou;
+                Clima.Mudou -= _mudou;
                 _espera.Dispose();
                 _relogio.Dispose();
             }
@@ -266,7 +268,7 @@ namespace MhiagosControl
             TextRenderer.DrawText(g, _ar.Nome, Ui.FontMed, new Rectangle(tx, yNome, tw, Ui.S(22)), Ui.Text,
                 TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
             string linha = !_ar.Online ? T.CasaOffline :
-                (_ar.Tem("f_temp_in") ? string.Format(T.CasaAmbienteCurto, _ar.Num("f_temp_in", 0).ToString("0.#") + u) : "") +
+                (T.ClimaLaFora + " " + Clima.Texto()) +
                 (ligado ? "  ·  " + TabelaDoAr.Modo(_ar.Int("t_work_mode", -1), _ar.Tipo) : "  ·  " + T.CasaDesligado);
             TextRenderer.DrawText(g, linha, Ui.FontSmall, new Rectangle(tx, yNome + Ui.S(24), tw, Ui.S(18)), Ui.Muted,
                 TextFormatFlags.Left | TextFormatFlags.EndEllipsis);

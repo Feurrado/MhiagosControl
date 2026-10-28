@@ -36,6 +36,10 @@ namespace MhiagosControl
             Motion.PrenderNaInterface();
             Console.WriteLine("efeitos do Windows: " + (Ui.Animacoes ? "ligados" : "desligados"));
 
+            // uma cidade e uma leitura de exemplo para a temperatura de fora (nada sai para a rede)
+            ServicoCasa.Pref.ClimaCidade = "Recife"; ServicoCasa.Pref.ClimaLat = -8.05; ServicoCasa.Pref.ClimaLon = -34.88;
+            ClimaAgora exemploClima = new ClimaAgora(); exemploClima.Temperatura = 28.4; exemploClima.Codigo = 2; exemploClima.EmUtc = DateTime.UtcNow;
+            Clima.Definir(exemploClima);
             List<Aparelho> l = Exemplo();
             l[1].Estado["t_power"] = "0";
             ServicoCasa.Simular(l);

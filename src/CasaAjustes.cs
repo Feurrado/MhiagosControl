@@ -88,7 +88,15 @@ namespace MhiagosControl
             _btSair.Danger = true;
             _btSair.Click += delegate { if (Sair != null) Sair(this, EventArgs.Empty); };
             _secConta.Controls.Add(_btSair);
+
+            // Clima la fora: a cidade da temperatura externa (widget e Visao geral).
+            _clima = new SecaoDoClima();
+            _clima.Rearranjar = delegate { PaginaCasa pc = Parent as PaginaCasa; if (pc != null) pc.Arranjar(); };
+            AcrescentarSecao(_clima.Secao);
         }
+
+        private readonly SecaoDoClima _clima;
+        internal SecaoDoClima SecaoClima { get { return _clima; } }
 
         private Secao NovaSecao(string titulo)
         {

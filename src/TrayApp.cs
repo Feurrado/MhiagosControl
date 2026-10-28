@@ -1087,6 +1087,8 @@ namespace MhiagosControl
                 ServicoCasa.Iniciar();
                 // Os eventos da Visao geral contam desde o arranque, com a janela fechada tambem.
                 EventosDaVisao.Iniciar();
+                // A temperatura la fora (Open-Meteo), se houver cidade escolhida.
+                Clima.Iniciar();
                 // A casa no widget de bateria: o clique num item dela abre a pagina Casa, fora do clique (a janela e modal).
                 CasaNoWidget.AbrirCasa = delegate { Marshal(delegate { _paginaPedida = "casa"; PedirConfiguracao(); }); };
             }
