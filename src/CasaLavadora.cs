@@ -569,6 +569,9 @@ namespace MhiagosControl
         private readonly AnimacaoDeRecolher _animConsumo;
 
         internal CabecalhoRecolhivel CabecalhoDoConsumo { get { return _cabConsumo; } }
+        private bool _compacto;
+        /// <summary>Sem ciclo rodando (ou desconectada): so nome e estado.</summary>
+        internal bool Compacto { get { return _compacto; } }
         public bool ConsumoAberto { get { return _animConsumo.Aberto; } }
 
         /// <summary>Abre ou fecha a secao de consumo e historico, lembrando em casa.ini.</summary>
@@ -582,7 +585,7 @@ namespace MhiagosControl
 
         private void AjustarConsumo()
         {
-            bool algo = _animConsumo.Valor > 0.001f;
+            bool algo = !_compacto && _animConsumo.Valor > 0.001f;
             _consumo.Visible = _ciclos.Visible = _lbCiclos.Visible = algo;
             _cabConsumo.Aberto = _animConsumo.Aberto;
             _cabConsumo.Invalidate();
@@ -758,6 +761,21 @@ namespace MhiagosControl
             _tudo.Text = string.Join("\n", todas.ToArray());
             _tudo.Visible = _aberto;
             _btTudo.Visible = A.Estado.Count > 0;
+
+            // Fora de ciclo (parada, pronta ou desconectada) o cartao fica compacto: so o nome
+            // no cabecalho e o estado. Anel, etapas, parametros e consumo so com ciclo rodando.
+            _compacto = !(c.Online && c.Rodando);
+            if (_compacto)
+            {
+                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams, _btTudo, _tudo, _cabConsumo, _consumo, _ciclos, _lbCiclos })
+                    x.Visible = false;
+                foreach (Label[] l in _params) l[0].Visible = l[1].Visible = false;
+            }
+            else
+            {
+                _anel.Visible = _cabConsumo.Visible = true;
+                AjustarConsumo();
+            }
         }
 
         public override int Arranjar(int w)
@@ -773,6 +791,16 @@ namespace MhiagosControl
                 seloW = Math.Max(seloW, TextRenderer.MeasureText(s, Ui.FontSmall).Width + Ui.S(22));
             int kc = Ui.S(32);
             _chave.SetBounds(w - M - seloW - Ui.S(10) - kc, (Cabeca - kc) / 2, kc, kc);
+            if (_compacto)
+            {
+                int yk = Bloco(_titulo, M, Cabeca + Ui.S(12), iw);
+                if (_diag.Visible)
+                {
+                    _lbDiag.SetBounds(M, yk + Ui.S(10), iw, Ui.S(22));
+                    yk = Bloco(_diag, M, yk + Ui.S(36), iw);
+                }
+                return yk + Ui.S(14);
+            }
             int ax = lado ? M : M + (iw - anel) / 2;
             _anel.SetBounds(ax, y0, anel, anel);
 

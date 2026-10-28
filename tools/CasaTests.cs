@@ -459,7 +459,23 @@ namespace MhiagosControl
                                 Verdade(((Label)Field(lv, "_diag")).Visible && ((Label)Field(lv, "_diag")).Text.Length > 0, "diagnostico aberto " + sufixo);
                                 if (estado == "secando" && largura == 1300) CaptureEvolution(lv, "casa-lavadora-diagnostico-" + sufixo);
                                 lv.AlternarDiagnostico();
-                                casa.Arranjar();                                // Item 5: consumo e historico da lavadora, recolhivel, comeca fechado.
+                                casa.Arranjar();
+                                if (estado != "secando")
+                                {
+                                    // Fora de ciclo: cartao compacto, so o nome e o estado.
+                                    Verdade(lv.Compacto && !((Control)Field(lv, "_anel")).Visible && !((Control)Field(lv, "_etapas")).Visible
+                                        && !lv.CabecalhoDoConsumo.Visible && ((Label)Field(lv, "_titulo")).Visible && lv.Height < Ui.S(140), "lavadora fora de ciclo compacta " + sufixo);
+                                    lv.AlternarConsumo(false);
+                                    casa.Arranjar();
+                                    Verdade(!((Label)Field(lv, "_consumo")).Visible, "consumo nao aparece no compacto " + sufixo);
+                                    SemSobrepor(lv, "lavadora compacta " + sufixo);
+                                    lv.AlternarConsumo(false);
+                                    casa.Arranjar();
+                                    if (language == T.PtBr && largura == 1300) CapturarEm(System.IO.Path.GetTempPath() + "clprobe", lv, "lavadora-compacta-" + estado);
+                                    continue;
+                                }
+                                Verdade(!lv.Compacto, "lavadora em ciclo com o cartao completo " + sufixo);
+                                // Item 5: consumo e historico da lavadora, recolhivel, comeca fechado.
                                 Verdade(!lv.ConsumoAberto && !((Label)Field(lv, "_consumo")).Visible && lv.CabecalhoDoConsumo.Visible,
                                     "consumo da lavadora comeca fechado " + sufixo);
                                 CaptureEvolution(lv, "casa-lavadora-" + sufixo);
@@ -1079,6 +1095,10 @@ namespace MhiagosControl
                 using (ItensDaCasa casa = new ItensDaCasa())
                 {
                     Verdade(casa.Ar != null && casa.Lavadora != null && casa.Itens().Length == 2, "itens da casa: ar e lavadora secando");
+                    Igual((22.0).ToString("0.0") + "°", casa.Ambiente(), "widget mostra a temperatura do escritorio junto do alvo");
+                    casa.Ar.Online = false;
+                    Igual("--", casa.Ambiente(), "sem leitura do escritorio: --");
+                    casa.Ar.Online = true;
                     foreach (LayoutDoWidget formato in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
                     {
                         string nf = formato == LayoutDoWidget.Aneis ? "aneis" : "lista";
@@ -1117,7 +1137,7 @@ namespace MhiagosControl
                         casa.Lavadora.Estado["machine_status"] = "3";
                         Verdade(casa.Itens().Length == 2 && QuadroCabe(new Periferico[] { x11 }, casa, formato, s1, dir, "widget-unico-" + nf + "-pausada"), "lavadora pausada aparece " + nf);
                         casa.Lavadora.Estado["machine_status"] = "4"; casa.Lavadora.Estado["error_code"] = "5";
-                        Verdade(casa.Itens().Length == 2 && QuadroCabe(new Periferico[] { x11 }, casa, formato, s1, null, null), "lavadora com erro aparece " + nf);
+                        Verdade(casa.Itens().Length == 1 && QuadroCabe(new Periferico[] { x11 }, casa, formato, s1, null, null), "lavadora com erro fora de ciclo nao aparece " + nf);
                         casa.Lavadora.Estado["machine_status"] = "2"; casa.Lavadora.Estado["error_code"] = "0";
                         casa.Lavadora.Online = false;
                         Verdade(casa.Itens().Length == 1, "lavadora desconectada sai " + nf);

@@ -104,7 +104,8 @@ namespace MhiagosControl
                 foreach (Aparelho a in ServicoCasa.Aparelhos)
                 {
                     if (_ar == null && a.ArCondicionado) _ar = a;
-                    if (_lav == null && a.Lavadora) _lav = a;
+                    // a lavadora so aparece online e em ciclo
+                    if (_lav == null && a.Lavadora && ItensDaCasa.CicloAtivo(a)) _lav = a;
                 }
             Preencher();
             Arranjar();

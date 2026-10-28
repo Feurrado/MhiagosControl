@@ -140,15 +140,16 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// A lavadora so entra com ciclo ativo: em funcionamento, pausada,
-        /// aguardando o inicio programado ou com erro. Parada, concluida,
-        /// desligada ou desconectada, ela sai.
+        /// A lavadora so entra online e em ciclo: em funcionamento, pausada ou
+        /// aguardando o inicio programado. Parada, concluida, com erro fora de
+        /// ciclo, desligada ou desconectada, ela sai (vale para a Visao geral tambem).
         /// </summary>
         internal static bool CicloAtivo(Aparelho lav)
         {
             if (lav == null) return false;
             CicloAtual c = CicloAtual.De(lav);
-            return c.Online && (c.Rodando || c.Erro);
+            // so com a maquina online e em ciclo; parada, pronta ou desconectada nao aparece
+            return c.Online && c.Rodando;
         }
 
         /// <summary>Os itens que o widget mostra agora, na ordem.</summary>
@@ -285,7 +286,7 @@ namespace MhiagosControl
         {
             bool on = _ar.Online, ligado = on && _ar.Int("t_power", 0) != 0;
             string u = _ar.Int("t_temp_type", 0) == 1 ? "°F" : "°C";
-            string amb = _ar.Tem("f_temp_in") ? _ar.Num("f_temp_in", 0).ToString("0.#") + u + " · " : "";
+            string amb = _ar.Tem("f_temp_in") && on ? _ar.Num("f_temp_in", 0).ToString("0.0") + u + " · " : "-- · ";
             return amb + (!on ? T.CasaOffline : ligado ? TabelaDoAr.Modo(_ar.Int("t_work_mode", -1), _ar.Tipo) : T.CasaDesligado);
         }
 
@@ -428,8 +429,28 @@ namespace MhiagosControl
             Botao(g, _rLiga, "\uE7E8", peq, ligado, on, 2, escuro);
 
             RectangleF lValor = new RectangleF(z.X, z.Y + d + 7f * s, z.Width, PintorDoWidget.LinhaDoValor * s);
-            NumeroDoAr(g, t > 0 ? t + "°" : "--", f.Pct, Ui.Misturar(PintorDoWidget.Secundario(escuro), PintorDoWidget.Primario(escuro), lig), escuro,
-                lValor, StringAlignment.Center);
+            // O alvo grande e, ao lado e menor, a temperatura do escritorio agora (a ambiente lida pelo ar).
+            string alvoTxt = t > 0 ? t + "°" : "--";
+            string amb = Ambiente();
+            float wAlvo, wAmb, gap = 5f * s;
+            using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
+            {
+                wAlvo = g.MeasureString(alvoTxt, f.Pct, PointF.Empty, sf).Width;
+                wAmb = g.MeasureString(amb, f.Nota, PointF.Empty, sf).Width;
+            }
+            float x0 = z.X + (z.Width - wAlvo - gap - wAmb) / 2f;
+            if (x0 < z.X) x0 = z.X;
+            NumeroDoAr(g, alvoTxt, f.Pct, Ui.Misturar(PintorDoWidget.Secundario(escuro), PintorDoWidget.Primario(escuro), lig), escuro,
+                new RectangleF(x0, lValor.Y, wAlvo + 2f * s, lValor.Height), StringAlignment.Near);
+            PintorDoWidget.Texto(g, amb, f.Nota, PintorDoWidget.Secundario(escuro), escuro,
+                new RectangleF(x0 + wAlvo + gap, lValor.Y + 2f * s, Math.Max(0f, z.Right - (x0 + wAlvo + gap)), lValor.Height), StringAlignment.Near, StringAlignment.Center);
+        }
+
+        /// <summary>A temperatura do escritorio agora, curta ("22,0°"); sem leitura, "--".</summary>
+        internal string Ambiente()
+        {
+            if (_ar == null || !_ar.Online || !_ar.Tem("f_temp_in")) return "--";
+            return _ar.Num("f_temp_in", 0).ToString("0.0", System.Globalization.CultureInfo.CurrentCulture) + "°";
         }
 
         /// <summary>A lavadora como um item de anel: o arco e o progresso do ciclo, o tempo restante embaixo.</summary>
