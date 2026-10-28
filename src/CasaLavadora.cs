@@ -25,14 +25,16 @@ namespace MhiagosControl
         internal static readonly Dictionary<int, string[]> Confirmados = new Dictionary<int, string[]>
         {
             // Confirmado pelo Thiago em 26/10/2026: o ciclo das 21:20 (programa 7) foi Algodao.
-            { 7, new[] { "Algodão", "Cotton" } }
+            { 7, new[] { "Algodão", "Cotton" } },
+            // Confirmado pelo Thiago em 28/10/2026: o ciclo das 16:15 (programa 42) era o Automatico.
+            { 42, new[] { "Automático", "Auto" } }
         };
 
         /// <summary>
         /// Nomes PROVAVEIS, do dicionario do connectlife-ha para as lava e secas
         /// da mesma familia (025-1wj120514v0t e 025-1wj120495v0t concordam nos ids
         /// em comum; 7 = cotton). Nao ha arquivo para 1wj110009v0t, e outra familia
-        /// (1wj100649v0t) numera diferente: por isso aparecem como "provavel".
+        /// (1wj100649v0t) numera diferente; aparecem so pelo nome, como palpite.
         /// Par pt/en.
         /// </summary>
         internal static readonly Dictionary<int, string[]> Provaveis = new Dictionary<int, string[]>
@@ -68,7 +70,8 @@ namespace MhiagosControl
             if (id <= 0) return T.LavSemPrograma;
             string[] n;
             if (Confirmados.TryGetValue(id, out n)) return T.Pt ? n[0] : n[1];
-            if (Provaveis.TryGetValue(id, out n)) return string.Format(T.LavProgramaProvavel, id, T.Pt ? n[0] : n[1]);
+            // Os provaveis tambem vao so pelo nome: o Thiago prefere o palpite ao numero (28/10/2026).
+            if (Provaveis.TryGetValue(id, out n)) return T.Pt ? n[0] : n[1];
             return string.Format(T.LavProgramaN, id);
         }
 
@@ -879,7 +882,6 @@ namespace MhiagosControl
     public static partial class T
     {
         public static string LavProgramaN { get { return P("Programa {0}", "Program {0}"); } }
-        public static string LavProgramaProvavel { get { return P("Programa {0} (provável: {1})", "Program {0} (likely: {1})"); } }
         public static string LavConsumoTitulo { get { return P("Consumo e histórico", "Usage and history"); } }
         public static string LavResumoConsumo(string agua, string kwh) { return P("ciclo: " + agua + " L · " + kwh + " kWh", "cycle: " + agua + " L · " + kwh + " kWh"); }
         public static string LavMesCurto(int n) { return P(n + " ciclos este mês", n + " cycles this month"); }

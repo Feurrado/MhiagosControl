@@ -1574,7 +1574,8 @@ namespace MhiagosControl
             Igual("90 °C", TabelaDaLavadora.Temperatura(9), "temperatura 9 = 90 °C");
             Igual("1400 rpm", TabelaDaLavadora.Centrifugacao(14), "centrifugacao 14 = 1400 rpm");
             Igual(T.Pt ? "Algodão" : "Cotton", TabelaDaLavadora.Programa(7), "programa 7 = Algodao, confirmado pelo Thiago (sem o provavel)");
-            Igual(string.Format(T.LavProgramaProvavel, 8, T.Pt ? "Sintético" : "Synthetic"), TabelaDaLavadora.Programa(8), "programa 8 segue como provavel");
+            Igual(T.Pt ? "Sintético" : "Synthetic", TabelaDaLavadora.Programa(8), "programa provavel aparece so pelo nome");
+            Igual(T.Pt ? "Automático" : "Auto", TabelaDaLavadora.Programa(42), "programa 42 = Automatico, confirmado pelo Thiago");
             Igual(string.Format(T.LavProgramaN, 99), TabelaDaLavadora.Programa(99), "programa desconhecido vai pelo numero");
             Igual(T.LavConcluida, CicloAtual.De(Lavadora("concluido")).Titulo(), "concluido");
             Igual(T.LavDesconectada, CicloAtual.De(Lavadora("offline")).Titulo(), "desconectada");
