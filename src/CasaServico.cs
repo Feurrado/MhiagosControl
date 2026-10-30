@@ -737,7 +737,7 @@ namespace MhiagosControl
                 // falhas do autodiagnostico (f_e_*)
                 foreach (KeyValuePair<string, string> kv in a.Estado)
                 {
-                    if (!kv.Key.StartsWith("f_e_")) continue;
+                    if (!kv.Key.StartsWith("f_e_", StringComparison.Ordinal)) continue;
                     string chave = a.Puid + "|" + kv.Key;
                     bool ativa = a.Int(kv.Key, 0) != 0;
                     if (!ativa) { _falhasAvisadas.Remove(chave); continue; }
@@ -844,7 +844,7 @@ namespace MhiagosControl
         {
             if (a == null) return false;
             foreach (KeyValuePair<string, string> kv in a.Estado)
-                if (kv.Key.StartsWith("f_e_") && a.Int(kv.Key, 0) != 0) return true;
+                if (kv.Key.StartsWith("f_e_", StringComparison.Ordinal) && a.Int(kv.Key, 0) != 0) return true;
             if (a.Int("error_code", 0) != 0) return true;
             List<FalhaOficial> lista = Lista(a.Puid);
             if (lista != null)
@@ -885,7 +885,7 @@ namespace MhiagosControl
             {
                 // Sem a lista oficial ainda: as f_e_* que o aparelho publica.
                 foreach (KeyValuePair<string, string> kv in a.Estado)
-                    if (kv.Key.StartsWith("f_e_") && kv.Key != "f_e_push")
+                    if (kv.Key.StartsWith("f_e_", StringComparison.Ordinal) && kv.Key != "f_e_push")
                         l.Add((a.Int(kv.Key, 0) != 0 ? "\u25CF  " + T.CasaFalhaAtiva : "\u25CB  " + T.CasaFalhaOk) + "  ·  " + T.CasaFalha(kv.Key, null));                // Lavadora (e quem mais publicar error_code) sem a lista oficial ainda.
                 if (a.Tem("error_code"))
                     l.Add(a.Int("error_code", 0) == 0 ? "\u25CB  " + T.CasaSemErro : "\u25CF  " + string.Format(T.CasaErroCodigo, a.Int("error_code", 0)));

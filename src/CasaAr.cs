@@ -1110,7 +1110,7 @@ namespace MhiagosControl
             List<string> alertas = new List<string>();
             foreach (KeyValuePair<string, string> kv in A.Estado)
             {
-                if (!kv.Key.StartsWith("f_e_")) continue;
+                if (!kv.Key.StartsWith("f_e_", StringComparison.Ordinal)) continue;
                 int v = A.Int(kv.Key, 0);
                 if (v == 0) continue;
                 alertas.Add(kv.Key == "f_e_push" ? string.Format(T.CasaAlertaCodigo, v) : T.CasaFalha(kv.Key, Meta(kv.Key)));

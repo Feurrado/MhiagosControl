@@ -697,7 +697,7 @@ namespace MhiagosControl
                 StringBuilder sb = new StringBuilder((int)n);
                 if (PowerReadFriendlyName(IntPtr.Zero, ref id, IntPtr.Zero, IntPtr.Zero, sb, ref n) != 0) return null;
                 string nome = sb.ToString().Trim();
-                return nome.Length == 0 || nome.StartsWith("@") ? null : nome;
+                return nome.Length == 0 || nome.StartsWith("@", StringComparison.Ordinal) ? null : nome;
             }
             catch { return null; }
             finally { if (p != IntPtr.Zero) LocalFree(p); }
