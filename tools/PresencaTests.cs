@@ -78,7 +78,7 @@ namespace MhiagosControl
                 Ui.AnimacoesForcadas = true;
             }
             using (PresencaAnimada p2 = new PresencaAnimada())
-                Verdade(((Timer)typeof(PresencaAnimada).GetField("_relogio", AuditFlags).GetValue(p2)).Interval < 15,
+                Verdade(((RelogioDeQuadros)typeof(PresencaAnimada).GetField("_relogio", AuditFlags).GetValue(p2)).Interval < 15,
                         "o relogio da presenca tambem fica abaixo do passo de 15,6 ms");
         }
 

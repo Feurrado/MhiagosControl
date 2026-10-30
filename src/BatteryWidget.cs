@@ -931,7 +931,9 @@ namespace MhiagosControl
 
         private readonly ConfigDoWidget _cfg;
         private readonly Timer _leitura = new Timer();
-        private readonly Timer _animacao = new Timer();
+        private bool _animando;
+        private long _proximoQuadro;
+        private Func<long, bool> _passoDaAnimacao;
         /// <summary>Algum aparelho entrava ou saia da carga no ultimo quadro.</summary>
         private bool _transicao;
         private readonly ToolTip _dica = new ToolTip();
@@ -1002,8 +1004,16 @@ namespace MhiagosControl
 
             _leitura.Interval = IntervaloDeLeitura;
             _leitura.Tick += delegate { Atualizar(false); };
-            _animacao.Interval = IntervaloDeAnimacao;
-            _animacao.Tick += delegate { Renderizar(); };
+            // No relogio unico do app (uma batida por quadro da tela): o Timer proprio
+            // alternava 15 e 31 ms. A transicao pinta a cada batida; a respiracao, lenta, no seu passo.
+            _passoDaAnimacao = delegate(long agora)
+            {
+                if (!_animando) return false;
+                if (agora < _proximoQuadro) return true;
+                _proximoQuadro = agora + (_transicao ? 0 : IntervaloDaRespiracao);
+                Renderizar();
+                return _animando;
+            };
             _entradas.Quadro += delegate { Reconstruir(); };
             _entradas.Removido += AoPassarPresenca;
             _camada = new Camada(this, delegate { return _cfg.NaFrente; });
@@ -1062,7 +1072,7 @@ namespace MhiagosControl
             if (disposing)
             {
                 _leitura.Stop(); _leitura.Dispose();
-                _animacao.Stop(); _animacao.Dispose();
+                _animando = false;
                 _entradas.Dispose();
                 _camada.Dispose();
                 ServicoCasa.Mudou -= _casaMudou;
@@ -1176,10 +1186,8 @@ namespace MhiagosControl
             // So o brilho da carga respirando (seno lento) dispensa 25 quadros por segundo:
             // 12 bastam e cortam pela metade a CPU do widget parado com algo carregando.
             // Transicao (entrada, ar ligando, alvo mudando) volta aos 25.
-            int intervalo = _transicao ? IntervaloDeAnimacao : IntervaloDaRespiracao;
-            if (_animacao.Interval != intervalo) _animacao.Interval = intervalo;
-            if (carregando && !_animacao.Enabled) _animacao.Start();
-            else if (!carregando && _animacao.Enabled) _animacao.Stop();
+            _animando = carregando;
+            if (carregando) Motion.Assinar(_passoDaAnimacao);
         }
 
         private bool Escuro { get { return EscuroDe(_cfg); } }

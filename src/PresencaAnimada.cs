@@ -27,7 +27,7 @@ namespace MhiagosControl
         }
 
         private readonly List<Entrada> _itens = new List<Entrada>();
-        private readonly Timer _relogio = new Timer();
+        private readonly RelogioDeQuadros _relogio;
         private readonly Stopwatch _cronometro = new Stopwatch();
         private bool _descartado;
 
@@ -40,8 +40,7 @@ namespace MhiagosControl
         public PresencaAnimada()
         {
             // 10 ms pelo mesmo motivo de AnimacaoDeRecolher: 16 cai em 31 ms no Windows
-            _relogio.Interval = 10;
-            _relogio.Tick += delegate { Avancar(_cronometro.ElapsedMilliseconds); };
+            _relogio = new RelogioDeQuadros(delegate { Avancar(_cronometro.ElapsedMilliseconds); });
         }
 
         public int Quantidade { get { return _itens.Count; } }

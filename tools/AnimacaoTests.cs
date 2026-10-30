@@ -114,7 +114,7 @@ namespace MhiagosControl
             Verdade(AnimacaoDeRecolher.Suavizar(0.05f) < 0.05f, "a saida nao da tranco no primeiro quadro");
             Verdade(AnimacaoDeRecolher.DuracaoMs >= 200 && AnimacaoDeRecolher.DuracaoMs <= 300, "duracao entre 200 e 300 ms");
             using (AnimacaoDeRecolher r = new AnimacaoDeRecolher(false))
-                Verdade(((Timer)typeof(AnimacaoDeRecolher).GetField("_relogio", AuditFlags).GetValue(r)).Interval < 15,
+                Verdade(((RelogioDeQuadros)typeof(AnimacaoDeRecolher).GetField("_relogio", AuditFlags).GetValue(r)).Interval < 15,
                         "timer abaixo do passo de 15,6 ms do Windows: 16 virava 31 ms e a animacao travava");
         }
 

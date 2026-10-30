@@ -86,7 +86,7 @@ namespace MhiagosControl
             catch (Exception ex)
             {
                 // um quadro perdido nao pode virar uma enxurrada no log a 15 por segundo
-                _animacao.Stop();
+                _animando = false;
                 Log.Error("desenho do widget", ex);
             }
         }

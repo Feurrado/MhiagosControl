@@ -87,8 +87,81 @@ namespace MhiagosControl
         {
             Timer t = new Timer();
             t.Interval = 10;
-            t.Tick += delegate { _ultimoTique = _cronometro.ElapsedMilliseconds; if (Tiques != null) Tiques.Add(_ultimoTique); Passo(_ultimoTique); };
+            t.Tick += delegate { Batida(); };
             return t;
+        }
+
+        private static void Batida()
+        {
+            _ultimoTique = _cronometro.ElapsedMilliseconds;
+            if (Tiques != null) Tiques.Add(_ultimoTique);
+            Passo(_ultimoTique);
+        }
+
+        // ---- batida na cadencia da tela ----
+        //
+        // O Timer do WinForms e WM_TIMER: a mensagem de menor prioridade, presa ao
+        // relogio do Windows (15,6 ms), entao os intervalos alternavam entre 15 e 31 ms
+        // (~40 a 55 fps, com tranco) e nunca casavam com o vblank. Com a thread de
+        // interface presa, o relogio passa a bater quando o DWM compoe um quadro
+        // (DwmFlush bloqueia ate la): uma batida por quadro da tela, 60, 120 ou 144 Hz.
+        // A mensagem e postada (prioridade acima da pintura) e uma so fica pendente,
+        // para uma interface ocupada nao acumular fila. Sem DWM ou sem interface presa
+        // (os testes), segue o Timer de sempre.
+
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        private static extern int DwmFlush();
+
+        private static System.Threading.Thread _vsync;
+        private static readonly System.Threading.ManualResetEvent _vsyncLigado = new System.Threading.ManualResetEvent(false);
+        private static int _batidaPendente;
+        private static volatile bool _vsyncFalhou;
+
+        internal static bool UsaVsync { get { return _interface != null && !_vsyncFalhou && VsyncPermitido; } }
+        /// <summary>Testes e diagnostico podem forcar o Timer.</summary>
+        internal static bool VsyncPermitido = true;
+
+        private static bool RelogioLigado { get { return UsaVsync ? _vsyncLigado.WaitOne(0) : _relogio.Enabled; } }
+
+        private static void LigarRelogio()
+        {
+            if (!UsaVsync) { if (!_relogio.Enabled) _relogio.Start(); return; }
+            if (_vsync == null)
+            {
+                _vsync = new System.Threading.Thread(LacoDoVsync);
+                _vsync.IsBackground = true;
+                _vsync.Name = "Motion vsync";
+                _vsync.Start();
+            }
+            _vsyncLigado.Set();
+        }
+
+        private static void PararRelogio()
+        {
+            _relogio.Stop();
+            _vsyncLigado.Reset();
+        }
+
+        private static void LacoDoVsync()
+        {
+            while (true)
+            {
+                _vsyncLigado.WaitOne();
+                int hr;
+                try { hr = DwmFlush(); } catch { hr = -1; }
+                if (hr != 0)
+                {
+                    // sem DWM: cai no Timer, e a thread sai
+                    _vsyncFalhou = true;
+                    System.Threading.SynchronizationContext ctx = _interface;
+                    if (ctx != null) ctx.Post(delegate { _vsyncLigado.Reset(); _vsync = null; if (_assinantes.Count > 0 && !_relogio.Enabled) _relogio.Start(); }, null);
+                    return;
+                }
+                if (!_vsyncLigado.WaitOne(0)) continue;
+                if (System.Threading.Interlocked.Exchange(ref _batidaPendente, 1) == 1) continue;
+                System.Threading.SynchronizationContext c = _interface;
+                if (c != null) c.Post(delegate { System.Threading.Interlocked.Exchange(ref _batidaPendente, 0); if (_vsyncLigado.WaitOne(0)) Batida(); }, null);
+            }
         }
 
         private static long _ultimoTique;
@@ -129,7 +202,7 @@ namespace MhiagosControl
         /// <summary>Diagnostico: com o arquivo "animacao-debug" na pasta de dados, as animacoes do ar anotam no log.</summary>
         internal static bool Diagnostico;
 
-        internal static void Anotar(string texto) { if (Diagnostico) Log.Write("animacao: " + texto + " (relogio " + (_relogio.Enabled ? "ligado" : "parado") + ", efeitos " + (Ui.Animacoes ? "sim" : "nao") + ", assinantes " + _assinantes.Count + ")"); }
+        internal static void Anotar(string texto) { if (Diagnostico) Log.Write("animacao: " + texto + " (relogio " + (RelogioLigado ? (UsaVsync ? "ligado (vsync)" : "ligado") : "parado") + ", efeitos " + (Ui.Animacoes ? "sim" : "nao") + ", assinantes " + _assinantes.Count + ")"); }
 
         /// <summary>Milissegundos do relogio de movimento (so cresce).</summary>
         public static long Agora { get { return _cronometro.ElapsedMilliseconds; } }
@@ -149,8 +222,8 @@ namespace MhiagosControl
             }
             if (!_assinantes.Contains(passo)) _assinantes.Add(passo);
             // Ligado mas sem bater ha um tempo (timer preso a outra thread, ou parado pelo sistema): religa aqui.
-            if (_relogio.Enabled && _cronometro.ElapsedMilliseconds - _ultimoTique > 300) { _relogio.Stop(); Anotar("relogio religado"); }
-            if (!_relogio.Enabled) { _ultimoTique = _cronometro.ElapsedMilliseconds; _relogio.Start(); }
+            if (RelogioLigado && _cronometro.ElapsedMilliseconds - _ultimoTique > 300) { PararRelogio(); Anotar("relogio religado"); }
+            if (!RelogioLigado) { _ultimoTique = _cronometro.ElapsedMilliseconds; LigarRelogio(); }
         }
 
         internal static int Assinantes { get { return _assinantes.Count; } }
@@ -166,7 +239,7 @@ namespace MhiagosControl
                 catch { continua = false; }
                 if (!continua && i < _assinantes.Count) _assinantes.RemoveAt(i);
             }
-            if (_assinantes.Count == 0) _relogio.Stop();
+            if (_assinantes.Count == 0) PararRelogio();
         }
 
         /// <summary>
@@ -256,5 +329,39 @@ namespace MhiagosControl
             Repintar();
             return _assinada;
         }
+    }
+}
+
+namespace MhiagosControl
+{
+    /// <summary>
+    /// Relogio de quadros de uma animacao: Start/Stop/Enabled como o Timer, mas
+    /// batendo no relogio unico do Motion (uma batida por quadro da tela). O
+    /// valor da animacao vem do cronometro dela, nao daqui.
+    /// </summary>
+    internal sealed class RelogioDeQuadros
+    {
+        private readonly Action _tique;
+        private readonly Func<long, bool> _passo;
+        private bool _ligado;
+
+        public RelogioDeQuadros(Action tique)
+        {
+            _tique = tique;
+            _passo = delegate(long agora)
+            {
+                if (!_ligado) return false;
+                _tique();
+                return _ligado;
+            };
+        }
+
+        /// <summary>Intervalo do Timer de reserva (sem vsync): abaixo do passo de 15,6 ms do Windows.</summary>
+        public int Interval { get { return 10; } }
+        public bool Enabled { get { return _ligado; } }
+
+        public void Start() { _ligado = true; Motion.Assinar(_passo); }
+        public void Stop() { _ligado = false; }
+        public void Dispose() { _ligado = false; }
     }
 }

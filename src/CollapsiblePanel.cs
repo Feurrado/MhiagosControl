@@ -26,7 +26,7 @@ namespace MhiagosControl
         public const int DuracaoMs = Motion.Lenta;
 
         private readonly int _duracao;
-        private readonly Timer _relogio = new Timer();
+        private readonly RelogioDeQuadros _relogio;
         private readonly Stopwatch _cronometro = new Stopwatch();
         private float _de, _ate, _valor;
         private long _msDoTrecho;
@@ -49,8 +49,7 @@ namespace MhiagosControl
             // segundo, e a animacao travava. Abaixo de um passo, o timer
             // dispara a cada passo (~64 por segundo, medido com
             // Tests.exe --medir-animacao). O valor vem do cronometro, nao daqui.
-            _relogio.Interval = 10;
-            _relogio.Tick += delegate { Avancar(_cronometro.ElapsedMilliseconds); };
+            _relogio = new RelogioDeQuadros(delegate { Avancar(_cronometro.ElapsedMilliseconds); });
         }
 
         /// <summary>0 recolhido, 1 aberto, ja passado pela curva.</summary>
