@@ -5099,7 +5099,7 @@ namespace MhiagosControl
         private static string IdDoPainel()
         {
             string id = HidPanel.UltimoIdentificado;
-            return string.IsNullOrEmpty(id) ? T.PanelNotFound : id;
+            return string.IsNullOrEmpty(id) ? T.PanelNone : id;
         }
 
         private static void Abrir(string url)
