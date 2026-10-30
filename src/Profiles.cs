@@ -549,9 +549,9 @@ namespace MhiagosControl
                 foreach (string raw in lines)
                 {
                     string line = raw.Trim();
-                    if (line.Length == 0 || line.StartsWith(";")) continue;
+                    if (line.Length == 0 || line.StartsWith(";", StringComparison.Ordinal)) continue;
 
-                    if (line.StartsWith("[") && line.EndsWith("]"))
+                    if (line.StartsWith("[", StringComparison.Ordinal) && line.EndsWith("]", StringComparison.Ordinal))
                     {
                         string section = line.Substring(1, line.Length - 2).Trim();
                         if (string.Equals(section, "profile", StringComparison.OrdinalIgnoreCase))
