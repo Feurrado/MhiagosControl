@@ -48,6 +48,23 @@ namespace MhiagosControl
         /// </summary>
         public bool Editavel = true;
 
+        /// <summary>
+        /// Estilo da Visao geral nova: rotulo e numero em monoespacada, curva
+        /// baixa com a media tracejada e "max · med" na linha do valor.
+        /// </summary>
+        public bool Compacto;
+
+        /// <summary>Sem moldura nem cantos: o cartao vive dentro de outro (as curvas do cooler).</summary>
+        public bool SemMoldura;
+
+        /// <summary>Leitura quente (temperatura): pinta em ambar em vez da cor de destaque.</summary>
+        public bool Quente;
+
+        /// <summary>Nao editavel, mas o clique leva a algum lugar (a Visao geral abre Metricas): cursor de mao.</summary>
+        public bool Clicavel;
+
+        private float _estMax = float.NaN, _estMed = float.NaN;
+
         private Rectangle _bRem, _bEsq, _bDir, _bTam;
         private int _sobre = -1;
         private bool _mouseDentro = false;
@@ -94,7 +111,7 @@ namespace MhiagosControl
                 if (!_valor.HasValue) return Ui.Faint;
                 if (Perigo.HasValue && _valor.Value >= Perigo.Value) return Ui.Danger;
                 if (Atencao.HasValue && _valor.Value >= Atencao.Value) return Ui.Warn;
-                return Ui.Accent;
+                return Quente ? Visao.Quente : Ui.Accent;
             }
         }
 
@@ -111,9 +128,61 @@ namespace MhiagosControl
             return v.ToString("0.0");
         }
 
+        /// <summary>O valor como aparece no cartao, com a unidade (a faixa de status da Visao geral nova le).</summary>
+        public string ValorTexto { get { return _valor.HasValue ? Formatado() + " " + (Unidade ?? "").Trim() : "--"; } }
+
         private string Formatado()
         {
             return _valor.HasValue ? Formatar(_valor.Value) : "--";
+        }
+
+        // ---------------- cache do fundo ----------------
+
+        private Bitmap _cache;
+        private string _chaveDoCache;
+
+        /// <summary>Testes: quantas vezes o fundo (moldura, grade e curva) foi redesenhado de verdade.</summary>
+        internal int FundosDesenhados;
+
+        /// <summary>
+        /// Moldura, grade e curva guardadas num bitmap ate mudar o que elas mostram
+        /// (amostra nova no historico, tamanho, cor, tema, janela de tempo). O tique
+        /// da janela repinta o cartao quatro vezes por segundo porque o NUMERO muda;
+        /// a curva so muda a cada amostra (5 s), e era ela o grosso da pintura.
+        /// Com o ponteiro em cima (o balao do detalhe), desenha direto.
+        /// </summary>
+        private void PintarFundo(Graphics g, Color cor, Action<Graphics> desenhar)
+        {
+            if (_hoverX >= 0 || Width <= 0 || Height <= 0)
+            {
+                desenhar(g);
+                return;
+            }
+            string chave = string.Concat(Width, "x", Height, "|", MetricHistory.Revision, "|", cor.ToArgb(), "|", Ui.Surface.ToArgb(), "|",
+                Ui.Window.ToArgb(), "|", Ui.Border.ToArgb(), "|", Compacto, SemMoldura, _selecionado, "|", FimBalde, "|", Janela, "|", SensorId);
+            if (_cache == null || _cache.Width != Width || _cache.Height != Height || chave != _chaveDoCache)
+            {
+                if (_cache == null || _cache.Width != Width || _cache.Height != Height)
+                {
+                    if (_cache != null) _cache.Dispose();
+                    _cache = new Bitmap(Width, Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                }
+                using (Graphics gg = Graphics.FromImage(_cache))
+                {
+                    gg.Clear(SemMoldura ? Ui.Surface : Ui.Window);
+                    Ui.Smooth(gg);
+                    desenhar(gg);
+                }
+                _chaveDoCache = chave;
+                FundosDesenhados++;
+            }
+            g.DrawImageUnscaled(_cache, 0, 0);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _cache != null) { _cache.Dispose(); _cache = null; }
+            base.Dispose(disposing);
         }
 
         // ---------------- edicao ----------------
@@ -196,7 +265,7 @@ namespace MhiagosControl
             {
                 _sobre = s;
                 _hoverX = hx;
-                Cursor = s >= 0 ? Cursors.Hand : Cursors.Default;
+                Cursor = s >= 0 || Clicavel ? Cursors.Hand : Cursors.Default;
                 Invalidate();
             }
             base.OnMouseMove(e);
@@ -295,29 +364,33 @@ namespace MhiagosControl
 
             // Os cantos, que ficam fora do retangulo arredondado. Lido do Ui na
             // hora, para acompanhar troca de tema.
-            using (SolidBrush fundo = new SolidBrush(Ui.Window))
+            using (SolidBrush fundo = new SolidBrush(SemMoldura ? Ui.Surface : Ui.Window))
                 g.FillRectangle(fundo, e.ClipRectangle);
 
             Ui.Smooth(g);
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
             Color cor = Cor;
+            if (Compacto) { PintarCompacto(g, r, cor); return; }
 
             // Cartao alto sobra area util abaixo do valor: a curva desce e ganha
             // eixo e grade. No pequeno ela continua sendo pano de fundo.
             bool detalhado = Height >= Ui.S(140);
             int topo = detalhado ? Ui.S(66) : Height / 2;
 
-            using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))
+            PintarFundo(g, cor, delegate(Graphics gg)
             {
-                using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillPath(b, p);
+                using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))
+                {
+                    using (SolidBrush b = new SolidBrush(Ui.Surface)) gg.FillPath(b, p);
 
-                Region antigo = g.Clip;
-                g.SetClip(p, CombineMode.Intersect);
-                DesenharSerie(g, cor, topo, detalhado);
-                g.Clip = antigo;
+                    Region antigo = gg.Clip;
+                    gg.SetClip(p, CombineMode.Intersect);
+                    DesenharSerie(gg, cor, topo, detalhado);
+                    gg.Clip = antigo;
 
-                using (Pen pen = _selecionado ? new Pen(Ui.Accent, 1.6f) : new Pen(Ui.Border)) g.DrawPath(pen, p);
-            }
+                    using (Pen pen = _selecionado ? new Pen(Ui.Accent, 1.6f) : new Pen(Ui.Border)) gg.DrawPath(pen, p);
+                }
+            });
 
             // O rotulo cede espaco quando os botoes estao a mostra, em vez de
             // ficar por baixo deles.
@@ -342,6 +415,60 @@ namespace MhiagosControl
         }
 
         /// <summary>
+        /// O estilo da Visao geral nova: rotulo pequeno em maiusculas, numero
+        /// em monoespacada, "max · med" a direita na linha do valor e a curva
+        /// na metade de baixo, com a media tracejada.
+        /// </summary>
+        private void PintarCompacto(Graphics g, Rectangle r, Color cor)
+        {
+            int topo = Math.Max(Ui.S(52), Height - Ui.S(46));
+            PintarFundo(g, cor, delegate(Graphics gg)
+            {
+                if (SemMoldura)
+                {
+                    DesenharSerie(gg, cor, topo, false);
+                    return;
+                }
+                using (GraphicsPath p = Ui.RoundRect(r, Ui.Radius))
+                {
+                    using (SolidBrush b = new SolidBrush(Ui.Surface)) gg.FillPath(b, p);
+                    Region antigo = gg.Clip;
+                    gg.SetClip(p, CombineMode.Intersect);
+                    DesenharSerie(gg, cor, topo, false);
+                    gg.Clip = antigo;
+                    using (Pen pen = new Pen(Ui.Border)) gg.DrawPath(pen, p);
+                }
+            });
+
+            int m = Ui.S(12);
+            TextRenderer.DrawText(g, Titulo, Visao.MonoRotulo, new Rectangle(m, Ui.S(9), Width - 2 * m, Ui.S(16)),
+                Ui.Muted, TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+
+            string txt = Formatado();
+            int y = Ui.S(25);
+            Size ts = TextRenderer.MeasureText(g, txt, Visao.MonoValor, Size.Empty, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, txt, Visao.MonoValor, new Point(m, y), cor, TextFormatFlags.NoPadding);
+            int fim = m + ts.Width;
+            if (!string.IsNullOrEmpty(Unidade))
+            {
+                string u = Unidade.Trim();
+                Size us = TextRenderer.MeasureText(g, u, Visao.MonoPequena, Size.Empty, TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(g, u, Visao.MonoPequena, new Point(fim + Ui.S(3), y + ts.Height - us.Height - Ui.S(2)), Ui.Muted, TextFormatFlags.NoPadding);
+                fim += Ui.S(3) + us.Width;
+            }
+
+            if (float.IsNaN(_estMax)) return;
+            string[] formas = { T.StatMax + " " + Formatar(_estMax) + " · " + T.StatAvg + " " + Formatar(_estMed), T.StatMax + " " + Formatar(_estMax) };
+            foreach (string est in formas)
+            {
+                Size es = TextRenderer.MeasureText(g, est, Visao.MonoPequena, Size.Empty, TextFormatFlags.NoPadding);
+                if (fim + Ui.S(10) + es.Width > Width - m) continue;
+                TextRenderer.DrawText(g, est, Visao.MonoPequena, new Point(Width - m - es.Width, y + ts.Height - es.Height - Ui.S(2)), Ui.Faint, TextFormatFlags.NoPadding);
+                break;
+            }
+        }
+
+        /// <summary>
         /// A curva, escalada pelo proprio minimo e maximo da janela com folga de 5%.
         ///
         /// Escalar de zero ao maximo achataria justamente o que interessa: uma
@@ -356,6 +483,7 @@ namespace MhiagosControl
         private void DesenharSerie(Graphics g, Color cor, int topo, bool detalhado)
         {
             int n = MetricHistory.Janela(SensorId, Janela, FimBalde, ref _buf);
+            _estMax = float.NaN; _estMed = float.NaN;
 
             // min/med/max ganham uma faixa propria acima da curva, e nao ficam por cima dela
             int topoEixo = topo;
@@ -438,6 +566,16 @@ namespace MhiagosControl
                         g.DrawLine(tracejada, pontes[k], pontes[k + 1]);
                 }
 
+            _estMax = max; _estMed = media;
+            if (Compacto)
+            {
+                float ym = topo + alt - (media - baixo) / faixa * alt;
+                using (Pen m = new Pen(Color.FromArgb(150, Ui.Faint), 1f))
+                {
+                    m.DashPattern = new float[] { 4f, 3f };
+                    g.DrawLine(m, 0, ym, Width, ym);
+                }
+            }
             if (detalhado) DesenharEixo(g, topoEixo, alt, min, media, max);
             if (detalhado && _hoverX >= 0)
                 DesenharDetalhe(g, cor, topo, alt, n, baixo, faixa);

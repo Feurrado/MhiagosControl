@@ -39,6 +39,8 @@ namespace MhiagosControl
         public CorDoVidro Cor = CorDoVidro.Automatica;
         public bool NaFrente = false;
         public bool Travado = false;
+        /// <summary>Os aparelhos da casa (ar e, em ciclo, a lavadora) depois dos perifericos.</summary>
+        public bool Casa = true;
 
         private static string _caminho;
 
@@ -93,6 +95,7 @@ namespace MhiagosControl
             sb.AppendLine("cor=" + (Cor == CorDoVidro.Escura ? "escura" : Cor == CorDoVidro.Clara ? "clara" : "auto"));
             sb.AppendLine("frente=" + (NaFrente ? "1" : "0"));
             sb.AppendLine("travado=" + (Travado ? "1" : "0"));
+            sb.AppendLine("casa=" + (Casa ? "1" : "0"));
             return sb.ToString();
         }
 
@@ -122,6 +125,7 @@ namespace MhiagosControl
                     case "cor": c.Cor = v == "escura" ? CorDoVidro.Escura : v == "clara" ? CorDoVidro.Clara : CorDoVidro.Automatica; break;
                     case "frente": c.NaFrente = v == "1"; break;
                     case "travado": c.Travado = v == "1"; break;
+                    case "casa": c.Casa = v == "1"; break;
                 }
             }
             if (!c.TemPosicao) { c.X = SemPosicao; c.Y = SemPosicao; }
@@ -141,19 +145,28 @@ namespace MhiagosControl
     internal static class PintorDoWidget
     {
         internal const float RaioDoVidro = 8f;
-        private const float Margem = 16f;
+        /// <summary>
+        /// O widget desenhado um pouco maior que as medidas abaixo (pedido do
+        /// Thiago ao juntar a casa): vale para tudo, aneis, fontes, bolhas e
+        /// margens, multiplicado junto com a escala da tela.
+        /// </summary>
+        internal const float Ampliacao = 1.07f;
+        // internas: o widget da casa usa as mesmas medidas
+        internal const float Margem = 16f;
 
         // aneis
-        private const float Coluna = 78f;
-        private const float VaoDeColuna = 6f;
-        private const float Anel = 56f;
-        private const float Traco = 5.5f;
+        internal const float Coluna = 78f;
+        internal const float VaoDeColuna = 6f;
+        internal const float Anel = 56f;
+        internal const float Traco = 5.5f;
+        /// <summary>Altura da linha do valor embaixo do anel, e o vao entre o anel e ela.</summary>
+        internal const float LinhaDoValor = 20f, VaoDoValor = 8f;
 
         // lista
-        private const float LarguraDaLista = 300f;
-        private const float Linha = 50f;
-        private const float VaoDeLinha = 10f;
-        private const float BolhaDaLista = Anel - 2f * Traco - 6f; // a mesma bolha dos aneis
+        internal const float LarguraDaLista = 300f;
+        internal const float Linha = 50f;
+        internal const float VaoDeLinha = 10f;
+        internal const float BolhaDaLista = Anel - 2f * Traco - 6f; // a mesma bolha dos aneis
 
         /// <summary>
         /// O que vai para o widget: so o fone e o mouse (G HUB e Attack Shark) que
@@ -395,6 +408,37 @@ namespace MhiagosControl
             /// lista - ver PresencaAnimada. Sem valor, todos estao inteiros.
             /// </summary>
             public float[] Presenca = new float[0];
+            /// <summary>Os aparelhos da casa, depois dos perifericos; null sem a casa.</summary>
+            public ItensDaCasa Casa;
+        }
+
+        /// <summary>As presencas dos perifericos com as da casa (sempre inteiras) no fim.</summary>
+        internal static float[] ComCasa(float[] pres, ItensDaCasa casa)
+        {
+            int n = casa != null ? casa.Itens().Length : 0;
+            float[] r = new float[pres.Length + n];
+            Array.Copy(pres, r, pres.Length);
+            for (int i = pres.Length; i < r.Length; i++) r[i] = 1f;
+            return r;
+        }
+
+        /// <summary>As larguras dos perifericos com as dos itens da casa no fim.</summary>
+        internal static float[] ComCasa(LayoutDoWidget layout, float[] larg, ItensDaCasa casa)
+        {
+            float[] c = casa != null ? casa.Larguras(layout) : new float[0];
+            float[] r = new float[larg.Length + c.Length];
+            Array.Copy(larg, r, larg.Length);
+            Array.Copy(c, 0, r, larg.Length, c.Length);
+            return r;
+        }
+
+        /// <summary>O tamanho do widget com os perifericos (e quem entra e sai) e a casa.</summary>
+        internal static Size Medir(Quadro q)
+        {
+            float[] pres = new float[q.Itens.Length];
+            for (int i = 0; i < pres.Length; i++) pres[i] = PresencaDe(q, i);
+            return Medir(q.Layout, ComCasa(pres, q.Casa), ComCasa(q.Layout, Larguras(q.Layout, q.Itens), q.Casa), q.Escala,
+                         FracaoDeNome(q.Itens, pres));
         }
 
         internal static float PresencaDe(Quadro q, int i)
@@ -457,9 +501,11 @@ namespace MhiagosControl
             float s = q.Escala;
             Vidro(g, new RectangleF(0, 0, tamanho.Width, tamanho.Height), s, q.Escuro, q.Fosco, q.Nitido, q.Sobre);
 
+            ItensDaCasa.Tipo[] casa = q.Casa != null ? q.Casa.Itens() : new ItensDaCasa.Tipo[0];
+            if (q.Casa != null) q.Casa.ComecarQuadro();
             using (Fontes f = new Fontes(s))
             {
-                if (q.Itens.Length == 0)
+                if (q.Itens.Length == 0 && casa.Length == 0)
                 {
                     Texto(g, T.WidgetNoDevices, f.Nota, q.Escuro ? Color.White : Color.FromArgb(255, 22, 24, 30), q.Escuro,
                           new RectangleF(0, 0, tamanho.Width, tamanho.Height), StringAlignment.Center, StringAlignment.Center);
@@ -467,7 +513,9 @@ namespace MhiagosControl
                 }
                 float[] pres = new float[q.Itens.Length];
                 for (int i = 0; i < pres.Length; i++) pres[i] = PresencaDe(q, i);
-                RectangleF[] zonas = Zonas(q.Layout, pres, Larguras(q.Layout, q.Itens), tamanho, s);
+                RectangleF[] zonas = Zonas(q.Layout, ComCasa(pres, q.Casa), ComCasa(q.Layout, Larguras(q.Layout, q.Itens), q.Casa), tamanho, s);
+                for (int k = 0; k < casa.Length; k++)
+                    q.Casa.Pintar(g, casa[k], zonas[q.Itens.Length + k], q.Layout, s, q.Escuro, f);
                 for (int i = 0; i < q.Itens.Length; i++)
                 {
                     string nota = i < q.Notas.Length ? q.Notas[i] : null;
@@ -695,7 +743,7 @@ namespace MhiagosControl
         // ---------------- pecas ----------------
 
         /// <summary>Gota de vidro menor, dentro da placa, para o icone do aparelho.</summary>
-        private static void Bolha(Graphics g, RectangleF r, bool escuro)
+        internal static void Bolha(Graphics g, RectangleF r, bool escuro)
         {
             // miolo denso e neutro, sem contorno: o icone salta e nao sobram
             // dois circulos translucidos de tons diferentes. No vidro claro o
@@ -720,7 +768,7 @@ namespace MhiagosControl
         /// Texto com uma sombra de um pixel no vidro escuro: sobre um papel de
         /// parede claro e movimentado, o branco sozinho se perde.
         /// </summary>
-        private static void Texto(Graphics g, string texto, Font fonte, Color cor, bool escuro, RectangleF r,
+        internal static void Texto(Graphics g, string texto, Font fonte, Color cor, bool escuro, RectangleF r,
                                   StringAlignment h, StringAlignment v)
         {
             if (string.IsNullOrEmpty(texto) || r.Width <= 0) return;
@@ -746,7 +794,7 @@ namespace MhiagosControl
             }
         }
 
-        private static Pen Redonda(Color cor, float largura)
+        internal static Pen Redonda(Color cor, float largura)
         {
             Pen p = new Pen(cor, largura);
             p.StartCap = LineCap.Round;
@@ -777,17 +825,17 @@ namespace MhiagosControl
             return PeripheralStrip.Misturar(PeripheralStrip.CorFora(p), PeripheralStrip.Verde, carga);
         }
 
-        private static Color Primario(bool escuro)
+        internal static Color Primario(bool escuro)
         {
             return escuro ? Color.FromArgb(245, 255, 255, 255) : Color.FromArgb(235, 22, 24, 30);
         }
 
-        private static Color Secundario(bool escuro)
+        internal static Color Secundario(bool escuro)
         {
             return escuro ? Color.FromArgb(175, 255, 255, 255) : Color.FromArgb(160, 22, 24, 30);
         }
 
-        private static Color Trilho(bool escuro)
+        internal static Color Trilho(bool escuro)
         {
             return escuro ? Color.FromArgb(46, 255, 255, 255) : Color.FromArgb(30, 0, 0, 0);
         }
@@ -812,7 +860,7 @@ namespace MhiagosControl
         }
 
         /// <summary>As fontes de um desenho, no tamanho em pixels da escala da tela.</summary>
-        private sealed class Fontes : IDisposable
+        internal sealed class Fontes : IDisposable
         {
             public readonly Font Pct, Nome, Nota;
 
@@ -869,10 +917,15 @@ namespace MhiagosControl
     /// Alt+Tab. Arrasta com o botao esquerdo, abre a pagina Baterias com um
     /// clique e tem as opcoes no botao direito.
     /// </summary>
-    public sealed class WidgetDeBateria : Form
+    public sealed partial class WidgetDeBateria : Form
     {
         private const int IntervaloDeLeitura = 2000;
-        private const int IntervaloDeAnimacao = 40;
+        // Transicoes (ar ligando, alvo mudando, carga entrando): 15 ms, que o Windows
+        // arredonda para 15,6 - ~60 quadros por segundo. A 40 ms o timer caia em 47 e o
+        // widget animava a 21 qps, aos trancos (medido na tela, 28/10). Cada quadro custa
+        // ~2 ms e a transicao dura menos de 1 s.
+        private const int IntervaloDeAnimacao = 15;
+        private const int IntervaloDaRespiracao = 80;
         private const int CicloMs = 2400;
         private const int Arrasto = 4;
 
@@ -881,7 +934,6 @@ namespace MhiagosControl
         private readonly Timer _animacao = new Timer();
         /// <summary>Algum aparelho entrava ou saia da carga no ultimo quadro.</summary>
         private bool _transicao;
-        private readonly Timer _conferirDesktop = new Timer();
         private readonly ToolTip _dica = new ToolTip();
         private ContextMenu _menu;
 
@@ -905,10 +957,24 @@ namespace MhiagosControl
         private bool _pressionado, _arrastando;
         private Point _inicioDoArrasto, _origemDoArrasto;
 
-        /// <summary>Mostrar a area de trabalho (Win+D) cobriu tudo; o widget sobe ate alguem voltar.</summary>
-        private bool _sobreDesktop;
-        private IntPtr _gancho = IntPtr.Zero;
-        private WinEventDelegate _ganchoProc;
+        /// <summary>O lugar na pilha de janelas (fundo, ou na frente com a opcao).</summary>
+        private readonly Camada _camada;
+
+        /// <summary>O ar e a lavadora em ciclo, depois dos perifericos (opcao "Mostrar a casa no widget").</summary>
+        private readonly ItensDaCasa _casa = new ItensDaCasa();
+        private readonly EventHandler _casaMudou;
+        /// <summary>O clique comecou num botao da casa: nao arrasta.</summary>
+        private bool _noBotaoDaCasa;
+
+        internal ItensDaCasa Casa { get { return _casa; } }
+
+        /// <summary>A janela esta de fato acima das outras (WS_EX_TOPMOST)? Para os testes.</summary>
+        internal bool NaFrenteAgora
+        {
+            get { return IsHandleCreated && (GetWindowLong(Handle, -20) & WS_EX_TOPMOST) != 0; }
+        }
+
+        [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int indice);
 
         private readonly AvisosDoSistema _preferencias;
 
@@ -940,8 +1006,20 @@ namespace MhiagosControl
             _animacao.Tick += delegate { Renderizar(); };
             _entradas.Quadro += delegate { Reconstruir(); };
             _entradas.Removido += AoPassarPresenca;
-            _conferirDesktop.Interval = 300;
-            _conferirDesktop.Tick += delegate { _conferirDesktop.Stop(); ConferirDesktop(); };
+            _camada = new Camada(this, delegate { return _cfg.NaFrente; });
+            _casa.Ativa = _cfg.Casa;
+            _casa.Redesenhar = delegate { Renderizar(); };
+            _casaMudou = delegate
+            {
+                try
+                {
+                    if (IsDisposed || !IsHandleCreated) return;
+                    BeginInvoke(new MethodInvoker(delegate { _casa.Puxar(); Renderizar(); }));
+                }
+                catch (InvalidOperationException) { }
+            };
+            ServicoCasa.Mudou += _casaMudou;
+            Clima.Mudou += _casaMudou;
 
             _preferencias = new AvisosDoSistema(this);
         }
@@ -963,7 +1041,7 @@ namespace MhiagosControl
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            using (Graphics g = Graphics.FromHwnd(Handle)) _escala = Math.Max(1f, g.DpiX / 96f);
+            using (Graphics g = Graphics.FromHwnd(Handle)) _escala = Math.Max(1f, g.DpiX / 96f) * PintorDoWidget.Ampliacao;
             ArredondarCantos();
             AplicarDesfoque();
         }
@@ -973,16 +1051,8 @@ namespace MhiagosControl
             base.OnLoad(e);
             Atualizar(true);
             Posicionar();
-            Afundar();
+            _camada.Ligar();
             _leitura.Start();
-
-            try
-            {
-                _ganchoProc = new WinEventDelegate(AoMudarPrimeiroPlano);
-                _gancho = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero,
-                                          _ganchoProc, 0, 0, WINEVENT_OUTOFCONTEXT);
-            }
-            catch (Exception ex) { Log.Error("gancho de primeiro plano do widget", ex); }
 
             Log.Write("widget de bateria aberto");
         }
@@ -994,13 +1064,15 @@ namespace MhiagosControl
                 _leitura.Stop(); _leitura.Dispose();
                 _animacao.Stop(); _animacao.Dispose();
                 _entradas.Dispose();
-                _conferirDesktop.Stop(); _conferirDesktop.Dispose();
-                if (_quadro != null) { _quadro.Dispose(); _quadro = null; }
+                _camada.Dispose();
+                ServicoCasa.Mudou -= _casaMudou;
+                Clima.Mudou -= _casaMudou;
+                _casa.Dispose();
+                LiberarQuadro();
                 _dica.Dispose();
                 if (_menu != null) { _menu.Dispose(); _menu = null; }
                 if (_preferencias != null) _preferencias.Dispose();
             }
-            if (_gancho != IntPtr.Zero) { UnhookWinEvent(_gancho); _gancho = IntPtr.Zero; }
             base.Dispose(disposing);
         }
 
@@ -1089,7 +1161,8 @@ namespace MhiagosControl
         /// <summary>O tamanho do widget agora, com quem entra e sai e os nomes por inteiro.</summary>
         private Size Medida()
         {
-            return PintorDoWidget.Medir(_cfg.Layout, _presenca, PintorDoWidget.Larguras(_cfg.Layout, _itens), _escala,
+            return PintorDoWidget.Medir(_cfg.Layout, PintorDoWidget.ComCasa(_presenca, _casa),
+                                        PintorDoWidget.ComCasa(_cfg.Layout, PintorDoWidget.Larguras(_cfg.Layout, _itens), _casa), _escala,
                                         PintorDoWidget.FracaoDeNome(_itens, _presenca));
         }
 
@@ -1100,816 +1173,29 @@ namespace MhiagosControl
             foreach (Periferico p in _itens) if (p.Carregando && p.Bateria.HasValue) carregando = true;
             carregando |= _transicao;
             carregando &= Ui.Animacoes;   // sem animacoes no Windows, o quadro fica parado
+            // So o brilho da carga respirando (seno lento) dispensa 25 quadros por segundo:
+            // 12 bastam e cortam pela metade a CPU do widget parado com algo carregando.
+            // Transicao (entrada, ar ligando, alvo mudando) volta aos 25.
+            int intervalo = _transicao ? IntervaloDeAnimacao : IntervaloDaRespiracao;
+            if (_animacao.Interval != intervalo) _animacao.Interval = intervalo;
             if (carregando && !_animacao.Enabled) _animacao.Start();
             else if (!carregando && _animacao.Enabled) _animacao.Stop();
         }
 
-        private bool Escuro
+        private bool Escuro { get { return EscuroDe(_cfg); } }
+
+        /// <summary>A cor do vidro escolhida, com o automatico seguindo o tema do Windows.</summary>
+        internal static bool EscuroDe(ConfigDoWidget cfg)
         {
-            get
-            {
-                if (_cfg.Cor == CorDoVidro.Escura) return true;
-                if (_cfg.Cor == CorDoVidro.Clara) return false;
-                return Theme.IsDark;
-            }
+            if (cfg.Cor == CorDoVidro.Escura) return true;
+            if (cfg.Cor == CorDoVidro.Clara) return false;
+            return Theme.IsDark;
         }
 
         // ---------------- desenho ----------------
 
-        internal void Renderizar()
-        {
-            if (IsDisposed || !IsHandleCreated) return;
-            try
-            {
-                Size tam = Medida();
-                if (tam != Size)
-                {
-                    Rectangle antes = Bounds;
-                    // cresce para o lado da tela que tem mais espaco: perto da
-                    // borda direita (ou de baixo) a borda do widget fica parada
-                    Rectangle area = Screen.FromRectangle(antes).WorkingArea;
-                    Point onde = AncorarCrescimento(antes, tam, area);
-                    onde = new Point(Math.Max(area.Left, Math.Min(onde.X, area.Right - tam.Width)),
-                                     Math.Max(area.Top, Math.Min(onde.Y, area.Bottom - tam.Height)));
-                    // posicao e tamanho numa chamada so: em duas, o quadro do
-                    // meio mostra o widget no lugar errado e os icones pulam
-                    Bounds = new Rectangle(onde, tam);
-                    AplicarRegiao(tam);
-                }
-
-                PintorDoWidget.Quadro q = new PintorDoWidget.Quadro();
-                q.Itens = _itens;
-                q.Notas = _notas;
-                q.Presenca = _presenca;
-                q.Layout = _cfg.Layout;
-                q.Escuro = Escuro;
-                q.Fosco = _cfg.Fosco && !_cfg.Nitido;
-                q.Nitido = _cfg.Nitido;
-                q.Sobre = _sobre;
-                q.Escala = _escala;
-                q.Fase = Ui.Animacoes ? (Environment.TickCount & int.MaxValue) % CicloMs / (float)CicloMs : 0f;
-                bool transicao = false;
-                q.Carga = new float[_itens.Length];
-                for (int i = 0; i < _itens.Length; i++)
-                {
-                    bool animando;
-                    q.Carga[i] = TransicaoDeCarga.Valor(HistoricoDeBateria.Chave(_itens[i]),
-                        _itens[i].Carregando && _itens[i].Bateria.HasValue, out animando);
-                    transicao |= animando;
-                }
-                _transicao = transicao;
-
-                // O mesmo bitmap enquanto o tamanho nao muda: carregando, o
-                // widget pinta 25 quadros por segundo, e alocar uma imagem
-                // ARGB inteira em cada um so dava trabalho ao coletor.
-                if (_quadro == null || _quadro.Size != tam)
-                {
-                    if (_quadro != null) _quadro.Dispose();
-                    _quadro = new Bitmap(tam.Width, tam.Height, PixelFormat.Format32bppArgb);
-                }
-                using (Graphics g = Graphics.FromImage(_quadro))
-                {
-                    g.Clear(Color.Transparent);
-                    PintorDoWidget.Pintar(g, tam, q);
-                }
-                AplicarBitmap(_quadro);
-                // o ultimo quadro da transicao desliga o relogio se nada mais carrega
-                AjustarAnimacao();
-            }
-            catch (Exception ex)
-            {
-                // um quadro perdido nao pode virar uma enxurrada no log a 15 por segundo
-                _animacao.Stop();
-                Log.Error("desenho do widget", ex);
-            }
-        }
-
-        private void AplicarBitmap(Bitmap bmp)
-        {
-            IntPtr tela = GetDC(IntPtr.Zero);
-            IntPtr mem = CreateCompatibleDC(tela);
-            IntPtr hbmp = IntPtr.Zero, antigo = IntPtr.Zero;
-            try
-            {
-                hbmp = bmp.GetHbitmap(Color.FromArgb(0));
-                antigo = SelectObject(mem, hbmp);
-                SIZE tamanho = new SIZE(bmp.Width, bmp.Height);
-                POINT origem = new POINT(0, 0);
-                POINT topo = new POINT(Left, Top);
-                BLENDFUNCTION b = new BLENDFUNCTION();
-                b.BlendOp = AC_SRC_OVER;
-                b.SourceConstantAlpha = 255;
-                b.AlphaFormat = AC_SRC_ALPHA;
-                UpdateLayeredWindow(Handle, tela, ref topo, ref tamanho, mem, ref origem, 0, ref b, ULW_ALPHA);
-            }
-            finally
-            {
-                ReleaseDC(IntPtr.Zero, tela);
-                if (hbmp != IntPtr.Zero) { SelectObject(mem, antigo); DeleteObject(hbmp); }
-                DeleteDC(mem);
-            }
-        }
-
-        /// <summary>
-        /// Recorta a janela no formato da placa, para o clique.
-        /// </summary>
-        private void AplicarRegiao(Size tam)
-        {
-            int d = (int)Math.Round(PintorDoWidget.RaioDoVidro * 2f * _escala);
-            try
-            {
-                IntPtr rgn = CreateRoundRectRgn(0, 0, tam.Width + 1, tam.Height + 1, d, d);
-                // a regiao passa a ser do sistema: nao se apaga depois de entregar
-                if (SetWindowRgn(Handle, rgn, true) == 0) DeleteObject(rgn);
-            }
-            catch (Exception ex) { Log.Error("regiao do widget", ex); }
-        }
-
-        /// <summary>
-        /// O desfoque do Windows ignora a regiao da janela e saia quadrado fora
-        /// da curva dos cantos (SetWindowRgn e DwmEnableBlurBehindWindow nao
-        /// recortam, nem numa janela comum; visto no Windows 11). So o
-        /// arredondamento do proprio DWM corta o desfoque, e o raio dele e fixo
-        /// em 8 px na escala 1: por isso a placa e desenhada com esse raio. No
-        /// Windows 10 a chamada falha calada e o desfoque fica retangular.
-        /// </summary>
-        private void ArredondarCantos()
-        {
-            if (!Windows11) return;
-            try
-            {
-                int redondo = DWMWCP_ROUND;
-                DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref redondo, 4);
-            }
-            catch (Exception ex) { Log.Error("cantos do widget", ex); }
-        }
-
-        /// <summary>
-        /// Desfoque do que esta atras. O fosco usa o acrilico do Windows 11, de
-        /// desfoque mais forte; no Windows 10 o acrilico atrasa ao arrastar, e
-        /// os dois ficam no desfoque simples.
-        /// </summary>
-        private void AplicarDesfoque()
-        {
-            try
-            {
-                AccentPolicy ap = new AccentPolicy();
-                bool acrilico = _cfg.Fosco && !_cfg.Nitido && Windows11;
-                ap.AccentState = _cfg.Nitido ? ACCENT_DISABLED
-                               : acrilico ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_ENABLE_BLURBEHIND;
-                // tinta quase nula: com alfa zero o acrilico some em algumas versoes
-                ap.GradientColor = acrilico ? 0x01000000u : 0u;
-                int tamanho = Marshal.SizeOf(ap);
-                IntPtr p = Marshal.AllocHGlobal(tamanho);
-                try
-                {
-                    Marshal.StructureToPtr(ap, p, false);
-                    WindowCompositionAttributeData d = new WindowCompositionAttributeData();
-                    d.Attribute = WCA_ACCENT_POLICY;
-                    d.SizeOfData = tamanho;
-                    d.Data = p;
-                    SetWindowCompositionAttribute(Handle, ref d);
-                }
-                finally { Marshal.FreeHGlobal(p); }
-            }
-            catch (Exception ex) { Log.Error("desfoque do widget", ex); }
-        }
-
-        /// <summary>
-        /// Pelo RtlGetVersion, e nao pelo Environment.OSVersion: sem manifesto
-        /// de compatibilidade (a previa, por exemplo) o .NET responde 6.2 num
-        /// Windows 11.
-        /// </summary>
-        private static bool Windows11
-        {
-            get
-            {
-                Version v = Environment.OSVersion.Version;
-                try
-                {
-                    OSVERSIONINFOEX info = new OSVERSIONINFOEX();
-                    info.dwOSVersionInfoSize = Marshal.SizeOf(typeof(OSVERSIONINFOEX));
-                    if (RtlGetVersion(ref info) == 0)
-                        v = new Version(info.dwMajorVersion, info.dwMinorVersion, info.dwBuildNumber);
-                }
-                catch (Exception ex) { Log.Error("versao do Windows", ex); }
-                return v.Major > 10 || (v.Major == 10 && v.Build >= 22000);
-            }
-        }
-
-        // ---------------- posicao ----------------
-
-        /// <summary>Volta onde estava; na primeira vez, ou se a tela sumiu, no canto de cima a direita.</summary>
-        private void Posicionar()
-        {
-            Size tam = Medida();
-            Point p;
-            if (_cfg.TemPosicao)
-            {
-                Rectangle area = Screen.FromPoint(new Point(_cfg.X - 1, _cfg.Y - 1)).WorkingArea;
-                p = DoCanto(new Point(_cfg.X, _cfg.Y), tam, area);
-                if (!Visivel(new Rectangle(p, tam))) p = PosicaoPadrao(tam);
-            }
-            else p = PosicaoPadrao(tam);
-            Location = p;
-            ManterNaTela();
-            Renderizar();
-        }
-
-        /// <summary>Canto inferior direito da area de trabalho, um pouco longe da borda.</summary>
-        private Point PosicaoPadrao(Size tam)
-        {
-            Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            int m = (int)(48 * _escala);
-            return DoCanto(new Point(area.Right - m, area.Bottom - m), tam, area);
-        }
-
-        /// <summary>
-        /// O canto que fica parado quando o widget muda de tamanho: o mais
-        /// proximo da borda da tela (direito se o centro esta na metade direita,
-        /// de baixo se esta na metade de baixo). E ele que se guarda: assim o
-        /// widget reabre no mesmo lugar mesmo com mais ou menos aparelhos.
-        /// </summary>
-        internal static Point CantoAncora(Rectangle b, Rectangle area)
-        {
-            bool dir = b.Left + b.Width / 2 > area.Left + area.Width / 2;
-            bool baixo = b.Top + b.Height / 2 > area.Top + area.Height / 2;
-            return new Point(dir ? b.Right : b.Left, baixo ? b.Bottom : b.Top);
-        }
-
-        /// <summary>Onde fica o canto de cima a esquerda, dado o canto guardado e o tamanho de agora.</summary>
-        internal static Point DoCanto(Point canto, Size tam, Rectangle area)
-        {
-            bool dir = canto.X > area.Left + area.Width / 2;
-            bool baixo = canto.Y > area.Top + area.Height / 2;
-            return new Point(dir ? canto.X - tam.Width : canto.X, baixo ? canto.Y - tam.Height : canto.Y);
-        }
-
-        /// <summary>Visivel o bastante para alguem achar e arrastar de volta.</summary>
-        internal static bool Visivel(Rectangle r)
-        {
-            foreach (Screen tela in Screen.AllScreens)
-            {
-                Rectangle i = Rectangle.Intersect(tela.WorkingArea, r);
-                if (i.Width >= Math.Min(48, r.Width) && i.Height >= Math.Min(32, r.Height)) return true;
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// Encaixa a placa dentro da area util da tela em que esta. Com mais um
-        /// aparelho ela cresce para a direita, e no canto direito sairia da tela.
-        /// </summary>
-        /// <summary>
-        /// Onde fica o canto de cima a esquerda quando o widget muda de tamanho:
-        /// na metade direita da tela a borda direita fica parada (cresce para a
-        /// esquerda), na de baixo a borda de baixo; senao, a esquerda e o topo.
-        /// </summary>
-        internal static Point AncorarCrescimento(Rectangle antes, Size novo, Rectangle area)
-        {
-            int x = antes.Left, y = antes.Top;
-            if (antes.Left + antes.Width / 2 > area.Left + area.Width / 2) x = antes.Right - novo.Width;
-            if (antes.Top + antes.Height / 2 > area.Top + area.Height / 2) y = antes.Bottom - novo.Height;
-            return new Point(x, y);
-        }
-
-        private void ManterNaTela()
-        {
-            Rectangle area = Screen.FromRectangle(Bounds).WorkingArea;
-            int x = Math.Max(area.Left, Math.Min(Left, area.Right - Width));
-            int y = Math.Max(area.Top, Math.Min(Top, area.Bottom - Height));
-            if (x != Left || y != Top) Location = new Point(x, y);
-        }
-
-        /// <summary>Gruda na borda da tela quando chega a poucos pixels dela, como os gadgets faziam.</summary>
-        internal static Point Encaixar(Point p, Size tam, Rectangle area, int ima)
-        {
-            int x = p.X, y = p.Y;
-            if (Math.Abs(x - area.Left) <= ima) x = area.Left;
-            else if (Math.Abs(area.Right - (x + tam.Width)) <= ima) x = area.Right - tam.Width;
-            if (Math.Abs(y - area.Top) <= ima) y = area.Top;
-            else if (Math.Abs(area.Bottom - (y + tam.Height)) <= ima) y = area.Bottom - tam.Height;
-            return new Point(x, y);
-        }
-
-        private void GuardarPosicao()
-        {
-            Point c = CantoAncora(Bounds, Screen.FromRectangle(Bounds).WorkingArea);
-            _cfg.X = c.X;
-            _cfg.Y = c.Y;
-            _cfg.Salvar();
-        }
-
-        // ---------------- mouse ----------------
-
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            base.OnMouseDown(e);
-            if (e.Button != MouseButtons.Left) return;
-            _pressionado = true;
-            _arrastando = false;
-            _inicioDoArrasto = Cursor.Position;
-            _origemDoArrasto = Location;
-            Capture = true;
-        }
-
-        protected override void OnMouseMove(MouseEventArgs e)
-        {
-            base.OnMouseMove(e);
-            if (!_sobre) { _sobre = true; Renderizar(); }
-
-            if (_pressionado && !_cfg.Travado)
-            {
-                Point agora = Cursor.Position;
-                int dx = agora.X - _inicioDoArrasto.X, dy = agora.Y - _inicioDoArrasto.Y;
-                if (!_arrastando && (Math.Abs(dx) > Arrasto || Math.Abs(dy) > Arrasto))
-                {
-                    _arrastando = true;
-                    _dica.Hide(this);
-                }
-                if (_arrastando)
-                {
-                    Point alvo = new Point(_origemDoArrasto.X + dx, _origemDoArrasto.Y + dy);
-                    Rectangle area = Screen.FromPoint(agora).WorkingArea;
-                    Location = Encaixar(alvo, Size, area, (int)(12 * _escala));
-                }
-                return;
-            }
-
-            AtualizarDica(e.Location);
-        }
-
-        /// <summary>
-        /// Outra janela tomou o mouse no meio do arrasto (tecla Windows, UAC,
-        /// Alt+Tab): o MouseUp nao vem mais, e sem isso o widget seguiria o
-        /// cursor so de passar por cima.
-        /// </summary>
-        protected override void OnMouseCaptureChanged(EventArgs e)
-        {
-            base.OnMouseCaptureChanged(e);
-            // botao ja solto: e a soltura normal, o MouseUp vem logo depois
-            if (Capture || !_pressionado || (Control.MouseButtons & MouseButtons.Left) == 0) return;
-            _pressionado = false;
-            if (_arrastando)
-            {
-                _arrastando = false;
-                ManterNaTela();
-                GuardarPosicao();
-            }
-        }
-
-        protected override void OnMouseUp(MouseEventArgs e)
-        {
-            base.OnMouseUp(e);
-            if (e.Button == MouseButtons.Right) { MostrarMenu(e.Location); return; }
-            if (e.Button != MouseButtons.Left || !_pressionado) return;
-            _pressionado = false;
-            Capture = false;
-            if (_arrastando)
-            {
-                _arrastando = false;
-                ManterNaTela();
-                GuardarPosicao();
-                return;
-            }
-            if (BateriasPedidas != null) BateriasPedidas();
-        }
-
-        protected override void OnMouseLeave(EventArgs e)
-        {
-            base.OnMouseLeave(e);
-            if (_arrastando) return;
-            _sobre = false;
-            _zonaDaDica = -1;
-            _dica.SetToolTip(this, null);
-            Renderizar();
-        }
-
-        /// <summary>Nome, carga e a previsao do aparelho sob o ponteiro.</summary>
-        private void AtualizarDica(Point p)
-        {
-            RectangleF[] zonas = PintorDoWidget.Zonas(_cfg.Layout, _presenca, PintorDoWidget.Larguras(_cfg.Layout, _itens), Medida(), _escala);
-            int zona = -1;
-            for (int i = 0; i < zonas.Length; i++) if (zonas[i].Contains(p)) { zona = i; break; }
-            if (zona == _zonaDaDica) return;
-            _zonaDaDica = zona;
-            if (zona < 0) { _dica.SetToolTip(this, T.OpenBatteriesPage); return; }
-            Periferico it = _itens[zona];
-            string texto = it.Nome + "  " + PintorDoWidget.Valor(it);
-            string nota = _notas[zona];
-            if (!string.IsNullOrEmpty(nota)) texto += "\n" + nota;
-            _dica.SetToolTip(this, texto + "\n" + T.OpenBatteriesPage);
-        }
-
-        // ---------------- menu ----------------
-
-        private void MostrarMenu(Point onde)
-        {
-            ContextMenu menu = new ContextMenu();
-            menu.MenuItems.Add(new MenuItem(T.WidgetOpenBatteries, delegate { if (BateriasPedidas != null) BateriasPedidas(); }));
-            menu.MenuItems.Add("-");
-
-            MenuItem layout = new MenuItem(T.WidgetLayout);
-            layout.MenuItems.Add(Opcao(T.WidgetRings, _cfg.Layout == LayoutDoWidget.Aneis, delegate { TrocarLayout(LayoutDoWidget.Aneis); }));
-            layout.MenuItems.Add(Opcao(T.WidgetList, _cfg.Layout == LayoutDoWidget.Lista, delegate { TrocarLayout(LayoutDoWidget.Lista); }));
-            menu.MenuItems.Add(layout);
-
-            MenuItem vidro = new MenuItem(T.WidgetGlass);
-            vidro.MenuItems.Add(Opcao(T.WidgetSharp, _cfg.Nitido, delegate { TrocarVidro(true, false); }));
-            vidro.MenuItems.Add(Opcao(T.WidgetClear, !_cfg.Nitido && !_cfg.Fosco, delegate { TrocarVidro(false, false); }));
-            vidro.MenuItems.Add(Opcao(T.WidgetFrosted, !_cfg.Nitido && _cfg.Fosco, delegate { TrocarVidro(false, true); }));
-            vidro.MenuItems.Add("-");
-            vidro.MenuItems.Add(Opcao(T.WidgetTintAuto, _cfg.Cor == CorDoVidro.Automatica, delegate { TrocarCor(CorDoVidro.Automatica); }));
-            vidro.MenuItems.Add(Opcao(T.WidgetTintDark, _cfg.Cor == CorDoVidro.Escura, delegate { TrocarCor(CorDoVidro.Escura); }));
-            vidro.MenuItems.Add(Opcao(T.WidgetTintLight, _cfg.Cor == CorDoVidro.Clara, delegate { TrocarCor(CorDoVidro.Clara); }));
-            menu.MenuItems.Add(vidro);
-
-            MenuItem frente = new MenuItem(T.WidgetOnTop, delegate { TrocarFrente(!_cfg.NaFrente); });
-            frente.Checked = _cfg.NaFrente;
-            menu.MenuItems.Add(frente);
-            MenuItem trava = new MenuItem(T.WidgetLock, delegate { _cfg.Travado = !_cfg.Travado; _cfg.Salvar(); });
-            trava.Checked = _cfg.Travado;
-            menu.MenuItems.Add(trava);
-
-            menu.MenuItems.Add("-");
-            menu.MenuItems.Add(new MenuItem(T.WidgetHide, delegate { if (OcultarPedido != null) OcultarPedido(); }));
-
-            // Menu nativo numa janela que nunca fica ativa: sem o primeiro plano
-            // ele nao fecha ao clicar fora (comportamento documentado do
-            // TrackPopupMenu). A janela volta ao fundo pelo WM_WINDOWPOSCHANGING.
-            SetForegroundWindow(Handle);
-            _dica.Hide(this);
-            // O clique numa opcao chega depois, como WM_COMMAND: descartar o
-            // menu logo apos o Show perderia a acao. Fica ate o proximo.
-            if (_menu != null) _menu.Dispose();
-            _menu = menu;
-            menu.Show(this, onde);
-        }
-
-        private static MenuItem Opcao(string texto, bool marcado, EventHandler acao)
-        {
-            MenuItem mi = new MenuItem(texto, acao);
-            mi.RadioCheck = true;
-            mi.Checked = marcado;
-            return mi;
-        }
-
-        private void TrocarLayout(LayoutDoWidget layout)
-        {
-            if (_cfg.Layout == layout) return;
-            _cfg.Layout = layout;
-            _cfg.Salvar();
-            _zonaDaDica = -1;
-            Renderizar();
-            ManterNaTela();
-        }
-
-        private void TrocarVidro(bool nitido, bool fosco)
-        {
-            if (_cfg.Nitido == nitido && _cfg.Fosco == fosco) return;
-            _cfg.Nitido = nitido;
-            _cfg.Fosco = fosco;
-            _cfg.Salvar();
-            AplicarDesfoque();
-            Renderizar();
-        }
-
-        private void TrocarCor(CorDoVidro cor)
-        {
-            if (_cfg.Cor == cor) return;
-            _cfg.Cor = cor;
-            _cfg.Salvar();
-            Renderizar();
-        }
-
-        private void TrocarFrente(bool frente)
-        {
-            _cfg.NaFrente = frente;
-            _cfg.Salvar();
-            AplicarFrente();
-        }
-
-        /// <summary>
-        /// Reaplica a configuracao inteira, ja salva por quem mudou: a pagina
-        /// Baterias mexe nos campos e chama isto.
-        /// </summary>
-        internal void AplicarConfig()
-        {
-            if (IsDisposed || !IsHandleCreated) return;
-            _zonaDaDica = -1;
-            AplicarDesfoque();
-            AplicarFrente();
-            Renderizar();
-            ManterNaTela();
-        }
-
-        /// <summary>Volta para o canto de cima a direita da tela principal.</summary>
-        internal void VoltarAoCanto()
-        {
-            if (IsDisposed || !IsHandleCreated) return;
-            Posicionar();
-        }
-
-        private void AplicarFrente()
-        {
-            bool frente = _cfg.NaFrente;
-            _sobreDesktop = false;
-            if (frente) SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            else
-            {
-                SetWindowPos(Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-                Afundar();
-            }
-        }
-
-        // ---------------- lugar na pilha de janelas ----------------
-
-        /// <summary>
-        /// Prende o widget logo acima da area de trabalho a cada mudanca de
-        /// ordem. HWND_BOTTOM puro nao serve: ficaria atras da janela dos icones,
-        /// que ocupa a tela inteira, e sumiria.
-        /// </summary>
-        protected override void WndProc(ref Message m)
-        {
-            if (m.Msg == WM_MOUSEACTIVATE)
-            {
-                m.Result = (IntPtr)MA_NOACTIVATE;
-                return;
-            }
-            if (m.Msg == WM_WINDOWPOSCHANGING && _cfg != null && !_cfg.NaFrente && !_sobreDesktop && m.LParam != IntPtr.Zero)
-            {
-                try
-                {
-                    WINDOWPOS wp = (WINDOWPOS)Marshal.PtrToStructure(m.LParam, typeof(WINDOWPOS));
-                    if ((wp.flags & SWP_NOZORDER) == 0)
-                    {
-                        IntPtr depois = LugarNoFundo();
-                        if (depois == Handle) wp.flags |= SWP_NOZORDER;
-                        else wp.hwndInsertAfter = depois;
-                        Marshal.StructureToPtr(wp, m.LParam, false);
-                    }
-                }
-                catch (Exception ex) { Log.Error("ordem do widget", ex); }
-            }
-            base.WndProc(ref m);
-        }
-
-        /// <summary>A janela atras da qual o widget deve ficar: a que esta logo acima da area de trabalho.</summary>
-        private IntPtr LugarNoFundo()
-        {
-            IntPtr desktop = AreaDeTrabalho();
-            if (desktop == IntPtr.Zero) return HWND_BOTTOM;
-            IntPtr acima = GetWindow(desktop, GW_HWNDPREV);
-            if (acima == IntPtr.Zero) return HWND_TOP;   // a area de trabalho esta no topo: Win+D
-            return acima;
-        }
-
-        private void Afundar()
-        {
-            if (!IsHandleCreated || _cfg.NaFrente) return;
-            // a ordem final vem do WM_WINDOWPOSCHANGING acima
-            SetWindowPos(Handle, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        }
-
-        /// <summary>
-        /// A janela dos icones da area de trabalho: o Progman, ou o WorkerW que
-        /// o Explorer cria por cima dele quando ha apresentacao de papel de parede.
-        /// </summary>
-        private static IntPtr AreaDeTrabalho()
-        {
-            IntPtr progman = FindWindow("Progman", null);
-            if (progman != IntPtr.Zero && FindWindowEx(progman, IntPtr.Zero, "SHELLDLL_DefView", null) != IntPtr.Zero)
-                return progman;
-            IntPtr w = IntPtr.Zero;
-            while ((w = FindWindowEx(IntPtr.Zero, w, "WorkerW", null)) != IntPtr.Zero)
-                if (FindWindowEx(w, IntPtr.Zero, "SHELLDLL_DefView", null) != IntPtr.Zero) return w;
-            return progman;
-        }
-
-        /// <summary>A area de trabalho subiu para cima do widget? So acontece com o Mostrar area de trabalho.</summary>
-        private bool DesktopPorCima()
-        {
-            IntPtr desktop = AreaDeTrabalho();
-            if (desktop == IntPtr.Zero) return false;
-            int limite = 4096;
-            for (IntPtr h = GetWindow(Handle, GW_HWNDPREV); h != IntPtr.Zero && limite-- > 0; h = GetWindow(h, GW_HWNDPREV))
-                if (h == desktop) return true;
-            return false;
-        }
-
-        private void AoMudarPrimeiroPlano(IntPtr gancho, uint evento, IntPtr hwnd, int objeto, int filho, uint thread, uint tempo)
-        {
-            if (IsDisposed || !IsHandleCreated || _cfg.NaFrente) return;
-            ConferirDesktop();
-            // o Explorer as vezes termina de subir a area de trabalho depois de avisar
-            _conferirDesktop.Stop();
-            _conferirDesktop.Start();
-        }
-
-        /// <summary>
-        /// Com o Win+D a area de trabalho cobre todas as janelas, inclusive o
-        /// widget. Ele sobe para a frente enquanto ela estiver por cima e
-        /// volta ao fundo quando qualquer outra janela ganha o primeiro plano.
-        /// </summary>
-        private void ConferirDesktop()
-        {
-            if (IsDisposed || !IsHandleCreated || _cfg.NaFrente) return;
-            try
-            {
-                if (!_sobreDesktop && DesktopPorCima())
-                {
-                    _sobreDesktop = true;
-                    SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-                }
-                else if (_sobreDesktop && !EhAreaDeTrabalho(GetForegroundWindow()))
-                {
-                    _sobreDesktop = false;
-                    SetWindowPos(Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-                    Afundar();
-                }
-            }
-            catch (Exception ex) { Log.Error("widget e area de trabalho", ex); }
-        }
-
-        private static bool EhAreaDeTrabalho(IntPtr h)
-        {
-            if (h == IntPtr.Zero) return true;
-            string c = NomeDaClasse(h);
-            return c == "Progman" || c == "WorkerW";
-        }
-
-        private static bool Escondida(IntPtr h)
-        {
-            int cloaked = 0;
-            try { DwmGetWindowAttribute(h, DWMWA_CLOAKED, out cloaked, sizeof(int)); }
-            catch { }
-            return cloaked != 0;
-        }
-
-        private static string NomeDaClasse(IntPtr h)
-        {
-            StringBuilder sb = new StringBuilder(64);
-            GetClassName(h, sb, sb.Capacity);
-            return sb.ToString();
-        }
-
-        /// <summary>Uma linha sobre escala, posicao e lugar na pilha de janelas, para a previa e o log.</summary>
-        internal string Diagnostico()
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("windows 11: ").Append(Windows11 ? "sim" : "nao");
-            sb.Append(" | escala ").Append(_escala.ToString("0.##", CultureInfo.InvariantCulture));
-            sb.Append(" | ").Append(Width).Append('x').Append(Height).Append(" em ").Append(Left).Append(',').Append(Top);
-            if (!IsHandleCreated) return sb.ToString();
-            IntPtr desktop = AreaDeTrabalho();
-            sb.Append(" | area de trabalho: ").Append(desktop == IntPtr.Zero ? "nao achada" : NomeDaClasse(desktop));
-            if (desktop != IntPtr.Zero)
-            {
-                // janelas invisiveis ou escondidas pelo DWM (apps suspensos) nao
-                // contam: o que importa e se ha algo visivel entre os dois
-                int entre = 0, limite = 4096;
-                IntPtr h = GetWindow(Handle, GW_HWNDNEXT);
-                for (; h != IntPtr.Zero && h != desktop && limite-- > 0; h = GetWindow(h, GW_HWNDNEXT))
-                    if (IsWindowVisible(h) && !Escondida(h)) entre++;
-                if (h == desktop) sb.Append(" | janelas visiveis entre o widget e ela: ").Append(entre);
-                else sb.Append(" | area de trabalho nao esta abaixo do widget");
-            }
-            sb.Append(" | ela por cima do widget: ").Append(DesktopPorCima() ? "sim" : "nao");
-            sb.Append(" | sempre na frente: ").Append(_cfg.NaFrente || _sobreDesktop ? "sim" : "nao");
-            return sb.ToString();
-        }
-
-        /// <summary>
-        /// Tema e tela mudando. O SystemEvents segura quem assina para sempre,
-        /// por isso a assinatura mora num objeto proprio que se desfaz junto.
-        /// </summary>
-        private sealed class AvisosDoSistema : IDisposable
-        {
-            private readonly WidgetDeBateria _dono;
-            private readonly Microsoft.Win32.UserPreferenceChangedEventHandler _pref;
-            private readonly EventHandler _tela;
-
-            public AvisosDoSistema(WidgetDeBateria dono)
-            {
-                _dono = dono;
-                _pref = delegate(object s, Microsoft.Win32.UserPreferenceChangedEventArgs a)
-                {
-                    if (a.Category == Microsoft.Win32.UserPreferenceCategory.General ||
-                        a.Category == Microsoft.Win32.UserPreferenceCategory.Color)
-                        Depois(delegate { _dono.Renderizar(); });
-                };
-                _tela = delegate { Depois(delegate { _dono.ManterNaTela(); _dono.Renderizar(); }); };
-                Microsoft.Win32.SystemEvents.UserPreferenceChanged += _pref;
-                Microsoft.Win32.SystemEvents.DisplaySettingsChanged += _tela;
-            }
-
-            /// <summary>O aviso pode vir de outra thread; o desenho e da thread da janela.</summary>
-            private void Depois(MethodInvoker acao)
-            {
-                try
-                {
-                    if (_dono.IsDisposed || !_dono.IsHandleCreated) return;
-                    _dono.BeginInvoke(acao);
-                }
-                catch (Exception ex) { Log.Error("aviso do sistema ao widget", ex); }
-            }
-
-            public void Dispose()
-            {
-                Microsoft.Win32.SystemEvents.UserPreferenceChanged -= _pref;
-                Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= _tela;
-            }
-        }
-
-        // ---------------- Win32 ----------------
-
-        private const int WS_EX_LAYERED = 0x80000;
-        private const int WS_EX_TOOLWINDOW = 0x80;
-        private const int WS_EX_NOACTIVATE = 0x8000000;
-        private const int WS_EX_TOPMOST = 0x8;
-        private const int WM_WINDOWPOSCHANGING = 0x46;
-        private const int WM_MOUSEACTIVATE = 0x21;
-        private const int MA_NOACTIVATE = 3;
-        private const int ULW_ALPHA = 2;
-        private const byte AC_SRC_OVER = 0;
-        private const byte AC_SRC_ALPHA = 1;
-        private const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10;
-        private const uint GW_HWNDNEXT = 2, GW_HWNDPREV = 3;
-        private const int DWMWA_CLOAKED = 14;
-        private const uint EVENT_SYSTEM_FOREGROUND = 3;
-        private const uint WINEVENT_OUTOFCONTEXT = 0;
-        private const int WCA_ACCENT_POLICY = 19;
-        private const int ACCENT_DISABLED = 0;
-        private const int ACCENT_ENABLE_BLURBEHIND = 3;
-        private const int ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
-        private static readonly IntPtr HWND_TOP = IntPtr.Zero;
-        private static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
-        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct POINT { public int X, Y; public POINT(int x, int y) { X = x; Y = y; } }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct SIZE { public int Cx, Cy; public SIZE(int cx, int cy) { Cx = cx; Cy = cy; } }
-
-        [StructLayout(LayoutKind.Sequential, Pack = 1)]
-        private struct BLENDFUNCTION { public byte BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat; }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct WINDOWPOS
-        {
-            public IntPtr hwnd, hwndInsertAfter;
-            public int x, y, cx, cy;
-            public uint flags;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct AccentPolicy { public int AccentState, AccentFlags; public uint GradientColor; public int AnimationId; }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct WindowCompositionAttributeData { public int Attribute; public IntPtr Data; public int SizeOfData; }
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct OSVERSIONINFOEX
-        {
-            public int dwOSVersionInfoSize, dwMajorVersion, dwMinorVersion, dwBuildNumber, dwPlatformId;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szCSDVersion;
-            public ushort wServicePackMajor, wServicePackMinor, wSuiteMask;
-            public byte wProductType, wReserved;
-        }
-
-        private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2;
-
-        [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
-        [DllImport("ntdll.dll")] private static extern int RtlGetVersion(ref OSVERSIONINFOEX info);
-        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
-        [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
-
-        private delegate void WinEventDelegate(IntPtr hook, uint evento, IntPtr hwnd, int objeto, int filho, uint thread, uint tempo);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize,
-            IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, int dwFlags);
-
-        [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
-        [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
-        [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
-        [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr hdc);
-        [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
-        [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
-        [DllImport("gdi32.dll")] private static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
-        [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hwnd, IntPtr rgn, bool redraw);
-        [DllImport("user32.dll")] private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
-        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
-        [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
-        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string cls, string nome);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowEx(IntPtr pai, IntPtr depois, string cls, string nome);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder sb, int max);
-        [DllImport("user32.dll")]
-        private static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventDelegate proc, uint pid, uint tid, uint flags);
-        [DllImport("user32.dll")] private static extern bool UnhookWinEvent(IntPtr hook);
+        /// <summary>Medicao: instantes (ms do relogio de movimento) e duracao de cada quadro.</summary>
+        internal static List<long> QuadrosEm;
+        internal static List<double> QuadrosMs;
     }
 }

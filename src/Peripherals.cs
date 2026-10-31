@@ -114,8 +114,44 @@ namespace MhiagosControl
                 if (s != null) l.Add(s);
                 l.Sort(delegate(Periferico a, Periferico b) { return a.Tipo.CompareTo(b.Tipo); });
                 l.AddRange(Volatile.Read(ref _bluetooth));
+                l.RemoveAll(delegate(Periferico p) { return p != null && OcultoChave(p.Fonte + "|" + p.Nome); });
                 return l.ToArray();
             }
+        }
+
+        /// <summary>
+        /// Aparelhos escondidos pela pessoa, como "fonte|inicio do nome"
+        /// (GHub|G325, GHub|PRO X). Sao detectados normalmente; so nao entram no
+        /// retrato nem na pagina Baterias - assim um headset que saiu de casa nao
+        /// fica para sempre como "desligado" na Visao geral. Vem da config
+        /// (PerifericosOcultos); os testes deixam vazio.
+        /// </summary>
+        public static string[] Ocultos = new string[0];
+
+        /// <summary>A lista da config ("GHub|G325,GHub|PRO X") em entradas.</summary>
+        public static string[] LerOcultos(string texto)
+        {
+            List<string> l = new List<string>();
+            foreach (string s in (texto ?? "").Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+                if (s.Trim().IndexOf('|') > 0) l.Add(s.Trim());
+            return l.ToArray();
+        }
+
+        /// <summary>A chave "fonte|nome" casa com alguma entrada oculta (mesma fonte, nome comecando igual)?</summary>
+        public static bool OcultoChave(string chave)
+        {
+            if (string.IsNullOrEmpty(chave)) return false;
+            int b = chave.IndexOf('|');
+            if (b <= 0) return false;
+            string fonte = chave.Substring(0, b), nome = chave.Substring(b + 1);
+            foreach (string o in Ocultos)
+            {
+                int ob = o.IndexOf('|');
+                if (ob <= 0) continue;
+                if (string.Equals(o.Substring(0, ob), fonte, StringComparison.OrdinalIgnoreCase) &&
+                    nome.StartsWith(o.Substring(ob + 1).Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
         }
 
         /// <summary>

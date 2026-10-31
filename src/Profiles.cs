@@ -126,6 +126,16 @@ namespace MhiagosControl
         /// largura cheia desfaria isso a cada vez.
         /// </summary>
         public bool SidebarCollapsed = false;
+        /// <summary>Pagina Casa: manda t_beep=0 junto de cada comando ao ar, para ele nao apitar.</summary>
+        public bool CasaSemBipe = false;
+        /// <summary>Perifericos escondidos, "fonte|inicio do nome" separados por virgula. Ver Perifericos.Ocultos.</summary>
+        public string PerifericosOcultos = "GHub|G325,GHub|PRO X";
+        /// <summary>
+        /// Visao geral nova (cabecalho, casa e cooler em duas colunas), a padrao.
+        /// Gravada como "visaoclassica" invertida: a chave antiga "visaogeralnova=0"
+        /// que todo config.ini ja tem deixaria a nova desligada para sempre.
+        /// </summary>
+        public bool VisaoGeralNova = true;
 
         /// <summary>
         /// Ordem das paginas na barra lateral, como chaves separadas por
@@ -167,6 +177,8 @@ namespace MhiagosControl
         /// de uma janela redimensionavel.
         /// </summary>
         public int WindowW = 0, WindowH = 0;
+        /// <summary>Versao do tamanho padrao com que WindowW/WindowH foram gravados (ver SettingsForm.VersaoDaJanela).</summary>
+        public int JanelaVersao = 0;
         public int WindowX = int.MinValue, WindowY = int.MinValue;   // posicao da janela; MinValue = nunca guardada
         public string LastPage = "";
 
@@ -217,11 +229,15 @@ namespace MhiagosControl
             IdleBlankMinutes = other.IdleBlankMinutes;
             RotateSeconds = other.RotateSeconds;
             SidebarCollapsed = other.SidebarCollapsed;
+            CasaSemBipe = other.CasaSemBipe;
+            PerifericosOcultos = other.PerifericosOcultos;
+            VisaoGeralNova = other.VisaoGeralNova;
             NavOrder = other.NavOrder;
             MetricsChosen = other.MetricsChosen;
             MetricRange = other.MetricRange;
             MetricNavId = other.MetricNavId;
             WindowW = other.WindowW;
+            JanelaVersao = other.JanelaVersao;
             WindowH = other.WindowH;
             WindowX = other.WindowX;
             WindowY = other.WindowY;
@@ -533,9 +549,9 @@ namespace MhiagosControl
                 foreach (string raw in lines)
                 {
                     string line = raw.Trim();
-                    if (line.Length == 0 || line.StartsWith(";")) continue;
+                    if (line.Length == 0 || line.StartsWith(";", StringComparison.Ordinal)) continue;
 
-                    if (line.StartsWith("[") && line.EndsWith("]"))
+                    if (line.StartsWith("[", StringComparison.Ordinal) && line.EndsWith("]", StringComparison.Ordinal))
                     {
                         string section = line.Substring(1, line.Length - 2).Trim();
                         if (string.Equals(section, "profile", StringComparison.OrdinalIgnoreCase))
@@ -561,11 +577,15 @@ namespace MhiagosControl
                         else if (k == "idleblank") c.IdleBlankMinutes = ParseTiming(v, strictTiming);
                         else if (k == "rotateseconds") c.RotateSeconds = ParseTiming(v, strictTiming);
                         else if (k == "sidebarcollapsed") c.SidebarCollapsed = (v == "1");
+                        else if (k == "casasembipe") c.CasaSemBipe = (v == "1");
+                        else if (k == "perifericosocultos") c.PerifericosOcultos = v;
+                        else if (k == "visaoclassica") c.VisaoGeralNova = (v != "1");
                         else if (k == "navorder") c.NavOrder = v;
                         else if (k == "metricschosen") c.MetricsChosen = (v == "1");
                         else if (k == "metricrange") c.MetricRange = MetricHistory.JanelaValida(ParseInt(v));
                         else if (k == "metricnav") c.MetricNavId = v;
                         else if (k == "windoww") c.WindowW = ParseInt(v);
+                        else if (k == "janelaversao") c.JanelaVersao = ParseInt(v);
                         else if (k == "windowh") c.WindowH = ParseInt(v);
                         else if (k == "windowx") c.WindowX = ParseInt(v);
                         else if (k == "windowy") c.WindowY = ParseInt(v);
@@ -773,11 +793,15 @@ namespace MhiagosControl
                 sb.AppendLine("idleblank=" + IdleBlankMinutes.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("rotateseconds=" + RotateSeconds.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("sidebarcollapsed=" + (SidebarCollapsed ? "1" : "0"));
+                sb.AppendLine("casasembipe=" + (CasaSemBipe ? "1" : "0"));
+                sb.AppendLine("perifericosocultos=" + (PerifericosOcultos ?? ""));
+                sb.AppendLine("visaoclassica=" + (VisaoGeralNova ? "0" : "1"));
                 if (!string.IsNullOrEmpty(NavOrder)) sb.AppendLine("navorder=" + NavOrder);
                 sb.AppendLine("metricschosen=" + (MetricsChosen ? "1" : "0"));
                 sb.AppendLine("metricrange=" + MetricRange.ToString(CultureInfo.InvariantCulture));
                 if (!string.IsNullOrEmpty(MetricNavId)) sb.AppendLine("metricnav=" + MetricNavId);
                 sb.AppendLine("windoww=" + WindowW.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("janelaversao=" + JanelaVersao.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("windowh=" + WindowH.ToString(CultureInfo.InvariantCulture));
                 if (WindowX != int.MinValue && WindowY != int.MinValue)
                 {

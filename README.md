@@ -13,6 +13,14 @@ máquina.
 
 ![Visão geral](docs/visaogeral.png)
 
+> **Edição do Feurrado (2.30.0).** Esta versão ficou muito mais específica para o
+> uso do próprio autor: além do cooler, ela traz a página **Casa** (ar-condicionado
+> e lava e seca Hisense pela conta ConnectLife), a bateria dos periféricos
+> (Logitech G325, Attack Shark X11 e PRO X) e o widget de bateria na área de
+> trabalho. Quem só quer controlar o painel do cooler e ver as especificações
+> do PC deve usar a **edição enxuta** (branch `edicao-cpu`, release com sufixo
+> `-cpu`), que não tem nada disso.
+
 > A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
 > Windows na primeira execução e trocável em *Configurações*.
 

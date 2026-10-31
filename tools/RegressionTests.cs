@@ -208,7 +208,7 @@ namespace MhiagosControl
                     Verdade(!preview.Value2.HasValue, "desconexao nao aparenta envio valido");
 
                     data.Values.Clear();
-                    ((NavBar)Field(form, "_nav")).SelectedIndex = 4;
+                    InvokePrivate(form, "AbrirPaginaPelaChave", "perfis");
                     InvokePrivate(form, "AtualizarPaginaAtiva", false);
                     Verdade(!((PanelPreview)Field(form, "_profilePreview")).Value1.HasValue,
                         "F08: previa do perfil limpa sensor ausente sem visitar Paineis");

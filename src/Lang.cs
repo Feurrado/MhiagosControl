@@ -176,7 +176,8 @@ namespace MhiagosControl
         // ---------------- barra lateral ----------------
 
         public static string NavOverview { get { return P("Visão geral", "Overview"); } }
-        public static string NavPanels { get { return P("Painéis", "Panels"); } }
+        public static string NavPanels { get { return P("Painel CPU", "CPU Panel"); } }
+        public static string PanelsTab { get { return P("Painéis", "Panels"); } }
         public static string NavProfiles { get { return P("Perfis", "Profiles"); } }
         public static string NavMetrics { get { return P("Métricas", "Metrics"); } }
         public static string AddMetric { get { return P("Adicionar métrica", "Add metric"); } }

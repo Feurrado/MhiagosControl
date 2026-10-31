@@ -301,7 +301,7 @@ namespace MhiagosControl
                     form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
                     form.Size = new Size(1100, 760);
                     form.Show(); ((Timer)Field(form, "_tick")).Stop();
-                    ((NavBar)Field(form, "_nav")).SelectedIndex = 6;
+                    ((NavBar)Field(form, "_nav")).SelectedIndex = 5;
                     BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
                     CollapsiblePanel painel = (CollapsiblePanel)Field(form, "_painelDoWidget");
                     Label vazio = (Label)Field(form, "_lbBateriasVazio");

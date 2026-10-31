@@ -43,6 +43,23 @@ namespace MhiagosControl
                 return CapturaDoMenu(args);
             if (args.Length > 1 && args[0] == "--captura-presenca")
                 return CapturaDePresenca(args);
+            if (args.Length > 1 && args[0] == "--anim-real")
+                return CapturaDaAnimacaoReal(args);
+            if (args.Length > 1 && args[0] == "--clima-fluxo")
+                return FluxoDoClima(args[1]);
+            if (args.Length > 1 && args[0] == "--clima")
+            {
+                // Chamada real a Open-Meteo pelo mesmo codigo do app (busca + temperatura), sem gravar nada.
+                List<LugarDoClima> ls = Clima.BuscarCidade(args[1]);
+                Console.WriteLine("resultados: " + ls.Count + (ls.Count > 0 ? " (primeiro: " + ls[0].Descricao + ")" : ""));
+                if (ls.Count == 0) return 1;
+                string u = string.Format(System.Globalization.CultureInfo.InvariantCulture, "https://api.open-meteo.com/v1/forecast?latitude={0:0.####}&longitude={1:0.####}&current=temperature_2m,weather_code,is_day&timezone=auto", ls[0].Lat, ls[0].Lon);
+                ClimaAgora a = Clima.InterpretarAtual(Clima.Baixar(u));
+                Console.WriteLine(a == null ? "sem temperatura" : "agora: " + a.Temperatura.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " C, codigo " + a.Codigo + ", dia " + a.Dia);
+                return a == null ? 1 : 0;
+            }
+            if (args.Length > 0 && args[0] == "--medir-fluidez")
+                return MedicaoDeFluidez(args);
             if (args.Length > 2 && (args[0] == "--captura-escala" || args[0] == "--captura-tela" || args[0] == "--medir-pintura"))
                 return CapturaDeEscala(args);
             // Sem animacao por padrao: a opcao do Windows muda de maquina para
@@ -1780,6 +1797,18 @@ namespace MhiagosControl
         {
             Console.WriteLine();
             Console.WriteLine("== " + nome);
+        }
+
+        /// <summary>
+        /// Medidas de layout que so valem numa tela do tamanho de quem desenvolve: a janela
+        /// padrao e maior que a area de trabalho de uma maquina virtual de 1024 x 768 (a do
+        /// CI), onde o Windows a comprime e as colunas mudam. Ali a conferencia e pulada.
+        /// </summary>
+        private static void VerdadeNaTela(bool condicao, string descricao)
+        {
+            Rectangle area = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+            if (area.Width < 1400 || area.Height < 900) return;
+            Verdade(condicao, descricao);
         }
 
         private static void Verdade(bool condicao, string descricao)

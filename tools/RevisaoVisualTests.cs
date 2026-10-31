@@ -50,6 +50,7 @@ namespace MhiagosControl
         {
             Secao("visual 2: Visao geral, colunas do meio nas divisas da fileira de cima");
             Config config = AuditConfig(root, "alinhada");
+            config.VisaoGeralNova = false;   // o alinhamento medido aqui e o da classica
             config.MetricIds.Clear(); config.MetricSizes.Clear();
             config.MetricIds.AddRange(new string[] { "cpu", "load", "gpu", "fan", "cpu" });
             config.MetricSizes.AddRange(new int[] { 1, 1, 1, 1, 1 });
