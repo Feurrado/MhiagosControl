@@ -10,7 +10,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace MhiagosControl
 {
-    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData, IControleDoWidget
+    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData
     {
         // ---------------- acoes ----------------
 
@@ -18,82 +18,6 @@ namespace MhiagosControl
         {
             _paginaPedida = null;
             PedirConfiguracao();
-        }
-
-        // ---------------- widget de bateria ----------------
-
-        private void OnToggleWidget(object sender, EventArgs e)
-        {
-            LigarWidget(!_cfgWidget.Ativo);
-        }
-
-        private void LigarWidget(bool ligar)
-        {
-            _cfgWidget.Ativo = ligar;
-            _cfgWidget.Salvar();
-            if (_miWidget != null) _miWidget.Checked = ligar;
-            if (ligar) MostrarWidget();
-            else FecharWidget();
-        }
-
-        private void MostrarWidget()
-        {
-            if (IsStopping || (_widget != null && !_widget.IsDisposed)) return;
-            try
-            {
-                _widget = new WidgetDeBateria(_cfgWidget);
-                // Fora do clique: a janela de configuracao e modal, e o widget
-                // nao pode ser fechado dentro do proprio menu
-                _widget.BateriasPedidas += delegate
-                {
-                    Marshal(delegate
-                    {
-                        _paginaPedida = "baterias";
-                        PedirConfiguracao();
-                    });
-                };
-                _widget.OcultarPedido += delegate { Marshal(delegate { LigarWidget(false); }); };
-                _widget.Show();
-            }
-            catch (Exception ex)
-            {
-                Log.Error("abertura do widget de bateria", ex);
-                FecharWidget();
-                // sem isso o item ficaria marcado e a falha voltaria a cada inicio
-                _cfgWidget.Ativo = false;
-                _cfgWidget.Salvar();
-                if (_miWidget != null) _miWidget.Checked = false;
-            }
-        }
-
-        ConfigDoWidget IControleDoWidget.ConfigDoWidget { get { return _cfgWidget; } }
-
-        void IControleDoWidget.LigarWidget(bool ligar)
-        {
-            if (_cfgWidget.Ativo != ligar) LigarWidget(ligar);
-        }
-
-        void IControleDoWidget.WidgetMudou()
-        {
-            _cfgWidget.Salvar();
-            if (_widget != null && !_widget.IsDisposed) _widget.AplicarConfig();
-        }
-
-        void IControleDoWidget.WidgetAoCanto()
-        {
-            _cfgWidget.X = ConfigDoWidget.SemPosicao;
-            _cfgWidget.Y = ConfigDoWidget.SemPosicao;
-            _cfgWidget.Salvar();
-            if (_widget != null && !_widget.IsDisposed) _widget.VoltarAoCanto();
-        }
-
-        private void FecharWidget()
-        {
-            WidgetDeBateria w = _widget;
-            _widget = null;
-            if (w == null || w.IsDisposed) return;
-            try { w.Close(); w.Dispose(); }
-            catch (Exception ex) { Log.Error("fechamento do widget de bateria", ex); }
         }
 
         private void PedirConfiguracao()

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -20,14 +20,13 @@ namespace MhiagosControl
     /// </summary>
     public static partial class Tests
     {
-        private sealed class DadosDeCaptura : ISettingsData, IReadingStatusData, IControleDoWidget
+        private sealed class DadosDeCaptura : ISettingsData, IReadingStatusData
         {
             public readonly List<SensorEntry> Sensors = new List<SensorEntry> {
                 AuditSensor("cpu", "CPU", SensorType.Temperature, "°C", 47),
                 AuditSensor("load", "CPU", SensorType.Load, "%", 23),
                 AuditSensor("gpu", "GPU", SensorType.Temperature, "°C", 52),
                 AuditSensor("fan", "CPU", SensorType.Fan, "RPM", 1240) };
-            public readonly ConfigDoWidget Widget = new ConfigDoWidget();
             public Dictionary<string, float> CurrentSnapshot()
             {
                 Dictionary<string, float> d = new Dictionary<string, float>();
@@ -37,10 +36,6 @@ namespace MhiagosControl
             public List<SensorEntry> RefreshSensorList() { return Sensors; }
             public void SetShowAllSensors(bool value) { }
             public ReadingState CurrentReadingState(string id) { return ReadingState.Live; }
-            public ConfigDoWidget ConfigDoWidget { get { return Widget; } }
-            public void LigarWidget(bool ligar) { Widget.Ativo = ligar; }
-            public void WidgetMudou() { }
-            public void WidgetAoCanto() { }
         }
 
         private static void QuadrosDaAnimacao(Form form, AnimacaoDeRecolher motor, string pasta, string nome)
@@ -55,28 +50,6 @@ namespace MhiagosControl
                     form.DrawToBitmap(bmp, new Rectangle(Point.Empty, bmp.Size));
                     bmp.Save(Path.Combine(pasta, nome + "-" + pct.ToString("000") + ".png"), ImageFormat.Png);
                 }
-            }
-        }
-
-        /// <summary>
-        /// Quadros por segundo de verdade, com a janela na tela e o relogio
-        /// real: Tests.exe --medir-animacao 1.0 pasta
-        /// </summary>
-        private static void MedirAnimacoes(SettingsForm form, NavBar nav)
-        {
-            Ui.AnimacoesForcadas = true;
-            for (int i = 0; i < nav.Items.Count; i++)
-                if (nav.Items[i].Key == "baterias") nav.SelectedIndex = i;
-            Esperar(600);
-            BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
-            CollapsiblePanel painel = (CollapsiblePanel)Field(form, "_painelDoWidget");
-            List<CartaoDeBateria> cartoes = (List<CartaoDeBateria>)Field(form, "_cartoesDeBateria");
-            for (int r = 0; r < 3; r++)
-            {
-                Medir("widget", MotorDe(painel, "_animacao"), delegate { InvokePrivate(botao, "OnClick", EventArgs.Empty); });
-                if (cartoes.Count > 0)
-                    Medir("detalhes", MotorDe(cartoes[0], "_detalhes"), delegate { cartoes[0].AlternarDetalhes(); });
-                Medir("lateral", null, delegate { nav.Collapsed = !nav.Collapsed; }, nav);
             }
         }
 
@@ -236,10 +209,6 @@ namespace MhiagosControl
             string root = Path.Combine(Path.GetTempPath(), "MhiagosControl-abertura-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
             typeof(Log).GetField("_path", AuditFlags).SetValue(null, Path.Combine(root, "log.txt"));
-            DetalhesDaBateria._caminho = Path.Combine(root, "detalhes.txt");
-            DetalhesDaBateria.Recarregar();
-            HistoricoDeBateria.Caminho = Path.Combine(root, "baterias.dat");
-            HistoricoDeBateria.Zerar();
             MetricHistory.Arquivo = Path.Combine(root, "history.dat");
             T.Language = T.PtBr;
             Config config = AuditConfig(root, "abertura");
@@ -279,10 +248,6 @@ namespace MhiagosControl
             string root = Path.Combine(Path.GetTempPath(), "MhiagosControl-captura-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
             typeof(Log).GetField("_path", AuditFlags).SetValue(null, Path.Combine(root, "log.txt"));
-            DetalhesDaBateria._caminho = Path.Combine(root, "detalhes.txt");
-            DetalhesDaBateria.Recarregar();
-            HistoricoDeBateria.Caminho = Path.Combine(root, "baterias.dat");
-            HistoricoDeBateria.Zerar();
             MetricHistory.Arquivo = Path.Combine(root, "history.dat");
             // Historico sintetico (ruido, uma falha curta e uma longa) para a curva
             // dos mostradores aparecer nas capturas.
@@ -300,21 +265,6 @@ namespace MhiagosControl
             }
             T.Language = args.Length > 3 ? args[3] : T.PtBr;
 
-            // Dois aparelhos com historico, para a pagina Baterias ter cartoes.
-            DateTime t = DateTime.Now.AddHours(-30);
-            Periferico g = Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 100, false);
-            Periferico x = Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 100, false);
-            for (int m = 0; m < 30 * 60; m += 5)
-            {
-                int pg = 100 - m / 30, px = 100 - m / 45;
-                g = Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, pg, false);
-                x = Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, px, false);
-                HistoricoDeBateria.Registrar(new Periferico[] { g, x }, t.AddMinutes(m));
-            }
-            Perifericos.PublicarLogitech(new Periferico[] { g });
-            Perifericos.PublicarShark(x);
-            DetalhesDaBateria.Alternar("GHub|G325");
-            DetalhesDaBateria.Alternar(SettingsForm.ChaveDoPainelDoWidget);
 
             Config config = AuditConfig(root, "captura");
             config.MetricIds.Clear(); config.MetricSizes.Clear();
@@ -329,7 +279,6 @@ namespace MhiagosControl
                 form.Location = (medir || tela) ? new Point(20, 20) : new Point(-30000, -30000);
                 form.Show(); ((Timer)Field(form, "_tick")).Stop();
                 NavBar nav = (NavBar)Field(form, "_nav");
-                if (medir) { MedirAnimacoes(form, nav); form.Close(); return 0; }
                 if (tela) { CapturaDaTela(form, nav, pasta); form.Close(); return 0; }
                 if (pintura) { MedirPintura(form, nav); form.Close(); return 0; }
                 foreach (Size tamanho in tamanhos)
@@ -355,23 +304,6 @@ namespace MhiagosControl
                 for (int i = 0; i < nav.Items.Count; i++)
                     if (nav.Items[i].Key == "baterias") nav.SelectedIndex = i;
                 Ui.AnimacoesForcadas = true;
-                BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
-                CollapsiblePanel painel = (CollapsiblePanel)Field(form, "_painelDoWidget");
-                List<CartaoDeBateria> cartoes = (List<CartaoDeBateria>)Field(form, "_cartoesDeBateria");
-                if (painel.Expandido) InvokePrivate(botao, "OnClick", EventArgs.Empty);
-                MotorDe(painel, "_animacao").Avancar(AnimacaoDeRecolher.DuracaoMs);
-                InvokePrivate(botao, "OnClick", EventArgs.Empty);
-                QuadrosDaAnimacao(form, MotorDe(painel, "_animacao"), pasta, (int)(zoom * 100) + "-anim-widget-abrindo");
-                if (cartoes.Count > 0)
-                {
-                    if (cartoes[0].DetalhesAbertos)
-                    {
-                        cartoes[0].AlternarDetalhes();
-                        MotorDe(cartoes[0], "_detalhes").Avancar(AnimacaoDeRecolher.DuracaoMs);
-                    }
-                    cartoes[0].AlternarDetalhes();
-                    QuadrosDaAnimacao(form, MotorDe(cartoes[0], "_detalhes"), pasta, (int)(zoom * 100) + "-anim-detalhes");
-                }
                 // A barra lateral recolhendo e abrindo de novo.
                 nav.Collapsed = true;
                 QuadrosDaAnimacao(form, (AnimacaoDeRecolher)typeof(NavBar).GetField("_anim", AuditFlags).GetValue(nav), pasta, (int)(zoom * 100) + "-anim-lateral-fechando");

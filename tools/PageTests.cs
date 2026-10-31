@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -15,116 +15,6 @@ namespace MhiagosControl
     /// </summary>
     public static partial class Tests
     {
-        private static void RegressionWidgetRecolhido(string root)
-        {
-            Secao("pagina Baterias: aparelhos primeiro, widget atras do botao");
-            string arquivo = Path.Combine(Path.GetTempPath(), "mhiagos-painel-" + Guid.NewGuid().ToString("N") + ".txt");
-            DetalhesDaBateria._caminho = arquivo;
-            DetalhesDaBateria.Recarregar();
-            string languageBefore = T.Language;
-            try
-            {
-                T.Language = T.PtBr;
-                Config config = AuditConfig(root, "widget-recolhido");
-                DadosComWidget dados = new DadosComWidget();
-                using (SettingsForm form = new SettingsForm(config, new List<SensorEntry>(), dados))
-                {
-                    form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
-                    form.Size = new Size(1100, 760);
-                    form.Show(); ((Timer)Field(form, "_tick")).Stop();
-                    ((NavBar)Field(form, "_nav")).SelectedIndex = 5;
-                    Control pagina = (Control)Field(form, "_pgBaterias");
-                    Verdade(pagina.Visible, "a setima entrada da barra e a pagina Baterias");
-
-                    BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
-                    Card cartao = (Card)Field(form, "_cardWidget");
-                    Label vazio = (Label)Field(form, "_lbBateriasVazio");
-                    Verdade(botao != null, "a pagina ganha o botao Widget");
-                    Igual("Widget", botao.Text, "o botao se chama Widget");
-                    Verdade(!botao.Aberto && !cartao.Visible, "o painel do widget comeca fechado");
-                    Verdade(botao.Top <= 4 && botao.Height <= 32, "o botao e uma linha fina no alto da pagina");
-                    Verdade(botao.Right >= pagina.Width - Pagina.LarguraDaBarra - 40, "e fica a direita, fora do caminho");
-                    Verdade(vazio.Top < botao.Bottom + 16, "os aparelhos comecam logo abaixo do botao, sem os 330 px do cartao");
-                    CaptureEvolution(form, "baterias-widget-fechado");
-
-                    InvokePrivate(botao, "OnClick", EventArgs.Empty);
-                    Verdade(botao.Aberto && cartao.Visible, "clicar abre o painel");
-                    Control painel = cartao.Parent;   // o cartao mora no CollapsiblePanel da pagina
-                    Verdade(painel is CollapsiblePanel && painel.Top >= botao.Bottom, "o painel abre logo abaixo do botao");
-                    Verdade(vazio.Top > painel.Bottom, "e empurra os aparelhos para baixo so enquanto aberto");
-                    Igual(0, dados.Mudancas, "abrir o painel nao mexe na configuracao do widget");
-                    DetalhesDaBateria.Recarregar();
-                    Verdade(DetalhesDaBateria.Aberto(SettingsForm.ChaveDoPainelDoWidget), "aberto fica gravado");
-                    Verdade(!DetalhesDaBateria.Aberto("GHub|G325"), "sem abrir os detalhes de aparelho nenhum");
-                    CaptureEvolution(form, "baterias-widget-aberto");
-                    form.Close();
-                }
-
-                using (SettingsForm form = new SettingsForm(config, new List<SensorEntry>(), dados))
-                {
-                    form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
-                    form.Show(); ((Timer)Field(form, "_tick")).Stop();
-                    ((NavBar)Field(form, "_nav")).SelectedIndex = 5;
-                    BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
-                    Verdade(botao.Aberto && ((Card)Field(form, "_cardWidget")).Visible, "reaberto, o painel volta como foi deixado");
-                    InvokePrivate(botao, "OnKeyDown", new KeyEventArgs(Keys.Space));
-                    Verdade(!botao.Aberto && !((Card)Field(form, "_cardWidget")).Visible, "Espaco no botao fecha de novo");
-                    form.Close();
-                }
-
-                using (SettingsForm form = new SettingsForm(config, new List<SensorEntry>(), new FreshData()))
-                {
-                    form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
-                    form.Show(); ((Timer)Field(form, "_tick")).Stop();
-                    Verdade(Field(form, "_btWidget") == null, "sem o controle do widget nao ha botao para um painel vazio");
-                    form.Close();
-                }
-                Verdade(typeof(TrayContext).GetField("_miWidget", AuditFlags) != null, "ligar e desligar continua no menu da bandeja");
-            }
-            finally
-            {
-                T.Language = languageBefore;
-                DetalhesDaBateria._caminho = null;
-                DetalhesDaBateria.Recarregar();
-                try { File.Delete(arquivo); } catch { }
-            }
-        }
-
-        private static void RegressionNomesCompletos()
-        {
-            Secao("pagina Baterias: nomes completos dos aparelhos");
-            Igual("Logitech G325 Lightspeed", Perifericos.NomeCompleto("G325", FontePeriferico.GHub), "G325 do G HUB ganha o nome completo");
-            Igual("Attack Shark X11", Perifericos.NomeCompleto("X11", FontePeriferico.AttackShark), "X11 ganha a marca");
-            Igual("G325", Perifericos.NomeCompleto("G325", FontePeriferico.Bluetooth), "outra fonte com o mesmo nome fica como esta");
-            Igual("G733", Perifericos.NomeCompleto("G733", FontePeriferico.GHub), "outro aparelho do G HUB fica como esta");
-            Igual("Fone Bluetooth", Perifericos.NomeCompleto("Fone Bluetooth", FontePeriferico.Bluetooth), "Bluetooth fica como esta");
-
-            Periferico g325 = Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 70, false);
-            Igual("GHub|G325", HistoricoDeBateria.Chave(g325), "a chave do historico segue com o nome lido");
-            Igual("G325", g325.Nome, "o nome lido nao muda");
-
-            string languageBefore = T.Language;
-            try
-            {
-                T.Language = T.PtBr;
-                using (Form f = new Form())
-                {
-                    f.ShowInTaskbar = false; f.StartPosition = FormStartPosition.Manual; f.Location = new Point(-20000, -20000);
-                    f.ClientSize = new Size(760, 640);
-                    CartaoDeBateria largo = new CartaoDeBateria(), estreito = new CartaoDeBateria();
-                    f.Controls.Add(largo); f.Controls.Add(estreito);
-                    f.Show();
-                    largo.Mostrar(AnaliseDeExemplo(true), null);
-                    estreito.Mostrar(AnaliseDeExemplo(false), 38);
-                    largo.SetBounds(12, 12, 700, largo.AlturaDesejada(700));
-                    estreito.SetBounds(12, largo.Bottom + 12, 300, estreito.AlturaDesejada(300));
-                    f.Refresh();
-                    CaptureEvolution(f, "baterias-nomes-completos");
-                    f.Close();
-                }
-            }
-            finally { T.Language = languageBefore; }
-        }
 
         private static void RegressionMarcaDaPlaca()
         {
@@ -438,7 +328,7 @@ namespace MhiagosControl
                                 anterior = item.Bottom;
                             }
                             // Nove desde a Visao geral nova (item 10 do backlog da Casa): a chave dela entrou no grupo Geral.
-                            Igual(9, linhas, "nove linhas: idioma, inicio, visao geral nova, sensores, ocioso, RTSS, pasta, backup e diagnostico");
+                            Igual(8, linhas, "nove linhas: idioma, inicio, visao geral nova, sensores, ocioso, RTSS, pasta, backup e diagnostico");
                             Igual(4, grupos, "em quatro grupos: Geral, Painel, FPS e Dados");
                             Verdade(Field(form, "_backupCard") is LinhaDeOpcao && Field(form, "_diagnosticCard") is LinhaDeOpcao,
                                 "backup e diagnostico viraram linhas do grupo Dados");

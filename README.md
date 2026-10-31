@@ -7,19 +7,17 @@ e Temp 8**, no lugar do software original *CPU TEMP Monitor*
 Mostra **qualquer sensor** do sistema nos dois mostradores de 3 dígitos, em vez
 das duas métricas fixas do software de fábrica. Tem perfis salvos, rodízio entre
 eles, perfil automático por jogo e apagamento quando ninguém está usando o
-computador. Além do cooler, acompanha a bateria do headset e do mouse sem fio,
-guarda seis horas de histórico das leituras e monta o retrato completo da
-máquina.
+computador. Além do cooler, guarda seis horas de histórico das leituras e monta o
+retrato completo da máquina.
 
 ![Visão geral](docs/visaogeral.png)
 
-> **Edição do Feurrado (2.30.0).** Esta versão ficou muito mais específica para o
-> uso do próprio autor: além do cooler, ela traz a página **Casa** (ar-condicionado
-> e lava e seca Hisense pela conta ConnectLife), a bateria dos periféricos
-> (Logitech G325, Attack Shark X11 e PRO X) e o widget de bateria na área de
-> trabalho. Quem só quer controlar o painel do cooler e ver as especificações
-> do PC deve usar a **edição enxuta** (branch `edicao-cpu`, release com sufixo
-> `-cpu`), que não tem nada disso.
+> **Edição enxuta (2.30.0-cpu).** Só o que importa para o cooler e para o PC:
+> controle do painel (Painel CPU, com Perfis), Métricas e Especificações. Sem a
+> página Casa, sem bateria de periféricos e sem widget. A edição completa, feita
+> para o uso do próprio autor, está na branch `main` e nos releases sem o sufixo
+> `-cpu`.
+
 
 > A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
 > Windows na primeira execução e trocável em *Configurações*.
@@ -43,40 +41,6 @@ atualiza no lugar.
 > O executável não é assinado. O SmartScreen vai mostrar *"Editor
 > desconhecido"*, e é preciso clicar em **Mais informações** e depois em
 > **Executar assim mesmo**.
-
----
-
-## Novidades
-
-**2.22**
-- **Baterias** abre direto nos aparelhos, com o nome completo de cada um
-  (*Logitech G325 Lightspeed* e *Attack Shark X11*). As opções do widget
-  ficam num painel recolhido, atrás do botão **Widget** no alto da página.
-- **Especificações** mostra a marca de quem montou a placa de vídeo
-  (*Sapphire Radeon RX 580 8 GB*) e acende cada slot de memória no lugar
-  físico certo, com o nome (A1, A2, B1, B2) e o pente daquele slot ao passar o
-  mouse.
-- Em **Métricas**, a faixa do navegador de período segue o cartão clicado.
-- **Configurações** em linhas no estilo do Windows 11, **Sobre** com cartão de
-  identidade e **Perfis** em duas colunas.
-
-**2.21**
-- **Visão geral** com janela de 5 minutos, para os picos aparecerem.
-- Gráficos sem buracos: falhas curtas somem e períodos sem medida viram uma
-  ponte tracejada.
-- **Métricas** troca os três botões de período por um navegador arrastável
-  sobre as seis horas gravadas.
-- **Especificações** em mosaico: peças em destaque, slots de memória e discos
-  em barras.
-
-**2.18 a 2.20**
-- Bateria do headset e do mouse na Visão geral, na bandeja e na página
-  **Baterias**, com histórico, previsão e saúde da bateria.
-- Widget de bateria com efeito de vidro na área de trabalho.
-- Ícones do G325 e do X11 desenhados a partir das fotos dos aparelhos.
-
-O histórico completo de versões está nas
-[releases](https://github.com/Feurrado/MhiagosControl/releases).
 
 ---
 
@@ -107,7 +71,6 @@ fica gravada.
 | Página | Responde |
 |---|---|
 | **Visão geral** | como a máquina está agora e o que o cooler está mostrando |
-| **Baterias** | quanto dura a carga do headset, do mouse e dos aparelhos Bluetooth |
 | **Painéis** | qual sensor vai para cada mostrador, com escala, unidade e prévia |
 | **Perfis** | conjuntos salvos, rodízio, exportação e perfil por jogo |
 | **Métricas** | cartões com histórico, conjuntos prontos e perfis de grade salvos |
@@ -122,8 +85,8 @@ monitor atual.
 
 | | |
 |:--:|:--:|
-| ![Baterias](docs/baterias.png) | ![Métricas](docs/metricas.png) |
-| **Baterias**: carga, tempo restante, duração de uma carga cheia e saúde de cada aparelho, com a curva das últimas 48 horas | **Métricas**: a grade de cartões arrastáveis, com o navegador de período no alto seguindo o cartão escolhido |
+| ![Painéis](docs/paineis.png) | ![Métricas](docs/metricas.png) |
+| **Painel CPU**: o sensor, a escala e a unidade de cada mostrador, com prévia | **Métricas**: a grade de cartões arrastáveis, com o navegador de período no alto seguindo o cartão escolhido |
 | ![Especificações](docs/especificacoes.png) | ![Painéis](docs/paineis.png) |
 | **Especificações**: as peças em destaque, com a marca da placa de vídeo, os slots de memória no lugar e os discos em barras | **Painéis**: o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça |
 | ![Perfis](docs/perfis.png) | ![Configurações](docs/configuracoes.png) |
@@ -143,12 +106,11 @@ que separa os dois casos.
 
 No centro, o mostrador do cooler ao vivo, com o perfil ativo e o painel
 encontrado; ao lado, as duas leituras que vão para a peça, cada uma com o seu
-histórico. Embaixo, a carga dos periféricos sem fio e uma tira com o retrato da
+histórico. Embaixo, uma tira com o retrato da
 máquina: processador com núcleos e threads, placa de vídeo com a memória dela,
 memória instalada, placa-mãe e a versão do Windows.
 
-Nada aqui é editável: cada bloco tem a sua página, a um clique. Clicar num
-aparelho abre a página **Baterias**.
+Nada aqui é editável: cada bloco tem a sua página, a um clique.
 
 A prévia reproduz a vista superior do cooler e o mostrador de sete segmentos
 como ele é no aparelho: os dois painéis empilhados, `°C`/`°F` sobre `%`/`W`,
@@ -202,52 +164,6 @@ padrão volta.
 
 Depende do RivaTuner Statistics Server, que identifica o jogo em primeiro
 plano. Sem ele o cartão avisa e desabilita o interruptor.
-
-### Bateria dos periféricos
-
-A **Visão geral** mostra a carga dos periféricos sem fio: imagem, porcentagem,
-uma pilha que fica verde com um raio quando o aparelho está no cabo e, embaixo,
-quanto ainda resta de uso (ou em quanto tempo enche). Passar o mouse no ícone da
-bandeja mostra as mesmas porcentagens, e o ícone ganha uma pilha vermelha quando
-algum aparelho fora do cabo chega a 30%.
-
-| Aparelho | De onde vem a carga |
-|---|---|
-| **Logitech G325 Lightspeed** (e o que mais o G HUB mostrar) | serviço local do G HUB; **o G HUB precisa estar aberto** |
-| **Attack Shark X11** | mensagem que o receptor 2.4 GHz manda sozinho a cada 2 s |
-| **Bluetooth** | a mesma informação que o Windows mostra em Configurações |
-
-Nada disso pede administrador nem escreve nos aparelhos. Na página **Baterias**,
-clicar na imagem abre o app do aparelho (G HUB, Attack Shark ou o painel de
-Bluetooth do Windows).
-
-A página **Baterias** mede o **uso**, e não o calendário: só conta o tempo com o
-aparelho ligado. A previsão soma o ritmo de cada faixa de 10%, porque a bateria
-não descarrega em linha reta, e no headset aparece ao lado da estimativa do
-próprio G HUB. Cada aparelho mostra o tempo restante, quanto dura uma carga
-cheia, o tempo desde a última carga, a **saúde da bateria** (quanto dura uma
-carga cheia mês a mês) e a curva das últimas 48 horas. *Mais detalhes* abre o
-ritmo por faixa, a última carga, a última descarga completa e o uso total.
-
-O Windows avisa em **30%**, em **10%**, quando restarem **cerca de 2 h de uso**
-e quando o aparelho **chega a 100% no cabo**. A carga também vira sensor
-(categoria *Periféricos*): pode ir para o mostrador do cooler, para os cartões
-de *Métricas* e para os perfis.
-
-#### Widget na área de trabalho
-
-*Widget de bateria*, no menu da bandeja, põe a carga dos periféricos numa placa
-de vidro sobre a área de trabalho, com um anel (ou barra) por aparelho, que fica
-verde e respira devagar enquanto carrega. Fica logo acima dos ícones, atrás das
-janelas, como os antigos gadgets; com **Win+D** ele continua à vista. Arrastar
-muda o lugar (gruda nas bordas da tela) e clicar abre a página **Baterias**.
-
-As opções ficam atrás do botão **Widget**, com a engrenagem, no alto da página
-**Baterias** (fechado por padrão; se ficar aberto, a página lembra): ligar e
-desligar, **anéis** ou **lista**, vidro **nítido** (padrão), **desfocado** ou
-**fosco**, a cor do vidro (do tema do Windows, escura ou clara), **sempre na
-frente das janelas**, **travar posição** e voltar ao canto da tela. O botão
-direito no widget tem as mesmas opções.
 
 ### Especificações
 
@@ -441,9 +357,6 @@ Ficam em `%LOCALAPPDATA%\MhiagosControl\`, acessível pelo menu da bandeja em
 |---------|----------|
 | `config.ini` | perfis do painel e de métricas, sensores, unidades, rodízio e idioma |
 | `history.dat` | as seis horas de histórico das métricas |
-| `baterias.dat` | histórico de bateria dos periféricos: cargas, descargas e as amostras dos últimos 7 dias |
-| `baterias-detalhes.txt` | quais aparelhos estão com *Mais detalhes* aberto |
-| `widget.ini` | lugar e aparência do widget de bateria |
 | `log.txt` | diagnóstico, com rotação em 512 KB (`log.txt.1`) |
 
 Configurações de versões antigas são migradas no primeiro arranque.
@@ -518,7 +431,6 @@ Em `tools\`, cada uma com o seu `build-*.ps1`:
 | `Probe` | manda quadros crus ao painel, para mapear o protocolo |
 | `RtssProbe` | separa as causas de "o FPS não aparece" na ponte com o RTSS |
 | `Bench` | mede quanto o ciclo de atualização aloca, perto do que a biblioteca de sensores aloca |
-| `WidgetPreview` | abre o widget de bateria sozinho, sem elevação |
 | `MakeAssets` | gera os ícones e a imagem do cooler a partir das artes em `assets\` (`build.ps1 -Assets`) |
 | `MakePeripherals` | desenha o ícone do Bluetooth; o G325 e o X11 saem de `assets\svg\` |
 

@@ -8,6 +8,13 @@ namespace MhiagosControl
 {
     public partial class SettingsForm : Form
     {
+        private Pagina _pgSpecs;
+        private Label _lbSpecsEstado, _lbSpecsNota;
+        private FlatBtn _btCopiarSpecs;
+        private bool _coletando = false;
+        private readonly List<FlatBtn> _specCategoryButtons = new List<FlatBtn>();
+        private readonly Dictionary<Card, int> _specFullHeights = new Dictionary<Card, int>();
+        private int _specCategory = 0; // zero = resumo; os demais seguem _specCards
         /// <summary>
         /// A folha de especificacoes, no espirito do CPU-Z.
         ///
