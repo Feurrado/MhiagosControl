@@ -78,7 +78,7 @@ namespace MhiagosControl
 
         // pagina Sobre
         private Control _pgConfig;
-        private Toggle _tgAutostart, _tgIdle, _tgRotate;
+        private Toggle _tgAutostart, _tgIdle, _tgRotate, _tgVisaoNova;
         private NumberBox _idleMin, _rotSecs;
         private Label _idleNote, _rotNote;
         private Segmented _lang;
@@ -360,11 +360,40 @@ namespace MhiagosControl
             NavItem sobre = new NavItem();
             sobre.Text = T.NavAbout; sobre.Glyph = ""; sobre.Page = BuildPageSobre();
 
+            // Icone desenhado (Ui.IconeDeBateria): o E83F da Segoe MDL2 saia
+            // como um bloco cheio e nao parecia bateria. O glifo fica so como
+            // reserva para quem nao desenha o Icone.
+            // Entra antes de Sobre, e nao junto de Metricas: os atalhos Alt+1
+            // a Alt+6 e os testes de navegacao contam as paginas pela posicao.
+            NavItem baterias = new NavItem();
+            baterias.Text = T.NavBatteries; baterias.Glyph = "\uE83F"; baterias.Icone = Ui.IconeDeBateria; baterias.Page = BuildPageBaterias();
+
+            // Ar-condicionado e lava e seca da conta ConnectLife. E9CA e o
+            // termometro da Segoe MDL2; a casa (E80F) ja e da Visao geral.
+            NavItem casa = new NavItem();
+            _pgCasa = new PaginaCasa();
+            _pgCasa.SemBipe = _cfg.CasaSemBipe;   // tambem leva ao ServicoCasa
+            // Grava na hora, como a barra recolhida: e preferencia do app, nao edicao de perfil.
+            _pgCasa.SemBipeMudou += delegate
+            {
+                try
+                {
+                    _cfg.CasaSemBipe = _pgCasa.SemBipe;
+                    string erro;
+                    if (!_session.TrySavePreferences(delegate(Config draft, Config target)
+                    {
+                        target.CasaSemBipe = draft.CasaSemBipe;
+                    }, out erro)) Log.Write("comandos sem bipe nao persistiu: " + erro);
+                }
+                catch (Exception ex) { Log.Error("gravar comandos sem bipe", ex); }
+            };
+            casa.Text = T.NavCasa; casa.Glyph = ""; casa.Page = _pgCasa;
 
             visao.Key = "visao"; paineis.Key = "paineis"; metricas.Key = "metricas"; specs.Key = "specs";
-            perfis.Key = "perfis"; config.Key = "config"; sobre.Key = "sobre";
+            perfis.Key = "perfis"; config.Key = "config"; baterias.Key = "baterias"; sobre.Key = "sobre";
+            casa.Key = "casa";
 
-            NavItem[] fabrica = { visao, paineis, metricas, specs, config, sobre };
+            NavItem[] fabrica = { visao, paineis, metricas, specs, config, baterias, casa, sobre };
             foreach (NavItem it in OrdemDaBarra(fabrica, _cfg.NavOrder))
             {
                 _nav.Add(it);
@@ -776,10 +805,12 @@ namespace MhiagosControl
             if (pagina == _pgMetricas) ArranjarMetricas();
             else if (pagina == _pgVisao) { if (pagina.Visible) ArranjarVisaoGeral(); }
             else if (pagina == _pgSpecs) { if (pagina.Visible) ArranjarSpecsPagina(); }
+            else if (pagina == _pgBaterias) ArranjarBaterias();
             else if (pagina == _pgPaineis) ArranjarPaineis();
             else if (pagina == _pgConfig) ArrangeSettings();
             else if (pagina == _pgPerfis) ArrangeProfiles();
             else if (pagina == _pgSobre) ArranjarSobre();
+            else if (pagina == _pgCasa) _pgCasa.Arranjar();
             else ArrangeAboutBounds(pagina);
         }
 
@@ -1022,8 +1053,17 @@ namespace MhiagosControl
 
         private CartaoDoCooler _cardCooler;
         private Card _cardSpecs;
+        private PeripheralStrip _cardPerif;
+        private ResumoDaCasa _cardCasa;
         // Visao geral nova (a padrao): cabecalho, casa em cartoes, caixas de
         // perifericos e eventos. A classica usa a faixa e o resumo acima.
+        private CabecalhoDaVisao _vgCabecalho;
+        private CartaoDoArVisao _vgAr;
+        private CartaoDaLavadoraVisao _vgLav;
+        private ConviteDaCasa _vgConvite;
+        private CaixaDePerifericos _vgPerif;
+        private CaixaDeEventos _vgEventos;
+        private Label _vgAbrirPaineis;
         private readonly List<string> _vgTitulos = new List<string>(), _vgTitulosMono = new List<string>();
         private PanelPreview _vgPreview;
         private Label _vgPerfil, _vgPainel;

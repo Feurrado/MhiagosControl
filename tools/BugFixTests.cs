@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -38,14 +38,243 @@ namespace MhiagosControl
             Igual(ReadingState.Waiting, snapshot.State("unknown", later, false), "ausencia nao vira zero");
             Igual(0, snapshot.Read(start, false).Count, "recuo do relogio simulado nao valida leitura futura");
 
+            RegressionFileProtection(root);
+            RegressionMouseButtons();
+            RegressionMissingMetrics(root);
             RegressionBugGeometry(root);
+            RegressionVideoMemory();
+            RegressionReviewFixes();
+            RegressionPeripheralBattery();
+            RegressionPeripheralIcons();
+            RegressionBatteryHistory();
+            RegressionBatteryCoarseSteps();
+            RegressionLeitoresReconhecemRapido();
             RegressionNavOrder(root);
+            RegressionBatteryWidget(root);
+            RegressionWidgetCard(root);
+            RegressionBatteryCard(root);
+            RegressionWidgetRecolhido(root);
+            RegressionNomesCompletos();
             RegressionMarcaDaPlaca();
             RegressionSlotsDeMemoria();
             RegressionNavegadorSegueCartao(root);
             RegressionLayoutsEscolhidos(root);
             CapturaDasMetricas(root);
             RegressionRevisao(root);
+        }
+
+        private static void RegressionBatteryWidget(string root)
+        {
+            Secao("widget de bateria: preferencias, formato e desenho");
+
+            ConfigDoWidget padrao = ConfigDoWidget.DeTexto(null);
+            Verdade(!padrao.Ativo && !padrao.TemPosicao, "sem arquivo o widget comeca desligado e sem posicao");
+            Igual(LayoutDoWidget.Aneis, padrao.Layout, "formato padrao sao os aneis");
+            Verdade(padrao.Nitido && !padrao.Fosco, "vidro padrao e o nitido, sem desfoque");
+            Verdade(PintorDoWidget.Pulso(0f) < 0.001f && PintorDoWidget.Pulso(0.5f) > 0.999f && PintorDoWidget.Pulso(1f) < 0.001f,
+                    "a respiracao da carga sai de 0, chega a 1 no meio do ciclo e volta");
+            Verdade(typeof(IControleDoWidget).IsAssignableFrom(typeof(TrayContext)),
+                    "a bandeja entrega o controle do widget para a pagina Baterias");
+
+            // transicao de carga: primeira vista ja no estado certo, depois anda suave
+            TransicaoDeCarga.Limpar();
+            bool anima;
+            int t0 = 1000000, dur = TransicaoDeCarga.DuracaoMs;
+            Igual(1f, TransicaoDeCarga.Valor("teste|X11", true, out anima, t0), "aparelho visto pela primeira vez no cabo ja entra cheio");
+            Verdade(!anima, "primeira vista nao anima");
+            TransicaoDeCarga.Informar("teste|X11", false, t0 + 10);
+            Igual(1f, TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10), "no instante em que sai do cabo ainda esta em 1");
+            Verdade(anima, "sair do cabo comeca uma transicao");
+            float noMeio = TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10 + dur / 2);
+            Verdade(noMeio > 0.4f && noMeio < 0.6f && anima, "no meio da transicao a carga esta no meio");
+            float atrasado = TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 10 + dur / 2);
+            Verdade(Math.Abs(atrasado - noMeio) < 0.001f, "quem desenha com leitura velha nao puxa o alvo de volta");
+            float perto = TransicaoDeCarga.Valor("teste|X11", false, out anima, t0 + 10 + dur / 10);
+            Verdade(perto > 0.95f, "a saida comeca devagar, sem tranco");
+            TransicaoDeCarga.Informar("teste|X11", true, t0 + 10 + dur / 2);
+            float virou = TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 10 + dur / 2);
+            Verdade(Math.Abs(virou - noMeio) < 0.001f && anima, "virar no meio do caminho parte de onde estava, sem salto");
+            Igual(1f, TransicaoDeCarga.Valor("teste|X11", true, out anima, t0 + 20 + dur * 2), "no fim chega exatamente ao alvo");
+            Verdade(!anima, "terminada a transicao o relogio pode parar");
+            Igual(0f, TransicaoDeCarga.Valor(null, false), "sem chave vale o estado de agora");
+            TransicaoDeCarga.Limpar();
+
+            Periferico x11 = Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 46, true);
+            Igual(PeripheralStrip.Verde.ToArgb(), PintorDoWidget.CorDoNivel(x11, 1f).ToArgb(), "carga 1 e o verde do cabo");
+            Igual(PeripheralStrip.CorFora(x11).ToArgb(), PintorDoWidget.CorDoNivel(x11, 0f).ToArgb(), "carga 0 e a cor do nivel");
+            Color metade = PeripheralStrip.Cor(x11, 0.5f);
+            Verdade(metade.ToArgb() != PeripheralStrip.Verde.ToArgb() && metade.ToArgb() != PeripheralStrip.CorFora(x11).ToArgb(),
+                    "no meio da transicao a cor fica entre as duas");
+
+            // notificacoes: nome do app no cabecalho e icone dele no corpo
+            Igual("Mhiagos Control", TaskbarIdentity.NomeVisivel, "notificacao mostra o nome do app, nao a AUMID");
+            Verdade(TaskbarIdentity.ChaveDoRegistro.EndsWith(@"AppUserModelId\" + TaskbarIdentity.AppId),
+                    "nome registrado na chave da propria AUMID");
+            Verdade(typeof(NotifyIcon).GetField("id", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) != null &&
+                    typeof(NotifyIcon).GetField("window", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) != null,
+                    "NotifyIcon do framework expoe janela e id para o aviso com icone do app");
+            Igual(TaskbarIdentity.AppId, MhiagosSetup.Setup.AppUserModelId, "atalho do instalador leva a mesma AUMID do app");
+            {
+                string pastaLnk = Path.Combine(Path.GetTempPath(), "mhiagos-atalho-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(pastaLnk);
+                try
+                {
+                    string lnk = Path.Combine(pastaLnk, "Mhiagos Control.lnk");
+                    string alvo = Path.Combine(Environment.SystemDirectory, "notepad.exe");
+                    MhiagosSetup.Setup.CriarAtalho(lnk, alvo, pastaLnk);
+                    Verdade(File.Exists(lnk), "instalador cria o atalho");
+                    Igual(TaskbarIdentity.AppId, MhiagosSetup.Setup.LerAppId(lnk), "atalho do Menu Iniciar sai carimbado com a AUMID do app");
+
+                    // Atualizacao: o exe muda de tamanho e o atalho e recriado no
+                    // mesmo lugar. O .lnk guarda o tamanho do alvo no cabecalho;
+                    // se ficar o da versao antiga, o Windows mostra o icone em branco.
+                    string exe = Path.Combine(pastaLnk, "app.exe");
+                    File.WriteAllBytes(exe, new byte[1000]);
+                    MhiagosSetup.Setup.CriarAtalho(lnk, exe, pastaLnk);
+                    File.WriteAllBytes(exe, new byte[5000]);
+                    MhiagosSetup.Setup.CriarAtalho(lnk, exe, pastaLnk);
+                    Igual(5000L, (long)BitConverter.ToUInt32(File.ReadAllBytes(lnk), 0x34),
+                        "atalho recriado na atualizacao descreve o exe novo, nao o antigo");
+                    Igual(TaskbarIdentity.AppId, MhiagosSetup.Setup.LerAppId(lnk), "atalho recriado continua com a AUMID");
+                }
+                finally { try { Directory.Delete(pastaLnk, true); } catch { } }
+            }
+            Verdade(Assets.AppIconBytes() != null && Assets.AppIconBytes().Length > 1000, "icone do app embutido para gravar o da notificacao");
+
+            // icone da aba Baterias, desenhado: contorno, polo e nivel
+            using (Bitmap ic = new Bitmap(24, 24, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(ic)) { g.Clear(Color.Transparent); Ui.IconeDeBateria(g, new RectangleF(2, 2, 20, 20), Color.White); }
+                Verdade(ic.GetPixel(12, 2).A == 0 && ic.GetPixel(12, 21).A == 0, "icone de bateria e deitado: sobra em cima e embaixo");
+                Verdade(ic.GetPixel(9, 12).A > 200, "icone de bateria tem o nivel preenchido");
+                Verdade(ic.GetPixel(21, 12).A > 100, "icone de bateria tem o polo a direita");
+                string pastaIc = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                if (!string.IsNullOrEmpty(pastaIc))
+                {
+                    Directory.CreateDirectory(pastaIc);
+                    using (Bitmap big = new Bitmap(ic, 96, 96)) big.Save(Path.Combine(pastaIc, "icone-baterias.png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+            }
+
+            ConfigDoWidget c = new ConfigDoWidget();
+            c.Ativo = true; c.X = -1500; c.Y = 40; c.Layout = LayoutDoWidget.Lista; c.Fosco = true;
+            c.Cor = CorDoVidro.Clara; c.NaFrente = true; c.Travado = true;
+            ConfigDoWidget volta = ConfigDoWidget.DeTexto(c.ParaTexto());
+            Igual(c.ParaTexto(), volta.ParaTexto(), "preferencias do widget fazem ida e volta");
+            Igual(-1500, volta.X, "posicao em monitor a esquerda (negativa) sobrevive");
+
+            ConfigDoWidget torto = ConfigDoWidget.DeTexto("ativo=1\nx=abc\ny=10\nlayout=hexagono\ncor=roxa\nlixo\n=1");
+            Verdade(torto.Ativo, "linha boa vale mesmo com vizinhas estragadas");
+            Verdade(!torto.TemPosicao, "meia posicao conta como nenhuma");
+            Igual(LayoutDoWidget.Aneis, torto.Layout, "formato desconhecido volta ao padrao");
+            Igual(CorDoVidro.Automatica, torto.Cor, "cor desconhecida volta ao padrao");
+
+            string antes = ConfigDoWidget.Caminho;
+            try
+            {
+                ConfigDoWidget.Caminho = Path.Combine(root, "widget.ini");
+                Verdade(c.Salvar(), "widget.ini grava");
+                c.X = 12;
+                Verdade(c.Salvar(), "widget.ini regrava por cima");
+                Igual(12, ConfigDoWidget.Carregar().X, "widget.ini carrega o que gravou");
+                Verdade(!File.Exists(ConfigDoWidget.Caminho + ".tmp"), "gravacao nao deixa temporario");
+            }
+            finally { ConfigDoWidget.Caminho = antes; }
+
+            Periferico[] todos = {
+                Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 72, false),
+                Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado),
+                Periferico.Sem("Bluetooth", TipoPeriferico.Outro, FontePeriferico.Bluetooth, EstadoPeriferico.NenhumConectado),
+                Periferico.Sem("Fone BT", TipoPeriferico.Outro, FontePeriferico.Bluetooth, EstadoPeriferico.SemLeitura),
+                Periferico.Lido("WH-1000XM4", TipoPeriferico.Outro, FontePeriferico.Bluetooth, 18, true) };
+            Periferico[] vis = PintorDoWidget.Visiveis(todos);
+            Igual(2, vis.Length, "ficam o fone e o Bluetooth com leitura: mouse desligado e Bluetooth sem leitura saem");
+            Igual("WH-1000XM4", vis[1].Nome, "o Bluetooth com leitura continua no widget");
+            Igual(0, PintorDoWidget.Visiveis(null).Length, "sem lista o widget fica vazio");
+
+            // nomes: o G325 e o X11 se reconhecem pelo desenho; Bluetooth tem simbolo generico
+            Verdade(!PintorDoWidget.MostraNome(todos[0]) && !PintorDoWidget.MostraNome(todos[1]), "G325 e X11 sem nome no widget");
+            Verdade(PintorDoWidget.MostraNome(todos[4]), "aparelho Bluetooth continua com o nome");
+            Verdade(!PintorDoWidget.ComNome(new Periferico[] { todos[0], todos[1] }), "so G325 e X11: widget sem linha de nome");
+            Verdade(PintorDoWidget.Medir(LayoutDoWidget.Aneis, 2, 1f, false).Height < PintorDoWidget.Medir(LayoutDoWidget.Aneis, 2, 1f, true).Height,
+                "aneis sem nome ficam mais baixos");
+
+            foreach (LayoutDoWidget layout in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
+            {
+                Size um = PintorDoWidget.Medir(layout, 1, 1f, false), tres = PintorDoWidget.Medir(layout, 3, 1f, false);
+                Verdade(tres.Width * tres.Height > um.Width * um.Height, layout + ": mais aparelhos, placa maior");
+                Size dobro = PintorDoWidget.Medir(layout, 3, 2f, false);
+                Verdade(Math.Abs(dobro.Width - 2 * tres.Width) <= 1, layout + ": escala de 200% dobra a largura");
+                RectangleF[] zonas = PintorDoWidget.Zonas(layout, 3, 1.5f, false);
+                Size caixa = PintorDoWidget.Medir(layout, 3, 1.5f, false);
+                for (int i = 0; i < zonas.Length; i++)
+                {
+                    Verdade(zonas[i].Left >= 0 && zonas[i].Top >= 0 && zonas[i].Right <= caixa.Width && zonas[i].Bottom <= caixa.Height,
+                        layout + ": aparelho " + i + " cabe na placa");
+                    if (i > 0) Verdade(!zonas[i].IntersectsWith(zonas[i - 1]), layout + ": aparelhos " + (i - 1) + " e " + i + " nao se sobrepoem");
+                }
+
+                foreach (bool escuro in new bool[] { true, false })
+                {
+                    PintorDoWidget.Quadro q = new PintorDoWidget.Quadro();
+                    q.Itens = vis;
+                    q.Notas = new string[] { "~25 h", T.PeripheralOff, T.PeripheralCharging };
+                    q.Layout = layout;
+                    q.Escuro = escuro;
+                    q.Escala = 1.5f;
+                    q.Fase = 0.5f;
+                    q.Carga = new float[] { 0f, 0f, 0.5f };   // o ultimo no meio da entrada no cabo
+                    Size t = PintorDoWidget.Medir(layout, vis.Length, q.Escala, PintorDoWidget.ComNome(vis));
+                    using (Bitmap bmp = new Bitmap(t.Width, t.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                    {
+                        using (Graphics g = Graphics.FromImage(bmp)) { g.Clear(Color.Transparent); PintorDoWidget.Pintar(g, t, q); }
+                        Igual(0, (int)bmp.GetPixel(0, 0).A, layout + (escuro ? " escuro" : " claro") + ": canto fora do vidro fica transparente");
+                        int meio = bmp.GetPixel(t.Width / 2, t.Height / 2).A;
+                        Verdade(meio > 0, layout + ": miolo desenhado");
+                        Verdade(bmp.GetPixel(t.Width / 2, 3).A > 0, layout + ": vidro chega na borda de cima");
+                        string pasta = Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR");
+                        if (!string.IsNullOrEmpty(pasta))
+                        {
+                            Directory.CreateDirectory(pasta);
+                            bmp.Save(Path.Combine(pasta, "widget-" + layout + (escuro ? "-escuro" : "-claro") + ".png"),
+                                     System.Drawing.Imaging.ImageFormat.Png);
+                        }
+                    }
+                }
+            }
+
+            Rectangle area = new Rectangle(0, 0, 1920, 1040);
+            Size tam = new Size(300, 130);
+            Igual(new Point(0, 0), WidgetDeBateria.Encaixar(new Point(9, 7), tam, area, 12), "perto do canto gruda nele");
+            Igual(new Point(1620, 910), WidgetDeBateria.Encaixar(new Point(1611, 903), tam, area, 12), "perto do canto oposto tambem");
+            Igual(new Point(500, 400), WidgetDeBateria.Encaixar(new Point(500, 400), tam, area, 12), "longe das bordas fica onde soltou");
+            Verdade(!WidgetDeBateria.Visivel(new Rectangle(-40000, -40000, 300, 130)), "posicao de um monitor que saiu nao conta como visivel");
+
+            // a janela de verdade, com o arquivo apontado para a pasta do teste
+            antes = ConfigDoWidget.Caminho;
+            string log = File.Exists(Log.Path) ? File.ReadAllText(Log.Path) : "";
+            try
+            {
+                ConfigDoWidget.Caminho = Path.Combine(root, "widget-janela.ini");
+                ConfigDoWidget cfg = new ConfigDoWidget();
+                using (WidgetDeBateria w = new WidgetDeBateria(cfg))
+                {
+                    w.Show();
+                    Application.DoEvents();
+                    Verdade(w.Visible, "widget abre");
+                    Verdade(w.Width > 0 && w.Height > 0, "widget tem tamanho depois do primeiro desenho");
+                    Verdade(WidgetDeBateria.Visivel(w.Bounds), "primeira abertura cai dentro da tela");
+                    w.Renderizar();
+                    w.Close();
+                }
+                string depois = File.Exists(Log.Path) ? File.ReadAllText(Log.Path) : "";
+                string novo = depois.Length >= log.Length ? depois.Substring(log.Length) : depois;
+                bool erro = false;
+                foreach (string linha in novo.Split('\n'))
+                    if (linha.IndexOf("widget", StringComparison.OrdinalIgnoreCase) >= 0 && linha.Contains(" :: ")) erro = true;
+                Verdade(!erro, "widget abre e desenha sem erro no log");
+            }
+            finally { ConfigDoWidget.Caminho = antes; }
         }
 
         private static void RegressionNavOrder(string root)
@@ -63,9 +292,9 @@ namespace MhiagosControl
             };
 
             Igual(string.Join(",", chaves), junta(SettingsForm.OrdemDaBarra(fabrica, "")), "sem ordem gravada vale a de fabrica");
-            string trocada = "sobre,visao,paineis,metricas,specs,perfis,config,baterias";
+            string trocada = "baterias,visao,paineis,metricas,specs,perfis,config,sobre";
             Igual(trocada, junta(SettingsForm.OrdemDaBarra(fabrica, trocada)), "ordem gravada e respeitada");
-            Igual(trocada, junta(SettingsForm.OrdemDaBarra(fabrica, "sobre,fantasma,visao,visao,paineis,metricas,specs,perfis,config,baterias")),
+            Igual(trocada, junta(SettingsForm.OrdemDaBarra(fabrica, "baterias,fantasma,visao,visao,paineis,metricas,specs,perfis,config,sobre")),
                 "chave desconhecida e repetida sao ignoradas");
             Igual("visao,paineis,metricas,specs,perfis,config,baterias,sobre",
                 junta(SettingsForm.OrdemDaBarra(fabrica, "visao,paineis,metricas,specs,perfis,config,sobre")),
@@ -90,19 +319,650 @@ namespace MhiagosControl
             // janela de verdade: a ordem gravada vale, o atalho da Visao geral acha
             // Baterias onde ela estiver, e reordenar grava sozinho
             Config config = AuditConfig(root, "nav-order");
-            config.NavOrder = "sobre,visao,paineis,metricas,specs,config";
+            config.NavOrder = trocada;
             config.Save();
             using (SettingsForm form = BugForm(config, new FreshData()))
             {
                 NavBar nav = (NavBar)Field(form, "_nav");
-                Igual("sobre", nav.Items[0].Key, "janela abre com a ordem gravada");
+                Igual("baterias", nav.Items[0].Key, "janela abre com a ordem gravada");
                 nav.SelectedIndex = 3;
-                InvokePrivate(form, "AbrirPaginaPelaChave", "sobre");
-                Igual("sobre", nav.Selected.Key, "clique no aparelho da Visao geral abre a pagina onde estiver");
+                InvokePrivate(form, "AbrirPaginaPelaChave", "baterias");
+                Igual("baterias", nav.Selected.Key, "clique no aparelho da Visao geral abre Baterias");
                 form.MostrarPagina("metricas");
                 Igual("metricas", nav.Selected.Key, "clique no widget leva a janela aberta para a pagina pedida");
                 form.MostrarPagina(null);
                 Igual("metricas", nav.Selected.Key, "abrir pela bandeja nao mexe na pagina aberta");
+                nav.MoverItem(0, 7);
+                Igual("baterias", Config.LoadFrom(config.SavePath, false).NavOrder.Split(',')[7],
+                    "reordenar grava a ordem nova na hora");
+
+                PeripheralStrip tira = (PeripheralStrip)Field(form, "_cardPerif");
+                MethodInfo vai = typeof(PeripheralStrip).GetMethod("VaiParaBaterias", BindingFlags.NonPublic | BindingFlags.Instance);
+                Verdade((bool)vai.Invoke(tira, new object[] {
+                    Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 70, false) }),
+                    "headset da Visao geral leva a Baterias");
+                Verdade((bool)vai.Invoke(tira, new object[] {
+                    Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado) }),
+                    "mouse desligado tambem leva a Baterias, onde esta o historico dele");
+                Verdade(!(bool)vai.Invoke(tira, new object[] {
+                    Periferico.Sem("Bluetooth", TipoPeriferico.Outro, FontePeriferico.Bluetooth, EstadoPeriferico.RadioDesligado) }),
+                    "campo Bluetooth vazio continua abrindo o painel do Windows");
+            }
+        }
+
+        private static void RegressionBatteryHistory()
+        {
+            Secao("bateria dos perifericos: historico de cargas e descargas");
+
+            string pasta = Path.Combine(Path.GetTempPath(), "mhiagos-bat-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(pasta);
+            HistoricoDeBateria.Caminho = Path.Combine(pasta, "baterias.dat");
+            HistoricoDeBateria.Zerar();
+            try
+            {
+                const string Nome = "MouseDeTeste";
+                string chave = FontePeriferico.AttackShark + "|" + Nome;
+                DateTime t = new DateTime(2026, 10, 1, 8, 0, 0);
+                Func<int, bool, Periferico[]> leitura = delegate(int pct, bool cabo)
+                {
+                    return new Periferico[] { Periferico.Lido(Nome, TipoPeriferico.Mouse, FontePeriferico.AttackShark, pct, cabo) };
+                };
+                // sem leitura viva: a analise sai so do historico
+                Func<AnaliseDeBateria> analise = delegate
+                {
+                    foreach (AnaliseDeBateria a in HistoricoDeBateria.Analisar(null))
+                        if (a.Chave == chave) return a;
+                    return null;
+                };
+
+                // 2 h de uso, de 90 a 70%, em passos de 10 s
+                for (int s = 0; s <= 7200; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(90 - 20 * s / 7200, false), t.AddSeconds(s));
+                AnaliseDeBateria r = analise();
+                Verdade(r.Atual != null && r.Atual.Parcial, "abrir no meio da descarga marca a medicao como parcial");
+                Igual(2.0, Math.Round(r.Atual.UsoSegundos / 3600.0, 2), "uso conta o tempo ligado");
+
+                // uma hora desligado nao e uso
+                t = t.AddSeconds(7200 + 3600);
+                HistoricoDeBateria.Registrar(leitura(70, false), t);
+                Igual(2.0, Math.Round(analise().Atual.UsoSegundos / 3600.0, 2), "lacuna de aparelho desligado nao conta como uso");
+
+                // carregador: 70 a 100% em 30 min
+                for (int s = 10; s <= 1800; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(70 + 30 * s / 1800, true), t.AddSeconds(s));
+                r = analise();
+                Verdade(r.Atual == null, "ir para o carregador encerra a descarga");
+                Igual(10.0, Math.Round(r.HorasPorCargaCheia.Value, 1), "20 pontos em 2 h dao 10 h por carga cheia");
+                Igual(1, r.DescargasMedidas, "uma descarga medida");
+
+                t = t.AddSeconds(1810);
+                HistoricoDeBateria.Registrar(leitura(100, false), t);
+                r = analise();
+                Igual(100, r.UltimaCarga.PctFim, "ultima carga registra ate onde foi");
+                Igual(70, r.UltimaCarga.PctInicio, "e de onde partiu");
+                Igual(30.0, Math.Round((r.UltimaCarga.Fim - r.UltimaCarga.Inicio).TotalMinutes), "e quanto levou");
+                Verdade(r.Atual != null && !r.Atual.Parcial, "descarga que comeca no fim de uma carga nao e parcial");
+
+                // fora do cabo a leitura assenta (100 cai a 95 sozinha) e so depois gasta
+                for (int s = 10; s <= 600; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(95, false), t.AddSeconds(s));
+                Igual(95, analise().Atual.PctInicio, "queda logo depois do cabo nao conta como gasto");
+
+                // 1 h de uso, 95 a 75%: a media passa a incluir a descarga em andamento
+                t = t.AddSeconds(600);
+                for (int s = 10; s <= 3600; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(95 - 20 * s / 3600, false), t.AddSeconds(s));
+                r = analise();
+                // faixas: 71-80% gastou 15 pontos em 4500 s, 81-90% 20 em 5400 s,
+                // 91-100% 5 em 900 s; as demais ficam na media (270 s/ponto),
+                // e cada faixa e puxada para a media com peso de 5 pontos
+                Igual(7.3, Math.Round(r.HorasPorCargaCheia.Value, 1), "duracao soma o ritmo de cada faixa");
+                Verdade(r.HorasPorPontoNaFaixa[9].Value < r.HorasPorPontoNaFaixa[7].Value,
+                    "faixa que gastou mais depressa fica com ritmo mais curto");
+                Verdade(!r.HorasPorPontoNaFaixa[3].HasValue, "faixa sem gasto medido fica sem ritmo proprio");
+                Igual(3.17, Math.Round(r.UsoTotalHoras, 2), "uso total soma todas as descargas, assentamento incluido");
+                Verdade(!r.HorasRestantes.HasValue, "sem leitura viva nao ha previsao de restante");
+                AnaliseDeBateria viva = null;
+                foreach (AnaliseDeBateria a in HistoricoDeBateria.Analisar(leitura(75, false)))
+                    if (a.Chave == chave) viva = a;
+                Igual(5.6, Math.Round(viva.HorasRestantes.Value, 1), "restante soma as faixas abaixo da carga atual");
+                Igual(viva.HorasRestantes, HistoricoDeBateria.Restante(leitura(75, false)[0]),
+                    "a Visao geral usa a mesma previsao da pagina Baterias");
+
+                // um degrau de volta (como o G325 faz em repouso) nao e carga
+                t = t.AddSeconds(3610);
+                HistoricoDeBateria.Registrar(leitura(84, false), t);
+                Verdade(analise().UltimaCarga != null && !analise().UltimaCarga.Deduzida, "subida pequena nao vira carga");
+
+                // subir muito sem aviso de carga conta como carga feita fora da vista
+                t = t.AddSeconds(10);
+                HistoricoDeBateria.Registrar(leitura(97, false), t);
+                r = analise();
+                Verdade(r.UltimaCarga.Deduzida, "subida sem aviso vira carga deduzida");
+                Igual(2, r.DescargasMedidas, "e fecha a descarga anterior");
+
+                // gravar e reler preserva o essencial
+                HistoricoDeBateria.Salvar();
+                HistoricoDeBateria.Recarregar();
+                AnaliseDeBateria lida = analise();
+                Verdade(lida != null, "historico sobrevive a gravacao");
+                Igual(Math.Round(r.HorasPorCargaCheia.Value, 2), Math.Round(lida.HorasPorCargaCheia.Value, 2), "media igual depois de reler");
+                Igual(r.UltimaCarga.Fim, lida.UltimaCarga.Fim, "ultima carga igual depois de reler");
+                Igual(r.Amostras.Length, lida.Amostras.Length, "amostras iguais depois de reler");
+
+                Igual("45 min", HistoricoDeBateria.Duracao(0.75), "duracao curta em minutos");
+                Igual("12 h 30 min", HistoricoDeBateria.Duracao(12.5), "duracao em horas e minutos");
+                Igual("3 d 4 h", HistoricoDeBateria.Duracao(76), "duracao longa em dias");
+
+                // a carga de 70 a 100% levou 60 s por ponto: de 50 faltam 50 pontos
+                Igual(0.83, Math.Round(HistoricoDeBateria.AteEncher(leitura(50, true)[0]).Value, 2),
+                    "cheio em sai do ritmo de carga registrado");
+                Igual(0.0, HistoricoDeBateria.AteEncher(leitura(100, true)[0]).Value, "em 100% no cabo ja esta cheio");
+                Verdade(!HistoricoDeBateria.AteEncher(leitura(50, false)[0]).HasValue, "fora do cabo nao ha cheio em");
+
+                // saude: o mes de outubro mediu 40 pontos em 3 h de uso
+                Igual(1, lida.SaudePorMes.Count, "um mes com dado bastante");
+                Igual(7.5, Math.Round(lida.SaudePorMes[0].Value, 1), "horas por carga cheia do mes");
+
+                // bateria como sensor: o aparelho conhecido entra na lista mesmo desligado
+                SensorEntry sensor = null;
+                foreach (SensorEntry e in new BateriaSensorSource().Read(null))
+                    if (e.Id == "bat:attackshark:" + Nome) sensor = e;
+                Verdade(sensor != null, "aparelho do historico vira sensor");
+                Igual("%", sensor.EffectiveUnit, "sensor de bateria em porcentagem");
+                Igual(Sensors.CategoriaPerifericos, sensor.Category, "na categoria Perifericos");
+                float? atencao, perigo;
+                MetricPicker.Faixas("%", sensor.Id, out atencao, out perigo);
+                Verdade(!atencao.HasValue && !perigo.HasValue, "bateria cheia nao pinta o grafico de vermelho");
+                Igual("41 h", HistoricoDeBateria.DuracaoAproximada(40.69), "previsao longa arredonda na hora");
+                Igual("2 h 20 min", HistoricoDeBateria.DuracaoAproximada(2.37), "previsao curta arredonda de 10 em 10 min");
+                Igual("20 min", HistoricoDeBateria.DuracaoAproximada(0.31), "previsao de minutos arredonda de 5 em 5");
+            }
+            finally
+            {
+                HistoricoDeBateria.Caminho = null;
+                // Rele o arquivo de verdade em vez de zerar: com o historico vazio
+                // e marcado como lido, o proximo Registrar dos testes da bandeja
+                // gravaria por cima do baterias.dat de quem roda a suite.
+                HistoricoDeBateria.Recarregar();
+                try { Directory.Delete(pasta, true); } catch { }
+            }
+        }
+
+        private static void RegressionLeitoresReconhecemRapido()
+        {
+            Secao("perifericos: reconhecer o aparelho ligado de volta sem esperar 30 s");
+            List<LeitorGHub.Aparelho> todosAtivos = new List<LeitorGHub.Aparelho> {
+                new LeitorGHub.Aparelho { Id = "dev1", Tipo = TipoPeriferico.Headset, Ativo = true } };
+            Verdade(!LeitorGHub.PrecisaListar(3, todosAtivos), "tudo ativo: a lista segue a cada 15 ciclos");
+            Verdade(LeitorGHub.PrecisaListar(15, todosAtivos), "e no ciclo 15 ela vem");
+            List<LeitorGHub.Aparelho> umInativo = new List<LeitorGHub.Aparelho> {
+                new LeitorGHub.Aparelho { Id = "dev1", Tipo = TipoPeriferico.Headset, Ativo = false } };
+            Verdade(LeitorGHub.PrecisaListar(3, umInativo), "headset desligado: a lista vem a cada ciclo");
+            List<LeitorGHub.Aparelho> irrelevante = new List<LeitorGHub.Aparelho> {
+                new LeitorGHub.Aparelho { Id = "dev2", Tipo = TipoPeriferico.Outro, Ativo = false } };
+            Verdade(!LeitorGHub.PrecisaListar(3, irrelevante), "aparelho sem bateria desligado nao acelera a lista");
+        }
+
+        private static void RegressionBatteryCoarseSteps()
+        {
+            Secao("bateria: leitura em degraus de 10% (G325), degrau em curso e lacunas");
+
+            string pasta = Path.Combine(Path.GetTempPath(), "mhiagos-bat-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(pasta);
+            HistoricoDeBateria.Caminho = Path.Combine(pasta, "baterias.dat");
+            HistoricoDeBateria.Zerar();
+            try
+            {
+                const string Nome = "HeadsetDeTeste";
+                DateTime t0 = new DateTime(2026, 10, 2, 8, 0, 0);
+                Func<int, bool, Periferico[]> leitura = delegate(int pct, bool cabo)
+                {
+                    return new Periferico[] { Periferico.Lido(Nome, TipoPeriferico.Headset, FontePeriferico.GHub, pct, cabo) };
+                };
+                Func<AnaliseDeBateria> analise = delegate
+                {
+                    foreach (AnaliseDeBateria a in HistoricoDeBateria.Analisar(null))
+                        if (a.Nome == Nome) return a;
+                    return null;
+                };
+
+                // tira do cabo cheio, a leitura assenta de 100 para 90 e depois
+                // cada degrau de 10% dura 2 h: o primeiro (sem inicio conhecido)
+                // nao conta, os outros quatro dao 720 s por ponto
+                HistoricoDeBateria.Registrar(leitura(100, true), t0);
+                int s = 10;
+                int[] quedas = { 300, 7500, 14700, 21900, 29100, 36300 };
+                int[] niveis = { 90, 80, 70, 60, 50, 40 };
+                for (; s <= 36300 + 3600; s += 10)
+                {
+                    int pct = 100;
+                    for (int i = 0; i < quedas.Length; i++) if (s >= quedas[i]) pct = niveis[i];
+                    HistoricoDeBateria.Registrar(leitura(pct, false), t0.AddSeconds(s));
+                }
+                AnaliseDeBateria r = analise();
+                Igual(20.0, Math.Round(r.HorasPorCargaCheia.Value, 1), "so degraus completos: 720 s por ponto, 20 h por carga cheia");
+                Igual(0.4, Math.Round(r.CiclosEquivalentes, 2), "quatro degraus de 10 pontos sao 0,4 ciclo");
+                Verdade(!r.HorasPorPontoNaFaixa[8].HasValue && !r.HorasPorPontoNaFaixa[9].HasValue, "o degrau sem inicio conhecido (apos a assentada) nao entra");
+
+                // 1 h dos 2 h do degrau de 40% ja passou: faltam 1 h + 3 degraus de 2 h
+                Igual(7.0, Math.Round(HistoricoDeBateria.Restante(leitura(40, false)[0]).Value, 2),
+                    "restante desconta o tempo ja gasto no degrau atual");
+
+                // passou do tempo usual do degrau: ainda sobra um quarto dele
+                for (; s <= 36300 + 10800; s += 10)
+                    HistoricoDeBateria.Registrar(leitura(40, false), t0.AddSeconds(s));
+                Igual(6.5, Math.Round(HistoricoDeBateria.Restante(leitura(40, false)[0]).Value, 2),
+                    "degrau alem do usual nao zera o restante");
+
+                // o aparelho some por 1 h no meio do degrau: a queda seguinte nao tem duracao confiavel
+                s += 3600;
+                HistoricoDeBateria.Registrar(leitura(30, false), t0.AddSeconds(s));
+                for (int k = 0; k < 720; k++) { s += 10; HistoricoDeBateria.Registrar(leitura(30, false), t0.AddSeconds(s)); }
+                for (int k = 0; k < 720; k++) { s += 10; HistoricoDeBateria.Registrar(leitura(20, false), t0.AddSeconds(s)); }
+                for (int k = 0; k < 720; k++) { s += 10; HistoricoDeBateria.Registrar(leitura(10, false), t0.AddSeconds(s)); }
+                r = analise();
+                Verdade(!r.HorasPorPontoNaFaixa[3].HasValue, "degrau que atravessou uma lacuna nao entra");
+                Verdade(!r.HorasPorPontoNaFaixa[2].HasValue, "nem o que comecou na lacuna");
+                Verdade(r.HorasPorPontoNaFaixa[1].HasValue, "o seguinte, medido de ponta a ponta, entra");
+
+                // gravar e reler preserva as fracoes do esquecimento
+                HistoricoDeBateria.Salvar();
+                HistoricoDeBateria.Recarregar();
+                AnaliseDeBateria lida = analise();
+                Igual(Math.Round(r.HorasPorCargaCheia.Value, 2), Math.Round(lida.HorasPorCargaCheia.Value, 2), "ritmo igual depois de reler");
+                Igual(r.CiclosEquivalentes, lida.CiclosEquivalentes, "ciclos iguais depois de reler");
+            }
+            finally
+            {
+                HistoricoDeBateria.Caminho = null;
+                HistoricoDeBateria.Recarregar();
+                try { Directory.Delete(pasta, true); } catch { }
+            }
+        }
+
+        private static void RegressionPeripheralBattery()
+        {
+            Secao("bateria dos perifericos: dica da bandeja e avisos");
+
+            string dica = TrayContext.ComBateria("Mhiagos Control  63C / 42%", "G325 70%  X11 90%");
+            Igual("Mhiagos Control  63C / 42%\nG325 70%  X11 90%", dica, "bateria vira a segunda linha da dica");
+            Igual("abc", TrayContext.ComBateria("abc", null), "sem perifericos a dica nao muda");
+            string longa = TrayContext.ComBateria(new string('x', 80), "G325 70%  X11 90%");
+            Verdade(longa.Length <= 63, "dica nunca passa do limite do NotifyIcon");
+            Verdade(longa.EndsWith("\nG325 70%  X11 90%"), "quem encolhe e a primeira linha, nao a bateria");
+
+            AvisosDeBateria avisos = new AvisosDeBateria();
+            Func<int, bool, int> passo = delegate(int pct, bool carregando)
+            {
+                List<KeyValuePair<Periferico, int>> r = avisos.Verificar(new Periferico[] {
+                    Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, pct, carregando) });
+                return r.Count == 0 ? 0 : r[0].Value;
+            };
+            Igual(0, passo(50, false), "carga alta nao avisa");
+            Igual(30, passo(30, false), "30% avisa");
+            Igual(0, passo(29, false), "aviso de 30% sai uma vez so");
+            Igual(0, passo(31, false), "oscilar perto do limiar nao repete o aviso");
+            Igual(10, passo(10, false), "10% avisa de novo");
+            Igual(0, passo(8, false), "aviso de 10% sai uma vez so");
+            Igual(0, passo(9, true), "no carregador nao avisa");
+            Igual(30, passo(12, false), "tirar do carregador ainda abaixo de 30 avisa de novo");
+            Igual(10, passo(10, false), "depois do carregador, 10% volta a avisar");
+            Igual(0, avisos.Verificar(new Periferico[] {
+                Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado) }).Count,
+                "aparelho desligado nao avisa");
+
+            AvisosDeBateria inicio = new AvisosDeBateria();
+            List<KeyValuePair<Periferico, int>> ja = inicio.Verificar(new Periferico[] {
+                Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 7, false) });
+            Igual(1, ja.Count, "abrir o app ja abaixo de 10% gera um aviso so");
+            Igual(10, ja[0].Value, "e e o aviso critico");
+
+            // carga completa: uma vez por passagem pelo cabo
+            AvisosDeBateria cheio = new AvisosDeBateria();
+            Func<int, bool, int> cabo = delegate(int pct, bool carregando)
+            {
+                return cheio.VerificarCargaCompleta(new Periferico[] {
+                    Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, pct, carregando) }).Count;
+            };
+            Igual(0, cabo(90, true), "no cabo antes de 100% nao avisa");
+            Igual(1, cabo(100, true), "chegar a 100% no cabo avisa");
+            Igual(0, cabo(100, true), "continuar em 100% nao repete");
+            Igual(0, cabo(99, false), "tirar do cabo nao avisa");
+            Igual(1, cabo(100, true), "nova passagem pelo cabo avisa de novo");
+
+            // aviso por tempo: 2 h ou menos, uma vez, rearmando acima de 3 h
+            AvisosDeBateria tempo = new AvisosDeBateria();
+            double? previsto = null;
+            Func<double?, bool, int> horas = delegate(double? h, bool carregando)
+            {
+                previsto = h;
+                return tempo.VerificarTempo(new Periferico[] {
+                    Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 40, carregando) },
+                    delegate(Periferico p) { return previsto; }).Count;
+            };
+            Igual(0, horas(null, false), "sem previsao nao avisa");
+            Igual(0, horas(5, false), "longe do fim nao avisa");
+            Igual(1, horas(1.9, false), "2 h ou menos avisa");
+            Igual(0, horas(1.5, false), "aviso por tempo sai uma vez so");
+            Igual(0, horas(2.5, false), "oscilar perto do limite nao rearma");
+            Igual(0, horas(1.8, false), "e nao repete");
+            Igual(0, horas(3.5, false), "previsao acima de 3 h rearma");
+            Igual(1, horas(1.8, false), "e o aviso volta");
+            Igual(0, horas(1.0, true), "no cabo nao avisa");
+
+            // pilhinha no icone: alguem fora do cabo com 30% ou menos
+            Verdade(!TrayContext.AlgumBaixo(new Periferico[] {
+                Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 31, false) }), "31% nao marca o icone");
+            Verdade(TrayContext.AlgumBaixo(new Periferico[] {
+                Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 70, false),
+                Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 30, false) }), "30% em qualquer aparelho marca");
+            Verdade(!TrayContext.AlgumBaixo(new Periferico[] {
+                Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 12, true) }), "baixo mas no cabo nao marca");
+            Verdade(!TrayContext.AlgumBaixo(new Periferico[] {
+                Periferico.Sem("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, EstadoPeriferico.Desligado) }), "desligado nao marca");
+        }
+
+        private static void RegressionPeripheralIcons()
+        {
+            Secao("icones dos perifericos: G325, PRO X e X11 decalcados de foto");
+
+            Image[] icones = { Assets.Headset, Assets.Mouse, Assets.Bluetooth };
+            string[] nomes = { "G325", "X11", "Bluetooth" };
+            for (int i = 0; i < icones.Length; i++)
+            {
+                Bitmap b = icones[i] as Bitmap;
+                Verdade(b != null && b.Width == 256 && b.Height == 256, nomes[i] + ": icone embutido em 256 px");
+                if (b == null) continue;
+                Verdade(b.GetPixel(0, 0).A == 0 && b.GetPixel(255, 255).A == 0, nomes[i] + ": fundo transparente");
+            }
+
+            // o G325 tem uma mola verde-agua de cada lado, entre a tiara e a concha
+            Bitmap fone = Assets.Headset as Bitmap;
+            if (fone != null)
+            {
+                int esq = 0, dir = 0;
+                for (int y = 96; y < 160; y++)
+                    for (int x = 0; x < 256; x++)
+                    {
+                        Color c = fone.GetPixel(x, y);
+                        if (c.A > 200 && c.G > 150 && c.R < 100 && c.B > 130) { if (x < 128) esq++; else dir++; }
+                    }
+                Verdade(esq > 20 && dir > 20, "G325: mola verde-agua dos dois lados");
+            }
+
+            // o X11 e branco, mesmo que a foto de referencia fosse de um preto
+            Bitmap mouse = Assets.Mouse as Bitmap;
+            if (mouse != null)
+            {
+                Color c = mouse.GetPixel(128, 170);
+                Verdade(c.A == 255 && c.R > 230 && c.G > 230 && c.B > 230, "X11: corpo branco");
+            }
+
+            // o PRO X Wireless e grafite, como o aparelho, com o vao entre tiara e conchas aberto
+            Bitmap prox = Assets.HeadsetProX as Bitmap;
+            Verdade(prox != null && prox.Width == 256 && prox.Height == 256, "PRO X: icone embutido em 256 px");
+            if (prox != null)
+            {
+                Verdade(prox.GetPixel(0, 0).A == 0 && prox.GetPixel(255, 255).A == 0, "PRO X: fundo transparente");
+                Color c = prox.GetPixel(176, 150);
+                Verdade(c.A == 255 && c.R < 80 && c.G < 80 && c.B < 80, "PRO X: almofada escura");
+                Verdade(prox.GetPixel(128, 128).A == 0, "PRO X: vao aberto entre as conchas");
+            }
+
+            // o G HUB lista os dois headsets com o mesmo tipo; o nome separa os icones
+            Periferico g325 = Periferico.Lido("G325", TipoPeriferico.Headset, FontePeriferico.GHub, 70, false);
+            Periferico proX = Periferico.Lido("PRO X Wireless", TipoPeriferico.Headset, FontePeriferico.GHub, 80, false);
+            Periferico proXLongo = Periferico.Lido("PRO X Wireless Gaming Headset", TipoPeriferico.Headset, FontePeriferico.GHub, 80, false);
+            Periferico mouseProX = Periferico.Lido("PRO X SUPERLIGHT", TipoPeriferico.Mouse, FontePeriferico.GHub, 80, false);
+            Verdade(PeripheralStrip.Imagem(g325) == Assets.Headset, "G325 conectado: icone do G325");
+            Verdade(PeripheralStrip.Imagem(proX) == Assets.HeadsetProX, "PRO X Wireless conectado: icone do PRO X");
+            Verdade(PeripheralStrip.Imagem(proXLongo) == Assets.HeadsetProX, "PRO X com nome longo: icone do PRO X");
+            Verdade(PeripheralStrip.Imagem(mouseProX) == Assets.Mouse, "mouse PRO X nao vira headset");
+            Verdade(Perifericos.NomeCompleto("PRO X Wireless", FontePeriferico.GHub) == "Logitech PRO X Wireless", "PRO X: nome completo na aba Baterias");
+            Verdade(Perifericos.NomeCompleto("G325", FontePeriferico.GHub) == "Logitech G325 Lightspeed", "G325: nome completo segue igual");
+        }
+
+        private static void RegressionVideoMemory()
+        {
+            Secao("bugs: memoria de video da Radeon vem do Direct3D");
+
+            const string Placa = "GPU [#0]: AMD Radeon RX 580: Sapphire RX 580 Pulse";
+            const string Outra = "GPU [#1]: AMD Radeon RX 6600";
+            List<SensorEntry> lista = new List<SensorEntry>();
+            SensorEntry driver = Memoria(Placa, "GPU Memory Usage", 86354f, "MB");
+            SensorEntry d3d = Memoria(Placa, "GPU D3D Memory Dedicated", 1885f, "MB");
+            SensorEntry outraPlaca = Memoria(Outra, "GPU Memory Usage", 50000f, "MB");
+            lista.Add(driver); lista.Add(d3d); lista.Add(outraPlaca);
+            foreach (SensorEntry e in lista) Sensors.ToGigabytes(e);
+
+            Sensors.CorrigirMemoriaDeVideo(lista);
+            Verdade(Math.Abs(driver.Value.Value - 1885f / 1024f) < 0.001f,
+                    "GPU Memory Usage do driver passa a mostrar o D3D dedicado");
+            Igual("GB", driver.Unit, "unidade preservada");
+            Igual("hw:" + Placa + "|8|GPU Memory Usage", driver.Id, "ID salvo nos perfis nao muda");
+            Verdade(Math.Abs(outraPlaca.Value.Value - 50000f / 1024f) < 0.001f,
+                    "placa sem D3D dedicado nao recebe valor de outra placa");
+
+            SensorEntry nvidia = Memoria(Placa, "GPU Memory Usage", 37f, "%");
+            nvidia.Type = SensorType.Load;
+            List<SensorEntry> porcentagem = new List<SensorEntry>();
+            porcentagem.Add(nvidia); porcentagem.Add(Memoria(Placa, "GPU D3D Memory Dedicated", 2.5f, "GB"));
+            Sensors.CorrigirMemoriaDeVideo(porcentagem);
+            Igual(37f, nvidia.Value.Value, "uso em porcentagem nao e tocado");
+
+            List<SensorEntry> semantica = new List<SensorEntry>();
+            SensorEntry usage = Memoria(Placa, "GPU Memory Usage", 84f, "GB");
+            usage.Id = "usage"; usage.Category = "GPU";
+            SensorEntry dedicada = Memoria(Placa, "GPU D3D Memory Dedicated", 1.8f, "GB");
+            dedicada.Id = "d3d"; dedicada.Category = "GPU";
+            semantica.Add(usage); semantica.Add(dedicada);
+            Igual("d3d", SensorSemantics.ResolveId(semantica, "semantic:vram-used"),
+                  "recuperacao da memoria de video prefere o D3D dedicado");
+        }
+
+        private static void RegressionReviewFixes()
+        {
+            Secao("bugs: revisao de outubro (config, metricas, autostart, winget)");
+
+            string caixa = Path.Combine(Path.GetTempPath(), "MhiagosControlTeste" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(caixa);
+            try
+            {
+                string ini = Path.Combine(caixa, "config.ini");
+                File.WriteAllText(ini, "[general]\r\nactive=Meu\r\n" +
+                    "metric=hw:CPU [#0]: AMD Ryzen 5 5600X: Enhanced|1|CPU (Tctl/Tdie)\r\n" +
+                    "metric=2|rtss:fps\r\n\r\n[profile]\r\nname=Meu\r\npanel1=a\r\npanel2=b\r\n");
+                Config lida = Config.LoadFrom(ini, false);
+                Igual("hw:CPU [#0]: AMD Ryzen 5 5600X: Enhanced|1|CPU (Tctl/Tdie)", lida.MetricIds[0],
+                      "metrica antiga do HWiNFO sem tamanho preserva o ID inteiro");
+                Igual(0, lida.MetricSizes[0], "metrica antiga recebe tamanho pequeno");
+                Igual("rtss:fps", lida.MetricIds[1], "prefixo numerico continua sendo tamanho");
+                Igual(2, lida.MetricSizes[1], "tamanho lido do prefixo");
+
+                // Arquivo travado: o .bak entra e o original nao e sobrescrito por um padrao.
+                File.Copy(ini, ini + ".bak", true);
+                using (new FileStream(ini, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    Config travada = Config.LoadFrom(ini, false);
+                    Igual("Meu", travada.Active.Name, "arquivo travado le a copia .bak");
+                }
+                File.Delete(ini + ".bak");
+                string original = File.ReadAllText(ini);
+                Config semCopia;
+                using (new FileStream(ini, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    semCopia = Config.LoadFrom(ini, false);
+                Verdade(!semCopia.Save(), "sem copia, a sessao nao grava por cima do arquivo real");
+                Igual(original, File.ReadAllText(ini), "config real permanece intacto");
+
+                Verdade(!Autostart.PastaProtegida(caixa), "pasta temporaria do usuario nao serve para autostart elevado");
+                Verdade(!Autostart.PastaProtegida(Path.Combine(caixa, "inexistente")), "pasta inexistente e recusada");
+            }
+            finally { try { Directory.Delete(caixa, true); } catch { } }
+
+            string programas = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            Verdade(Autostart.PastaProtegida(Path.Combine(windows, "System32")) || !Directory.Exists(programas),
+                    "pasta do sistema conta como protegida");
+
+            string winget = Rtss.Winget();
+            Verdade(winget == null || winget.EndsWith(@"\Microsoft\WindowsApps\winget.exe", StringComparison.OrdinalIgnoreCase),
+                    "winget so vem do atalho do App Installer, nunca do PATH");
+        }
+
+        private static SensorEntry Memoria(string placa, string nome, float valor, string unidade)
+        {
+            SensorEntry e = new SensorEntry();
+            e.Hardware = placa; e.Name = nome; e.Label = nome; e.Category = "GPU";
+            e.Type = SensorType.Data; e.Value = valor; e.Unit = unidade;
+            e.Id = "hw:" + placa + "|8|" + nome; e.Source = "HWiNFO";
+            return e;
+        }
+
+        private static void RegressionFileProtection(string root)
+        {
+            Secao("bugs: exportacao protegida e limites de temporizadores");
+            Config config = AuditConfig(root, "protected-export");
+            string original = File.ReadAllText(config.SavePath), error;
+            string alias = Path.Combine(Path.GetDirectoryName(config.SavePath), ".", Path.GetFileName(config.SavePath));
+            Verdade(!Config.ExportProfile(config.Active, alias, config.SavePath, out error), "recusa caminho equivalente ao config ativo");
+            Igual(T.ExportOwnConfig, error, "erro especifico da protecao");
+            string defaultPath = (string)typeof(Config).GetProperty("FilePath", AuditFlags).GetValue(null, null);
+            Verdade(!Config.ExportProfile(config.Active, defaultPath, out error), "API padrao protege config real sem abri-lo");
+            Igual(original, File.ReadAllText(config.SavePath), "config ativo permanece intacto");
+            string export = Path.Combine(root, "single-profile.ini");
+            Verdade(Config.ExportProfile(config.Profiles[0], export, config.SavePath, out error), "exportacao normal funciona");
+            string previous = File.ReadAllText(export);
+            using (FileStream held = File.Open(export, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                Verdade(!Config.ExportProfile(config.Profiles[1], export, config.SavePath, out error), "falha ao substituir arquivo bloqueado");
+                Igual(previous, File.ReadAllText(export), "falha preserva exportacao anterior");
+            }
+            Verdade(Config.ExportProfile(config.Profiles[1], export, config.SavePath, out error), "nova tentativa substitui exportacao");
+            Igual("B", Config.ImportProfile(export, out error).Name, "perfil exportado pode ser importado");
+            foreach (int idle in new int[] { 0, 1, 999 })
+            foreach (int rotation in new int[] { 0, 2, 999 })
+            {
+                config.IdleBlankMinutes = idle; config.RotateSeconds = rotation;
+                Config parsed = Config.FromText(config.ToText());
+                Igual(idle, parsed.IdleBlankMinutes, "inatividade valida preservada");
+                Igual(rotation, parsed.RotateSeconds, "rodizio valido preservado");
+            }
+            foreach (int[] invalid in new int[][] { new int[] { -1, 20 }, new int[] { 1000, 20 },
+                new int[] { 40000, 20 }, new int[] { 0, 1 }, new int[] { 0, -1 }, new int[] { 0, 3000000 } })
+            {
+                config.IdleBlankMinutes = invalid[0]; config.RotateSeconds = invalid[1];
+                bool refused = false;
+                try { Config.FromText(config.ToText()); } catch (FormatException) { refused = true; }
+                Verdade(refused, "restauracao recusa intervalo fora da faixa");
+                // Checksum correto nao torna os intervalos semanticamente validos.
+                byte[] bytes = Encoding.UTF8.GetBytes(config.ToText());
+                string hash;
+                using (SHA256 sha = SHA256.Create()) hash = Convert.ToBase64String(sha.ComputeHash(bytes));
+                string backup = Path.Combine(root, "invalid-timing.mhiagos-backup");
+                File.WriteAllText(backup, "MHIAGOS-CONFIG-BACKUP/1\n" + hash + "\n" + Convert.ToBase64String(bytes));
+                refused = false;
+                try { ConfigurationBackup.Read(backup); } catch (FormatException) { refused = true; }
+                Verdade(refused, "backup integro mas invalido e recusado");
+                Verdade(!config.Save(out error), "gravacao recusa estado invalido");
+            }
+            config.IdleBlankMinutes = 40000; config.RotateSeconds = 3000000;
+            foreach (string invalidText in new string[] { "2147483648", "abc", "1.5" })
+            {
+                bool refused = false;
+                try { Config.FromText("[general]\nactive=A\nidleblank=" + invalidText + "\n[profile]\nname=A\n"); }
+                catch (FormatException) { refused = true; }
+                Verdade(refused, "backup nao transforma inteiro invalido em desligado");
+            }
+            string legacy = Path.Combine(root, "legacy-timing.ini");
+            File.WriteAllText(legacy, config.ToText()); string legacyText = File.ReadAllText(legacy);
+            Config normalized = Config.LoadFrom(legacy, false);
+            Igual(999, normalized.IdleBlankMinutes, "config antigo limitado a faixa da interface");
+            Igual(999, normalized.RotateSeconds, "rodizio antigo limitado a faixa da interface");
+            Igual(legacyText, File.ReadAllText(legacy), "leitura nao reescreve config antigo");
+            Igual(59940000, ConfigTiming.IdleMilliseconds(int.MaxValue), "conversao de minutos nao transborda");
+            Igual(999000, ConfigTiming.RotationMilliseconds(int.MaxValue), "conversao de segundos nao transborda");
+            SettingsSession session = new SettingsSession(AuditConfig(root, "invalid-restore"));
+            string before = session.SavedConfiguration.ToText(), safety;
+            Verdade(!session.TryRestore(config, out safety, out error), "restauracao direta tambem rejeita candidato invalido");
+            Igual(before, session.SavedConfiguration.ToText(), "restauracao recusada preserva estado salvo");
+            Igual(before, session.Draft.ToText(), "restauracao recusada preserva rascunho");
+        }
+
+        private static void RegressionMouseButtons()
+        {
+            Secao("bugs: comandos somente com botao esquerdo");
+            using (MetricCard card = new MetricCard())
+            {
+                card.Size = new Size(240, 160); int commands = 0;
+                card.Remover += delegate { commands++; }; card.MoverDireita += delegate { commands++; };
+                card.MoverEsquerda += delegate { commands++; }; card.TrocarTamanho += delegate { commands++; };
+                using (Bitmap image = new Bitmap(240, 160)) card.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size));
+                foreach (string name in new string[] { "_bRem", "_bEsq", "_bDir", "_bTam" })
+                {
+                    Rectangle hit = (Rectangle)Field(card, name);
+                    foreach (MouseButtons button in new MouseButtons[] { MouseButtons.Right, MouseButtons.Middle })
+                        InvokePrivate(card, "OnMouseDown", new MouseEventArgs(button, 1, hit.X + 4, hit.Y + 4, 0));
+                }
+                Igual(0, commands, "direito e central nao removem, movem ou redimensionam");
+                Rectangle remove = (Rectangle)Field(card, "_bRem");
+                InvokePrivate(card, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, remove.X + 4, remove.Y + 4, 0));
+                Igual(1, commands, "esquerdo continua acionando comando");
+            }
+            using (GameBindingList games = new GameBindingList())
+            {
+                games.Size = new Size(500, 100); int removed = 0;
+                games.SetItems(new GameBindingView[] { new GameBindingView { Key = "fake.exe", Name = "Fake", Profile = "A" } });
+                games.RemoveRequested += delegate { removed++; };
+                foreach (MouseButtons button in new MouseButtons[] { MouseButtons.Right, MouseButtons.Middle })
+                    InvokePrivate(games, "OnMouseUp", new MouseEventArgs(button, 1, 480, 25, 0));
+                Igual(0, removed, "direito e central nao removem vinculo");
+                InvokePrivate(games, "OnMouseUp", new MouseEventArgs(MouseButtons.Left, 1, 480, 25, 0));
+                Igual(1, removed, "esquerdo remove vinculo");
+            }
+        }
+
+        private static void RegressionMissingMetrics(string root)
+        {
+            Secao("bugs: sensores ausentes sobrevivem ao arraste e a reabertura");
+            for (int position = 0; position < 3; position++)
+            {
+                Config config = AuditConfig(root, "missing-" + position);
+                config.MetricIds.Clear(); config.MetricSizes.Clear();
+                config.MetricIds.AddRange(new string[] { "cpu", "load" }); config.MetricIds.Insert(position, "missing");
+                foreach (string id in config.MetricIds) config.MetricSizes.Add(id == "missing" ? 2 : id == "cpu" ? 1 : 0);
+                config.Save(); FreshData data = new FreshData();
+                using (SettingsForm form = BugForm(config, data))
+                {
+                    ((NavBar)Field(form, "_nav")).SelectedIndex = 2;
+                    List<MetricCard> cards = (List<MetricCard>)Field(form, "_cards");
+                    Igual(3, cards.Count, "cartao do sensor ausente continua presente");
+                    MetricCard moved = cards[0];
+                    InvokePrivate(form, "ComecarArrasteDeCartao", moved);
+                    InvokePrivate(form, "ReordenarPara", 2); Field(form, "_destinoDoArraste", 2);
+                    InvokePrivate(form, "OnSoltouCartao", form, new MouseEventArgs(MouseButtons.Left, 1, 0, 0, 0));
+                    Config loaded = Config.LoadFrom(config.SavePath, false);
+                    Igual(3, loaded.MetricIds.Count, "arraste preserva todos os sensores no disco");
+                    Igual(2, loaded.MetricSize(loaded.MetricIds.IndexOf("missing")), "tamanho do ausente acompanha ID");
+                    InvokePrivate(form, "MexerNaMetrica", "missing", -1);
+                    loaded = Config.LoadFrom(config.SavePath, false);
+                    Verdade(loaded.MetricIds.Contains("missing"), "setas preservam sensor ausente");
+                    data.Sensors.Add(AuditSensor("missing", "CPU", SensorType.Temperature, "C", 55));
+                    data.Values["missing"] = 55;
+                    InvokePrivate(form, "AtualizarMetricas", data.CurrentSnapshot());
+                    foreach (MetricCard card in (List<MetricCard>)Field(form, "_cards"))
+                        if (card.SensorId == "missing")
+                        {
+                            Verdade(card.Titulo != T.SensorUnavailable, "retorno do sensor atualiza titulo");
+                            Igual((float?)55, (float?)Field(card, "_valor"), "retorno publica leitura sem recriar janela");
+                        }
+                    form.Close();
+                }
+                using (SettingsForm reopened = BugForm(Config.LoadFrom(config.SavePath, false), data))
+                {
+                    Igual(3, ((List<MetricCard>)Field(reopened, "_cards")).Count, "reabertura preserva grade completa");
+                    reopened.Close();
+                }
             }
         }
 
@@ -116,6 +976,166 @@ namespace MhiagosControl
             public List<SensorEntry> RefreshSensorList() { return Sensors; }
             public void SetShowAllSensors(bool value) { }
             public ReadingState CurrentReadingState(string id) { return State; }
+        }
+
+        /// <summary>Hospedeiro de mentira que tambem entrega o controle do widget.</summary>
+        private sealed class DadosComWidget : ISettingsData, IControleDoWidget
+        {
+            public readonly ConfigDoWidget Widget = new ConfigDoWidget();
+            public int Mudancas, AoCanto;
+            public bool? Ligado;
+            public Dictionary<string, float> CurrentSnapshot() { return new Dictionary<string, float>(); }
+            public List<SensorEntry> RefreshSensorList() { return new List<SensorEntry>(); }
+            public void SetShowAllSensors(bool value) { }
+            public ConfigDoWidget ConfigDoWidget { get { return Widget; } }
+            public void LigarWidget(bool ligar) { Ligado = ligar; Widget.Ativo = ligar; }
+            public void WidgetMudou() { Mudancas++; }
+            public void WidgetAoCanto() { AoCanto++; }
+        }
+
+        private static void RegressionWidgetCard(string root)
+        {
+            Secao("widget de bateria: cartao na pagina Baterias");
+            DadosComWidget dados = new DadosComWidget();
+            dados.Widget.Fosco = true; dados.Widget.Nitido = false; dados.Widget.NaFrente = true;
+            Config config = AuditConfig(root, "widget-card");
+            using (SettingsForm form = new SettingsForm(config, new List<SensorEntry>(), dados))
+            {
+                form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
+                form.Show(); ((Timer)Field(form, "_tick")).Stop();
+                Verdade(Field(form, "_cardWidget") != null, "com o controle do widget, a pagina Baterias ganha o cartao");
+                Segmented vidro = (Segmented)Field(form, "_sgWidgetVidro");
+                Toggle frente = (Toggle)Field(form, "_tgWidgetFrente");
+                Igual(2, vidro.SelectedIndex, "o cartao abre com o vidro que esta valendo");
+                Verdade(frente.Checked, "e com o sempre na frente que esta valendo");
+                Igual(0, dados.Mudancas, "preencher o cartao nao conta como mudanca");
+
+                vidro.SelectedIndex = 0;
+                Verdade(dados.Widget.Nitido && !dados.Widget.Fosco, "escolher nitido no cartao muda a configuracao do widget");
+                Igual(1, dados.Mudancas, "e avisa a bandeja para salvar e redesenhar");
+                ((Segmented)Field(form, "_sgWidgetLayout")).SelectedIndex = 1;
+                Igual(LayoutDoWidget.Lista, dados.Widget.Layout, "o formato tambem vale na hora");
+                ((Toggle)Field(form, "_tgWidget")).Checked = true;
+                Verdade(dados.Ligado == true, "ligar no cartao liga o widget");
+
+                dados.Widget.Cor = CorDoVidro.Clara;
+                InvokePrivate(form, "SincronizarWidget");
+                Igual(2, ((Segmented)Field(form, "_sgWidgetCor")).SelectedIndex, "mudanca feita pelo menu do widget aparece no cartao");
+                Igual(2, dados.Mudancas, "sincronizar nao devolve a mudanca para a bandeja");
+                form.Close();
+            }
+        }
+
+        private static AnaliseDeBateria AnaliseDeExemplo(bool headset)
+        {
+            DateTime agora = DateTime.Now;
+            AnaliseDeBateria a = new AnaliseDeBateria();
+            a.Chave = headset ? "teste-g325" : "teste-x11";
+            a.Nome = headset ? "G325" : "X11";
+            a.Tipo = headset ? TipoPeriferico.Headset : TipoPeriferico.Mouse;
+            a.Fonte = headset ? FontePeriferico.GHub : FontePeriferico.AttackShark;
+            a.PctAtual = headset ? 99 : 73;
+            a.Carregando = headset;
+            a.CarregandoDesde = headset ? (DateTime?)agora.AddMinutes(-40) : null;
+            a.CarregandoDe = 10;
+            a.HorasAteEncher = headset ? (double?)0.08 : null;
+            a.HorasRestantes = headset ? null : (double?)40;
+            a.HorasPorCargaCheia = headset ? 21 : 56;
+            a.DescargasMedidas = 1;
+            a.UsoTotalHoras = headset ? 11.53 : 9.12;
+            a.SaudePorMes.Add(new KeyValuePair<DateTime, double>(new DateTime(agora.Year, agora.Month, 1), 19));
+            if (!headset)
+            {
+                a.SaudePorMes.Clear();
+                a.Atual = new Descarga { Inicio = agora.AddHours(-6), Fim = agora, PctInicio = 84, PctFim = 73, UsoSegundos = 4.95 * 3600 };
+            }
+            a.UltimaCarga = new Carga { Inicio = agora.AddHours(-25), Fim = agora.AddHours(-25), PctInicio = 70, PctFim = headset ? 80 : 84, Deduzida = false };
+            a.UltimaCompleta = new Descarga { Inicio = agora.AddHours(-20), Fim = agora.AddMinutes(-40), PctInicio = 70, PctFim = 10, UsoSegundos = 11.53 * 3600 };
+            a.HorasPorPontoNaFaixa = new double?[] { null, 0.2, null, null, null, 0.12, 0.3, 0.3, null, null };
+            List<AmostraDeBateria> am = new List<AmostraDeBateria>();
+            int pct = headset ? 82 : 89;
+            for (int m = 0; m < 24 * 60; m += 20)
+            {
+                DateTime q = agora.AddHours(-24).AddMinutes(m);
+                if (m > 9 * 60 && m < 18 * 60) continue;              // uma lacuna: app fechado
+                bool carregando = headset && m > 23 * 60;
+                if (carregando) pct = Math.Min(99, pct + 20);
+                else if (m % 60 == 0) pct = Math.Max(10, pct - (headset ? 5 : 1));
+                am.Add(new AmostraDeBateria { Quando = q, Pct = pct, Carregando = carregando });
+            }
+            a.Amostras = am.ToArray();
+            return a;
+        }
+
+        private static void RegressionBatteryCard(string root)
+        {
+            Secao("pagina Baterias: resumo primeiro e mais detalhes");
+            string languageBefore = T.Language;
+            string arquivo = Path.Combine(Path.GetTempPath(), "mhiagos-detalhes-" + Guid.NewGuid().ToString("N") + ".txt");
+            DetalhesDaBateria._caminho = arquivo;
+            DetalhesDaBateria.Recarregar();
+            try
+            {
+                T.Language = T.PtBr;
+                using (Form f = new Form())
+                {
+                    f.ShowInTaskbar = false; f.StartPosition = FormStartPosition.Manual; f.Location = new Point(-20000, -20000);
+                    f.ClientSize = new Size(940, 1100);
+                    CartaoDeBateria g325 = new CartaoDeBateria(), x11 = new CartaoDeBateria();
+                    f.Controls.Add(g325); f.Controls.Add(x11);
+                    f.Show();
+                    g325.Mostrar(AnaliseDeExemplo(true), null);
+                    x11.Mostrar(AnaliseDeExemplo(false), 38);
+
+                    string[][] b = x11.Blocos();
+                    Igual(4, b.Length, "quatro blocos de resumo");
+                    Igual("Restante", b[0][0], "primeiro bloco e o restante");
+                    Igual("~40 h", b[0][1], "restante em destaque, sem o rotulo comprido de antes");
+                    Igual("Carga cheia dura", b[1][0], "segundo bloco e a duracao da carga");
+                    Igual("média de 1 descarga", b[1][2], "a contagem de descargas vira linha de apoio");
+                    Igual("4 h 57 min", b[2][1], "desde a ultima carga com o uso em destaque");
+                    Igual("84% → 73%", b[2][2], "e a queda embaixo");
+                    Igual("medindo", b[3][1], "saude sem mes medido mostra medindo");
+
+                    string[][] h = g325.Blocos();
+                    Igual("G HUB: carregando", h[0][2], "a previsao do G HUB vira apoio do restante, sem item repetido");
+                    Igual("Carregando desde", h[2][0], "no cabo o terceiro bloco diz desde quando carrega");
+                    Igual("a partir de 10%", h[2][2], "e de quanto partiu");
+                    Verdade(h[3][1].StartsWith("~19 h"), "saude com um mes medido");
+                    Igual(4, g325.Detalhes().Length, "quatro itens em mais detalhes");
+
+                    int fechado = g325.AlturaDesejada(900);
+                    Verdade(!g325.DetalhesAbertos, "detalhes comecam fechados");
+                    int avisos = 0;
+                    g325.AlturaMudou += delegate { avisos++; };
+                    g325.AlternarDetalhes();
+                    Verdade(g325.DetalhesAbertos, "clicar abre os detalhes");
+                    Igual(1, avisos, "abrir avisa a pagina para rearranjar");
+                    Verdade(g325.AlturaDesejada(900) > fechado, "aberto o cartao cresce");
+                    Verdade(!x11.DetalhesAbertos, "abrir um aparelho nao abre o outro");
+                    DetalhesDaBateria.Recarregar();
+                    Verdade(DetalhesDaBateria.Aberto("teste-g325"), "a escolha sobrevive a reabrir o app");
+                    Verdade(CartaoDeBateria.AlturaPara(500, false) > CartaoDeBateria.AlturaPara(900, false),
+                        "estreito, os blocos vao para duas linhas");
+
+                    g325.SetBounds(12, 12, 900, g325.AlturaDesejada(900));
+                    x11.SetBounds(12, g325.Bottom + 12, 900, x11.AlturaDesejada(900));
+                    f.Refresh();
+                    CaptureEvolution(f, "baterias-resumo");
+                    g325.SetBounds(12, 12, 480, g325.AlturaDesejada(480));
+                    x11.SetBounds(12, g325.Bottom + 12, 480, x11.AlturaDesejada(480));
+                    f.Refresh();
+                    CaptureEvolution(f, "baterias-resumo-estreito");
+                    f.Close();
+                }
+            }
+            finally
+            {
+                T.Language = languageBefore;
+                DetalhesDaBateria._caminho = null;
+                DetalhesDaBateria.Recarregar();
+                try { File.Delete(arquivo); } catch { }
+            }
         }
 
         private static SettingsForm BugForm(Config config, FreshData data)

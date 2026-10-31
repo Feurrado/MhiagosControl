@@ -112,7 +112,7 @@ namespace MhiagosControl
             string id = HidPanel.UltimoIdentificado;
             bool achou = !string.IsNullOrEmpty(id);
             _blocoPainel.Valor = achou ? id : T.PanelNone;
-            _blocoPainel.Ponto = achou ? (Color?)Ui.Verde : Ui.Faint;
+            _blocoPainel.Ponto = achou ? (Color?)PeripheralStrip.Verde : Ui.Faint;
             _blocoPainel.Apoio = !achou ? "" : id == "VID 1A2C / PID 4984" ? T.PanelTested : T.PanelUntested;
 
             int hw = 0, lhm = 0;
@@ -120,7 +120,7 @@ namespace MhiagosControl
                 if (s.Source == "HWiNFO") hw++; else lhm++;
             _blocoFontes.Valor = T.SensorsFrom("HWiNFO", hw);
             _blocoFontes.CorDoValor = hw == 0 ? (Color?)Ui.Warn : null;
-            _blocoFontes.Ponto = hw == 0 ? Ui.Warn : Ui.Verde;
+            _blocoFontes.Ponto = hw == 0 ? Ui.Warn : PeripheralStrip.Verde;
             _blocoFontes.Apoio = T.SensorsFrom("LibreHardwareMonitor", lhm);
             _sobreAvisoMotor.Visible = hw == 0;
 
@@ -440,6 +440,7 @@ namespace MhiagosControl
             if (snap != null && ativa == _pgVisao)
                 AtualizarVisaoGeral(snap);
 
+            if (ativa == _pgBaterias) AtualizarBaterias();
 
             if (snap != null && ativa == _pgMetricas)
                 AtualizarMetricas(snap);
@@ -668,6 +669,7 @@ namespace MhiagosControl
             if (_tick != null) { _tick.Stop(); _tick.Dispose(); }
             if (_aquecer != null) { _aquecer.Stop(); _aquecer.Dispose(); _aquecer = null; }
             if (_noteTimer != null) { _noteTimer.Stop(); _noteTimer.Dispose(); }
+            _dicaDoWidget.Dispose();
             _dicaDaConfig.Dispose();
 
             // Filtro de mensagens e do Application, e nao da janela: esquecer de
@@ -705,7 +707,8 @@ namespace MhiagosControl
             {
                 Control sel = _nav != null && _nav.Selected != null ? _nav.Selected.Page : null;
                 Control alvo = null;
-                 
+                if (_pgCasa != null && _pgCasa != sel && !_aquecidas.Contains(_pgCasa)) alvo = _pgCasa;
+                else
                     foreach (NavItem it in _nav.Items)
                         if (it.Page != null && it.Page != sel && !_aquecidas.Contains(it.Page)) { alvo = it.Page; break; }
                 if (alvo == null || !Visible || WindowState == FormWindowState.Minimized) { if (alvo == null) { _aquecer.Stop(); } return; }

@@ -141,7 +141,8 @@ namespace MhiagosControl
         /// </summary>
         private readonly ISensorSource _extra;
 
-        public Sensors() : this(new HwInfoSensorSource(), new LibreSensorSource(), new RtssSensorSource()) { }
+        public Sensors() : this(new HwInfoSensorSource(), new LibreSensorSource(), new RtssSensorSource(),
+                                new BateriaSensorSource()) { }
 
         internal Sensors(ISensorSource primary, ISensorSource fallback, ISensorSource auxiliary)
             : this(primary, fallback, auxiliary, null) { }

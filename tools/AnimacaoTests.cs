@@ -24,6 +24,9 @@ namespace MhiagosControl
                 AnimacaoCurva();
                 AnimacaoMotor();
                 AnimacaoPainel();
+                AnimacaoCartaoDeBateria();
+                AnimacaoPaginaBaterias(root);
+                PresencaDosAparelhos();
             }
             finally { Ui.AnimacoesForcadas = antes; }
         }
@@ -222,6 +225,114 @@ namespace MhiagosControl
             fora.Expandido = true;
             Verdade(!fora.Animando && fora.Height == 120, "sem janela na tela nao anima: ninguem veria");
             fora.Dispose();
+        }
+
+        private static void AnimacaoCartaoDeBateria()
+        {
+            Secao("animacoes: Mais detalhes do cartao de bateria");
+            string languageBefore = T.Language;
+            string arquivo = Path.Combine(Path.GetTempPath(), "mhiagos-anim-" + Guid.NewGuid().ToString("N") + ".txt");
+            DetalhesDaBateria._caminho = arquivo;
+            DetalhesDaBateria.Recarregar();
+            Ui.AnimacoesForcadas = true;
+            try
+            {
+                T.Language = T.PtBr;
+                using (Form f = new Form())
+                {
+                    f.ShowInTaskbar = false; f.StartPosition = FormStartPosition.Manual; f.Location = new Point(-20000, -20000);
+                    f.ClientSize = new Size(940, 900);
+                    CartaoDeBateria c = new CartaoDeBateria();
+                    f.Controls.Add(c);
+                    f.Show();
+                    c.Mostrar(AnaliseDeExemplo(true), null);
+                    int fechado = c.AlturaDesejada(900);
+                    int aberto = CartaoDeBateria.AlturaPara(900, true);
+
+                    InvokePrivate(c, "OnKeyDown", new KeyEventArgs(Keys.Enter));
+                    Verdade(c.DetalhesAbertos, "Enter no cartao abre Mais detalhes");
+                    AnimacaoDeRecolher m = MotorDe(c, "_detalhes");
+                    Verdade(m.Animando, "e anima");
+                    Verdade(!(bool)c.GetType().GetProperty("MostraDetalhes", AuditFlags).GetValue(c, null),
+                            "os detalhes so aparecem no fim");
+                    m.Avancar(AnimacaoDeRecolher.DuracaoMs / 2);
+                    int meio = c.AlturaDesejada(900);
+                    Verdade(meio > fechado && meio < aberto, "no meio, a altura esta entre fechado e aberto");
+                    Verdade(c.ProgressoDosDetalhes > 0f && c.ProgressoDosDetalhes < 1f, "a seta gira junto");
+                    m.Avancar(AnimacaoDeRecolher.DuracaoMs);
+                    Igual(aberto, c.AlturaDesejada(900), "no fim, a altura aberta");
+                    Verdade((bool)c.GetType().GetProperty("MostraDetalhes", AuditFlags).GetValue(c, null), "e os detalhes aparecem");
+                    Igual(AccessibleStates.Expanded, c.AccessibilityObject.State & AccessibleStates.Expanded, "acessibilidade diz expandido");
+                    Verdade(c.AccessibilityObject.Name.Contains(T.LessDetails), "o nome acessivel diz o que a acao faz");
+
+                    InvokePrivate(c, "OnKeyDown", new KeyEventArgs(Keys.Space));
+                    Verdade(!c.DetalhesAbertos, "Espaco fecha");
+                    Verdade(!(bool)c.GetType().GetProperty("MostraDetalhes", AuditFlags).GetValue(c, null),
+                            "fechando, os detalhes somem antes de o cartao encolher");
+                    MotorDe(c, "_detalhes").Avancar(AnimacaoDeRecolher.DuracaoMs);
+                    Igual(fechado, c.AlturaDesejada(900), "fechado no fim");
+                    Verdade(c.TabStop, "o cartao entra na ordem do Tab");
+                    f.Close();
+                }
+            }
+            finally
+            {
+                T.Language = languageBefore;
+                DetalhesDaBateria._caminho = null;
+                DetalhesDaBateria.Recarregar();
+                try { File.Delete(arquivo); } catch { }
+            }
+        }
+
+        private static void AnimacaoPaginaBaterias(string root)
+        {
+            Secao("animacoes: painel Widget da pagina Baterias");
+            string arquivo = Path.Combine(Path.GetTempPath(), "mhiagos-anim-pg-" + Guid.NewGuid().ToString("N") + ".txt");
+            DetalhesDaBateria._caminho = arquivo;
+            DetalhesDaBateria.Recarregar();
+            string languageBefore = T.Language;
+            Ui.AnimacoesForcadas = true;
+            try
+            {
+                T.Language = T.PtBr;
+                Config config = AuditConfig(root, "anim-baterias");
+                using (SettingsForm form = new SettingsForm(config, new List<SensorEntry>(), new DadosComWidget()))
+                {
+                    form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
+                    form.Size = new Size(1100, 760);
+                    form.Show(); ((Timer)Field(form, "_tick")).Stop();
+                    ((NavBar)Field(form, "_nav")).SelectedIndex = 5;
+                    BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
+                    CollapsiblePanel painel = (CollapsiblePanel)Field(form, "_painelDoWidget");
+                    Label vazio = (Label)Field(form, "_lbBateriasVazio");
+                    int vazioFechado = vazio.Top;
+
+                    InvokePrivate(botao, "OnKeyDown", new KeyEventArgs(Keys.Enter));
+                    Verdade(botao.Aberto && painel.Animando, "Enter no botao abre o painel animando");
+                    Igual(AccessibleStates.Expanded, botao.AccessibilityObject.State & AccessibleStates.Expanded, "o botao anuncia expandido");
+                    AnimacaoDeRecolher m = MotorDe(painel, "_animacao");
+                    m.Avancar(AnimacaoDeRecolher.DuracaoMs / 2);
+                    Verdade(botao.Giro > 0f && botao.Giro < 1f, "a seta do botao gira no mesmo quadro");
+                    Verdade(vazio.Top > vazioFechado && vazio.Top < vazioFechado + painel.AlturaAberta, "os vizinhos descem junto, sem salto");
+                    m.Avancar(AnimacaoDeRecolher.DuracaoMs);
+                    Igual(1f, botao.Giro, "aberto, a seta aponta para cima");
+                    Verdade(vazio.Top > painel.Bottom, "aberto, os aparelhos ficam abaixo do painel");
+
+                    InvokePrivate(botao, "OnKeyDown", new KeyEventArgs(Keys.Space));
+                    Verdade(!botao.Aberto, "Espaco fecha");
+                    MotorDe(painel, "_animacao").Avancar(AnimacaoDeRecolher.DuracaoMs);
+                    Igual(vazioFechado, vazio.Top, "fechado, os aparelhos voltam para o lugar");
+                    Igual(0f, botao.Giro, "e a seta volta para baixo");
+                    form.Close();
+                }
+            }
+            finally
+            {
+                T.Language = languageBefore;
+                DetalhesDaBateria._caminho = null;
+                DetalhesDaBateria.Recarregar();
+                try { File.Delete(arquivo); } catch { }
+            }
         }
     }
 }

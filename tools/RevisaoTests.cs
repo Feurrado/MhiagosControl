@@ -17,6 +17,7 @@ namespace MhiagosControl
         private static void RegressionRevisao(string root)
         {
             RevisaoSairComJanelaAberta(root);
+            RevisaoHistoricoDeBateriaPreso(root);
             RevisaoHistoricoDeMetricasIlegivel(root);
             RevisaoAvisosDepoisDoMostrador(root);
             RevisaoSplashFechadoCedo();
@@ -25,6 +26,7 @@ namespace MhiagosControl
             RegressionAnimacoes(root);
             RegressionPendencias(root);
             RegressionRevisaoVisual(root);
+            RegressionCasa(root);
         }
 
         private static void RevisaoEscalaEEstados(string root)
@@ -88,6 +90,44 @@ namespace MhiagosControl
                 Verdade(context.FecharConfiguracao(true), "B1: sem janela aberta nada impede a saida");
             }
             finally { DisposeAuditContext(context); }
+        }
+
+        private static void RevisaoHistoricoDeBateriaPreso(string root)
+        {
+            Secao("revisao B2: historico de bateria preso por outro programa no arranque");
+            object antes = typeof(HistoricoDeBateria).GetField("_caminho", AuditFlags).GetValue(null);
+            string arq = Path.Combine(root, "baterias-preso.dat");
+            try
+            {
+                HistoricoDeBateria.Caminho = arq;
+                HistoricoDeBateria.Zerar();
+                DateTime t = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Local);
+                Periferico x11 = Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 80, false);
+                HistoricoDeBateria.Registrar(new Periferico[] { x11 }, t);
+                HistoricoDeBateria.Salvar();
+                string original = File.ReadAllText(arq);
+                Verdade(original.Contains("X11"), "o historico de partida guarda o aparelho");
+
+                Periferico outro = Periferico.Lido("Fone", TipoPeriferico.Headset, FontePeriferico.GHub, 50, true);
+                using (new FileStream(arq, FileMode.Open, FileAccess.Read, FileShare.None))
+                {
+                    HistoricoDeBateria.Recarregar();   // a leitura falha: arquivo preso
+                    HistoricoDeBateria.Registrar(new Periferico[] { outro }, t.AddMinutes(1));
+                }
+                HistoricoDeBateria.Salvar();   // o arquivo ja esta livre
+                Igual(original, File.ReadAllText(arq), "B2: leitura que falhou nao deixa a gravacao apagar o historico");
+
+                HistoricoDeBateria.Registrar(new Periferico[] { outro }, t.AddMinutes(2));
+                HistoricoDeBateria.Salvar();
+                string depois = File.ReadAllText(arq);
+                Verdade(depois.Contains("X11") && depois.Contains("Fone"),
+                        "B2: com o arquivo livre o historico antigo e lido e o novo aparelho entra junto");
+            }
+            finally
+            {
+                HistoricoDeBateria.Zerar();
+                typeof(HistoricoDeBateria).GetField("_caminho", AuditFlags).SetValue(null, antes);
+            }
         }
 
         private static void RevisaoHistoricoDeMetricasIlegivel(string root)
@@ -217,7 +257,7 @@ namespace MhiagosControl
                 rotulo.ForeColor = textoEscuro;
                 rotulo.BackColor = Color.Transparent;
                 Label verde = new Label();
-                verde.ForeColor = Ui.Verde;
+                verde.ForeColor = PeripheralStrip.Verde;
                 Panel dentro = new Panel();
                 Label fundo = new Label();
                 fundo.ForeColor = Color.FromArgb(unchecked((int)0xFF9699A3));   // Muted escuro
@@ -227,6 +267,7 @@ namespace MhiagosControl
                 Theme.Recolorir(raiz, true);
                 Igual(textoClaro.ToArgb(), rotulo.ForeColor.ToArgb(), "B7: rotulo montado no escuro passa a ler no claro");
                 Igual(Color.Transparent.ToArgb(), rotulo.BackColor.ToArgb(), "B7: fundo transparente fica transparente");
+                Igual(PeripheralStrip.Verde.ToArgb(), verde.ForeColor.ToArgb(), "B7: cor fora da paleta nao muda");
                 Igual(unchecked((int)0xFF5F646E), fundo.ForeColor.ToArgb(), "B7: controles aninhados tambem mudam");
             }
 

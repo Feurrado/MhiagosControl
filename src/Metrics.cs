@@ -1339,6 +1339,11 @@ namespace MhiagosControl
         /// </summary>
         public static void Faixas(string unidade, string id, out float? atencao, out float? perigo)
         {
+            if (id != null && id.StartsWith(BateriaSensorSource.Prefixo, StringComparison.Ordinal))
+            {
+                atencao = null; perigo = null;
+                return;
+            }
             Faixas(unidade, out atencao, out perigo);
         }
 

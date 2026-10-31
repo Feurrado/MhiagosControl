@@ -156,8 +156,6 @@ namespace MhiagosControl
 
         // estados
         public static Color Warn { get { return C(0xF0, 0xAF, 0x3C); } }
-        /// <summary>Verde de ligado/ok: o mesmo nos dois temas.</summary>
-        public static readonly Color Verde = Color.FromArgb(0x2F, 0xBF, 0x5A);
         public static Color Danger { get { return C(0xEB, 0x5A, 0x4B); } }
         public static Color Hover { get { return De(Papel.Hover, Dark); } }
 

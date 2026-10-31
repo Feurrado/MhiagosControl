@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.AccessControl;
@@ -17,6 +17,7 @@ namespace MhiagosControl
         private static void RegressionPendencias(string root)
         {
             PendenciaHistoricoDeslocado();
+            PendenciaAmostraComRelogioVoltando(root);
             PendenciaGravacaoAtomica(root);
             PendenciaAliasDoWinget();
             PendenciaOrigemDoHwInfo(root);
@@ -47,6 +48,36 @@ namespace MhiagosControl
             for (int i = 0; i < v.Length; i++) if (!float.IsNaN(v[i])) tudoFalha = false;
             Verdade(tudoFalha, "mais de seis horas fora: a janela inteira e falha");
             ResetHistory();
+        }
+
+        private static void PendenciaAmostraComRelogioVoltando(string root)
+        {
+            Secao("pendencias B17: relogio voltando nao cala o grafico de bateria");
+            object antes = typeof(HistoricoDeBateria).GetField("_caminho", AuditFlags).GetValue(null);
+            try
+            {
+                HistoricoDeBateria.Caminho = Path.Combine(root, "baterias-relogio.dat");
+                HistoricoDeBateria.Zerar();
+                DateTime t = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Local);
+                for (int m = 0; m <= 60; m += 10)
+                    HistoricoDeBateria.Registrar(new Periferico[] { Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 90 - m / 10, false) }, t.AddMinutes(m));
+                // o relogio volta uma hora
+                for (int m = 0; m <= 30; m += 10)
+                    HistoricoDeBateria.Registrar(new Periferico[] { Periferico.Lido("X11", TipoPeriferico.Mouse, FontePeriferico.AttackShark, 83 - m / 10, false) }, t.AddMinutes(m + 5));
+                AnaliseDeBateria a = null;
+                foreach (AnaliseDeBateria x in HistoricoDeBateria.Analisar(new Periferico[0])) if (x.Nome == "X11") a = x;
+                Verdade(a != null && a.Amostras != null && a.Amostras.Length > 0, "o aparelho segue com amostras");
+                DateTime ultima = a.Amostras[a.Amostras.Length - 1].Quando;
+                Igual(t.AddMinutes(35), ultima, "depois de o relogio voltar, as amostras continuam no horario novo");
+                bool ordenado = true;
+                for (int i = 1; i < a.Amostras.Length; i++) if (a.Amostras[i].Quando < a.Amostras[i - 1].Quando) ordenado = false;
+                Verdade(ordenado, "e ficam em ordem");
+            }
+            finally
+            {
+                HistoricoDeBateria.Zerar();
+                typeof(HistoricoDeBateria).GetField("_caminho", AuditFlags).SetValue(null, antes);
+            }
         }
 
         private static void PendenciaGravacaoAtomica(string root)

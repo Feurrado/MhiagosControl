@@ -17,7 +17,7 @@ namespace MhiagosControl
     /// (MSR, SMART, NVMe) leva dezenas a centenas de milissegundos, e fazer
     /// isso na thread de UI travaria a bomba de mensagens a cada ciclo.
     /// </summary>
-    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData
+    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData, IControleDoWidget
     {
         // Hardware continua em 1 Hz. FPS e frametime usam um caminho proprio
         // a 4 Hz: fluido no LCD sem fazer o numero oscilar depressa demais.
@@ -109,7 +109,7 @@ namespace MhiagosControl
         private ReadingSnapshot _snapshot = ReadingSnapshot.Empty;
 
         private List<SensorEntry> _cache = new List<SensorEntry>();
-        private ToolStripMenuItem _miPause, _miAutostart, _miProfiles;
+        private ToolStripMenuItem _miPause, _miAutostart, _miProfiles, _miWidget;
         private bool _sensorsOk = false;
         private bool _openWhenReady = false;
         private SettingsForm _settingsForm;
@@ -118,6 +118,8 @@ namespace MhiagosControl
         /// <summary>Pagina que a proxima abertura da configuracao deve mostrar; nulo e a de sempre.</summary>
         private string _paginaPedida;
 
+        private ConfigDoWidget _cfgWidget = new ConfigDoWidget();
+        private WidgetDeBateria _widget;
 
         public TrayContext() : this(new Sensors(), new HidPanel(), null) { }
 
@@ -164,13 +166,21 @@ namespace MhiagosControl
             _icon.DoubleClick += new EventHandler(OnConfig);
             _icon.BalloonTipClicked += delegate { ExecutarAcaoDoBalao(); };
             _icon.BalloonTipClosed += delegate { _acaoDoBalao = null; };
+            _cfgWidget = ConfigDoWidget.Carregar();
+            // o widget da casa separado (2.29.0 de teste) virou parte do de bateria
+            if (CasaNoWidget.Migrar(_cfgWidget)) _cfgWidget.Salvar();
+            CasaNoWidget.Controle = this;
             BuildMenu();
 
             IniciarVigiaDeAtivacao();
+            Perifericos.Iniciar(_stop);
 
             // A abertura das fontes NAO acontece aqui. Ela e agendada para
             // depois que Application.Run assumir: veja AbrirSensores.
             _marshal.BeginInvoke(new MethodInvoker(AbrirSensores));
+
+            // O widget nao depende dos sensores: a bateria tem leitores proprios
+            if (_cfgWidget.Ativo) _marshal.BeginInvoke(new MethodInvoker(MostrarWidget));
         }
 
         /// <summary>
@@ -514,6 +524,7 @@ namespace MhiagosControl
                 try
                 {
                     TrayContext contexto = new TrayContext(new Sensors(), new HidPanel(), activation);
+                    contexto.IniciarCasa();
                     Application.Run(contexto);
                 }
                 catch (Exception ex)

@@ -10,7 +10,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace MhiagosControl
 {
-    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData
+    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData, IControleDoWidget
     {
         private void OnPause(object sender, EventArgs e)
         {
@@ -108,6 +108,8 @@ namespace MhiagosControl
             bool painelParou = EsperarKeepalive(budget);
             bool aberturaParou = EsperarThread(_sensorInit, "abertura de sensores", budget);
             bool ativacaoParou = EsperarThread(_activationWatcher, "ativacao", budget);
+            bool bateriaParou = Perifericos.Esperar(ShutdownTimeoutMs - (int)budget.ElapsedMilliseconds);
+            if (!bateriaParou) Log.Write("leitores de bateria nao encerraram a tempo");
 
             // Depois de a thread parar: gravar com ela viva copiaria uma serie
             // no meio de um balde sendo fechado. Pelo mesmo motivo, se uma
@@ -118,12 +120,16 @@ namespace MhiagosControl
             // _stop, em que eles esperam, depende de terem parado.
             bool podeDescartarRecursos = workerParou && painelParou && aberturaParou && ativacaoParou;
             try { MetricHistory.Salvar(); } catch (Exception ex) { Log.Error("gravacao do historico", ex); }
+            try { HistoricoDeBateria.Salvar(); } catch (Exception ex) { Log.Error("gravacao do historico de bateria", ex); }
             if (!podeDescartarRecursos)
                 Log.Write("encerramento: recursos de hardware ficarao para o termino do processo");
 
+            FecharWidget();
             if (_icon != null) { _icon.Visible = false; _icon.Dispose(); }
             // _iconNormal e o Assets.TrayIcon, guardado e compartilhado (pode ser o
             // icone de reserva das janelas): nao e deste dono para descartar.
+            if (_iconBaixa != null) _iconBaixa.Dispose();
+            if (_hIconBaixa != IntPtr.Zero) { DestroyIcon(_hIconBaixa); _hIconBaixa = IntPtr.Zero; }
 
             if (podeDescartarRecursos)
             {
@@ -135,7 +141,7 @@ namespace MhiagosControl
             }
             _panelKeepalive.Dispose();
             if (_marshal != null) _marshal.Dispose();
-            if (podeDescartarRecursos) _stop.Dispose();
+            if (podeDescartarRecursos && bateriaParou) _stop.Dispose();
 
             Volatile.Write(ref _runtimeState, (int)RuntimeState.Stopped);
             Log.Write("=== encerrado ===");
