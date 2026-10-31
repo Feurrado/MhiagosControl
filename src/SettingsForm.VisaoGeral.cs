@@ -256,10 +256,12 @@ namespace MhiagosControl
 
                 Label cap = MakeLabel(l[0], 0, 0, Ui.FontSmall);
                 cap.ForeColor = Ui.Faint;
+                cap.AutoEllipsis = true;
                 _cardSpecs.Controls.Add(cap);
                 caps.Add(cap);
 
                 Label val = MakeLabel(l[1], 0, 0, Ui.FontSemi);
+                val.AutoEllipsis = true;
                 _cardSpecs.Controls.Add(val);
                 vals.Add(val);
             }
@@ -692,8 +694,35 @@ namespace MhiagosControl
             // Se nao couber, todas encolhem na proporcao: cortar so a ultima
             // deixaria justamente o sistema operacional sem nome.
             int disp = _cardSpecs.Width - Ui.S(32) - (n - 1) * Vao;
+            if (soma > disp)
+            {
+                // Aperto: o vao encolhe antes de qualquer texto.
+                Vao = Ui.S(12);
+                disp = _cardSpecs.Width - Ui.S(32) - (n - 1) * Vao;
+            }
             if (soma > disp && soma > 0)
-                for (int i = 0; i < n; i++) larg[i] = larg[i] * disp / soma;
+            {
+                // Quem e curto ("16 GB", o sistema) fica inteiro; o que sobra e dividido
+                // entre os longos, que terminam em reticencias. Repartir na proporcao
+                // cortava todos, ate o rotulo ("Memo").
+                bool[] fixa = new bool[n];
+                int restante = disp, livres = n;
+                bool mudou = true;
+                while (mudou && livres > 0)
+                {
+                    mudou = false;
+                    int parte = restante / livres;
+                    for (int i = 0; i < n; i++)
+                        if (!fixa[i] && larg[i] <= parte) { fixa[i] = true; restante -= larg[i]; livres--; mudou = true; }
+                }
+                if (livres > 0)
+                    for (int i = 0; i < n; i++)
+                        if (!fixa[i])
+                        {
+                            int minimo = TextRenderer.MeasureText(_vgSpecCap[i].Text, Ui.FontSmall).Width + Ui.S(14);
+                            larg[i] = Math.Max(minimo, restante / livres);
+                        }
+            }
 
             // Centralizada, e nao encostada a esquerda.
             //

@@ -799,9 +799,22 @@ namespace MhiagosControl
                         foreach (Control ctl in pp.Controls) if (ctl.Visible && ctl.Dock == DockStyle.None) fundoP = Math.Max(fundoP, ctl.Bottom);
                         Verdade(fundoP <= pp.Height, "Paineis sem cortar no tamanho padrao (" + fundoP + " de " + pp.Height + ") " + language);
                         for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
-                        // Tamanho padrao 1263 x 738 de area cliente; gravado de antes da versao atual, abre no novo uma vez.
-                        Igual(new Size(Ui.S(1263), Ui.S(738)), SettingsForm.TamanhoPadrao, "area cliente padrao da janela");
+                        // Tamanho padrao 1263 x 782 (738 mais a faixa de abas do Painel CPU) de area cliente; gravado de antes da versao atual, abre no novo uma vez.
+                        Igual(new Size(Ui.S(1263), Ui.S(782)), SettingsForm.TamanhoPadrao, "area cliente padrao da janela");
                         Verdade(SettingsForm.TamanhoPadrao.Height >= Ui.S(660), "padrao respeita o minimo");
+                        // faixa de sistema da Visao geral: em janela estreita o rotulo nunca e cortado
+                        foreach (int larguraJanela in new int[] { 760, 880, 1100 })
+                        {
+                            form.Size = new Size(larguraJanela, 700);
+                            InvokePrivate(form, "ArranjarVisaoGeral");
+                            Label[] capsS = (Label[])Field(form, "_vgSpecCap"), valsS = (Label[])Field(form, "_vgSpecVal");
+                            for (int i = 0; i < capsS.Length; i++)
+                                Verdade(capsS[i].Width >= TextRenderer.MeasureText(capsS[i].Text, capsS[i].Font).Width,
+                                    "rotulo da faixa de sistema inteiro: " + capsS[i].Text + " em " + larguraJanela);
+                            if (capsS.Length > 0)
+                                Verdade(valsS[valsS.Length - 1].Right <= ((Control)Field(form, "_cardSpecs")).Width,
+                                    "faixa de sistema cabe no cartao em " + larguraJanela);
+                        }
                         int wAntes = cfgForm.WindowW, hAntes = cfgForm.WindowH, vAntes = cfgForm.JanelaVersao;
                         cfgForm.WindowW = Ui.S(1000); cfgForm.WindowH = Ui.S(700); cfgForm.JanelaVersao = 0;
                         Verdade((Size)InvokePrivate(form, "TamanhoGuardado") == Size.Empty, "tamanho de versao anterior abre no padrao novo " + language);

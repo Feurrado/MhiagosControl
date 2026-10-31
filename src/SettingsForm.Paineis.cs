@@ -188,5 +188,60 @@ namespace MhiagosControl
             }
             return copy;
         }
+
+        // ---------------- Painel CPU: Painéis + Perfis ----------------
+
+        private Panel _faixaPainelCpu;
+        private Segmented _abasPainelCpu;
+        private NavItem _itemPainelCpu;
+
+        /// <summary>
+        /// Perfis deixou de ser uma aba da barra: e a segunda aba do Painel CPU, o lugar
+        /// de quem escolhe o que o mostrador do cooler exibe. A pagina de Perfis continua
+        /// uma pagina inteira; o item da barra so aponta para uma das duas.
+        /// </summary>
+        private void MontarPainelCpu(NavItem item)
+        {
+            _itemPainelCpu = item;
+            _pgPerfis.Dock = DockStyle.Fill;
+            _pgPerfis.Visible = false;
+            _host.Controls.Add(_pgPerfis);
+            Control pg = _pgPerfis;
+            pg.Resize += delegate { ArranjarPagina(pg); };
+
+            _faixaPainelCpu = new Panel();
+            _faixaPainelCpu.Dock = DockStyle.Top;
+            _faixaPainelCpu.Height = Ui.S(44);
+            _faixaPainelCpu.BackColor = Ui.Window;
+            _faixaPainelCpu.Visible = false;
+
+            _abasPainelCpu = new Segmented();
+            _abasPainelCpu.SetItems(T.PanelsTab, T.NavProfiles);
+            _abasPainelCpu.SetBounds(Ui.S(4), Ui.S(4), Ui.S(260), Ui.S(32));
+            _abasPainelCpu.SelectedIndexChanged += delegate { TrocarAbaDoPainelCpu(_abasPainelCpu.SelectedIndex); };
+            _faixaPainelCpu.Controls.Add(_abasPainelCpu);
+
+            _host.Controls.Add(_faixaPainelCpu);
+            // Top toma a borda antes do Fill: vai para o fundo da ordem Z
+            _faixaPainelCpu.SendToBack();
+        }
+
+        /// <summary>0 Painéis, 1 Perfis: o item da barra passa a mostrar a pagina da aba.</summary>
+        private void TrocarAbaDoPainelCpu(int aba)
+        {
+            if (_itemPainelCpu == null) return;
+            _itemPainelCpu.Page = aba == 1 ? _pgPerfis : _pgPaineis;
+            if (_nav != null && _nav.Selected == _itemPainelCpu) ShowPage();
+        }
+
+        /// <summary>Abre o Painel CPU na aba pedida (Perfis tem chave propria nos atalhos antigos).</summary>
+        private void AbrirPainelCpu(int aba)
+        {
+            if (_abasPainelCpu != null && _abasPainelCpu.SelectedIndex != aba) _abasPainelCpu.SelectedIndex = aba;
+            else TrocarAbaDoPainelCpu(aba);
+            IList<NavItem> itens = _nav.Items;
+            for (int i = 0; i < itens.Count; i++)
+                if (itens[i] == _itemPainelCpu) { _nav.SelectedIndex = i; return; }
+        }
     }
 }

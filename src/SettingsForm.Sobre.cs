@@ -655,6 +655,7 @@ namespace MhiagosControl
             _paginaPronta = true;
             GuardarPagina();
             ArranjarPaginaVisivel();
+            IniciarPreAquecimento();
 
             if (_roda == null)
             {
@@ -666,6 +667,7 @@ namespace MhiagosControl
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             if (_tick != null) { _tick.Stop(); _tick.Dispose(); }
+            if (_aquecer != null) { _aquecer.Stop(); _aquecer.Dispose(); _aquecer = null; }
             if (_noteTimer != null) { _noteTimer.Stop(); _noteTimer.Dispose(); }
             _dicaDoWidget.Dispose();
             _dicaDaConfig.Dispose();
@@ -677,6 +679,48 @@ namespace MhiagosControl
             if (_roda != null) { Application.RemoveMessageFilter(_roda); _roda = null; }
 
             base.OnFormClosed(e);
+        }
+
+        // ---------------- pre-aquecimento das paginas ----------------
+
+        private Timer _aquecer;
+        private readonly HashSet<Control> _aquecidas = new HashSet<Control>();
+
+        /// <summary>
+        /// A primeira visita a uma pagina cria as janelas (HWND) de todos os controles dela,
+        /// e na Casa isso passava de 200 ms na frente de quem clicou. Com a janela ja
+        /// mostrada e a pagina de abertura pintada, as outras ganham o HWND aos poucos,
+        /// uma por vez, enquanto o app esta ocioso - a Casa primeiro.
+        /// </summary>
+        private void IniciarPreAquecimento()
+        {
+            if (_aquecer != null) return;
+            _aquecer = new Timer();
+            _aquecer.Interval = 120;
+            _aquecer.Tick += delegate { PreAquecerProxima(); };
+            _aquecer.Start();
+        }
+
+        private void PreAquecerProxima()
+        {
+            try
+            {
+                Control sel = _nav != null && _nav.Selected != null ? _nav.Selected.Page : null;
+                Control alvo = null;
+                if (_pgCasa != null && _pgCasa != sel && !_aquecidas.Contains(_pgCasa)) alvo = _pgCasa;
+                else
+                    foreach (NavItem it in _nav.Items)
+                        if (it.Page != null && it.Page != sel && !_aquecidas.Contains(it.Page)) { alvo = it.Page; break; }
+                if (alvo == null || !Visible || WindowState == FormWindowState.Minimized) { if (alvo == null) { _aquecer.Stop(); } return; }
+                _aquecidas.Add(alvo);
+                if (alvo.IsHandleCreated) return;
+                // CreateControl(true): cria o HWND dela e dos filhos mesmo com a pagina escondida
+                System.Reflection.MethodInfo m = typeof(Control).GetMethod("CreateControl",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new Type[] { typeof(bool) }, null);
+                if (m != null) m.Invoke(alvo, new object[] { true });
+                Theme.ApplyScrollbars(alvo);
+            }
+            catch (Exception ex) { Log.Error("pre-aquecimento das paginas", ex); if (_aquecer != null) _aquecer.Stop(); }
         }
     }
 }

@@ -393,7 +393,7 @@ namespace MhiagosControl
             perfis.Key = "perfis"; config.Key = "config"; baterias.Key = "baterias"; sobre.Key = "sobre";
             casa.Key = "casa";
 
-            NavItem[] fabrica = { visao, paineis, metricas, specs, perfis, config, baterias, casa, sobre };
+            NavItem[] fabrica = { visao, paineis, metricas, specs, config, baterias, casa, sobre };
             foreach (NavItem it in OrdemDaBarra(fabrica, _cfg.NavOrder))
             {
                 _nav.Add(it);
@@ -406,6 +406,7 @@ namespace MhiagosControl
                 Control pg = it.Page;
                 pg.Resize += delegate { ArranjarPagina(pg); };
             }
+            MontarPainelCpu(paineis);
             _nav.OrderChanged += delegate { GravarOrdemDaBarra(); };
             ShowPage();
         }
@@ -451,6 +452,8 @@ namespace MhiagosControl
         /// <summary>Abre a pagina pela chave, onde quer que a pessoa a tenha posto na barra.</summary>
         private void AbrirPaginaPelaChave(string chave)
         {
+            if (chave == "perfis") { AbrirPainelCpu(1); return; }
+            if (chave == "paineis") { AbrirPainelCpu(0); return; }
             IList<NavItem> itens = _nav.Items;
             for (int i = 0; i < itens.Count; i++)
                 if (itens[i].Key == chave) { _nav.SelectedIndex = i; return; }
@@ -500,6 +503,7 @@ namespace MhiagosControl
         {
             NavItem sel = _nav.Selected;
             foreach (Control c in _host.Controls) c.Visible = false;
+            if (_faixaPainelCpu != null) _faixaPainelCpu.Visible = sel != null && sel == _itemPainelCpu;
             if (sel != null && sel.Page != null)
             {
                 sel.Page.Visible = true;
@@ -584,7 +588,7 @@ namespace MhiagosControl
         /// medida: Paineis (as duas colunas e a Previa, a mais alta) e a Visao
         /// geral cabem sem rolar, com 8 px de folga. Perfis, Configuracoes e Casa rolam.
         /// </summary>
-        internal static Size TamanhoPadrao { get { return new Size(Ui.S(1263), Ui.S(738)); } }
+        internal static Size TamanhoPadrao { get { return new Size(Ui.S(1263), Ui.S(782)); } }
 
         /// <summary>
         /// Versao do tamanho padrao. Gravado com versao menor (os padroes

@@ -124,7 +124,7 @@ namespace MhiagosControl
                         foreach (int width in new int[] { 880, 1100 })
                         {
                             form.Size = new Size(width, 740);
-                            ((NavBar)Field(form, "_nav")).SelectedIndex = 5;
+                            ((NavBar)Field(form, "_nav")).SelectedIndex = 4;
                             InvokePrivate(form, "ArrangeSettings");
                             Control page = (Control)Field(form, "_pgConfig");
                             foreach (Control card in page.Controls)
@@ -138,7 +138,7 @@ namespace MhiagosControl
                             CaptureEvolution(form, "settings-" + language + "-" + width);
                             CaptureEvolution((Control)Field(form, "_backupCard"), "backup-" + language + "-" + width);
                             CaptureEvolution((Control)Field(form, "_diagnosticCard"), "diagnostic-" + language + "-" + width);
-                            ((NavBar)Field(form, "_nav")).SelectedIndex = 4;
+                            InvokePrivate(form, "AbrirPaginaPelaChave", "perfis");
                             InvokePrivate(form, "ArrangeProfiles");
                             Control profiles = (Control)Field(form, "_pgPerfis");
                             foreach (Control card in profiles.Controls)
@@ -147,12 +147,12 @@ namespace MhiagosControl
                             CaptureEvolution(form, "profiles-" + language + "-" + width);
                         }
                         form.Size = new Size(1120, 850);
-                        ((NavBar)Field(form, "_nav")).SelectedIndex = 4;
+                        InvokePrivate(form, "AbrirPaginaPelaChave", "perfis");
                         CaptureEvolution((Control)Field(form, "_cardGame"), "games-" + language);
                         form.Size = new Size(880, 740);
                         NavBar sidebar = (NavBar)Field(form, "_nav");
                         sidebar.Subtitle = "Perfil com um nome muito comprido para testar a largura";
-                        sidebar.AjustarLargura(); sidebar.SelectedIndex = 5;
+                        sidebar.AjustarLargura(); sidebar.SelectedIndex = 4;
                         InvokePrivate(form, "ArrangeSettings");
                         Control narrowPage = (Control)Field(form, "_pgConfig");
                         foreach (Control card in narrowPage.Controls)
@@ -161,10 +161,10 @@ namespace MhiagosControl
                                     Verdade(child.Right <= card.Width && child.Bottom <= card.Height,
                                         "controle cabe com barra larga: " + child.Text);
                         CaptureEvolution(form, "settings-wide-sidebar-" + language);
-                        sidebar.SelectedIndex = 4;
+                        InvokePrivate(form, "AbrirPaginaPelaChave", "perfis");
                         CaptureEvolution((Control)Field(form, "_cardGame"), "games-narrow-" + language);
-                        InvokePrivate(form, "ProcessCmdKey", new Message(), Keys.Alt | Keys.D6);
-                        Igual(5, sidebar.SelectedIndex, "Alt+6 abre Configuracoes");
+                        InvokePrivate(form, "ProcessCmdKey", new Message(), Keys.Alt | Keys.D5);
+                        Igual(4, sidebar.SelectedIndex, "Alt+5 abre Configuracoes");
                         Config edit = (Config)Field(form, "_cfg");
                         edit.IdleBlankMinutes = 23;
                         typeof(SettingsForm).GetProperty("_dirty", AuditFlags).SetValue(form, true, null);

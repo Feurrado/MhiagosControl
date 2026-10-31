@@ -39,6 +39,7 @@ namespace MhiagosControl
                 ((Timer)Field(form, "_tick")).Stop();
                 NavBar nav = (NavBar)Field(form, "_nav");
                 EsperarQuadros(300);
+                EsperarQuadros(1800);   // o pre-aquecimento das paginas roda ocioso, uma a cada 120 ms
 
                 // troca de pagina: selecionar e pintar a janela inteira
                 Ui.AnimacoesForcadas = false;   // o custo da troca em si; o fade e medido na janela real
@@ -57,7 +58,7 @@ namespace MhiagosControl
                         sw.Stop();
                         ms.Add(sw.Elapsed.TotalMilliseconds);
                     }
-                    Console.WriteLine("troca para " + it.Key + ": " + Mediana(ms).ToString("0.0") + " ms (troca + pintura da janela)");
+                    Console.WriteLine("troca para " + it.Key + ": " + Mediana(ms).ToString("0.0") + " ms (troca + pintura da janela); primeira vez " + ms[0].ToString("0") + " ms");
                 }
 
                 Ui.AnimacoesForcadas = null;

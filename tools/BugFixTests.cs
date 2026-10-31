@@ -1165,7 +1165,7 @@ namespace MhiagosControl
                         foreach (int sidebar in new int[] { 60, 210, 330 })
                         {
                             form.Size = size; nav.Width = sidebar;
-                            foreach (int index in new int[] { 2, 6, 7 })
+                            foreach (int index in new int[] { 2, 5, 6 })
                             {
                                 nav.SelectedIndex = index; InvokePrivate(form, "ShowPage");
                                 Control page = nav.Selected.Page;
@@ -1178,7 +1178,7 @@ namespace MhiagosControl
                                                 Verdade(content.Right <= child.Width && content.Bottom <= child.Height, "texto e botao cabem em Sobre");
                                     }
                                 CaptureEvolution(form, "bugs-" + language + "-" + size.Width + "-" + sidebar + "-" + index);
-                                if (index == 6 && size.Width == 880 && sidebar == 330)
+                                if (index == 5 && size.Width == 880 && sidebar == 330)
                                 {
                                     ScrollFina aboutBar = (ScrollFina)Field(page, "_barra");
                                     aboutBar.Ajustar(int.MaxValue);

@@ -32,7 +32,7 @@ namespace MhiagosControl
                     form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
                     form.Size = new Size(1100, 760);
                     form.Show(); ((Timer)Field(form, "_tick")).Stop();
-                    ((NavBar)Field(form, "_nav")).SelectedIndex = 6;
+                    ((NavBar)Field(form, "_nav")).SelectedIndex = 5;
                     Control pagina = (Control)Field(form, "_pgBaterias");
                     Verdade(pagina.Visible, "a setima entrada da barra e a pagina Baterias");
 
@@ -64,7 +64,7 @@ namespace MhiagosControl
                 {
                     form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000);
                     form.Show(); ((Timer)Field(form, "_tick")).Stop();
-                    ((NavBar)Field(form, "_nav")).SelectedIndex = 6;
+                    ((NavBar)Field(form, "_nav")).SelectedIndex = 5;
                     BotaoDoWidget botao = (BotaoDoWidget)Field(form, "_btWidget");
                     Verdade(botao.Aberto && ((Card)Field(form, "_cardWidget")).Visible, "reaberto, o painel volta como foi deixado");
                     InvokePrivate(botao, "OnKeyDown", new KeyEventArgs(Keys.Space));
@@ -425,7 +425,7 @@ namespace MhiagosControl
                             string sufixo = language + "-" + largura;
 
                             // ---- 5B
-                            nav.SelectedIndex = 5;
+                            nav.SelectedIndex = 4;
                             InvokePrivate(form, "ArrangeSettings");
                             Control config5 = (Control)Field(form, "_pgConfig");
                             List<Control> itens = (List<Control>)Field(form, "_itensDaConfig");
@@ -468,7 +468,7 @@ namespace MhiagosControl
                             CaptureEvolution(form, "layout-sobre-" + sufixo);
 
                             // ---- 7C
-                            nav.SelectedIndex = 4;
+                            InvokePrivate(form, "AbrirPaginaPelaChave", "perfis");
                             InvokePrivate(form, "ArrangeProfiles");
                             Card lista = (Card)Field(form, "_profilesListCard"), previa = (Card)Field(form, "_profilesPreviewCard");
                             Card jogo = (Card)Field(form, "_cardGame"), rodizio = (Card)Field(form, "_cardRotation");
@@ -504,7 +504,7 @@ namespace MhiagosControl
 
                         Toggle ocioso = (Toggle)Field(form, "_tgIdle");
                         Label nota = (Label)Field(form, "_idleNote");
-                        nav.SelectedIndex = 5;
+                        nav.SelectedIndex = 4;
                         int fechado = nota.Width;
                         ocioso.Checked = true;
                         Igual(T.MinutesIdle, nota.Text, "ligar o apagamento mostra os minutos");
