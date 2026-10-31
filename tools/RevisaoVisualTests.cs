@@ -30,7 +30,7 @@ namespace MhiagosControl
         {
             Secao("visual 3: a janela abre com a pagina montada, antes do Shown");
             Config config = AuditConfig(root, "abertura");
-            config.LastPage = "baterias";
+            config.LastPage = "specs";
             DadosDeCaptura dados = new DadosDeCaptura();
             using (SettingsForm form = new SettingsForm(config, dados.Sensors, dados))
             {
@@ -39,9 +39,7 @@ namespace MhiagosControl
                 form.Show();
                 // Show() devolve antes do Shown, que e postado: aqui a pessoa ja veria o quadro.
                 NavBar nav = (NavBar)Field(form, "_nav");
-                Igual("baterias", nav.Selected.Key, "a pagina lembrada ja esta aberta no primeiro quadro");
-                Control botao = (Control)Field(form, "_btWidget");
-                Verdade(botao != null && botao.Width > 0 && botao.Left > 0, "o botao do Widget ja esta no lugar, e nao no canto");
+                Igual("specs", nav.Selected.Key, "a pagina lembrada ja esta aberta no primeiro quadro");
                 form.Close();
             }
         }

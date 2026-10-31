@@ -47,21 +47,6 @@ namespace MhiagosControl
             // E7E8: botao de ligar
             LinhaDaConfig(page, new LinhaDeOpcao("\uE7E8", T.StartWithWindows, T.StartWithWindowsNote)).Interruptor(_tgAutostart, true);
 
-            // A Visao geral classica, para quem preferir a de antes (a nova e a
-            // padrao). Grava na hora, como a barra recolhida: e arrumacao da
-            // tela, nao edicao de perfil.
-            _tgVisaoNova = new Toggle();
-            _tgVisaoNova.Checked = !_cfg.VisaoGeralNova;
-            _tgVisaoNova.CheckedChanged += delegate
-            {
-                _cfg.VisaoGeralNova = !_tgVisaoNova.Checked;
-                string erro;
-                if (!_session.TrySavePreferences(delegate(Config draft, Config target) { target.VisaoGeralNova = draft.VisaoGeralNova; }, out erro))
-                    Log.Write("visao geral nova nao persistiu: " + erro);
-                ArranjarVisaoGeral();
-            };
-            // E80F: a casa, a mesma da Visao geral
-            LinhaDaConfig(page, new LinhaDeOpcao("\uE80F", T.VisaoNovaOpcao, T.VisaoNovaNota)).Interruptor(_tgVisaoNova, true);
 
             GrupoDaConfig(page, T.PanelLabel);
 

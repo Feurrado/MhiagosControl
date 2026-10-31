@@ -10,7 +10,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace MhiagosControl
 {
-    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData, IControleDoWidget
+    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData
     {
         /// <summary>
         /// Vigia qual jogo esta em primeiro plano e troca o perfil conforme o

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using LibreHardwareMonitor.Hardware;
 
@@ -192,67 +192,5 @@ namespace MhiagosControl
         public void Refresh() { }
         public List<SensorEntry> Read(IEnumerable<string> focusedIds) { return _source.Ler(); }
         public void Dispose() { }
-    }
-
-    /// <summary>
-    /// A bateria dos perifericos como sensores comuns: entram no mostrador do
-    /// cooler, nos graficos de Metricas e nos perfis como qualquer temperatura.
-    ///
-    /// So repassa o que Perifericos ja leu - nao abre aparelho nenhum. Os que
-    /// o historico conhece continuam na lista desligados, com leitura vazia:
-    /// sumir com o headset desligado faria o perfil que o usa perder o sensor
-    /// escolhido e o grafico perder a serie.
-    /// </summary>
-    internal sealed class BateriaSensorSource : ISensorSource
-    {
-        public const string Prefixo = "bat:";
-
-        public string Name { get { return "Periféricos"; } }
-        public bool Available { get { return true; } }
-        public bool LastReadComplete { get { return true; } }
-        public bool Open() { return true; }
-        public void Refresh() { }
-        public void Dispose() { }
-
-        public static string IdDe(Periferico p)
-        {
-            return Prefixo + p.Fonte.ToString().ToLowerInvariant() + ":" + p.Nome;
-        }
-
-        public List<SensorEntry> Read(IEnumerable<string> focusedIds)
-        {
-            Dictionary<string, SensorEntry> porId = new Dictionary<string, SensorEntry>();
-            List<SensorEntry> saida = new List<SensorEntry>();
-            foreach (Periferico p in Perifericos.Atual)
-            {
-                // o campo Bluetooth vazio e aparelho sem leitura nao sao bateria
-                if (p == null || (!p.Bateria.HasValue && p.Estado != EstadoPeriferico.Desligado)) continue;
-                Add(saida, porId, p);
-            }
-            try
-            {
-                foreach (Periferico p in HistoricoDeBateria.Conhecidos()) Add(saida, porId, p);
-            }
-            catch (Exception ex) { Log.Error("aparelhos conhecidos para sensores", ex); }
-            return saida;
-        }
-
-        private static void Add(List<SensorEntry> saida, Dictionary<string, SensorEntry> porId, Periferico p)
-        {
-            string id = IdDe(p);
-            if (porId.ContainsKey(id)) return;
-            SensorEntry e = new SensorEntry();
-            e.Id = id;
-            e.Hardware = p.Nome;
-            e.Category = Sensors.CategoriaPerifericos;
-            e.Name = T.MetricBattery(p.Nome);
-            e.Type = SensorType.Level;
-            e.Unit = "%";
-            e.Value = p.Bateria.HasValue ? (float?)p.Bateria.Value : null;
-            e.Source = "Periféricos";
-            e.Label = e.Name;
-            porId[id] = e;
-            saida.Add(e);
-        }
     }
 }

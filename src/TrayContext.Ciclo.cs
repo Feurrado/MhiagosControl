@@ -10,7 +10,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace MhiagosControl
 {
-    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData, IControleDoWidget
+    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData
     {
         /// <summary>
         /// Entrega a thread de atualizacao uma copia do perfil ativo.
@@ -336,21 +336,7 @@ namespace MhiagosControl
             if (ocioso) text += T.TagIdle;
             if (v1.Clamped || v2.Clamped) text += T.TagOver;
             if (!ok) text += T.TagNoDevice;
-            SetTooltip(ComBateria(text, Perifericos.Resumo()));
-
-            Periferico[] perifericos = Perifericos.Atual;
-            foreach (KeyValuePair<Periferico, int> aviso in _avisosDeBateria.Verificar(perifericos))
-                AvisarBateria(aviso.Key, aviso.Value);
-            try { HistoricoDeBateria.Registrar(perifericos, DateTime.Now); }
-            catch (Exception ex) { Log.Error("historico de bateria", ex); }
-
-            foreach (Periferico cheio in _avisosDeBateria.VerificarCargaCompleta(perifericos))
-                Notificar(T.BatteryFullTitle(cheio.Nome), T.BatteryFullText, ToolTipIcon.Info, "carga completa: " + cheio.Nome);
-            foreach (KeyValuePair<Periferico, double> pouco in _avisosDeBateria.VerificarTempo(perifericos, HistoricoDeBateria.Restante))
-                Notificar(T.BatteryTimeTitle(pouco.Key.Nome, HistoricoDeBateria.DuracaoAproximada(pouco.Value)),
-                          T.BatteryTimeText, ToolTipIcon.Warning, "pouco tempo de bateria: " + pouco.Key.Nome);
-
-            AtualizarIconeDaBandeja(perifericos);
+            SetTooltip(text);
         }
 
         /// <summary>Mescla somente FPS/frametime no instantâneo da janela.</summary>
@@ -472,6 +458,5 @@ namespace MhiagosControl
         /// pessoa veio olhar ao passar o mouse.
         /// </summary>
         /// <summary>So a thread de atualizacao toca nele.</summary>
-        private readonly AvisosDeBateria _avisosDeBateria = new AvisosDeBateria();
     }
 }

@@ -10,7 +10,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace MhiagosControl
 {
-    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData, IControleDoWidget
+    public partial class TrayContext : ApplicationContext, ISettingsData, IPanelStatusData, IReadingStatusData
     {
         // ---------------- menu ----------------
 
@@ -24,9 +24,6 @@ namespace MhiagosControl
 
             menu.Items.Add(MenuTema.Item(T.TrayConfigure, new EventHandler(OnConfig)));
 
-            _miWidget = MenuTema.Item(T.TrayBatteryWidget, new EventHandler(OnToggleWidget));
-            _miWidget.Checked = _cfgWidget.Ativo;
-            menu.Items.Add(_miWidget);
             MenuTema.Separador(menu.Items);
 
             _miPause = MenuTema.Item(T.TrayPause, new EventHandler(OnPause));
