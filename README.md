@@ -21,6 +21,18 @@ máquina.
 > do PC deve usar a **edição enxuta** (branch `edicao-cpu`, release com sufixo
 > `-cpu`), que não tem nada disso.
 
+### Duas edições, o mesmo núcleo
+
+| | **Completa** (`v2.30.0`, branch `main`) | **Enxuta** (`v2.30.0-cpu`, branch `edicao-cpu`) |
+|---|---|---|
+| Mostrador do cooler, perfis, rodízio, perfil por jogo | sim | sim |
+| Painel CPU (Painéis e Perfis em abas) | sim | sim |
+| Métricas e histórico de seis horas | sim | sim |
+| Especificações do PC | sim | sim |
+| Casa (ar-condicionado e lava e seca pela ConnectLife) | sim | não |
+| Bateria dos periféricos (G325, X11, PRO X) e widget | sim | não |
+| Tamanho do instalador | cerca de 6 MB | cerca de 5,5 MB |
+
 > A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
 > Windows na primeira execução e trocável em *Configurações*.
 
@@ -47,6 +59,17 @@ atualiza no lugar.
 ---
 
 ## Novidades
+
+**2.30**
+- **Painel CPU**: a página Painéis mudou de nome e ganhou **Perfis** como segunda aba.
+- A faixa de sistema da Visão geral não corta mais os rótulos em janela estreita.
+- A janela abre por cima dos outros programas quando o app é aberto pelo executável, e a página Casa abre mais rápido (as páginas são preparadas em segundo plano).
+- O código foi reorganizado em arquivos por assunto, sem mudar o comportamento.
+- Nasce a **edição enxuta** (`v2.30.0-cpu`), sem Casa, baterias e widget.
+
+**2.28 a 2.29**
+- Página **Casa**: ar-condicionado e lava e seca Hisense pela conta ConnectLife, com histórico e consumo, e a casa no widget de bateria.
+- Ícone próprio para o headset PRO X Wireless, separado do G325.
 
 **2.22**
 - **Baterias** abre direto nos aparelhos, com o nome completo de cada um
@@ -108,8 +131,8 @@ fica gravada.
 |---|---|
 | **Visão geral** | como a máquina está agora e o que o cooler está mostrando |
 | **Baterias** | quanto dura a carga do headset, do mouse e dos aparelhos Bluetooth |
-| **Painéis** | qual sensor vai para cada mostrador, com escala, unidade e prévia |
-| **Perfis** | conjuntos salvos, rodízio, exportação e perfil por jogo |
+| **Casa** | ar-condicionado e lava e seca Hisense pela conta ConnectLife: estado, controle, histórico e consumo |
+| **Painel CPU** | duas abas: **Painéis** (qual sensor vai para cada mostrador, com escala, unidade e prévia) e **Perfis** (conjuntos salvos, rodízio, exportação e perfil por jogo) |
 | **Métricas** | cartões com histórico, conjuntos prontos e perfis de grade salvos |
 | **Especificações** | o retrato completo da máquina, no espírito do CPU-Z |
 | **Configurações** | idioma, início automático, ociosidade, FPS, backup e diagnóstico |
@@ -127,7 +150,7 @@ monitor atual.
 | ![Especificações](docs/especificacoes.png) | ![Painéis](docs/paineis.png) |
 | **Especificações**: as peças em destaque, com a marca da placa de vídeo, os slots de memória no lugar e os discos em barras | **Painéis**: o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça |
 | ![Perfis](docs/perfis.png) | ![Configurações](docs/configuracoes.png) |
-| **Perfis**: a lista com rodízio de um lado, a prévia e o perfil por jogo do outro | **Configurações**: uma linha por opção, com a descrição curta e o controle à direita |
+| **Painel CPU, aba Perfis**: a lista com rodízio de um lado, a prévia e o perfil por jogo do outro | **Configurações**: uma linha por opção, com a descrição curta e o controle à direita |
 
 > As capturas saem do aplicativo, com as leituras que ele gravou na máquina do
 > autor (um Ryzen 5 5600X com uma Radeon RX 580). O caminho da pasta de dados

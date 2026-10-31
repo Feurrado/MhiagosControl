@@ -332,9 +332,10 @@ namespace MhiagosControl
                 if (medir) { MedirAnimacoes(form, nav); form.Close(); return 0; }
                 if (tela) { CapturaDaTela(form, nav, pasta); form.Close(); return 0; }
                 if (pintura) { MedirPintura(form, nav); form.Close(); return 0; }
-                foreach (Size tamanho in tamanhos)
+                foreach (Size tamanho in (Environment.GetEnvironmentVariable("MHIAGOS_README") == "1" ? new Size[] { tamanhos[0] } : tamanhos))
                 {
-                    form.Size = tamanho;
+                    bool readme = Environment.GetEnvironmentVariable("MHIAGOS_README") == "1";
+                    if (readme) form.ClientSize = SettingsForm.TamanhoPadrao; else form.Size = tamanho;
                     for (int i = 0; i < nav.Items.Count; i++)
                     {
                         nav.SelectedIndex = i;
@@ -345,9 +346,33 @@ namespace MhiagosControl
                         using (Bitmap bmp = new Bitmap(form.Width, form.Height))
                         {
                             form.DrawToBitmap(bmp, new Rectangle(Point.Empty, bmp.Size));
-                            bmp.Save(Path.Combine(pasta, nome + ".png"), ImageFormat.Png);
+                            if (readme)
+                            {
+                                Point o = form.PointToScreen(Point.Empty); o.X -= form.Left; o.Y -= form.Top;
+                                using (Bitmap so = bmp.Clone(new Rectangle(o, form.ClientSize), bmp.PixelFormat))
+                                    so.Save(Path.Combine(pasta, nav.Items[i].Key + ".png"), ImageFormat.Png);
+                            }
+                            else bmp.Save(Path.Combine(pasta, nome + ".png"), ImageFormat.Png);
                         }
                     }
+                }
+                if (Environment.GetEnvironmentVariable("MHIAGOS_README") == "1")
+                {
+                    // a aba Perfis do Painel CPU (nao e item da barra)
+                    form.ClientSize = SettingsForm.TamanhoPadrao;
+                    InvokePrivate(form, "AbrirPaginaPelaChave", "perfis");
+                    InvokePrivate(form, "AtualizarPaginaAtiva", true);
+                    Application.DoEvents();
+                    using (Bitmap bmp = new Bitmap(form.Width, form.Height))
+                    {
+                        form.DrawToBitmap(bmp, new Rectangle(Point.Empty, bmp.Size));
+                        Point o = form.PointToScreen(Point.Empty); o.X -= form.Left; o.Y -= form.Top;
+                        using (Bitmap so = bmp.Clone(new Rectangle(o, form.ClientSize), bmp.PixelFormat))
+                            so.Save(Path.Combine(pasta, "perfis.png"), ImageFormat.Png);
+                    }
+                    form.Close();
+                    Console.WriteLine("capturas em " + pasta);
+                    return 0;
                 }
                 // Quadros das animacoes, conduzidos a mao: o painel Widget e o
                 // "Mais detalhes" a 0, 25, 50, 75 e 100% do tempo.
