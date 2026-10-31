@@ -353,7 +353,7 @@ namespace MhiagosControl
             }
 
             // Aberto pelo executavel (e nao pelo logon do Windows): mostra a janela
-            if (!Program.IniciadoComOWindows()) _openWhenReady = true;
+            if (_activationSignal != null && !Program.IniciadoComOWindows()) _openWhenReady = true;
 
             Microsoft.Win32.SystemEvents.SessionEnded += new Microsoft.Win32.SessionEndedEventHandler(OnSessionEnded);
 
