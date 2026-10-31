@@ -33,6 +33,12 @@ namespace MhiagosControl
         [DllImport("user32.dll")]
         private static extern bool ShowWindowAsync(IntPtr handle, int command);
 
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr handle, out uint pid);
+        [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+        [DllImport("user32.dll")] private static extern bool BringWindowToTop(IntPtr handle);
+        [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+
         private const int SwRestore = 9;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -346,6 +352,9 @@ namespace MhiagosControl
                 _openWhenReady = true;
             }
 
+            // Aberto pelo executavel (e nao pelo logon do Windows): mostra a janela
+            if (!Program.IniciadoComOWindows()) _openWhenReady = true;
+
             Microsoft.Win32.SystemEvents.SessionEnded += new Microsoft.Win32.SessionEndedEventHandler(OnSessionEnded);
 
             IniciarVigiaDeJogo();
@@ -430,6 +439,30 @@ namespace MhiagosControl
         }
 
         [STAThread]
+        [DllImport("user32.dll")] private static extern bool AllowSetForegroundWindow(int pid);
+
+        /// <summary>
+        /// O app subiu junto com o Windows (tarefa de logon) ou a pessoa o abriu? Quem abre pelo
+        /// executavel espera ver a janela; no logon ela ficaria na frente de tudo sem ninguem
+        /// ter pedido. A tarefa agendada nao deixa marca, entao vale o relogio: dentro de dois
+        /// minutos do inicio do Explorer desta sessao, e logon.
+        /// </summary>
+        internal static bool IniciadoComOWindows()
+        {
+            try
+            {
+                Process eu = Process.GetCurrentProcess();
+                DateTime logon = DateTime.MaxValue;
+                foreach (Process p in Process.GetProcessesByName("explorer"))
+                {
+                    try { if (p.SessionId == eu.SessionId && p.StartTime < logon) logon = p.StartTime; }
+                    catch { }
+                }
+                return logon != DateTime.MaxValue && (eu.StartTime - logon).TotalSeconds < 120;
+            }
+            catch { return false; }
+        }
+
         public static void Main()
         {
             // Duas instancias disputariam o painel e o resultado piscaria.
@@ -462,6 +495,8 @@ namespace MhiagosControl
                 {
                     // A instancia existente traz sua unica janela para frente.
                     // Esta segunda execucao nao cria janela nem icone proprios.
+                    // quem acabou de ser aberto pela pessoa tem o primeiro plano: passa a permissao adiante
+                    try { AllowSetForegroundWindow(-1); } catch { }
                     try { activation.Set(); }
                     catch (Exception ex) { Log.Error("sinalizar instancia existente", ex); }
                     return;

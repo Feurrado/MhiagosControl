@@ -157,6 +157,7 @@ namespace MhiagosControl
                     {
                         _settingsForm = f;
                         f.PaginaInicial = _paginaPedida;
+                        f.Shown += delegate { TrazerParaFrente(f); };
                         _paginaPedida = null;
                         // Aplicar dentro da janela ja vale no mostrador: sem
                         // isto o perfil so mudaria ao fechar, o que faria o
@@ -208,10 +209,34 @@ namespace MhiagosControl
             {
                 if (form.WindowState == FormWindowState.Minimized)
                     form.WindowState = FormWindowState.Normal;
+                if (!form.Visible) form.Show();
                 ShowWindowAsync(form.Handle, SwRestore);
-                form.BringToFront();
-                form.Activate();
-                SetForegroundWindow(form.Handle);
+
+                // O Windows so deixa chamar SetForegroundWindow quem tem a entrada do
+                // momento: um processo de bandeja, chamado por outro executavel ou por
+                // um clique no icone, abria a janela ATRAS dos outros programas. Ligar a
+                // fila de entrada desta thread a da janela em primeiro plano vale a
+                // permissao por um instante.
+                IntPtr primeiro = GetForegroundWindow();
+                uint pid;
+                uint threadDele = primeiro != IntPtr.Zero ? GetWindowThreadProcessId(primeiro, out pid) : 0;
+                uint minha = GetCurrentThreadId();
+                bool ligou = threadDele != 0 && threadDele != minha && AttachThreadInput(minha, threadDele, true);
+                try
+                {
+                    BringWindowToTop(form.Handle);
+                    SetForegroundWindow(form.Handle);
+                    form.Activate();
+                }
+                finally { if (ligou) AttachThreadInput(minha, threadDele, false); }
+
+                // Reserva: se ainda assim ficou atras, o TopMost momentaneo a leva para cima.
+                if (GetForegroundWindow() != form.Handle)
+                {
+                    bool antes = form.TopMost;
+                    form.TopMost = true;
+                    form.TopMost = antes;
+                }
             }
             catch (Exception ex) { Log.Error("trazer configuracao para frente", ex); }
         }
