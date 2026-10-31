@@ -1799,6 +1799,18 @@ namespace MhiagosControl
             Console.WriteLine("== " + nome);
         }
 
+        /// <summary>
+        /// Medidas de layout que so valem numa tela do tamanho de quem desenvolve: a janela
+        /// padrao e maior que a area de trabalho de uma maquina virtual de 1024 x 768 (a do
+        /// CI), onde o Windows a comprime e as colunas mudam. Ali a conferencia e pulada.
+        /// </summary>
+        private static void VerdadeNaTela(bool condicao, string descricao)
+        {
+            Rectangle area = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+            if (area.Width < 1400 || area.Height < 900) return;
+            Verdade(condicao, descricao);
+        }
+
         private static void Verdade(bool condicao, string descricao)
         {
             if (condicao) { _ok++; return; }

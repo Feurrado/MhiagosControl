@@ -674,8 +674,8 @@ namespace MhiagosControl
                                         if (largura == 1300)
                                         {
                                             Verdade(tiles.Count < 5 || tiles[4].Top == tiles[0].Top, "cinco leituras numa fileira " + sufixo);
-                                            Verdade(cooler.Left > arv.Right && cooler.Top == arv.Top, "cooler na coluna da direita " + sufixo);
-                                            Verdade(Math.Abs(cooler.Bottom - evs.Bottom) <= 1, "as duas colunas terminam juntas " + sufixo);
+                                            VerdadeNaTela(cooler.Left > arv.Right && cooler.Top == arv.Top, "cooler na coluna da direita " + sufixo);
+                                            VerdadeNaTela(Math.Abs(cooler.Bottom - evs.Bottom) <= 1, "as duas colunas terminam juntas " + sufixo);
                                         }
                                         else
                                         {
@@ -773,7 +773,7 @@ namespace MhiagosControl
                             Verdade(arv.Height == Ui.S(CartaoDoArVisao.Altura), "cartao do ar nao cresceu " + est + " " + language);
                             int topo = int.MaxValue, fundo = 0;
                             foreach (Control ctl in pg.Controls) if (ctl.Visible && ctl.Dock == DockStyle.None) { topo = Math.Min(topo, ctl.Top); fundo = Math.Max(fundo, ctl.Bottom); }
-                            Verdade(pg.Height >= fundo - topo, "Visao geral cabe sem rolar no tamanho padrao (" + (fundo - topo) + " de " + pg.Height + ") " + est + " " + language);
+                            VerdadeNaTela(pg.Height >= fundo - topo, "Visao geral cabe sem rolar no tamanho padrao (" + (fundo - topo) + " de " + pg.Height + ") " + est + " " + language);
                             if (est == "concluido" && language == T.PtBr && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MHIAGOS_VISUAL_DIR")))
                                 using (Bitmap b = new Bitmap(form.Width, form.Height))
                                 {
@@ -797,7 +797,7 @@ namespace MhiagosControl
                         Control pp = (Control)Field(form, "_pgPaineis");
                         int fundoP = 0;
                         foreach (Control ctl in pp.Controls) if (ctl.Visible && ctl.Dock == DockStyle.None) fundoP = Math.Max(fundoP, ctl.Bottom);
-                        Verdade(fundoP <= pp.Height, "Paineis sem cortar no tamanho padrao (" + fundoP + " de " + pp.Height + ") " + language);
+                        VerdadeNaTela(fundoP <= pp.Height, "Paineis sem cortar no tamanho padrao (" + fundoP + " de " + pp.Height + ") " + language);
                         for (int i = 0; i < nav.Items.Count; i++) if (nav.Items[i].Key == "visao") nav.SelectedIndex = i;
                         // Tamanho padrao 1263 x 782 (738 mais a faixa de abas do Painel CPU) de area cliente; gravado de antes da versao atual, abre no novo uma vez.
                         Igual(new Size(Ui.S(1263), Ui.S(782)), SettingsForm.TamanhoPadrao, "area cliente padrao da janela");
@@ -819,7 +819,7 @@ namespace MhiagosControl
                         cfgForm.WindowW = Ui.S(1000); cfgForm.WindowH = Ui.S(700); cfgForm.JanelaVersao = 0;
                         Verdade((Size)InvokePrivate(form, "TamanhoGuardado") == Size.Empty, "tamanho de versao anterior abre no padrao novo " + language);
                         cfgForm.JanelaVersao = SettingsForm.VersaoDaJanela;
-                        Verdade((Size)InvokePrivate(form, "TamanhoGuardado") == new Size(Ui.S(1000), Ui.S(700)), "tamanho escolhido pela pessoa fica " + language);
+                        VerdadeNaTela((Size)InvokePrivate(form, "TamanhoGuardado") == new Size(Ui.S(1000), Ui.S(700)), "tamanho escolhido pela pessoa fica " + language);
                         cfgForm.WindowW = wAntes; cfgForm.WindowH = hAntes; cfgForm.JanelaVersao = vAntes;
                         Verdade(arv.Linha().StartsWith(T.ClimaLaFora + " "), "linha do ar comeca por la fora " + language);
                         Verdade(lavv.Linha().Contains("rpm"), "linha da lavadora com a centrifugacao " + language);
