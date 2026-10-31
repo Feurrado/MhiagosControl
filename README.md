@@ -18,6 +18,26 @@ retrato completo da máquina.
 > para o uso do próprio autor, está na branch `main` e nos releases sem o sufixo
 > `-cpu`.
 
+### Duas edições, o mesmo núcleo
+
+| | **Enxuta** (`v2.30.0-cpu`, branch `edicao-cpu`) | **Completa** (`v2.30.0`, branch `main`) |
+|---|---|---|
+| Mostrador do cooler, perfis, rodízio, perfil por jogo | sim | sim |
+| Painel CPU (Painéis e Perfis em abas) | sim | sim |
+| Métricas e histórico de seis horas | sim | sim |
+| Especificações do PC | sim | sim |
+| Casa (ar-condicionado e lava e seca pela ConnectLife) | não | sim |
+| Bateria dos periféricos (G325, X11, PRO X) e widget | não | sim |
+| Tamanho do instalador | cerca de 5,5 MB | cerca de 6 MB |
+
+### O que mudou na 2.30.0
+
+- **Painel CPU**: a página Painéis mudou de nome e ganhou **Perfis** como segunda aba.
+- A faixa de sistema da Visão geral não corta mais os rótulos em janela estreita.
+- A janela abre por cima dos outros programas quando o app é aberto pelo executável.
+- Abertura da página Casa mais rápida (na edição completa); páginas preparadas em segundo plano.
+- O código foi reorganizado em arquivos por assunto, sem mudar o comportamento.
+
 
 > A interface fala **português do Brasil e inglês**, escolhido pelo idioma do
 > Windows na primeira execução e trocável em *Configurações*.
@@ -64,15 +84,14 @@ algo sair diferente do esperado no seu aparelho.
 
 ## Telas
 
-A janela tem oito páginas na barra lateral e abre na **Visão geral**. A ordem é
+A janela tem seis páginas na barra lateral e abre na **Visão geral**. A ordem é
 sua: arraste um item para cima ou para baixo (ou use Ctrl+↑ e Ctrl+↓), e ela
 fica gravada.
 
 | Página | Responde |
 |---|---|
 | **Visão geral** | como a máquina está agora e o que o cooler está mostrando |
-| **Painéis** | qual sensor vai para cada mostrador, com escala, unidade e prévia |
-| **Perfis** | conjuntos salvos, rodízio, exportação e perfil por jogo |
+| **Painel CPU** | duas abas: **Painéis** (qual sensor vai para cada mostrador, com escala, unidade e prévia) e **Perfis** (conjuntos salvos, rodízio, exportação e perfil por jogo) |
 | **Métricas** | cartões com histórico, conjuntos prontos e perfis de grade salvos |
 | **Especificações** | o retrato completo da máquina, no espírito do CPU-Z |
 | **Configurações** | idioma, início automático, ociosidade, FPS, backup e diagnóstico |
@@ -85,12 +104,12 @@ monitor atual.
 
 | | |
 |:--:|:--:|
-| ![Painéis](docs/paineis.png) | ![Métricas](docs/metricas.png) |
+| ![Painel CPU](docs/paineis.png) | ![Métricas](docs/metricas.png) |
 | **Painel CPU**: o sensor, a escala e a unidade de cada mostrador, com prévia | **Métricas**: a grade de cartões arrastáveis, com o navegador de período no alto seguindo o cartão escolhido |
-| ![Especificações](docs/especificacoes.png) | ![Painéis](docs/paineis.png) |
-| **Especificações**: as peças em destaque, com a marca da placa de vídeo, os slots de memória no lugar e os discos em barras | **Painéis**: o sensor de cada mostrador, a escala e as unidades, com prévia ao vivo sobre a peça |
+| ![Especificações](docs/especificacoes.png) | ![Seletor de sensor](docs/seletor.png) |
+| **Especificações**: as peças em destaque, com a marca da placa de vídeo, os slots de memória no lugar e os discos em barras | **Seletor de sensor**: a lista agrupada por peça, com busca e a leitura ao vivo |
 | ![Perfis](docs/perfis.png) | ![Configurações](docs/configuracoes.png) |
-| **Perfis**: a lista com rodízio de um lado, a prévia e o perfil por jogo do outro | **Configurações**: uma linha por opção, com a descrição curta e o controle à direita |
+| **Painel CPU, aba Perfis**: a lista com rodízio de um lado, a prévia e o perfil por jogo do outro | **Configurações**: uma linha por opção, com a descrição curta e o controle à direita |
 
 > As capturas saem do aplicativo, com as leituras que ele gravou na máquina do
 > autor (um Ryzen 5 5600X com uma Radeon RX 580). O caminho da pasta de dados
