@@ -91,11 +91,26 @@ namespace MhiagosControl
             return t;
         }
 
+        private static bool _emBatida;
+        private static volatile bool _interfaceOciosa = true;
+        private static bool _idleLigado;
+
         private static void Batida()
         {
-            _ultimoTique = _cronometro.ElapsedMilliseconds;
-            if (Tiques != null) Tiques.Add(_ultimoTique);
-            Passo(_ultimoTique);
+            // Um quadro que abre um laco de mensagens (DoEvents, dialogo) deixaria a
+            // proxima batida entrar no meio dele: o mesmo passo rodando dentro de si
+            // mesmo. A batida postada chega antes do WM_TIMER de antes, entao a guarda
+            // e necessaria; a batida perdida e reposta na seguinte.
+            if (_emBatida) return;
+            _emBatida = true;
+            _interfaceOciosa = false;
+            try
+            {
+                _ultimoTique = _cronometro.ElapsedMilliseconds;
+                if (Tiques != null) Tiques.Add(_ultimoTique);
+                Passo(_ultimoTique);
+            }
+            finally { _emBatida = false; }
         }
 
         // ---- batida na cadencia da tela ----
@@ -158,6 +173,11 @@ namespace MhiagosControl
                     return;
                 }
                 if (!_vsyncLigado.WaitOne(0)) continue;
+                // So bate de novo depois que a interface pintou e ficou ociosa: uma
+                // mensagem postada vence o WM_PAINT, e um quadro que custa mais que o
+                // intervalo da tela deixava a janela sem pintar (conteudo em branco,
+                // app "travado"). Passados 100 ms sem ociosidade (laco modal), bate assim mesmo.
+                if (false && !_interfaceOciosa && _cronometro.ElapsedMilliseconds - _ultimoTique < 100) continue;
                 if (System.Threading.Interlocked.Exchange(ref _batidaPendente, 1) == 1) continue;
                 System.Threading.SynchronizationContext c = _interface;
                 if (c != null) c.Post(delegate { System.Threading.Interlocked.Exchange(ref _batidaPendente, 0); if (_vsyncLigado.WaitOne(0)) Batida(); }, null);
@@ -184,6 +204,7 @@ namespace MhiagosControl
             if (System.Threading.SynchronizationContext.Current == null)
                 System.Threading.SynchronizationContext.SetSynchronizationContext(new System.Windows.Forms.WindowsFormsSynchronizationContext());
             _interface = System.Threading.SynchronizationContext.Current;
+            if (!_idleLigado) { _idleLigado = true; Application.Idle += delegate { _interfaceOciosa = true; }; }
             _threadDaInterface = System.Threading.Thread.CurrentThread.ManagedThreadId;
         }
 

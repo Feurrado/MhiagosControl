@@ -91,6 +91,46 @@ namespace MhiagosControl
                 EsperarQuadros(900);
                 Gravar(pasta, "janela-mais", arv, delegate { InvokePrivate(arv.BotaoMais, "OnClick", EventArgs.Empty); });
                 EsperarQuadros(300);
+
+                // CollapsiblePanel isolado, no relogio real do app (vsync): abre, fica aberto e fecha
+                using (Form fx = new Form())
+                {
+                    fx.StartPosition = FormStartPosition.Manual; fx.Location = new Point(60, 60); fx.Size = new Size(400, 300); fx.ShowInTaskbar = false;
+                    CollapsiblePanel pw = new CollapsiblePanel(false);
+                    pw.Width = 360; pw.Location = new Point(10, 10);
+                    Panel miolo = new Panel(); miolo.BackColor = Color.Teal;
+                    pw.Conteudo = miolo; pw.AlturaAberta = 150;
+                    fx.Controls.Add(pw);
+                    fx.Show(); fx.TopMost = true;
+                    EsperarQuadros(300);
+                    pw.Alternar();
+                    EsperarQuadros(1200);
+                    Console.WriteLine("painel isolado apos abrir: expandido=" + pw.Expandido + " animando=" + pw.Animando + " altura=" + pw.Height + "/" + pw.AlturaAberta + " conteudo visivel=" + miolo.Visible);
+                    EsperarQuadros(1500);
+                    Console.WriteLine("painel isolado 1,5 s depois: expandido=" + pw.Expandido + " altura=" + pw.Height + " conteudo visivel=" + miolo.Visible);
+                    pw.Alternar();
+                    EsperarQuadros(1200);
+                    Console.WriteLine("painel isolado apos fechar: expandido=" + pw.Expandido + " altura=" + pw.Height);
+                    fx.Close();
+                }
+                // quadro caro (25 ms de arranjo por quadro, como as paginas pesadas): a janela tem de continuar pintando
+                using (Form fy = new Form())
+                {
+                    fy.StartPosition = FormStartPosition.Manual; fy.Location = new Point(60, 60); fy.Size = new Size(400, 300); fy.ShowInTaskbar = false;
+                    CollapsiblePanel pp = new CollapsiblePanel(false);
+                    pp.Width = 360; pp.Location = new Point(10, 10);
+                    Panel miolo2 = new Panel(); miolo2.BackColor = Color.Teal;
+                    pp.Conteudo = miolo2; pp.AlturaAberta = 150;
+                    pp.AlturaMudou += delegate { System.Threading.Thread.Sleep(25); };
+                    fy.Controls.Add(pp);
+                    int pinturas = 0; pp.Paint += delegate { pinturas++; };
+                    fy.Show(); fy.TopMost = true;
+                    EsperarQuadros(300);
+                    pp.Alternar();
+                    EsperarQuadros(1500);
+                    Console.WriteLine("quadro caro: pinturas do painel=" + pinturas + " expandido=" + pp.Expandido + " altura=" + pp.Height + " conteudo visivel=" + miolo2.Visible);
+                    fy.Close();
+                }
                 form.Close();
             }
 
