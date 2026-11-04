@@ -7,13 +7,13 @@ import os
 import time
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from . import banco, servico
+from . import banco, casa, servico
 from .connectlife import ConnectLifeErro, extrair_codigo
 
-VERSAO = "1.0.0"
+VERSAO = "1.1.0"
 CHAVE = os.environ.get("MHIAGOS_CHAVE", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -91,26 +91,159 @@ def sair():
 
 class Comando(BaseModel):
     props: dict[str, str]
-    semBipe: bool = False
+    semBipe: bool | None = None
+    # Mudanca manual cancela o retorno da cena (como no app).
+    manual: bool = True
+
+
+def _leves(lista):
+    """Sem a meta do modelo (centenas de propriedades da lavadora): ela vai em /propriedades."""
+    return [{k: v for k, v in a.items() if k != "meta"} for a in lista]
+
+
+def _aparelho(puid):
+    a = servico.achar(puid)
+    if a is None:
+        raise HTTPException(404, "aparelho desconhecido")
+    return a
+
+
+def _sem_bipe(pedido):
+    return casa.preferencias()["dados"].get("semBipe", False) if pedido is None else pedido
 
 
 @app.get("/api/aparelhos", dependencies=[Depends(autorizado)])
 def aparelhos():
-    return {**servico.situacao(), "lista": servico.aparelhos()}
+    servico.tocar()
+    return {**servico.situacao(), "lista": _leves(servico.aparelhos()), "agendamentos": _agendamentos()}
 
 
 @app.post("/api/aparelhos/ler", dependencies=[Depends(autorizado)])
 def ler_agora():
+    servico.tocar()
     servico.ler()
-    return {**servico.situacao(), "lista": servico.aparelhos()}
+    return {**servico.situacao(), "lista": _leves(servico.aparelhos()), "agendamentos": _agendamentos()}
+
+
+@app.get("/api/aparelhos/{puid}/propriedades", dependencies=[Depends(autorizado)])
+def propriedades(puid: str):
+    return {"propriedades": casa.propriedades(_aparelho(puid))}
 
 
 @app.post("/api/aparelhos/{puid}/comando", dependencies=[Depends(autorizado)])
 def comando(puid: str, c: Comando):
     if not c.props:
         raise HTTPException(400, "sem propriedades")
-    servico.enviar(puid, c.props, c.semBipe)
+    servico.enviar(puid, c.props, _sem_bipe(c.semBipe))
+    if c.manual:
+        servico.cancelar(puid, "retorno")
     return {"ok": True}
+
+
+class Cena(BaseModel):
+    indice: int
+
+
+@app.post("/api/aparelhos/{puid}/cena", dependencies=[Depends(autorizado)])
+def cena(puid: str, c: Cena):
+    """Roda a cena das preferencias; com duracao, agenda o retorno ao padrao (como o app)."""
+    a = _aparelho(puid)
+    cenas = casa.preferencias()["dados"]["cenas"]
+    if not 0 <= c.indice < len(cenas):
+        raise HTTPException(404, "cena desconhecida")
+    x = cenas[c.indice]
+    props = casa.comando_da_cena(x, a)
+    if props is None:
+        raise HTTPException(409, "este aparelho nao aceita a cena")
+    servico.enviar(puid, props, _sem_bipe(None))
+    servico.cancelar(puid, "retorno")
+    if x.get("duracao", 0) > 0 and not x.get("desligar"):
+        r = casa.comando_de_retorno(a)
+        if r:
+            servico.agendar(puid, int(time.time()) + int(x["duracao"]) * 60, r, "retorno")
+    return {"ok": True}
+
+
+class Timer(BaseModel):
+    minutos: int
+
+
+@app.post("/api/aparelhos/{puid}/timer", dependencies=[Depends(autorizado)])
+def timer(puid: str, t: Timer):
+    if not 1 <= t.minutos <= 24 * 60:
+        raise HTTPException(400, "minutos fora da faixa")
+    _aparelho(puid)
+    return {"id": servico.agendar(puid, int(time.time()) + t.minutos * 60, {"t_power": "0"}, "desligar")}
+
+
+@app.delete("/api/aparelhos/{puid}/timer", dependencies=[Depends(autorizado)])
+def cancelar_timer(puid: str):
+    servico.cancelar(puid, "desligar")
+    return {"ok": True}
+
+
+@app.delete("/api/aparelhos/{puid}/retorno", dependencies=[Depends(autorizado)])
+def cancelar_retorno(puid: str):
+    servico.cancelar(puid, "retorno")
+    return {"ok": True}
+
+
+# ---------------- preferencias e consumo ----------------
+
+class Preferencias(BaseModel):
+    dados: dict
+    origem: str = "web"
+
+
+@app.get("/api/preferencias", dependencies=[Depends(autorizado)])
+def preferencias():
+    return casa.preferencias()
+
+
+@app.put("/api/preferencias", dependencies=[Depends(autorizado)])
+def gravar_preferencias(p: Preferencias):
+    return casa.gravar_preferencias(p.dados, p.origem)
+
+
+@app.get("/api/consumo", dependencies=[Depends(autorizado)])
+def consumo(dias: int = 30, meses: int = 12):
+    dias = max(1, min(400, dias))
+    meses = max(1, min(36, meses))
+    r = {}
+    for a in servico.aparelhos():
+        if a["tipo"] in ("008", "009"):
+            r[a["puid"]] = {"tipo": "ar", "dias": casa.consumo_ar(a["puid"], dias)}
+        elif a["tipo"] in ("003", "025", "027", "004"):
+            r[a["puid"]] = {"tipo": "lavadora", "meses": casa.consumo_lavadora(a["puid"], meses)}
+    return {"preferencias": casa.preferencias()["dados"], "aparelhos": r}
+
+
+def _csv(linhas, colunas):
+    out = [";".join(colunas)]
+    for l in linhas:
+        out.append(";".join("" if l.get(c) is None else str(l[c]) for c in colunas))
+    return "\n".join(out) + "\n"
+
+
+@app.get("/api/exportar/ar.csv", dependencies=[Depends(autorizado)])
+def exportar_ar(desde: int = 0):
+    l = banco.linhas("SELECT puid,t,amb,alvo,ligado,modo FROM amostras_ar WHERE t > ? ORDER BY puid,t", (desde,))
+    for x in l:
+        x["quando"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(x["t"]))
+    return Response(_csv(l, ["puid", "quando", "t", "amb", "alvo", "ligado", "modo"]), media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=historico-ar.csv"})
+
+
+@app.get("/api/exportar/ciclos.csv", dependencies=[Depends(autorizado)])
+def exportar_ciclos(desde: int = 0):
+    from . import tabelas
+    l = banco.linhas("SELECT * FROM ciclos WHERE fim > ? ORDER BY inicio", (desde,))
+    for x in l:
+        x["inicio_local"] = time.strftime("%Y-%m-%d %H:%M", time.localtime(x["inicio"]))
+        x["minutos"] = (x["fim"] - x["inicio"]) // 60
+        x["programa_nome"] = tabelas.programa(x["programa"] or 0)
+    return Response(_csv(l, ["puid", "inicio_local", "minutos", "programa", "programa_nome", "agua", "energia", "concluido"]),
+                    media_type="text/csv", headers={"Content-Disposition": "attachment; filename=ciclos-lavadora.csv"})
 
 
 @app.get("/api/aparelhos/{puid}/diagnostico", dependencies=[Depends(autorizado)])
@@ -134,8 +267,12 @@ def historico_ar(desde: int = 0, ate: int | None = None, puid: str | None = None
 @app.get("/api/historico/ciclos", dependencies=[Depends(autorizado)])
 def historico_ciclos(desde: int = 0):
     """Ciclos terminados depois de 'desde' (pelo fim) e o que esta em curso."""
+    from . import tabelas
+    ciclos = banco.linhas("SELECT * FROM ciclos WHERE fim > ? ORDER BY inicio", (desde,))
+    for c in ciclos:
+        c["programaNome"] = tabelas.programa(c["programa"] or 0)
     return {"agora": int(time.time()),
-            "ciclos": banco.linhas("SELECT * FROM ciclos WHERE fim > ? ORDER BY inicio", (desde,)),
+            "ciclos": ciclos,
             "emCurso": banco.linhas("SELECT * FROM em_curso")}
 
 
@@ -189,19 +326,20 @@ class Agendamento(BaseModel):
     nome: str | None = None
 
 
+def _agendamentos():
+    return [dict(a, props=json.loads(a["props"])) for a in banco.linhas("SELECT * FROM agendamentos ORDER BY quando")]
+
+
 @app.get("/api/agendamentos", dependencies=[Depends(autorizado)])
 def agendamentos():
-    return {"agendamentos": [dict(a, props=json.loads(a["props"]))
-                             for a in banco.linhas("SELECT * FROM agendamentos ORDER BY quando")]}
+    return {"agendamentos": _agendamentos()}
 
 
 @app.post("/api/agendamentos", dependencies=[Depends(autorizado)])
 def agendar(a: Agendamento):
     if not a.props:
         raise HTTPException(400, "sem propriedades")
-    cur = banco.con().execute("INSERT INTO agendamentos(puid,quando,props,nome,criado) VALUES(?,?,?,?,?)",
-                              (a.puid, a.quando, json.dumps(a.props), a.nome, int(time.time())))
-    return {"id": cur.lastrowid}
+    return {"id": servico.agendar(a.puid, a.quando, a.props, a.nome)}
 
 
 @app.delete("/api/agendamentos/{ident}", dependencies=[Depends(autorizado)])

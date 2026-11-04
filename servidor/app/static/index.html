@@ -3,166 +3,647 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1C1C1F">
 <title>Mhiagos Casa</title>
 <style>
-  :root { --bg:#f4f5f7; --card:#fff; --tx:#1b1d21; --mu:#6b7280; --ac:#2563eb; --bd:#e5e7eb; --ok:#16a34a; --er:#dc2626; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#111317; --card:#1b1e24; --tx:#e8eaed; --mu:#9aa0a8; --ac:#60a5fa; --bd:#2a2e36; } }
+  /* Paleta do Mhiagos Control (src/Ui.cs, tabela Tons): escuro e claro. */
+  :root {
+    --window:#F4F5F7; --sidebar:#EAECF0; --surface:#FFFFFF; --surface-alt:#F7F8FA; --border:#DADDE3;
+    --text:#1B1D21; --muted:#5F646E; --faint:#6B707B; --hover:#ECEFF4; --accent:#2D7DF6; --accent-hover:#4A91FF;
+    --accent-soft:#DEEAFF; --accent-text:#1F6AE0; --warn:#F0AF3C; --danger:#EB5A4B; --ok:#2EA043;
+    --r-ctl:4px; --r-card:8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --window:#1C1C1F; --sidebar:#17171A; --surface:#26262A; --surface-alt:#2E2E33; --border:#38383E;
+      --text:#F0F0F3; --muted:#9699A3; --faint:#8A8E99; --hover:#323238; --accent-soft:#1E3352; --accent-text:#6AA6FF;
+    }
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.4 system-ui, "Segoe UI", sans-serif; }
-  main { max-width:560px; margin:0 auto; padding:16px; }
-  h1 { font-size:20px; margin:4px 0 12px; }
-  .card { background:var(--card); border:1px solid var(--bd); border-radius:12px; padding:14px; margin-bottom:12px; }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .mu { color:var(--mu); font-size:13px; }
-  .big { font-size:34px; font-weight:600; }
-  button, select, input { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--bd); border-radius:8px; padding:8px 12px; }
-  button.on { background:var(--ac); color:#fff; border-color:var(--ac); }
-  button:disabled { opacity:.5; }
-  .er { color:var(--er); }
-  .bar { height:8px; background:var(--bd); border-radius:4px; overflow:hidden; }
-  .bar > div { height:100%; background:var(--ac); }
+  html, body { margin:0; background:var(--window); color:var(--text); }
+  body { font:14px/1.4 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  .app { display:flex; min-height:100vh; }
+  nav { width:220px; flex:none; background:var(--sidebar); padding:16px 10px; display:flex; flex-direction:column; gap:2px; position:sticky; top:0; height:100vh; }
+  nav .marca { font-size:18px; font-weight:600; padding:4px 10px 16px; }
+  nav button { all:unset; cursor:pointer; padding:9px 12px; border-radius:var(--r-ctl); color:var(--text); display:flex; gap:10px; align-items:center; }
+  nav button:hover { background:var(--hover); }
+  nav button.ativo { background:var(--accent-soft); color:var(--accent-text); font-weight:600; }
+  nav .rodape { margin-top:auto; color:var(--muted); font-size:12px; padding:10px; }
+  main { flex:1; padding:24px 28px 40px; max-width:1180px; }
+  h1 { font:600 24px "Segoe UI Variable Display","Segoe UI",sans-serif; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:18px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .pilula { background:var(--surface-alt); border:1px solid var(--border); border-radius:999px; padding:2px 10px; font-size:12px; }
+  .pilula.ok::before, .pilula.er::before { content:""; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; background:var(--ok); vertical-align:1px; }
+  .pilula.er::before { background:var(--danger); }
+  .grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr)); gap:12px; align-items:start; }
+  .cartao { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-card); padding:18px; }
+  .cab { display:flex; align-items:baseline; gap:10px; margin-bottom:12px; }
+  .cab .nome { font-weight:600; font-size:16px; }
+  .cab .mu { margin-left:auto; }
+  .mu { color:var(--muted); font-size:12px; }
+  .secao { border-top:1px solid var(--border); margin-top:14px; padding-top:12px; }
+  .secao > .tit { color:var(--muted); font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between; }
+  button.b, select, input { font:inherit; color:var(--text); background:var(--surface-alt); border:1px solid var(--border);
+    border-radius:var(--r-ctl); padding:7px 12px; min-height:32px; }
+  button.b { cursor:pointer; }
+  button.b:hover:not(:disabled) { background:var(--hover); }
+  button.b.pri { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.b.pri:hover:not(:disabled) { background:var(--accent-hover); }
+  button.b.perigo { color:var(--danger); }
+  button:disabled { opacity:.45; cursor:default; }
+  input:focus, select:focus, button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  .linha { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .seg { display:flex; background:var(--surface-alt); border:1px solid var(--border); border-radius:var(--r-ctl); padding:2px; gap:2px; flex-wrap:wrap; }
+  .seg button { all:unset; cursor:pointer; padding:6px 12px; border-radius:3px; font-size:13px; flex:1; text-align:center; white-space:nowrap; }
+  .seg button:hover { background:var(--hover); }
+  .seg button.on { background:var(--accent); color:#fff; }
+  .seg button:disabled { opacity:.45; cursor:default; }
+  /* Mostrador do ar */
+  .mostrador { display:flex; align-items:center; gap:18px; }
+  .dial { position:relative; width:150px; height:150px; flex:none; }
+  .dial svg { width:100%; height:100%; }
+  .dial .val { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .dial .val b { font:600 38px "Segoe UI Variable Display","Segoe UI",sans-serif; line-height:1; }
+  .dial .val span { font-size:12px; color:var(--muted); margin-top:4px; }
+  .ctl { display:flex; flex-direction:column; gap:10px; flex:1; min-width:0; }
+  .redondo { width:40px; height:40px; border-radius:50%; padding:0; font-size:20px; display:inline-flex; align-items:center; justify-content:center; }
+  .liga.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .big { font:600 26px "Segoe UI Variable Display","Segoe UI",sans-serif; }
+  .chave { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0; }
+  .tg { position:relative; width:40px; height:20px; flex:none; cursor:pointer; }
+  .tg input { opacity:0; position:absolute; inset:0; margin:0; cursor:pointer; }
+  .tg span { position:absolute; inset:0; border-radius:10px; border:1px solid var(--muted); background:transparent; transition:.15s; }
+  .tg span::after { content:""; position:absolute; width:12px; height:12px; left:3px; top:3px; border-radius:50%; background:var(--muted); transition:.15s; }
+  .tg input:checked + span { background:var(--accent); border-color:var(--accent); }
+  .tg input:checked + span::after { left:23px; background:#fff; }
+  .tg input:disabled + span { opacity:.45; }
+  .cenas { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; }
+  .cena { all:unset; cursor:pointer; background:var(--surface-alt); border:1px solid var(--border); border-radius:var(--r-card); padding:10px; display:flex; flex-direction:column; gap:4px; }
+  .cena:hover { background:var(--hover); }
+  .cena svg { width:22px; height:22px; color:var(--accent-text); }
+  .cena small { color:var(--muted); font-size:11px; }
+  .aviso { background:color-mix(in srgb, var(--warn) 16%, transparent); border:1px solid color-mix(in srgb, var(--warn) 50%, transparent); border-radius:var(--r-ctl); padding:8px 10px; margin-top:8px; font-size:13px; }
+  .aviso.perigo { background:color-mix(in srgb, var(--danger) 14%, transparent); border-color:color-mix(in srgb, var(--danger) 50%, transparent); }
+  .info { color:var(--accent-text); font-size:13px; }
+  /* Lavadora */
+  .anel { position:relative; width:150px; height:150px; flex:none; }
+  .anel .val { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+  .anel .val b { font:600 30px "Segoe UI Variable Display","Segoe UI",sans-serif; }
+  .etapas { display:flex; gap:3px; margin-top:10px; }
+  .etapas div { flex:1; height:6px; border-radius:3px; background:var(--border); }
+  .etapas div.feita { background:var(--accent); opacity:.55; }
+  .etapas div.atual { background:var(--accent); }
+  .etapas-nomes { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:4px; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
-  td { padding:4px 0; border-top:1px solid var(--bd); }
+  td, th { padding:6px 4px; border-top:1px solid var(--border); text-align:left; }
+  th { color:var(--muted); font-weight:400; font-size:12px; border-top:none; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  .params { display:grid; grid-template-columns:auto 1fr; gap:4px 16px; font-size:13px; }
+  .params span:nth-child(odd) { color:var(--muted); }
+  details summary { cursor:pointer; color:var(--muted); font-size:12px; }
+  .props { max-height:340px; overflow:auto; margin-top:8px; }
+  /* Consumo */
+  .barras { display:flex; align-items:flex-end; gap:3px; height:150px; padding-top:8px; }
+  .barras div { flex:1; background:var(--accent); border-radius:2px 2px 0 0; min-height:1px; position:relative; }
+  .barras div:hover { background:var(--accent-hover); }
+  .eixo { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:4px; }
+  .totais { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin:10px 0; }
+  .totais div { background:var(--surface-alt); border:1px solid var(--border); border-radius:var(--r-ctl); padding:8px 10px; }
+  .totais b { display:block; font-size:18px; font-weight:600; }
+  .campo { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
+  .campo input, .campo select { color:var(--text); font-size:14px; }
+  .form { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .editor-cena { border:1px solid var(--border); border-radius:var(--r-card); padding:12px; margin-bottom:8px; }
+  .oculto { display:none !important; }
+  #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--r-card); padding:10px 16px; box-shadow:0 6px 24px rgba(0,0,0,.25); opacity:0; transition:.2s; pointer-events:none; }
+  #toast.vis { opacity:1; }
+  @media (max-width:760px) {
+    .app { flex-direction:column; }
+    nav { width:auto; height:auto; flex-direction:row; padding:8px; overflow-x:auto; position:sticky; top:0; z-index:5; }
+    nav .marca, nav .rodape { display:none; }
+    nav button { flex:1; justify-content:center; }
+    main { padding:16px; }
+    .mostrador { flex-direction:column; align-items:stretch; }
+    .dial, .anel { margin:0 auto; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <h1>Mhiagos Casa</h1>
-  <div id="chave" class="card" hidden>
-    <p>Chave de acesso do servidor:</p>
-    <div class="row"><input id="ch" type="password" style="flex:1"><button id="salvar">Entrar</button></div>
-  </div>
-  <div id="login" class="card" hidden>
-    <p><strong>Conectar o servidor à ConnectLife</strong></p>
-    <p class="mu">1. Abra o login e entre com a sua conta (Google). 2. No fim, a página do Home Assistant pode até dar erro: copie o endereço inteiro da barra e cole aqui.</p>
-    <div class="row"><button id="abrir">Abrir o login</button></div>
-    <div class="row" style="margin-top:8px"><input id="colado" placeholder="Endereço final (my.home-assistant.io/...code=...)" style="flex:1"><button id="enviar">Conectar</button></div>
-  </div>
-  <div id="sit" class="mu"></div>
-  <div id="lista"></div>
-</main>
+<div class="app">
+  <nav>
+    <div class="marca">Mhiagos Casa</div>
+    <button data-aba="painel" class="ativo">Painel</button>
+    <button data-aba="consumo">Consumo</button>
+    <button data-aba="ajustes">Ajustes</button>
+    <div class="rodape" id="rodape"></div>
+  </nav>
+  <main>
+    <div id="chave" class="cartao oculto" style="max-width:520px">
+      <div class="cab"><span class="nome">Chave de acesso</span></div>
+      <p class="mu">A chave fica em /opt/mhiagos-casa/.env no servidor (MHIAGOS_CHAVE).</p>
+      <div class="linha"><input id="ch" type="password" style="flex:1"><button class="b pri" id="salvarChave">Entrar</button></div>
+    </div>
+    <div id="login" class="cartao oculto" style="max-width:620px; margin-bottom:12px">
+      <div class="cab"><span class="nome">Conectar o servidor à ConnectLife</span></div>
+      <p class="mu">Abra o login e entre com a sua conta (Google). No fim, a página do Home Assistant pode até dar erro: copie o endereço inteiro da barra e cole aqui.</p>
+      <div class="linha"><button class="b" id="abrirLogin">Abrir o login</button></div>
+      <div class="linha" style="margin-top:8px"><input id="colado" placeholder="my.home-assistant.io/...code=..." style="flex:1"><button class="b pri" id="enviarCodigo">Conectar</button></div>
+    </div>
+
+    <section id="aba-painel">
+      <h1>Casa</h1>
+      <div class="sub" id="situacao"></div>
+      <div class="grade" id="cartoes"></div>
+    </section>
+
+    <section id="aba-consumo" class="oculto">
+      <h1>Consumo</h1>
+      <div class="sub">
+        <div class="seg" id="periodo"><button data-d="7">7 dias</button><button data-d="30" class="on">30 dias</button><button data-d="90">90 dias</button><button data-d="365">1 ano</button></div>
+        <button class="b" id="csvAr">Exportar histórico do ar (CSV)</button>
+        <button class="b" id="csvCiclos">Exportar ciclos (CSV)</button>
+      </div>
+      <div class="grade" id="consumo"></div>
+    </section>
+
+    <section id="aba-ajustes" class="oculto">
+      <h1>Ajustes</h1>
+      <div class="sub">Os ajustes ficam no servidor e o Mhiagos Control no PC usa os mesmos.</div>
+      <div class="grade" id="ajustes"></div>
+    </section>
+  </main>
+</div>
+<div id="toast"></div>
 <script>
-const MODOS = {0:"Ventilar", 2:"Frio", 3:"Desumidificar", 5:"ECO"};
-const VENTO = {2:"Baixa", 3:"Média", 4:"Alta"};
+"use strict";
 let chave = "";
 try { chave = localStorage.getItem("chave") || ""; } catch (e) {}
+let estado = null, pref = null, abaAtual = "painel", diasConsumo = 30;
+const pendente = {};          // puid -> {chave: valor} mandado e ainda nao confirmado pela leitura
+const propsAbertas = {};      // puid -> lista de propriedades carregada
+
+// ---------------- base ----------------
 
 async function api(caminho, metodo, corpo) {
   const r = await fetch("/api/" + caminho, { method: metodo || "GET",
     headers: { "Authorization": "Bearer " + chave, "Content-Type": "application/json" },
-    body: corpo ? JSON.stringify(corpo) : undefined });
+    body: corpo === undefined ? undefined : JSON.stringify(corpo) });
   if (r.status === 401) { pedirChave(); throw new Error("chave"); }
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.erro || j.detail || r.status);
+  const tipo = r.headers.get("content-type") || "";
+  const j = tipo.includes("json") ? await r.json() : await r.text();
+  if (!r.ok) throw new Error((j && (j.erro || j.detail)) || ("HTTP " + r.status));
   return j;
 }
 
-function pedirChave() { document.getElementById("chave").hidden = false; }
-document.getElementById("salvar").onclick = () => {
-  chave = document.getElementById("ch").value.trim();
-  try { localStorage.setItem("chave", chave); } catch (e) {}
-  document.getElementById("chave").hidden = true;
-  carregar();
-};
-
-document.getElementById("abrir").onclick = async () => {
-  try { const r = await api("conta/login"); window.open(r.url, "_blank"); } catch (e) { alert(e.message); }
-};
-document.getElementById("enviar").onclick = async (ev) => {
-  ev.target.disabled = true;
-  try { await api("conta/codigo", "POST", { colado: document.getElementById("colado").value }); carregar(); }
-  catch (e) { alert("Falhou: " + e.message); }
-  finally { ev.target.disabled = false; }
-};
-
 function el(tag, attrs, ...filhos) {
   const e = document.createElement(tag);
-  Object.assign(e, attrs || {});
-  for (const f of filhos) if (f != null) e.append(f);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "on") for (const [ev, f] of Object.entries(v)) e.addEventListener(ev, f);
+    else if (k === "class") e.className = v;
+    else if (k === "style") e.style.cssText = v;
+    else if (k in e) e[k] = v; else e.setAttribute(k, v);
+  }
+  for (const f of filhos.flat(Infinity)) if (f != null && f !== false) e.append(f);
   return e;
 }
 
-async function comando(puid, props, botao) {
-  if (botao) botao.disabled = true;
-  try { await api("aparelhos/" + puid + "/comando", "POST", { props, semBipe: true }); setTimeout(carregar, 5000); }
-  catch (e) { alert("Falhou: " + e.message); }
-  finally { if (botao) botao.disabled = false; }
+function aviso(t) {
+  const x = document.getElementById("toast");
+  x.textContent = t; x.classList.add("vis");
+  clearTimeout(aviso.t); aviso.t = setTimeout(() => x.classList.remove("vis"), 3500);
 }
 
-function cartaoAr(a) {
-  const s = a.estado, ligado = s.t_power === "1";
-  const temp = parseInt(s.t_temp || "24"), modo = parseInt(s.t_work_mode || "2"), vento = parseInt(s.t_fan_speed || "2");
-  const pw = el("button", { textContent: ligado ? "Desligar" : "Ligar", className: ligado ? "on" : "" });
-  pw.onclick = () => comando(a.puid, { t_power: ligado ? "0" : "1" }, pw);
-  const menos = el("button", { textContent: "−" }), mais = el("button", { textContent: "+" });
-  menos.onclick = () => comando(a.puid, { t_temp: String(Math.max(16, temp - 1)) }, menos);
-  mais.onclick = () => comando(a.puid, { t_temp: String(Math.min(32, temp + 1)) }, mais);
-  const modos = el("div", { className: "row" });
-  for (const [v, n] of Object.entries(MODOS)) {
-    const b = el("button", { textContent: n, className: ligado && +v === modo ? "on" : "" });
-    b.onclick = () => comando(a.puid, { t_work_mode: v }, b);
-    modos.append(b);
-  }
-  const ventos = el("div", { className: "row" });
-  for (const [v, n] of Object.entries(VENTO)) {
-    const b = el("button", { textContent: n, className: ligado && +v === vento ? "on" : "" });
-    b.onclick = () => comando(a.puid, { t_fan_speed: v }, b);
-    ventos.append(b);
-  }
-  return el("div", { className: "card" },
-    el("div", { className: "row" }, el("strong", { textContent: a.apelido || "Ar" }),
-      el("span", { className: "mu", textContent: a.online ? "conectado" : "desconectado" })),
-    el("div", { className: "row" },
-      el("span", { className: "big", textContent: (s.f_temp_in || "--") + " °C" }),
-      el("span", { className: "mu", textContent: "ambiente" })),
-    el("div", { className: "row" }, pw, menos, el("strong", { textContent: temp + " °C" }), mais),
-    el("p", { className: "mu", textContent: "Modo" }), modos,
-    el("p", { className: "mu", textContent: "Ventilador" }), ventos);
+const hora = t => new Date(t * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const dataHora = t => new Date(t * 1000).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const dur = min => min < 60 ? Math.round(min) + " min" : Math.floor(min / 60) + " h " + String(Math.round(min % 60)).padStart(2, "0");
+const num = (v, c) => v == null ? "--" : Number(v).toLocaleString("pt-BR", { minimumFractionDigits: c, maximumFractionDigits: c });
+
+function pedirChave() { document.getElementById("chave").classList.remove("oculto"); }
+document.getElementById("salvarChave").onclick = () => {
+  chave = document.getElementById("ch").value.trim();
+  try { localStorage.setItem("chave", chave); } catch (e) {}
+  document.getElementById("chave").classList.add("oculto");
+  atualizar(); carregarPref();
+};
+document.getElementById("abrirLogin").onclick = async () => {
+  try { const r = await api("conta/login"); window.open(r.url, "_blank"); } catch (e) { aviso(e.message); }
+};
+document.getElementById("enviarCodigo").onclick = async ev => {
+  ev.target.disabled = true;
+  try { await api("conta/codigo", "POST", { colado: document.getElementById("colado").value }); atualizar(); }
+  catch (e) { aviso("Falhou: " + e.message); }
+  finally { ev.target.disabled = false; }
+};
+
+for (const b of document.querySelectorAll("nav button")) b.onclick = () => trocarAba(b.dataset.aba);
+function trocarAba(a) {
+  abaAtual = a;
+  for (const b of document.querySelectorAll("nav button")) b.classList.toggle("ativo", b.dataset.aba === a);
+  for (const s of ["painel", "consumo", "ajustes"]) document.getElementById("aba-" + s).classList.toggle("oculto", s !== a);
+  if (a === "consumo") carregarConsumo();
+  if (a === "ajustes") desenharAjustes();
 }
 
-function cartaoLavadora(a, ciclos) {
-  const s = a.estado;
-  const st = parseInt(s.machine_status ?? s.DeviceStatus ?? "-1");
-  const rest = parseInt(s.Selected_program_remaining_time_in_minutes || s.Remaining_time_in_minutes || "0");
-  const total = parseInt(s.Selected_program_total_running_time_in_minutes || s.Selected_program_total_time_in_minutes || "0");
-  const rodando = st === 2 || st === 3;
-  const txt = !a.online ? "Desconectada" : st === 4 ? "Erro" : st === 3 ? "Pausada" : rodando ? "Em funcionamento" : st === 1 ? "Ligada" : "Em espera";
-  const prog = rodando && total > 0 ? Math.max(0, Math.min(1, 1 - rest / total)) : 0;
-  const tab = el("table");
-  for (const c of ciclos.slice(-8).reverse()) {
-    const d = new Date(c.inicio * 1000), min = Math.round((c.fim - c.inicio) / 60);
-    tab.append(el("tr", {}, el("td", { textContent: d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) }),
-      el("td", { textContent: "Programa " + c.programa }), el("td", { textContent: min + " min" }),
-      el("td", { textContent: (c.agua || 0) + " L" })));
-  }
-  return el("div", { className: "card" },
-    el("div", { className: "row" }, el("strong", { textContent: a.apelido || "Lavadora" }),
-      el("span", { className: "mu", textContent: txt })),
-    rodando ? el("div", {}, el("p", { textContent: rest + " min restantes" }),
-      el("div", { className: "bar" }, el("div", { style: "width:" + Math.round(prog * 100) + "%" }))) : null,
-    el("p", { className: "mu", textContent: "Últimos ciclos" }), tab);
-}
+// ---------------- icones das cenas (como IconesDeCena) ----------------
 
-async function carregar() {
+const ICONES = {
+  lua: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
+  floco: '<g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7"/><path d="M9 4l3 2 3-2M9 20l3-2 3 2"/></g>',
+  folha: '<path d="M5 19C5 10 11 5 20 4c0 9-5 15-14 15zM5 19l8-8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  sol: '<g stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g>',
+  gota: '<path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  ventoinha: '<g fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="1.6"/><path d="M12 10c0-4 1-7 4-7 2 0 2 3 0 5l-4 2zM14 12c4 0 7 1 7 4 0 2-3 2-5 0l-2-4zM12 14c0 4-1 7-4 7-2 0-2-3 0-5l4-2zM10 12c-4 0-7-1-7-4 0-2 3-2 5 0l2 4z"/></g>',
+  energia: '<path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
+};
+const icone = n => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("viewBox", "0 0 24 24"); s.innerHTML = ICONES[n] || ICONES.floco; return s; };
+const COR_MODO = { 0: "#8A93A6", 1: "#F08C3C", 2: "#2D7DF6", 3: "#00B0A9", 4: "#8B5CF6", 5: "#2EA043" };
+
+// ---------------- leitura ----------------
+
+async function atualizar() {
   if (!chave) { pedirChave(); return; }
   try {
-    const [r, h] = await Promise.all([api("aparelhos"), api("historico/ciclos?desde=" + (Math.floor(Date.now() / 1000) - 60 * 86400))]);
-    const sit = document.getElementById("sit");
-    document.getElementById("login").hidden = r.logado;
-    sit.textContent = r.logado
-      ? "Última leitura: " + (r.ultimaLeitura ? new Date(r.ultimaLeitura * 1000).toLocaleTimeString("pt-BR") : "ainda não")
-      : "Servidor sem acesso à ConnectLife.";
-    if (r.erro) sit.append(el("div", { className: "er", textContent: r.erro }));
-    const lista = document.getElementById("lista");
-    lista.replaceChildren();
-    for (const a of r.lista) {
-      if (a.tipo === "008" || a.tipo === "009") lista.append(cartaoAr(a));
-      else if (["003", "025", "027", "004"].includes(a.tipo)) lista.append(cartaoLavadora(a, h.ciclos.filter(c => c.puid === a.puid)));
-    }
-  } catch (e) { if (e.message !== "chave") document.getElementById("sit").textContent = "Erro: " + e.message; }
+    estado = await api("aparelhos");
+    document.getElementById("login").classList.toggle("oculto", estado.logado);
+    desenharSituacao();
+    if (abaAtual === "painel") desenharCartoes();
+  } catch (e) {
+    if (e.message !== "chave") document.getElementById("situacao").replaceChildren(el("span", { class: "pilula er" }, "Sem resposta do servidor: " + e.message));
+  }
 }
-carregar();
-setInterval(carregar, 30000);
+
+function desenharSituacao() {
+  const s = document.getElementById("situacao");
+  s.replaceChildren(
+    el("span", { class: "pilula " + (estado.logado && !estado.erro ? "ok" : "er") },
+      estado.logado ? (estado.ultimaLeitura ? "Lido às " + new Date(estado.ultimaLeitura * 1000).toLocaleTimeString("pt-BR") : "Lendo…") : "Sem a conta ConnectLife"),
+    el("span", { class: "mu" }, "nuvem lida a cada " + estado.periodo + " s"),
+    ...(estado.erro ? [el("span", { class: "pilula er" }, estado.erro)] : []));
+  document.getElementById("rodape").textContent = estado.logado ? "Servidor da casa conectado" : "";
+}
+
+async function comando(a, props, opts) {
+  pendente[a.puid] = Object.assign(pendente[a.puid] || {}, props);
+  desenharCartoes();
+  try { await api("aparelhos/" + a.puid + "/comando", "POST", Object.assign({ props }, opts || {})); }
+  catch (e) { aviso("Comando falhou: " + e.message); delete pendente[a.puid]; desenharCartoes(); }
+  setTimeout(() => { delete pendente[a.puid]; atualizar(); }, 9000);
+}
+
+function valor(a, k) {
+  const p = pendente[a.puid];
+  return p && k in p ? p[k] : a.estado[k];
+}
+
+function desenharCartoes() {
+  if (!estado) return;
+  const c = document.getElementById("cartoes");
+  const ativo = document.activeElement && c.contains(document.activeElement) ? document.activeElement.dataset.id : null;
+  c.replaceChildren(...estado.lista.map(a => a.tipo === "008" || a.tipo === "009" ? cartaoAr(a)
+    : ["003", "025", "027", "004"].includes(a.tipo) ? cartaoLavadora(a) : cartaoGenerico(a)));
+  if (ativo) { const e = c.querySelector('[data-id="' + ativo + '"]'); if (e) e.focus(); }
+}
+
+function cabecalho(a, direita) {
+  return el("div", { class: "cab" }, el("span", { class: "nome" }, a.apelido || a.deviceId),
+    el("span", { class: "mu" }, a.comodo || ""), el("span", { class: "mu" }, direita || (a.online ? "Conectado" : "Desconectado")));
+}
+
+function cartaoGenerico(a) { return el("div", { class: "cartao" }, cabecalho(a), el("p", { class: "mu" }, a.tipoNome)); }
+
+// ---------------- ar ----------------
+
+function agendamento(puid, nome) { return (estado.agendamentos || []).find(x => x.puid === puid && x.nome === nome); }
+
+function cartaoAr(a) {
+  const i = a.info, ok = a.online;
+  const ligado = String(valor(a, "t_power")) === "1";
+  const alvo = parseInt(valor(a, "t_temp") ?? i.alvo);
+  const modo = parseInt(valor(a, "t_work_mode") ?? i.modo.valor);
+  const vento = parseInt(valor(a, "t_fan_speed") ?? i.vento.valor);
+  const noturno = String(valor(a, "t_sleep")) === "1";
+  const cor = ligado ? (COR_MODO[modo] || "#2EA043") : "var(--border)";
+  const [mn, mx] = i.faixa, frac = Math.max(0, Math.min(1, (alvo - mn) / (mx - mn)));
+  const arco = 2 * Math.PI * 62 * 0.75;
+  const dial = el("div", { class: "dial" });
+  dial.innerHTML = '<svg viewBox="0 0 150 150"><circle cx="75" cy="75" r="62" fill="none" stroke="var(--border)" stroke-width="9" stroke-linecap="round" stroke-dasharray="' + arco + ' 999" transform="rotate(135 75 75)"/>' +
+    '<circle cx="75" cy="75" r="62" fill="none" stroke="' + cor + '" stroke-width="9" stroke-linecap="round" stroke-dasharray="' + (arco * frac) + ' 999" transform="rotate(135 75 75)"/></svg>';
+  dial.append(el("div", { class: "val" }, el("b", {}, ligado ? alvo + "°" : "--"),
+    el("span", {}, ligado ? i.modo.nome && (i.modos.find(m => m.valor === modo) || {}).nome || i.modo.nome : "Desligado")));
+
+  const mudarTemp = d => comando(a, { t_temp: String(Math.max(mn, Math.min(mx, alvo + d))) });
+  const liga = el("button", { class: "b redondo liga" + (ligado ? " on" : ""), title: "Ligar ou desligar", "data-id": a.puid + "pw",
+    disabled: !ok || !i.grava.t_power, on: { click: () => comando(a, { t_power: ligado ? "0" : "1" }) } }, "⏻");
+  const menos = el("button", { class: "b redondo", title: "Diminuir temperatura", disabled: !ok || !ligado || !i.grava.t_temp || alvo <= mn, on: { click: () => mudarTemp(-1) } }, "−");
+  const mais = el("button", { class: "b redondo", title: "Aumentar temperatura", disabled: !ok || !ligado || !i.grava.t_temp || alvo >= mx, on: { click: () => mudarTemp(1) } }, "+");
+  const lua = i.noturnoBotao ? el("button", { class: "b redondo" + (noturno ? " liga on" : ""), title: noturno ? "Modo noturno ligado" : "Modo noturno",
+    disabled: !ok || !ligado, on: { click: () => comando(a, { t_sleep: noturno ? "0" : "1" }) } }, icone("lua")) : null;
+  if (lua) { lua.firstChild.style.width = "20px"; lua.firstChild.style.height = "20px"; }
+
+  const seg = (lista, atual, chave, grava) => el("div", { class: "seg" }, lista.map(m =>
+    el("button", { class: ligado && m.valor === atual ? "on" : "", disabled: !ok || !ligado || !grava,
+      on: { click: () => comando(a, { [chave]: String(m.valor) }) } }, m.nome)));
+
+  const amb = i.ambiente != null ? el("div", {}, el("span", { class: "big" }, num(i.ambiente, 0) + i.unidade), el("span", { class: "mu" }, "  ambiente")) : null;
+  const extras = [i.umidade != null ? "Umidade " + num(i.umidade, 0) + "%" : null, i.potencia != null ? "Potência " + num(i.potencia, 0) + " W" : null,
+    i.filtro ? "Limpar o filtro" : null].filter(Boolean);
+
+  const cartao = el("div", { class: "cartao" }, cabecalho(a),
+    el("div", { class: "mostrador" }, dial, el("div", { class: "ctl" }, amb,
+      el("div", { class: "linha" }, liga, menos, mais, lua),
+      extras.length ? el("div", { class: "mu" }, extras.join("  ·  ")) : null)),
+    i.modos.length ? el("div", { class: "secao" }, el("div", { class: "tit" }, "Modo"), seg(i.modos, modo, "t_work_mode", i.grava.t_work_mode)) : null,
+    i.ventos.length ? el("div", { class: "secao" }, el("div", { class: "tit" }, "Ventilador"), seg(i.ventos, vento, "t_fan_speed", i.grava.t_fan_speed)) : null);
+
+  // Cenas
+  if (pref && pref.dados.cenas.length) {
+    cartao.append(el("div", { class: "secao" }, el("div", { class: "tit" }, "Cenas"),
+      el("div", { class: "cenas" }, pref.dados.cenas.map((c, n) => el("button", { class: "cena", disabled: !ok,
+        on: { click: () => rodarCena(a, n, c) } }, icone(c.icone), el("span", {}, c.nome), el("small", {}, resumoCena(c, a)))))));
+  }
+
+  // Timer de desligar e retorno da cena
+  const tm = agendamento(a.puid, "desligar"), rt = agendamento(a.puid, "retorno");
+  const timer = el("div", { class: "secao" }, el("div", { class: "tit" }, "Timer de desligar"),
+    el("div", { class: "linha" }, [["30 min", 30], ["1 h", 60], ["2 h", 120]].map(([t, m]) =>
+      el("button", { class: "b", disabled: !ok || !ligado, on: { click: () => definirTimer(a, m) } }, t)),
+      tm ? el("button", { class: "b perigo", on: { click: () => cancelarAg(a, "timer") } }, "Cancelar") : null),
+    tm ? el("div", { class: "info", style: "margin-top:8px" }, "Desliga às " + hora(tm.quando) + " (em " + dur((tm.quando - Date.now() / 1000) / 60) + ")") : null,
+    rt ? el("div", { class: "linha", style: "margin-top:8px" }, el("span", { class: "info" }, "Volta ao padrão às " + hora(rt.quando)),
+      el("button", { class: "b", on: { click: () => cancelarAg(a, "retorno") } }, "Manter a cena")) : null,
+    el("div", { class: "mu", style: "margin-top:8px" }, "O servidor dispara o timer mesmo com o PC desligado."));
+  cartao.append(timer);
+
+  // Funcoes
+  if (i.funcoes.length || i.aceitaBipe || i.unidadeGrava) {
+    const f = el("div", { class: "secao" }, el("div", { class: "tit" }, "Funções"));
+    for (const x of i.funcoes) {
+      const lig = String(valor(a, x.chave)) === "1";
+      f.append(chaveLinha(x.nome, lig, !ok || !ligado || !x.grava, v => comando(a, { [x.chave]: v ? "1" : "0" })));
+    }
+    if (i.aceitaBipe && pref) f.append(chaveLinha("Comandos sem bipe (painel web)", !!pref.dados.semBipe, false, v => gravarPref({ semBipe: v })));
+    if (i.unidadeGrava) f.append(el("div", { class: "chave" }, el("span", {}, "Unidade"),
+      el("div", { class: "seg", style: "width:120px" }, ["°C", "°F"].map((u, n) => el("button", { class: (i.unidade === u ? "on" : ""), disabled: !ok,
+        on: { click: () => comando(a, { t_temp_type: String(n) }) } }, u)))));
+    cartao.append(f);
+  }
+
+  // Diagnostico
+  const falhas = i.falhas.map(x => x.nome).concat((a.diagnostico?.ativas || []).map(x => x.nome + (x.orientacao ? ": " + x.orientacao : "")));
+  cartao.append(el("div", { class: "secao" }, el("div", { class: "tit" }, "Diagnóstico",
+    el("span", {}, a.diagnostico?.conhecidas ? a.diagnostico.conhecidas + " falhas conhecidas pela Hisense" : "")),
+    falhas.length ? falhas.map(t => el("div", { class: "aviso perigo" }, t)) : el("div", { class: "mu" }, "Nenhuma falha ativa.")));
+  cartao.append(blocoPropriedades(a));
+  return cartao;
+}
+
+function chaveLinha(rotulo, ligado, desab, mudou) {
+  const inp = el("input", { type: "checkbox", checked: ligado, disabled: desab, on: { change: e => mudou(e.target.checked) } });
+  return el("label", { class: "chave" }, el("span", {}, rotulo), el("span", { class: "tg" }, inp, el("span")));
+}
+
+function resumoCena(c, a) {
+  if (c.desligar) return "Só desliga";
+  const l = [];
+  if (c.modo >= 0) l.push(({ 0: "Ventilar", 1: "Calor", 2: "Frio", 3: "Desumidificar", 4: "Automático", 5: "ECO" })[c.modo] || "Modo " + c.modo);
+  if (c.temp > 0) l.push(c.temp + "°C");
+  if (c.vento === -2) l.push("Mínima"); else if (c.vento === -3) l.push("Máxima");
+  else if (c.vento >= 0) l.push(((a && a.info.ventos.find(v => v.valor === c.vento)) || { nome: "Vel. " + c.vento }).nome);
+  if (c.noturno === 1) l.push("noturno");
+  if (c.duracao > 0) l.push("por " + dur(c.duracao));
+  return l.join(" · ");
+}
+
+async function rodarCena(a, n, c) {
+  try { await api("aparelhos/" + a.puid + "/cena", "POST", { indice: n }); aviso("Cena " + c.nome + " enviada"); setTimeout(atualizar, 3500); }
+  catch (e) { aviso("Cena falhou: " + e.message); }
+}
+async function definirTimer(a, m) {
+  try { await api("aparelhos/" + a.puid + "/timer", "POST", { minutos: m }); atualizar(); } catch (e) { aviso(e.message); }
+}
+async function cancelarAg(a, qual) {
+  try { await api("aparelhos/" + a.puid + "/" + qual, "DELETE"); atualizar(); } catch (e) { aviso(e.message); }
+}
+
+function blocoPropriedades(a) {
+  const d = el("details", { class: "secao", on: { toggle: async ev => {
+    if (!ev.target.open) { delete propsAbertas[a.puid]; return; }
+    try { propsAbertas[a.puid] = (await api("aparelhos/" + a.puid + "/propriedades")).propriedades; desenharCartoes(); } catch (e) { aviso(e.message); }
+  } } }, el("summary", {}, "Todas as propriedades que o aparelho publica"));
+  if (propsAbertas[a.puid]) {
+    d.open = true;
+    d.append(el("div", { class: "props" }, el("table", {}, el("tr", {}, el("th", {}, "Propriedade"), el("th", {}, "Nome no modelo"), el("th", { class: "n" }, "Valor")),
+      propsAbertas[a.puid].map(p => el("tr", {}, el("td", {}, p.chave), el("td", { class: "mu" }, p.nome),
+        el("td", { class: "n" }, p.valor + (p.valorNome ? " · " + p.valorNome : "")))))));
+  }
+  return d;
+}
+
+// ---------------- lavadora ----------------
+
+const FASES = [[1, "Pesar"], [2, "Pré"], [3, "Lavar"], [4, "Enxaguar"], [5, "Amaciar"], [7, "Centrifugar"], [8, "Secar"], [10, "Fim"]];
+
+function cartaoLavadora(a) {
+  const i = a.info;
+  const anel = el("div", { class: "anel" });
+  const C = 2 * Math.PI * 62;
+  const cor = i.erro ? "var(--danger)" : i.pausada ? "var(--warn)" : "var(--accent)";
+  anel.innerHTML = '<svg viewBox="0 0 150 150"><circle cx="75" cy="75" r="62" fill="none" stroke="var(--border)" stroke-width="9"/>' +
+    '<circle cx="75" cy="75" r="62" fill="none" stroke="' + cor + '" stroke-width="9" stroke-linecap="round" stroke-dasharray="' + (C * i.progresso) + ' 999" transform="rotate(-90 75 75)"/></svg>';
+  anel.append(el("div", { class: "val" },
+    el("b", {}, i.rodando ? dur(i.restante) : i.concluido ? "✓" : "--"),
+    el("span", { class: "mu" }, i.rodando ? "restantes" : a.online ? (i.concluido ? "Concluída" : "Sem ciclo") : "Desconectada"),
+    i.terminaEm ? el("span", { class: "mu" }, "termina às " + hora(i.terminaEm)) : null));
+
+  const passos = FASES.filter(([f]) => f !== 8 || a.estado.dry_time && a.estado.dry_time !== "0");
+  const idx = passos.findIndex(([f]) => f >= i.fase.id);
+  const etapas = i.rodando && !i.programado ? el("div", {},
+    el("div", { class: "etapas" }, passos.map(([f], n) => el("div", { class: f === i.fase.id ? "atual" : n < idx ? "feita" : "" }))),
+    el("div", { class: "etapas-nomes" }, passos.map(([, nome]) => el("span", {}, nome)))) : null;
+
+  const ciclos = (estado.ciclos || {})[a.puid] || [];
+  const cartao = el("div", { class: "cartao" }, cabecalho(a, i.titulo),
+    el("div", { class: "mostrador" }, anel, el("div", { class: "ctl" },
+      el("div", {}, el("div", { class: "mu" }, "Programa"), el("div", { class: "big", style: "font-size:20px" }, i.programa.id ? i.programa.nome : "--")),
+      i.rodando && i.total ? el("div", { class: "mu" }, "Ciclo de " + dur(i.total) + " · " + Math.round(i.progresso * 100) + "%") : null,
+      i.fase.nome ? el("div", { class: "info" }, i.fase.nome) : null)),
+    etapas,
+    i.parametros.length ? el("div", { class: "secao" }, el("div", { class: "tit" }, "Parâmetros"),
+      el("div", { class: "params" }, i.parametros.map(([k, v]) => [el("span", {}, k), el("span", {}, v)]))) : null,
+    el("div", { class: "secao" }, el("div", { class: "tit" }, "Consumo deste ciclo"),
+      el("div", { class: "params" }, el("span", {}, "Água"), el("span", {}, i.agua != null ? num(i.agua, 1) + " L" : "--"),
+        el("span", {}, "Energia"), el("span", {}, i.energia != null ? num(i.energia, 2) + " kWh" : "--"))),
+    i.avisos.map(t => el("div", { class: "aviso" }, t)),
+    (a.diagnostico?.ativas || []).map(x => el("div", { class: "aviso perigo" }, x.nome + (x.orientacao ? ": " + x.orientacao : ""))),
+    el("div", { class: "secao" }, el("div", { class: "tit" }, "Últimos ciclos"),
+      ciclos.length ? el("table", {}, el("tr", {}, el("th", {}, "Início"), el("th", {}, "Programa"), el("th", { class: "n" }, "Duração"), el("th", { class: "n" }, "Água"), el("th", { class: "n" }, "Energia")),
+        ciclos.slice().reverse().slice(0, 8).map(c => el("tr", {}, el("td", {}, dataHora(c.inicio)), el("td", {}, c.programaNome + (c.concluido ? "" : " (interrompido)")),
+          el("td", { class: "n" }, dur((c.fim - c.inicio) / 60)), el("td", { class: "n" }, num(c.agua, 1) + " L"), el("td", { class: "n" }, num(c.energia, 2) + " kWh"))))
+        : el("div", { class: "mu" }, "Nenhum ciclo gravado ainda.")),
+    el("div", { class: "mu", style: "margin-top:10px" }, "A lavadora é só monitorada, no app e aqui: a Hisense só aceita comandos com o modo remoto ligado no painel da máquina."),
+    blocoPropriedades(a));
+  return cartao;
+}
+
+async function carregarCiclos() {
+  try {
+    const r = await api("historico/ciclos?desde=" + (Math.floor(Date.now() / 1000) - 120 * 86400));
+    estado.ciclos = {};
+    for (const c of r.ciclos) (estado.ciclos[c.puid] = estado.ciclos[c.puid] || []).push(c);
+  } catch (e) {}
+}
+
+// ---------------- consumo ----------------
+
+for (const b of document.querySelectorAll("#periodo button")) b.onclick = () => {
+  diasConsumo = +b.dataset.d;
+  for (const x of document.querySelectorAll("#periodo button")) x.classList.toggle("on", x === b);
+  carregarConsumo();
+};
+
+async function baixar(caminho, nome) {
+  try {
+    const r = await fetch("/api/" + caminho, { headers: { "Authorization": "Bearer " + chave } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const url = URL.createObjectURL(await r.blob());
+    el("a", { href: url, download: nome }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) { aviso("Exportar falhou: " + e.message); }
+}
+document.getElementById("csvAr").onclick = () => baixar("exportar/ar.csv", "historico-ar.csv");
+document.getElementById("csvCiclos").onclick = () => baixar("exportar/ciclos.csv", "ciclos-lavadora.csv");
+
+async function carregarConsumo() {
+  const alvo = document.getElementById("consumo");
+  try {
+    const r = await api("consumo?dias=" + diasConsumo + "&meses=12");
+    const nomes = Object.fromEntries((estado ? estado.lista : []).map(a => [a.puid, a.apelido]));
+    alvo.replaceChildren(...Object.entries(r.aparelhos).map(([puid, c]) => c.tipo === "ar" ? consumoAr(nomes[puid], c.dias, r.preferencias) : consumoLav(nomes[puid], c.meses)));
+  } catch (e) { alvo.replaceChildren(el("div", { class: "mu" }, "Erro: " + e.message)); }
+}
+
+function consumoAr(nome, dias, p) {
+  const h = dias.reduce((s, d) => s + d.horas, 0), k = dias.reduce((s, d) => s + d.kwh, 0), c = dias.reduce((s, d) => s + d.custo, 0);
+  const mx = Math.max(0.1, ...dias.map(d => d.horas));
+  return el("div", { class: "cartao" }, el("div", { class: "cab" }, el("span", { class: "nome" }, nome || "Ar"), el("span", { class: "mu" }, "estimativa pelo tempo ligado")),
+    el("div", { class: "totais" }, el("div", {}, el("b", {}, num(h, 1) + " h"), el("span", { class: "mu" }, "ligado")),
+      el("div", {}, el("b", {}, num(k, 1) + " kWh"), el("span", { class: "mu" }, "energia")),
+      el("div", {}, el("b", {}, "R$ " + num(c, 2)), el("span", { class: "mu" }, "a R$ " + num(p.tarifa, 2) + "/kWh")),
+      el("div", {}, el("b", {}, num(h / dias.length, 1) + " h"), el("span", { class: "mu" }, "média por dia"))),
+    el("div", { class: "barras" }, dias.map(d => el("div", { title: d.dia.split("-").reverse().join("/") + ": " + num(d.horas, 1) + " h, " + num(d.kwh, 2) + " kWh, R$ " + num(d.custo, 2),
+      style: "height:" + (d.horas / mx * 100) + "%" }))),
+    el("div", { class: "eixo" }, el("span", {}, dias[0].dia.split("-").reverse().slice(0, 2).join("/")), el("span", {}, "horas ligado por dia"), el("span", {}, "hoje")),
+    el("div", { class: "mu", style: "margin-top:10px" }, "Potências em Ajustes: frio " + p.potenciaFrio + " W, ECO " + p.potenciaEco + " W, desumidificar " + p.potenciaSeco + " W, ventilar " + p.potenciaVentilar + " W."));
+}
+
+function consumoLav(nome, meses) {
+  return el("div", { class: "cartao" }, el("div", { class: "cab" }, el("span", { class: "nome" }, nome || "Lavadora"), el("span", { class: "mu" }, "ciclos gravados por mês")),
+    el("table", {}, el("tr", {}, el("th", {}, "Mês"), el("th", { class: "n" }, "Ciclos"), el("th", { class: "n" }, "Horas"), el("th", { class: "n" }, "Água"), el("th", { class: "n" }, "Energia"), el("th", { class: "n" }, "Custo")),
+      meses.slice().reverse().map(m => el("tr", {}, el("td", {}, m.mes.split("-").reverse().join("/")), el("td", { class: "n" }, m.ciclos), el("td", { class: "n" }, num(m.horas, 1)),
+        el("td", { class: "n" }, num(m.agua, 0) + " L"), el("td", { class: "n" }, num(m.kwh, 2) + " kWh"), el("td", { class: "n" }, "R$ " + num(m.custo, 2))))));
+}
+
+// ---------------- ajustes ----------------
+
+async function carregarPref() {
+  try { pref = await api("preferencias"); if (abaAtual === "ajustes") desenharAjustes(); else desenharCartoes(); } catch (e) {}
+}
+
+async function gravarPref(dados) {
+  try { pref = await api("preferencias", "PUT", { dados, origem: "web" }); aviso("Salvo"); desenharCartoes(); }
+  catch (e) { aviso("Não salvou: " + e.message); }
+}
+
+function campoNum(rotulo, k, passo) {
+  return el("label", { class: "campo" }, rotulo, el("input", { type: "number", step: passo || 1, value: pref.dados[k],
+    on: { change: e => { const v = parseFloat(String(e.target.value).replace(",", ".")); if (!isNaN(v) && v >= 0) gravarPref({ [k]: v }); } } }));
+}
+
+function opcoesModo(sel, comNenhum) {
+  const l = (comNenhum ? [[-1, "Manter"]] : []).concat([[2, "Frio"], [5, "ECO"], [3, "Desumidificar"], [0, "Ventilar"]]);
+  return l.map(([v, n]) => el("option", { value: v, selected: v === sel }, n));
+}
+
+function desenharAjustes() {
+  const g = document.getElementById("ajustes");
+  if (!pref) { g.replaceChildren(el("div", { class: "mu" }, "Carregando…")); carregarPref(); return; }
+  const d = pref.dados;
+  const ar = estado && estado.lista.find(a => a.tipo === "008" || a.tipo === "009");
+  const ventos = ar ? ar.info.ventos : [{ valor: 2, nome: "Baixa" }, { valor: 3, nome: "Média" }, { valor: 4, nome: "Alta" }];
+
+  const alertas = el("div", { class: "cartao" }, el("div", { class: "cab" }, el("span", { class: "nome" }, "Alertas do Windows")),
+    el("div", { class: "mu" }, "Avisos que o Mhiagos Control mostra no PC."),
+    chaveLinha("Falha no aparelho", d.alertaFalha, false, v => gravarPref({ alertaFalha: v })),
+    chaveLinha("Aparelho desconectado", d.alertaDesconectado, false, v => gravarPref({ alertaDesconectado: v })),
+    chaveLinha("Ambiente quente", d.alertaQuente, false, v => gravarPref({ alertaQuente: v })),
+    el("div", { class: "form" }, campoNum("Limite quente (°C)", "limiteQuente")),
+    chaveLinha("Fim do ciclo da lavadora", d.alertaLavadoraFim, false, v => gravarPref({ alertaLavadoraFim: v })));
+
+  const consumo = el("div", { class: "cartao" }, el("div", { class: "cab" }, el("span", { class: "nome" }, "Estimativa de consumo do ar")),
+    el("div", { class: "form" }, campoNum("Frio (W)", "potenciaFrio"), campoNum("ECO (W)", "potenciaEco"),
+      campoNum("Desumidificar (W)", "potenciaSeco"), campoNum("Ventilar (W)", "potenciaVentilar"), campoNum("Tarifa (R$/kWh)", "tarifa", 0.01)),
+    el("div", { class: "mu", style: "margin-top:8px" }, "O ar não informa o consumo: a estimativa usa o tempo ligado em cada modo vezes a potência."));
+
+  const retorno = el("div", { class: "cartao" }, el("div", { class: "cab" }, el("span", { class: "nome" }, "Padrão de retorno das cenas")),
+    el("div", { class: "form" },
+      el("label", { class: "campo" }, "Modo", el("select", { on: { change: e => gravarPref({ retornoModo: +e.target.value }) } }, opcoesModo(d.retornoModo))),
+      el("label", { class: "campo" }, "Temperatura (°C)", el("input", { type: "number", min: 16, max: 32, value: d.retornoTemp, on: { change: e => gravarPref({ retornoTemp: +e.target.value }) } })),
+      el("label", { class: "campo" }, "Ventilador", el("select", { on: { change: e => gravarPref({ retornoVento: +e.target.value }) } },
+        ventos.map(v => el("option", { value: v.valor, selected: v.valor === d.retornoVento }, v.nome))))),
+    el("div", { class: "mu", style: "margin-top:8px" }, "Uma cena com duração volta a este padrão no fim. Mudar o ar à mão cancela a volta."));
+
+  const cenas = el("div", { class: "cartao" }, el("div", { class: "cab" }, el("span", { class: "nome" }, "Cenas"), el("span", { class: "mu" }, "até 8")));
+  const lista = d.cenas.map(c => Object.assign({}, c));
+  const salvarCenas = () => gravarPref({ cenas: lista });
+  lista.forEach((c, n) => {
+    const set = (k, v) => { c[k] = v; salvarCenas(); };
+    cenas.append(el("div", { class: "editor-cena" },
+      el("div", { class: "form" },
+        el("label", { class: "campo" }, "Nome", el("input", { value: c.nome, maxLength: 30, on: { change: e => e.target.value.trim() && set("nome", e.target.value.trim()) } })),
+        el("label", { class: "campo" }, "Ícone", el("select", { on: { change: e => set("icone", e.target.value) } },
+          Object.keys(ICONES).map(k => el("option", { value: k, selected: k === c.icone }, k)))),
+        el("label", { class: "campo" }, "Ação", el("select", { on: { change: e => set("desligar", e.target.value === "1") } },
+          el("option", { value: "0", selected: !c.desligar }, "Ajustar"), el("option", { value: "1", selected: c.desligar }, "Desligar")))),
+      c.desligar ? null : el("div", { class: "form", style: "margin-top:8px" },
+        el("label", { class: "campo" }, "Modo", el("select", { on: { change: e => set("modo", +e.target.value) } }, opcoesModo(c.modo, true))),
+        el("label", { class: "campo" }, "Temperatura", el("select", { on: { change: e => set("temp", +e.target.value) } },
+          [[-1, "Manter"]].concat(Array.from({ length: 15 }, (_, k) => [16 + k, (16 + k) + " °C"])).map(([v, t]) => el("option", { value: v, selected: v === c.temp }, t)))),
+        el("label", { class: "campo" }, "Ventilador", el("select", { on: { change: e => set("vento", +e.target.value) } },
+          [[-1, "Manter"], [-2, "Mínima"], [-3, "Máxima"]].concat(ventos.map(v => [v.valor, v.nome])).map(([v, t]) => el("option", { value: v, selected: v === c.vento }, t)))),
+        el("label", { class: "campo" }, "Noturno", el("select", { on: { change: e => set("noturno", +e.target.value) } },
+          [[-1, "Manter"], [1, "Ligar"], [0, "Desligar"]].map(([v, t]) => el("option", { value: v, selected: v === c.noturno }, t)))),
+        el("label", { class: "campo" }, "Volta ao padrão", el("select", { on: { change: e => set("duracao", +e.target.value) } },
+          [[0, "Nunca"], [15, "15 min"], [30, "30 min"], [60, "1 h"], [120, "2 h"]].map(([v, t]) => el("option", { value: v, selected: v === c.duracao }, t))))),
+      el("div", { class: "linha", style: "margin-top:8px" },
+        el("button", { class: "b", disabled: n === 0, on: { click: () => { lista.splice(n - 1, 0, lista.splice(n, 1)[0]); salvarCenas(); } } }, "◀ Antes"),
+        el("button", { class: "b", disabled: n === lista.length - 1, on: { click: () => { lista.splice(n + 1, 0, lista.splice(n, 1)[0]); salvarCenas(); } } }, "Depois ▶"),
+        el("button", { class: "b perigo", on: { click: () => { lista.splice(n, 1); salvarCenas(); } } }, "Excluir"))));
+  });
+  cenas.append(el("div", { class: "linha" },
+    el("button", { class: "b pri", disabled: lista.length >= 8, on: { click: () => { lista.push({ nome: "Nova cena", icone: "floco", desligar: false, modo: -1, temp: 24, vento: -1, noturno: -1, duracao: 0 }); salvarCenas(); } } }, "Nova cena")));
+
+  const conta = el("div", { class: "cartao" }, el("div", { class: "cab" }, el("span", { class: "nome" }, "Servidor")),
+    el("div", { class: "mu" }, "Ajustes salvos pela última vez " + (pref.atualizado ? "em " + dataHora(pref.atualizado) + " (" + ({ web: "painel web", pc: "Mhiagos no PC" }[pref.origem] || pref.origem || "?") + ")" : "nunca") + "."),
+    el("div", { class: "linha", style: "margin-top:10px" },
+      el("button", { class: "b", on: { click: () => { try { localStorage.removeItem("chave"); } catch (e) {} chave = ""; pedirChave(); } } }, "Trocar a chave deste navegador"),
+      el("button", { class: "b perigo", on: { click: async () => { if (confirm("Desconectar o servidor da conta ConnectLife?")) { await api("conta", "DELETE"); atualizar(); } } } }, "Sair da conta ConnectLife")));
+
+  g.replaceChildren(cenas, retorno, consumo, alertas, conta);
+}
+
+// ---------------- laco ----------------
+
+async function ciclo() {
+  await atualizar();
+  if (estado && (!estado.ciclos || ciclo.n++ % 15 === 0)) { await carregarCiclos(); if (abaAtual === "painel") desenharCartoes(); }
+}
+ciclo.n = 0;
+carregarPref();
+ciclo();
+setInterval(() => { if (!document.hidden) ciclo(); }, 4000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { ciclo(); carregarPref(); } });
+setInterval(() => { if (!document.hidden) carregarPref(); }, 30000);
 </script>
 </body>
 </html>

@@ -11,12 +11,15 @@ import secrets
 import threading
 import time
 
-from . import banco
+from . import banco, casa, tabelas
 from .connectlife import ConnectLife, ConnectLifeErro, ar_condicionado, lavadora, endereco_de_login
 
 log = logging.getLogger("servico")
 
 PERIODO = int(os.environ.get("MHIAGOS_PERIODO", "60"))
+# Com alguem olhando (painel web ou o app pedindo estado), le a nuvem mais vezes.
+PERIODO_RAPIDO = int(os.environ.get("MHIAGOS_PERIODO_RAPIDO", "10"))
+ATIVO_POR = 180
 DIAS_AR = int(os.environ.get("MHIAGOS_DIAS_AR", "400"))
 
 # Propriedades que o aparelho so aceita num comando sozinhas (ar de janela 008/301,
@@ -31,6 +34,9 @@ _ultima_leitura = 0
 _erro = None
 _estado_login = None
 _acordar = threading.Event()
+_lendo = threading.Lock()
+_ultimo_cliente = 0
+_diag = {}      # puid -> (quando, lista oficial do autodiagnostico)
 
 
 # ---------------- conta ----------------
@@ -90,10 +96,23 @@ def sair():
     banco.apagar_kv("conta")
 
 
+def tocar():
+    """Alguem esta olhando: passa a ler a cada PERIODO_RAPIDO por ATIVO_POR segundos."""
+    global _ultimo_cliente
+    parado = time.time() - _ultimo_cliente > ATIVO_POR
+    _ultimo_cliente = time.time()
+    if parado and time.time() - _ultima_leitura > PERIODO_RAPIDO:
+        _acordar.set()
+
+
+def _periodo():
+    return PERIODO_RAPIDO if time.time() - _ultimo_cliente < ATIVO_POR else PERIODO
+
+
 def situacao():
     with _trava:
         return {"logado": _nuvem is not None, "ultimaLeitura": _ultima_leitura, "erro": _erro,
-                "aparelhos": len(_aparelhos), "periodo": PERIODO}
+                "aparelhos": len(_aparelhos), "periodo": _periodo()}
 
 
 def aparelhos():
@@ -113,7 +132,7 @@ def achar(puid):
 
 def _laco():
     while True:
-        _acordar.wait(PERIODO)
+        _acordar.wait(_periodo())
         _acordar.clear()
         try:
             ler()
@@ -122,6 +141,16 @@ def _laco():
 
 
 def ler():
+    # Uma leitura por vez: o laco, o painel e o comando podem pedir juntos.
+    if not _lendo.acquire(blocking=False):
+        return
+    try:
+        _ler()
+    finally:
+        _lendo.release()
+
+
+def _ler():
     global _aparelhos, _ultima_leitura, _erro, _nuvem
     with _trava:
         nuvem = _nuvem
@@ -129,10 +158,14 @@ def ler():
         return
     try:
         lista = nuvem.listar()
-        for a in lista:
-            if ar_condicionado(a):
-                a["meta"] = _meta(nuvem, a)
         agora = int(time.time())
+        for a in lista:
+            a["meta"] = _meta(nuvem, a)
+            _diagnostico(nuvem, a, agora)
+            if ar_condicionado(a):
+                a["info"] = casa.descrever_ar(a)
+            elif lavadora(a):
+                a["info"] = casa.descrever_lavadora(a, agora)
         with _trava:
             if nuvem is not _nuvem:
                 return
@@ -160,11 +193,28 @@ def _meta(nuvem, a):
     if chave not in _metas:
         try:
             r = nuvem.propriedades(a["tipo"], a["codigoDoModelo"])
-            _metas[chave] = r.get("properties") if isinstance(r, dict) else None
+            _metas[chave] = tabelas.ler_meta(r if isinstance(r, dict) else None)
         except ConnectLifeErro as e:
             log.warning("propriedades de %s indisponiveis: %s", chave, e)
             return None
     return _metas[chave]
+
+
+def _diagnostico(nuvem, a, agora):
+    """A lista oficial de falhas do modelo (uma consulta por hora) e as que acusam agora."""
+    q, lista = _diag.get(a["puid"], (0, None))
+    if agora - q > 3600:
+        try:
+            r = nuvem.autodiagnostico(a["puid"])
+            itens = ((r or {}).get("data") or {}).get("selfCheckList") or []
+            lista = [{"chave": str(i.get("statusKey") or ""), "valor": str(i.get("statusValue") or "1"),
+                      "nome": str(i.get("fault") or i.get("statusKey") or ""), "categoria": str(i.get("content") or ""),
+                      "orientacao": str(i.get("guide") or "")} for i in itens if isinstance(i, dict)]
+        except ConnectLifeErro as e:
+            log.info("autodiagnostico de %s indisponivel: %s", a["puid"][-6:], e)
+        _diag[a["puid"]] = (agora, lista)
+    ativas = [f for f in (lista or []) if f["chave"] and a["estado"].get(f["chave"]) == f["valor"]]
+    a["diagnostico"] = {"conhecidas": len(lista or []), "ativas": ativas}
 
 
 def _num(a, chave, padrao=None):
@@ -295,7 +345,10 @@ def enviar(puid, props, sem_bipe=False):
             log.info("comando com t_beep=0 recusado, repetindo sem: %s", e)
             nuvem.definir(puid, parte)
     _evento(puid, "comando", json.dumps(props, separators=(",", ":")))
-    threading.Timer(4.0, ler).start()
+    # O aparelho leva uns segundos para confirmar na nuvem.
+    tocar()
+    threading.Timer(3.0, ler).start()
+    threading.Timer(8.0, ler).start()
 
 
 def diagnostico(puid):
@@ -307,6 +360,22 @@ def diagnostico(puid):
 
 
 # ---------------- agendamentos ----------------
+
+def agendar(puid, quando, props, nome):
+    """Um por aparelho e nome: o novo substitui. Timer de desligar cancela o retorno da cena (como o app)."""
+    c = banco.con()
+    if nome:
+        c.execute("DELETE FROM agendamentos WHERE puid=? AND nome=?", (puid, nome))
+    if nome == "desligar":
+        c.execute("DELETE FROM agendamentos WHERE puid=? AND nome='retorno'", (puid,))
+    cur = c.execute("INSERT INTO agendamentos(puid,quando,props,nome,criado) VALUES(?,?,?,?,?)",
+                    (puid, int(quando), json.dumps(props), nome, int(time.time())))
+    return cur.lastrowid
+
+
+def cancelar(puid, nome):
+    banco.con().execute("DELETE FROM agendamentos WHERE puid=? AND nome=?", (puid, nome))
+
 
 def _laco_agendamentos():
     while True:
@@ -320,7 +389,7 @@ def _laco_agendamentos():
                     _evento(ag["puid"], "agendamento_descartado", ag["nome"] or "")
                     continue
                 try:
-                    enviar(ag["puid"], json.loads(ag["props"]))
+                    enviar(ag["puid"], json.loads(ag["props"]), casa.preferencias()["dados"].get("semBipe", False))
                     _evento(ag["puid"], "agendamento", ag["nome"] or "")
                 except Exception as e:
                     _evento(ag["puid"], "agendamento_falhou", "%s: %s" % (ag["nome"] or "", e))

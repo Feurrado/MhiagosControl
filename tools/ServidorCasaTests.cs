@@ -59,6 +59,21 @@ namespace MhiagosControl
                 Igual(1, CiclosDaLavadora.TerminadosDesde(t0.AddMinutes(1)).Count, "servidor: ciclos para enviar desde a data");
 
                 Igual(2, File.ReadAllLines(CiclosDaLavadora.Arquivo).Length, "servidor: arquivo de ciclos regravado com dois");
+
+                // Preferencias: o que sobe para o servidor volta igual.
+                PreferenciasCasa p = new PreferenciasCasa();
+                p.PotenciaFrio = 950; p.Tarifa = 0.91; p.RetornoTemp = 23; p.AlertaQuente = false;
+                p.Cenas[0].Nome = "Noite"; p.Cenas[0].Duracao = 60;
+                string json = Json.Escrever(ServidorCasa.Compartilhadas(p));
+                PreferenciasCasa q = new PreferenciasCasa();
+                ServidorCasa.Aplicar(q, (Dictionary<string, object>)Json.Ler(json));
+                Igual(json, Json.Escrever(ServidorCasa.Compartilhadas(q)), "servidor: preferencias voltam iguais do servidor");
+                Verdade(q.PotenciaFrio == 950 && Math.Abs(q.Tarifa - 0.91) < 1e-6 && !q.AlertaQuente && q.Cenas[0].Nome == "Noite" && q.Cenas[0].Duracao == 60,
+                    "servidor: campos das preferencias aplicados");
+                Dictionary<string, object> estranho = new Dictionary<string, object>();
+                estranho["limiteQuente"] = 99L; estranho["cenas"] = new List<object> { new Dictionary<string, object> { { "nome", "" } } };
+                ServidorCasa.Aplicar(q, estranho);
+                Verdade(q.LimiteQuente == 45 && q.Cenas.Count == 0, "servidor: valores fora da faixa limitados e cena sem nome ignorada");
             }
             finally
             {

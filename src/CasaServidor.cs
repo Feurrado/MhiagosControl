@@ -63,7 +63,9 @@ namespace MhiagosControl
             lock (_trava)
             {
                 if (_ciclo != null || Desligado) return;
-                _ciclo = new Timer(delegate { Sincronizar(); }, null, 5000, 10 * 60 * 1000);
+                // A cada minuto: o historico vai so a diferenca, e timers e ajustes
+                // mudados pelo painel web chegam logo.
+                _ciclo = new Timer(delegate { Sincronizar(); }, null, 5000, 60 * 1000);
             }
         }
 
@@ -88,6 +90,8 @@ namespace MhiagosControl
             ServicoCasa.Pref.Servidor = "";
             ServicoCasa.Pref.ServidorDesligarId = 0;
             ServicoCasa.Pref.ServidorRetornoId = 0;
+            ServicoCasa.Pref.ServidorPrefVersao = 0;
+            ServicoCasa.Pref.ServidorPrefHash = "";
             ServicoCasa.Pref.Salvar();
             Cofre.Apagar(AlvoDoCofre);
             lock (_trava) _chave = "";
@@ -184,6 +188,9 @@ namespace MhiagosControl
                 Pedir("POST", "/api/historico/importar", carga);
             }
 
+            Agendamentos();
+            Preferencias();
+
             long agoraAr, agoraCi;
             long.TryParse(Json.Texto(ar, "agora") ?? "0", out agoraAr);
             long.TryParse(Json.Texto(ci, "agora") ?? "0", out agoraCi);
@@ -236,6 +243,163 @@ namespace MhiagosControl
                 l.Add(new KeyValuePair<string, CiclosDaLavadora.Ciclo>(Json.Texto(d, "puid") ?? "", c));
             }
             return l;
+        }
+
+        // ---------------- o que o painel web muda ----------------
+
+        /// <summary>Timer de desligar e retorno criados ou cancelados pelo painel web.</summary>
+        private static void Agendamentos()
+        {
+            Dictionary<string, object> r = Pedir("GET", "/api/agendamentos", null);
+            List<object> l = r.ContainsKey("agendamentos") ? r["agendamentos"] as List<object> : null;
+            if (l == null) return;
+            PreferenciasCasa p = ServicoCasa.Pref;
+            foreach (bool desligar in new[] { true, false })
+            {
+                string nome = desligar ? "desligar" : "retorno";
+                Dictionary<string, object> achado = null;
+                foreach (object o in l)
+                {
+                    Dictionary<string, object> d = o as Dictionary<string, object>;
+                    if (d != null && Json.Texto(d, "nome") == nome) { achado = d; break; }
+                }
+                long idLocal = desligar ? p.ServidorDesligarId : p.ServidorRetornoId;
+                long emLocal = desligar ? p.DesligarEmUtc : p.RetornoEmUtc;
+                if (achado != null)
+                {
+                    long id = Long(achado, "id");
+                    if (id != idLocal)
+                        ServicoCasa.AdotarDoServidor(desligar, Json.Texto(achado, "puid") ?? "", Zero.AddSeconds(Long(achado, "quando")), id);
+                }
+                else if (idLocal != 0 && emLocal > DateTime.UtcNow.AddSeconds(30).Ticks)
+                    ServicoCasa.SoltarDoServidor(desligar);
+            }
+        }
+
+        /// <summary>
+        /// Cenas, potencias, tarifa, retorno e alertas: os mesmos no PC e no
+        /// painel web. Mudou so aqui, sobe; mudou so la, desce; nos dois, vale o
+        /// do servidor. Na primeira vez, com o servidor ainda sem nada, sobe o do PC.
+        /// </summary>
+        private static void Preferencias()
+        {
+            PreferenciasCasa p = ServicoCasa.Pref;
+            string hash = Resumo(Json.Escrever(Compartilhadas(p)));
+            Dictionary<string, object> sv = Pedir("GET", "/api/preferencias", null);
+            long versao = Long(sv, "versao");
+            bool mudouAqui = hash != p.ServidorPrefHash;
+            bool mudouLa = versao != p.ServidorPrefVersao;
+            bool primeira = p.ServidorPrefHash.Length == 0;
+            if (mudouAqui && (!mudouLa || (primeira && versao == 0)))
+            {
+                Dictionary<string, object> carga = new Dictionary<string, object>();
+                carga["dados"] = Compartilhadas(p);
+                carga["origem"] = "pc";
+                p.ServidorPrefVersao = Long(Pedir("PUT", "/api/preferencias", carga), "versao");
+                p.ServidorPrefHash = hash;
+                return;
+            }
+            if (!mudouLa) return;
+            Dictionary<string, object> dados = sv.ContainsKey("dados") ? sv["dados"] as Dictionary<string, object> : null;
+            if (dados == null) return;
+            Aplicar(p, dados);
+            p.ServidorPrefVersao = versao;
+            p.ServidorPrefHash = Resumo(Json.Escrever(Compartilhadas(p)));
+            p.Salvar();
+            Log.Write("casa: preferencias do servidor aplicadas (versao " + versao + ")");
+            ServicoCasa.AvisarMudanca();
+        }
+
+        internal static Dictionary<string, object> Compartilhadas(PreferenciasCasa p)
+        {
+            Dictionary<string, object> d = new Dictionary<string, object>();
+            d["alertaFalha"] = p.AlertaFalha;
+            d["alertaDesconectado"] = p.AlertaDesconectado;
+            d["alertaQuente"] = p.AlertaQuente;
+            d["alertaLavadoraFim"] = p.AlertaLavadoraFim;
+            d["limiteQuente"] = (long)p.LimiteQuente;
+            d["potenciaFrio"] = (long)p.PotenciaFrio;
+            d["potenciaEco"] = (long)p.PotenciaEco;
+            d["potenciaSeco"] = (long)p.PotenciaSeco;
+            d["potenciaVentilar"] = (long)p.PotenciaVentilar;
+            d["tarifa"] = p.Tarifa;
+            d["retornoModo"] = (long)p.RetornoModo;
+            d["retornoTemp"] = (long)p.RetornoTemp;
+            d["retornoVento"] = (long)p.RetornoVento;
+            List<object> cenas = new List<object>();
+            foreach (CenaCasa c in p.Cenas)
+            {
+                Dictionary<string, object> x = new Dictionary<string, object>();
+                x["nome"] = c.Nome;
+                x["icone"] = c.Icone;
+                x["desligar"] = c.Desligar;
+                x["modo"] = (long)c.Modo;
+                x["temp"] = (long)c.Temp;
+                x["vento"] = (long)c.Vento;
+                x["noturno"] = (long)c.Noturno;
+                x["duracao"] = (long)c.Duracao;
+                cenas.Add(x);
+            }
+            d["cenas"] = cenas;
+            return d;
+        }
+
+        internal static void Aplicar(PreferenciasCasa p, Dictionary<string, object> d)
+        {
+            p.AlertaFalha = Bool(d, "alertaFalha", p.AlertaFalha);
+            p.AlertaDesconectado = Bool(d, "alertaDesconectado", p.AlertaDesconectado);
+            p.AlertaQuente = Bool(d, "alertaQuente", p.AlertaQuente);
+            p.AlertaLavadoraFim = Bool(d, "alertaLavadoraFim", p.AlertaLavadoraFim);
+            p.LimiteQuente = Math.Max(16, Math.Min(45, Int(d, "limiteQuente", p.LimiteQuente)));
+            p.PotenciaFrio = Math.Max(0, Int(d, "potenciaFrio", p.PotenciaFrio));
+            p.PotenciaEco = Math.Max(0, Int(d, "potenciaEco", p.PotenciaEco));
+            p.PotenciaSeco = Math.Max(0, Int(d, "potenciaSeco", p.PotenciaSeco));
+            p.PotenciaVentilar = Math.Max(0, Int(d, "potenciaVentilar", p.PotenciaVentilar));
+            float tarifa = Float(d, "tarifa");
+            if (!float.IsNaN(tarifa) && tarifa >= 0 && tarifa < 100) p.Tarifa = Math.Round(tarifa, 4);
+            p.RetornoModo = Int(d, "retornoModo", p.RetornoModo);
+            p.RetornoTemp = Math.Max(16, Math.Min(32, Int(d, "retornoTemp", p.RetornoTemp)));
+            p.RetornoVento = Int(d, "retornoVento", p.RetornoVento);
+            List<object> l = d.ContainsKey("cenas") ? d["cenas"] as List<object> : null;
+            if (l == null) return;
+            List<CenaCasa> cenas = new List<CenaCasa>();
+            foreach (object o in l)
+            {
+                Dictionary<string, object> x = o as Dictionary<string, object>;
+                string nome = x != null ? (Json.Texto(x, "nome") ?? "").Trim() : "";
+                if (nome.Length == 0 || cenas.Count >= CenaCasa.MaxCenas) continue;
+                CenaCasa c = new CenaCasa();
+                c.Nome = nome;
+                string icone = Json.Texto(x, "icone") ?? "";
+                c.Icone = IconesDeCena.Existe(icone) ? icone : "floco";
+                c.Desligar = Bool(x, "desligar", false);
+                c.Modo = Int(x, "modo", -1);
+                c.Temp = Int(x, "temp", -1);
+                c.Vento = Int(x, "vento", -1);
+                c.Noturno = Int(x, "noturno", -1);
+                c.Duracao = Math.Max(0, Int(x, "duracao", 0));
+                cenas.Add(c);
+            }
+            p.Cenas = cenas;
+        }
+
+        private static bool Bool(Dictionary<string, object> d, string k, bool padrao)
+        {
+            string s = Json.Texto(d, k);
+            return s == "true" ? true : s == "false" ? false : padrao;
+        }
+
+        private static int Int(Dictionary<string, object> d, string k, int padrao)
+        {
+            double v;
+            string s = Json.Texto(d, k);
+            return s != null && double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v) ? (int)Math.Round(v) : padrao;
+        }
+
+        private static string Resumo(string s)
+        {
+            using (System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create())
+                return Convert.ToBase64String(md5.ComputeHash(Encoding.UTF8.GetBytes(s)));
         }
 
         // ---------------- agendamentos ----------------
@@ -449,7 +613,7 @@ namespace MhiagosControl
         public static string ServidorEsquecer { get { return P("Esquecer", "Forget"); } }
         public static string ServidorTestando { get { return P("Testando…", "Testing…"); } }
         public static string ServidorNaoConfigurado { get { return P("Sem servidor: só este PC lê os aparelhos.", "No server: only this PC reads the devices."); } }
-        public static string ServidorNota { get { return P("O servidor continua lendo o ar e a lavadora com o PC desligado, guarda o histórico e dispara o timer de desligar e o retorno das cenas. O histórico é trocado ao abrir o app e a cada 10 minutos.", "The server keeps reading the AC and washer with the PC off, stores the history and fires the off timer and scene return. History is exchanged at startup and every 10 minutes."); } }
+        public static string ServidorNota { get { return P("O servidor continua lendo o ar e a lavadora com o PC desligado, guarda o histórico e dispara o timer de desligar e o retorno das cenas. Histórico, cenas, ajustes e timers são trocados com ele a cada minuto, então o que mudar no painel web aparece aqui.", "The server keeps reading the AC and washer with the PC off, stores the history and fires the off timer and scene return. History, scenes, settings and timers are exchanged every minute, so changes made on the web panel show up here."); } }
         public static string ServidorSemConta { get { return P("Servidor no ar, mas sem a conta ConnectLife: entre pela página do servidor.", "Server is up but has no ConnectLife account: sign in on the server page."); } }
         public static string ServidorSemResposta { get { return P("o servidor não respondeu", "the server did not respond"); } }
         public static string ServidorChaveErrada { get { return P("chave de acesso recusada", "access key rejected"); } }

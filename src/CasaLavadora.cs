@@ -526,26 +526,36 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Preenche os nomes das etapas (Secar so quando o ciclo seca) e devolve
-        /// o indice da atual pela fase, ou -1. Usado aqui e na Visao geral.
+        /// As mesmas etapas do painel web, uma por fase da maquina:
+        /// Pesar, Pre, Lavar, Enxaguar, Amaciar, Centrifugar, Secar (so quando o
+        /// ciclo seca) e Fim. Antirrugas (6) e arejando (9) ficam na etapa anterior.
         /// </summary>
         internal static int Montar(Aparelho a, CicloAtual c, List<string> nomes)
         {
             bool seca = a.Int("dry_time", 0) > 0 || a.Int("DryingSwitch", 0) == 1 || c.Fase == 8 || c.Fase == 9;
+            List<int> fases = new List<int> { 1, 2, 3, 4, 5, 7 };
+            if (seca) fases.Add(8);
+            fases.Add(10);
             nomes.Clear();
-            nomes.Add(T.LavEtapaLavar);
-            nomes.Add(T.LavEtapaEnxaguar);
-            nomes.Add(T.LavEtapaCentrifugar);
-            if (seca) nomes.Add(T.LavEtapaSecar);
-            nomes.Add(T.LavEtapaFim);
-            switch (c.Fase)
+            foreach (int f in fases) nomes.Add(Nome(f));
+            if (c.Fase <= 0 || c.Fase > 10) return -1;
+            int atual = -1;
+            for (int i = 0; i < fases.Count; i++) if (fases[i] <= c.Fase) atual = i;
+            return atual;
+        }
+
+        private static string Nome(int fase)
+        {
+            switch (fase)
             {
-                case 1: case 2: case 3: return 0;
-                case 4: case 5: return 1;
-                case 6: case 7: return 2;
-                case 8: case 9: return seca ? 3 : 2;
-                case 10: return nomes.Count - 1;
-                default: return -1;
+                case 1: return T.LavEtapaPesar;
+                case 2: return T.LavEtapaPre;
+                case 3: return T.LavEtapaLavar;
+                case 4: return T.LavEtapaEnxaguar;
+                case 5: return T.LavEtapaAmaciar;
+                case 7: return T.LavEtapaCentrifugar;
+                case 8: return T.LavEtapaSecar;
+                default: return T.LavEtapaFim;
             }
         }
 
@@ -895,9 +905,11 @@ namespace MhiagosControl
             y = Bloco(_titulo, cx, y, cw) + Ui.S(2);
             if (_programa.Visible) y = Bloco(_programa, cx, y, cw) + Ui.S(2);
             if (_termino.Visible) y = Bloco(_termino, cx, y, cw) + Ui.S(10);
-            if (_etapas.Visible) { _etapas.SetBounds(cx, y + Ui.S(6), cw, Ui.S(48)); y += Ui.S(60); }
             if (_aviso.Visible) y = Bloco(_aviso, cx, y + Ui.S(4), cw) + Ui.S(4);
             y = Math.Max(y, lado ? y0 + anel : y) + Ui.S(14);
+
+            // Etapas na largura toda do cartao, como no painel web: sao oito.
+            if (_etapas.Visible) { _etapas.SetBounds(M, y, iw, Ui.S(48)); y += Ui.S(60); }
 
             // Parametros em grade: rotulo pequeno em cima, valor embaixo.
             if (_lbParams.Visible)
@@ -1002,11 +1014,14 @@ namespace MhiagosControl
         public static string LavCicloDe(string total, int pct) { return P("Ciclo de " + total + "  ·  " + pct + "% concluído", total + " cycle  ·  " + pct + "% done"); }
         public static string LavSemCiclo { get { return P("sem ciclo", "no cycle"); } }
         public static string LavUltimaLeitura(string h) { return P("Última leitura conhecida às " + h + ". Os valores abaixo podem estar desatualizados.", "Last known reading at " + h + ". The values below may be out of date."); }
+        public static string LavEtapaPesar { get { return P("Pesar", "Weigh"); } }
+        public static string LavEtapaPre { get { return P("Pré", "Pre"); } }
+        public static string LavEtapaAmaciar { get { return P("Amaciar", "Soften"); } }
         public static string LavEtapaLavar { get { return P("Lavar", "Wash"); } }
         public static string LavEtapaEnxaguar { get { return P("Enxaguar", "Rinse"); } }
         public static string LavEtapaCentrifugar { get { return P("Centrifugar", "Spin"); } }
         public static string LavEtapaSecar { get { return P("Secar", "Dry"); } }
-        public static string LavEtapaFim { get { return P("Pronto", "Done"); } }
+        public static string LavEtapaFim { get { return P("Fim", "Done"); } }
         public static string LavParametros { get { return P("Este ciclo", "This cycle"); } }
         public static string LavEnxagues { get { return P("Enxágues", "Rinses"); } }
         public static string LavExtra { get { return P("a mais", "extra"); } }

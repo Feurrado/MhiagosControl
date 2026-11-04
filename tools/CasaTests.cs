@@ -540,7 +540,7 @@ namespace MhiagosControl
                                 AnelDoCiclo anel = (AnelDoCiclo)Field(lv, "_anel");
                                 Label titulo = (Label)Field(lv, "_titulo");
                                 if (estado == "secando")
-                                    Verdade(anel.Grande == "1 h 25" && titulo.Text == T.LavFaseSecagem && ((EtapasDoCiclo)Field(lv, "_etapas")).Atual == 3,
+                                    Verdade(anel.Grande == "1 h 25" && titulo.Text == T.LavFaseSecagem && ((EtapasDoCiclo)Field(lv, "_etapas")).Atual == 6,
                                         "secando: 1 h 25 restantes, etapa Secar " + sufixo);
                                 EtapasDoCiclo et = (EtapasDoCiclo)Field(lv, "_etapas");
                                 if (et.Visible)

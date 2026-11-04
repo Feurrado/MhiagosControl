@@ -620,6 +620,40 @@ namespace MhiagosControl
             });
         }
 
+        // ---------------- vindo do servidor da casa ----------------
+
+        /// <summary>
+        /// O servidor tem um timer de desligar (ou retorno de cena) que o PC nao
+        /// conhece: foi criado pelo painel web. O PC passa a mostrar e a vigiar.
+        /// Mesmo horario (diferenca de segundos) e o que o proprio PC entregou.
+        /// </summary>
+        internal static void AdotarDoServidor(bool desligar, string puid, DateTime quandoUtc, long id)
+        {
+            lock (_trava)
+            {
+                long local = desligar ? Pref.DesligarEmUtc : Pref.RetornoEmUtc;
+                long ticks = Math.Abs(local - quandoUtc.Ticks) < TimeSpan.TicksPerSecond * 2 ? local : quandoUtc.Ticks;
+                if (desligar) { Pref.DesligarEmUtc = ticks; Pref.DesligarPuid = puid; Pref.ServidorDesligarId = id; }
+                else { Pref.RetornoEmUtc = ticks; Pref.RetornoPuid = puid; Pref.ServidorRetornoId = id; }
+            }
+            Pref.Salvar();
+            if (desligar) ArmarTimerDesligar(false); else ArmarRetorno(false);
+            Avisar();
+        }
+
+        /// <summary>O agendamento sumiu do servidor antes da hora: cancelado pelo painel web.</summary>
+        internal static void SoltarDoServidor(bool desligar)
+        {
+            lock (_trava)
+            {
+                if (desligar) Pref.ServidorDesligarId = 0; else Pref.ServidorRetornoId = 0;
+            }
+            if (desligar) CancelarTimer(); else CancelarRetorno();
+        }
+
+        /// <summary>Preferencias trocadas pelo servidor: quem mostra redesenha.</summary>
+        internal static void AvisarMudanca() { Avisar(); }
+
         internal static void AvisoWindows(string titulo, string texto)
         {
             Log.Write("casa: aviso: " + titulo + " - " + texto);
@@ -658,7 +692,9 @@ namespace MhiagosControl
         public string DesligarPuid = "";
         /// <summary>Servidor da casa (ServidorCasa): endereco, marcas da sincronizacao e agendamentos entregues.</summary>
         public string Servidor = "";
-        public long ServidorArAte, ServidorCiclosAte, ServidorEnviadoAte, ServidorDesligarId, ServidorRetornoId;
+        public long ServidorArAte, ServidorCiclosAte, ServidorEnviadoAte, ServidorDesligarId, ServidorRetornoId, ServidorPrefVersao;
+        /// <summary>Resumo das preferencias compartilhadas na ultima troca com o servidor: diferente, mudaram aqui.</summary>
+        public string ServidorPrefHash = "";
         /// <summary>Cenas do ar, na ordem dos botoes. Sem nenhuma gravada, as de fabrica.</summary>
         public List<CenaCasa> Cenas = CenaCasa.Padrao();
 
@@ -729,6 +765,8 @@ namespace MhiagosControl
                         case "servidorenviadoate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorEnviadoAte = l; break;
                         case "servidordesligarid": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorDesligarId = l; break;
                         case "servidorretornoid": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorRetornoId = l; break;
+                        case "servidorprefversao": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorPrefVersao = l; break;
+                        case "servidorprefhash": p.ServidorPrefHash = v; break;
                         case "cena": { CenaCasa cena = CenaCasa.DeLinha(v); if (cena != null) { if (!lidas) { p.Cenas.Clear(); lidas = true; } if (p.Cenas.Count < CenaCasa.MaxCenas) p.Cenas.Add(cena); } break; }
                     }
                 }
@@ -773,6 +811,8 @@ namespace MhiagosControl
             sb.AppendLine("servidorenviadoate=" + ServidorEnviadoAte.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidordesligarid=" + ServidorDesligarId.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidorretornoid=" + ServidorRetornoId.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("servidorprefversao=" + ServidorPrefVersao.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("servidorprefhash=" + (ServidorPrefHash ?? ""));
             foreach (CenaCasa cena in Cenas) sb.AppendLine("cena=" + cena.Linha());
             try { GravacaoAtomica.Escrever(Arquivo, sb.ToString(), new UTF8Encoding(false)); }
             catch (Exception ex) { Log.Error("casa: gravar casa.ini", ex); }
