@@ -223,6 +223,23 @@
   .legenda i { display:inline-block; width:14px; height:3px; border-radius:2px; vertical-align:3px; margin-right:6px; }
   .legenda i.faixa { height:10px; vertical-align:-1px; opacity:.5; }
 
+  /* ---------- giro, esqueleto e transicoes ---------- */
+  @keyframes gira { to { transform:rotate(360deg); } }
+  @keyframes brilho { from { background-position:100% 0; } to { background-position:-100% 0; } }
+  .gira { display:inline-block; width:13px; height:13px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:gira .8s linear infinite; vertical-align:-2px; margin-right:6px; }
+  .enviando { position:relative; }
+  .enviando::after { content:""; position:absolute; top:5px; right:5px; width:9px; height:9px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:gira .8s linear infinite; opacity:.85; }
+  .liga.enviando::after, .redondo.enviando::after { top:-3px; right:-3px; width:12px; height:12px; color:var(--accent-text); }
+  .tile, .liga, .redondo, .cena, .b, .selo { transition:background-color .18s, border-color .18s, color .18s; }
+  .anel circle.prog { transition:stroke-dasharray .7s ease, stroke .3s; }
+  .dial.arrastavel { touch-action:none; cursor:grab; }
+  .dial.arrastando { cursor:grabbing; }
+  .esqueleto i, .esqueleto .ico { display:block; border-radius:4px; background:linear-gradient(90deg, var(--surface-alt) 25%, var(--hover) 50%, var(--surface-alt) 75%);
+    background-size:200% 100%; animation:brilho 1.4s linear infinite; }
+  .esqueleto i { height:12px; margin:6px 0; }
+  .mini { margin-top:14px; }
+  .mini .graf svg text { font-size:10px; }
+
   @media (max-width:900px) {
     .ar { grid-template-columns:1fr; }
     .baixo { grid-template-columns:1fr; }
@@ -277,7 +294,12 @@
         <div class="acoes"><button class="b" id="lerAgora">Atualizar</button></div>
       </div>
       <div id="resumoMes" class="resumo-mes oculto"></div>
-      <div class="pilha" id="cartoes"></div>
+      <div class="pilha" id="cartoes">
+        <div class="cartao esqueleto"><div class="cab"><div class="ico"></div><div style="flex:1"><i style="width:140px"></i><i style="width:240px"></i></div></div>
+          <div class="corpo" style="display:flex;gap:28px"><i style="width:230px;height:230px;border-radius:50%"></i><div style="flex:1"><i style="width:50%;height:48px"></i><i style="height:70px;margin-top:20px"></i><i style="height:44px;margin-top:16px"></i></div></div></div>
+        <div class="cartao esqueleto"><div class="cab"><div class="ico"></div><div style="flex:1"><i style="width:180px"></i><i style="width:200px"></i></div></div>
+          <div class="corpo"><i style="width:40%;height:18px"></i></div></div>
+      </div>
     </section>
 
     <section id="aba-consumo" class="oculto">
@@ -445,13 +467,29 @@ function desenharSituacao() {
   if ($("rodape").textContent !== r) $("rodape").textContent = r;
 }
 
+const enviadoEm = {};
+
+/** O botao muda na hora e gira ate a leitura da nuvem confirmar (ou 20 s), como no app. */
 async function comando(a, p, opts) {
   pendente[a.puid] = Object.assign(pendente[a.puid] || {}, p);
+  const quando = enviadoEm[a.puid] = Date.now();
   desenharCartoes();
   try { await api("aparelhos/" + a.puid + "/comando", "POST", Object.assign({ props: p }, opts || {})); }
-  catch (e) { aviso("Comando falhou: " + e.message); delete pendente[a.puid]; desenharCartoes(); }
-  setTimeout(() => { delete pendente[a.puid]; atualizar(); }, 9000);
+  catch (e) { aviso("Comando falhou: " + e.message); delete pendente[a.puid]; desenharCartoes(); return; }
+  setTimeout(() => { if (enviadoEm[a.puid] === quando && pendente[a.puid]) { delete pendente[a.puid]; desenharCartoes(); } }, 20000);
 }
+
+/** Tira do pendente o que a leitura ja mostra com o valor pedido. */
+function conferirPendentes() {
+  for (const a of estado.lista) {
+    const p = pendente[a.puid];
+    if (!p || Date.now() - enviadoEm[a.puid] < 1500) continue;
+    for (const k of Object.keys(p)) if (String(a.estado[k]) === String(p[k])) delete p[k];
+    if (!Object.keys(p).length) delete pendente[a.puid];
+  }
+}
+
+const enviando = (a, k) => !!(pendente[a.puid] && k in pendente[a.puid]);
 
 function valor(a, k) {
   const p = pendente[a.puid];
@@ -471,14 +509,17 @@ const U = puid => ui[puid] || (ui[puid] = { diag: false, props: false, consumo: 
  */
 function desenharCartoes() {
   if (!estado) return;
+  conferirPendentes();
   const c = $("cartoes");
   const foco = document.activeElement && c.contains(document.activeElement) ? document.activeElement.dataset.id : null;
   const lista = [];
   for (const a of estado.lista) {
     const ags = (estado.agendamentos || []).filter(x => x.puid === a.puid);
     const sig = JSON.stringify([a, pendente[a.puid] || null, pref && pref.versao, U(a.puid), ags, ciclosDe(a.puid).length,
-      props[a.puid] ? props[a.puid].length : 0, ags.length ? Math.floor(Date.now() / 60000) : 0]);
+      props[a.puid] ? props[a.puid].length : 0, ags.length ? Math.floor(Date.now() / 60000) : 0,
+      mini[a.puid] ? mini[a.puid].length + ":" + (mini[a.puid].length ? mini[a.puid][mini[a.puid].length - 1].t : 0) : 0]);
     let r = nos.get(a.puid);
+    if (r && arrastando === a.puid) { lista.push(r.el); continue; }
     if (!r || r.sig !== sig) {
       const novo = ehAr(a) ? cartaoAr(a) : ehLavadora(a) ? cartaoLavadora(a) : cartaoGenerico(a);
       if (r) {
@@ -494,6 +535,8 @@ function desenharCartoes() {
   }
   lista.forEach((e, i) => { if (c.children[i] !== e) c.insertBefore(e, c.children[i] || null); });
   while (c.children.length > lista.length) c.lastChild.remove();
+  // O que precisa da largura real (miniatura) ou do quadro anterior (anel) roda ja no lugar.
+  for (const e of lista) for (const x of [e, ...e.querySelectorAll(".anel")]) if (x.depois) { const f = x.depois; x.depois = null; f(); }
   if (foco) { const e = c.querySelector('[data-id="' + foco + '"]'); if (e && e !== document.activeElement) e.focus(); }
 }
 
@@ -556,23 +599,80 @@ function chaveLinha(rotulo, ligado, desab, mudou) {
 
 // ---------------- ar ----------------
 
-function dial(ligado, alvo, mn, mx, cor, modoNome, ambiente, unidade) {
-  const r = 100, cx = 125, cy = 118, C = 2 * Math.PI * r, arco = C * .75;
-  const frac = Math.max(0, Math.min(1, (alvo - mn) / (mx - mn)));
+const DIAL = { r: 100, cx: 125, cy: 118 };
+let arrastando = null;        // puid cujo mostrador esta sendo arrastado: nao redesenha
+const ultimoArco = {};        // puid -> fracao desenhada, para deslizar ate a nova
+
+function dialConteudo(d, frac) {
+  const { r, cx, cy } = DIAL, C = 2 * Math.PI * r, arco = C * .75;
   const ang = (135 + 270 * frac) * Math.PI / 180;
   const kx = cx + r * Math.cos(ang), ky = cy + r * Math.sin(ang);
-  const corArco = ligado ? cor : "var(--faint)";
-  const s = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--border)" stroke-width="14" stroke-linecap="round" stroke-dasharray="' + arco + ' ' + C + '" transform="rotate(135 ' + cx + ' ' + cy + ')"/>' +
+  const corArco = d.ligado ? d.cor : "var(--faint)";
+  return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--border)" stroke-width="14" stroke-linecap="round" stroke-dasharray="' + arco + ' ' + C + '" transform="rotate(135 ' + cx + ' ' + cy + ')"/>' +
     '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + corArco + '" stroke-width="14" stroke-linecap="round" stroke-dasharray="' + (arco * frac) + ' ' + C + '" transform="rotate(135 ' + cx + ' ' + cy + ')"/>' +
     '<circle cx="' + kx + '" cy="' + ky + '" r="13" fill="#fff" stroke="' + corArco + '" stroke-width="3"/>' +
-    '<text x="' + cx + '" y="' + (cy - 40) + '" text-anchor="middle" class="t-mu">' + (ligado ? modoNome : "Desligado") + '</text>' +
-    '<text x="' + (cx - 6) + '" y="' + (cy + 18) + '" text-anchor="middle" font-size="54" font-weight="300"' + (ligado ? "" : ' style="fill:var(--muted)"') + '>' + alvo + '</text>' +
-    '<text x="' + (cx + 30) + '" y="' + (cy - 12) + '" font-size="20" class="t-mu">' + unidade + '</text>' +
-    (ambiente != null ? '<text x="' + cx + '" y="' + (cy + 52) + '" text-anchor="middle" class="t-mu" style="font-size:14px">ambiente ' + num(ambiente, 0) + unidade + '</text>' : "") +
-    '<text x="' + (cx - 58) + '" y="' + (cy + 112) + '" text-anchor="middle" class="t-mu">' + mn + '°</text>' +
-    '<text x="' + (cx + 58) + '" y="' + (cy + 112) + '" text-anchor="middle" class="t-mu">' + mx + '°</text>';
-  const e = svg(s, "0 0 250 236");
+    '<text x="' + cx + '" y="' + (cy - 40) + '" text-anchor="middle" class="t-mu">' + (d.ligado ? d.modoNome : "Desligado") + '</text>' +
+    '<text x="' + (cx - 6) + '" y="' + (cy + 18) + '" text-anchor="middle" font-size="54" font-weight="300"' + (d.ligado ? "" : ' style="fill:var(--muted)"') + '>' + d.alvo + '</text>' +
+    '<text x="' + (cx + 30) + '" y="' + (cy - 12) + '" font-size="20" class="t-mu">' + d.unidade + '</text>' +
+    (d.ambiente != null ? '<text x="' + cx + '" y="' + (cy + 52) + '" text-anchor="middle" class="t-mu" style="font-size:14px">ambiente ' + num(d.ambiente, 0) + d.unidade + '</text>' : "") +
+    '<text x="' + (cx - 58) + '" y="' + (cy + 112) + '" text-anchor="middle" class="t-mu">' + d.mn + '°</text>' +
+    '<text x="' + (cx + 58) + '" y="' + (cy + 112) + '" text-anchor="middle" class="t-mu">' + d.mx + '°</text>';
+}
+
+const fracDe = d => Math.max(0, Math.min(1, (d.alvo - d.mn) / (d.mx - d.mn)));
+
+/** Mostrador do ar. Arrastavel quando aceita temperatura; desliza do valor anterior ao novo. */
+function dial(a, d, arrastavel, mudou) {
+  const e = svg("", "0 0 250 236");
   e.classList.add("dial");
+  const alvoFrac = d.ligado ? fracDe(d) : 0;
+  const de = ultimoArco[a.puid];
+  ultimoArco[a.puid] = alvoFrac;
+  e.innerHTML = dialConteudo(d, de == null ? alvoFrac : de);
+  if (de != null && Math.abs(de - alvoFrac) > .001) {
+    const t0 = performance.now();
+    const passo = t => {
+      const k = Math.min(1, (t - t0) / 380), suave = 1 - Math.pow(1 - k, 3);
+      e.innerHTML = dialConteudo(d, de + (alvoFrac - de) * suave);
+      if (k < 1) requestAnimationFrame(passo);
+    };
+    requestAnimationFrame(passo);
+  }
+  if (!arrastavel) return e;
+  e.classList.add("arrastavel");
+  let valor = d.alvo, ativo = false;
+  const ler = ev => {
+    const b = e.getBoundingClientRect();
+    const x = (ev.clientX - b.left) * 250 / b.width - DIAL.cx, y = (ev.clientY - b.top) * 236 / b.height - DIAL.cy;
+    return { dist: Math.hypot(x, y), rel: ((Math.atan2(y, x) * 180 / Math.PI) - 135 + 720) % 360 };
+  };
+  const mover = ev => {
+    let rel = ler(ev).rel;
+    if (rel > 270) rel = rel > 315 ? 0 : 270;
+    const t = Math.round(d.mn + rel / 270 * (d.mx - d.mn));
+    if (t === valor) return;
+    valor = t;
+    const novo = Object.assign({}, d, { alvo: t });
+    e.innerHTML = dialConteudo(novo, fracDe(novo));
+  };
+  e.addEventListener("pointerdown", ev => {
+    const p = ler(ev);
+    if (p.dist < DIAL.r - 32 || p.dist > DIAL.r + 30) return;   // so pelo arco
+    ativo = true; arrastando = a.puid;
+    e.classList.add("arrastando");
+    e.setPointerCapture(ev.pointerId);
+    mover(ev);
+  });
+  e.addEventListener("pointermove", ev => { if (ativo) mover(ev); });
+  const soltar = () => {
+    if (!ativo) return;
+    ativo = false; arrastando = null;
+    e.classList.remove("arrastando");
+    ultimoArco[a.puid] = fracDe(Object.assign({}, d, { alvo: valor }));
+    if (valor !== d.alvo) mudou(valor); else desenharCartoes();
+  };
+  e.addEventListener("pointerup", soltar);
+  e.addEventListener("pointercancel", soltar);
   return e;
 }
 
@@ -589,15 +689,17 @@ function cartaoAr(a) {
   const unidade = i.unidade || "°C";
 
   const mudarTemp = d => comando(a, { t_temp: String(Math.max(mn, Math.min(mx, alvo + d))) });
-  const esquerda = el("div", { class: "dialbox" }, dial(ligado, alvo, mn, mx, cor, modoNome, i.ambiente, unidade),
+  const podeTemp = ok && ligado && !!i.grava.t_temp;
+  const esquerda = el("div", { class: "dialbox" },
+    dial(a, { ligado, alvo, mn, mx, cor, modoNome, ambiente: i.ambiente, unidade }, podeTemp, t => comando(a, { t_temp: String(t) })),
     el("div", { class: "linha" },
-      el("button", { class: "redondo", title: "Diminuir", "data-id": a.puid + "menos", disabled: !ok || !ligado || !i.grava.t_temp || alvo <= mn, on: { click: () => mudarTemp(-1) } }, icMenos()),
+      el("button", { class: "redondo" + (enviando(a, "t_temp") ? " enviando" : ""), title: "Diminuir", "data-id": a.puid + "menos", disabled: !ok || !ligado || !i.grava.t_temp || alvo <= mn, on: { click: () => mudarTemp(-1) } }, icMenos()),
       el("button", { class: "redondo", title: "Aumentar", "data-id": a.puid + "mais", disabled: !ok || !ligado || !i.grava.t_temp || alvo >= mx, on: { click: () => mudarTemp(1) } }, icMais())));
 
   const tiles = (lista, atual, k, grava, horiz, ic) => el("div", { class: "tiles", style: "grid-template-columns:repeat(" + lista.length + ",1fr)" },
     lista.map((m, n) => {
       const on = ligado && m.valor === atual;
-      return el("button", { class: "tile" + (horiz ? " horiz" : "") + (on ? " on" : ""), style: on ? "background:" + cor + ";border-color:" + cor : null,
+      return el("button", { class: "tile" + (horiz ? " horiz" : "") + (on ? " on" : "") + (on && enviando(a, k) ? " enviando" : ""), style: on ? "background:" + cor + ";border-color:" + cor : null,
         disabled: !ok || !ligado || !grava, "data-id": a.puid + k + m.valor, on: { click: () => comando(a, { [k]: String(m.valor) }) } }, ic(m, n), el("span", {}, m.nome));
     }));
 
@@ -605,11 +707,11 @@ function cartaoAr(a) {
     i.filtro ? "Limpar o filtro" : null].filter(Boolean);
   const direita = el("div", {},
     el("div", { class: "liga-linha" },
-      el("button", { class: "liga" + (ligado ? " on" : ""), title: "Ligar ou desligar", "data-id": a.puid + "pw",
+      el("button", { class: "liga" + (ligado ? " on" : "") + (enviando(a, "t_power") ? " enviando" : ""), title: "Ligar ou desligar", "data-id": a.puid + "pw",
         disabled: !ok || !i.grava.t_power, on: { click: () => comando(a, { t_power: ligado ? "0" : "1" }) } }, icPower()),
-      el("span", { class: "liga-txt" + (ligado ? " on" : "") }, ok ? (ligado ? "Ligado" : "Desligado") : "Desconectado"),
+      el("span", { class: "liga-txt" + (ligado ? " on" : "") }, pendente[a.puid] ? [el("span", { class: "gira" }), "Enviando…"] : ok ? (ligado ? "Ligado" : "Desligado") : "Desconectado"),
       i.noturnoBotao ? el("div", { class: "noturno" }, "Modo noturno",
-        el("button", { class: "redondo" + (noturno && ligado ? " on" : ""), title: "Modo noturno", "data-id": a.puid + "lua", disabled: !ok || !ligado,
+        el("button", { class: "redondo" + (noturno && ligado ? " on" : "") + (enviando(a, "t_sleep") ? " enviando" : ""), title: "Modo noturno", "data-id": a.puid + "lua", disabled: !ok || !ligado,
           on: { click: () => comando(a, { t_sleep: noturno ? "0" : "1" }) } }, icone("lua"))) : null),
     extras.length ? el("div", { class: "mu", style: "margin-top:8px" }, extras.join("  ·  ")) : null,
     i.modos.length ? [el("div", { class: "rot" }, "Modo"), tiles(i.modos, modo, "t_work_mode", i.grava.t_work_mode, false, m => icone(ICONE_MODO[m.valor]))] : null,
@@ -642,13 +744,35 @@ function cartaoAr(a) {
           on: { click: () => comando(a, { t_temp_type: String(n) }) } }, t)))) : null);
   }
 
-  return el("div", { class: "cartao" }, cabecalho(a, icTermometro()),
+  const caixaMini = el("div", { class: "graf-mini" }, el("div", { class: "mu" }, mini[a.puid] ? "Nenhuma leitura nas últimas 6 horas." : "Carregando…"));
+  const miniatura = el("div", { class: "sub-cartao mini" }, el("div", { class: "tit" }, "Últimas 6 horas",
+    el("button", { class: "b peq", on: { click: () => { diaGrafico = 0; trocarAba("consumo"); } } }, "Ver o dia")), caixaMini);
+
+  const cartao = el("div", { class: "cartao" }, cabecalho(a, icTermometro()),
     el("div", { class: "corpo" },
       el("div", { class: "ar" }, esquerda, direita),
       el("div", { class: "baixo" }, cenas, timer),
+      miniatura,
       funcoes,
       u.diag ? blocoDiagnostico(a, i.falhas.map(x => x.nome)) : null,
       blocoPropriedades(a)));
+  cartao.depois = () => {
+    const am = mini[a.puid];
+    if (!am || !am.length) return;
+    const fim = Math.floor(Date.now() / 1000), ini = fim - 6 * 3600;
+    caixaMini.replaceChildren(graficoDoDia(am, ini, fim, caixaMini.clientWidth || 600, { H: 130, legenda: false }));
+  };
+  return cartao;
+}
+
+const mini = {};   // puid do ar -> amostras das ultimas 6 h
+
+async function carregarMini() {
+  carregarMini.em = Date.now();
+  for (const a of (estado ? estado.lista : []).filter(ehAr)) {
+    try { mini[a.puid] = (await api("historico/ar?puid=" + encodeURIComponent(a.puid) + "&desde=" + (Math.floor(Date.now() / 1000) - 6 * 3600))).amostras; }
+    catch (e) {}
+  }
 }
 
 function resumoCena(c, a) {
@@ -679,6 +803,8 @@ async function cancelarAg(a, qual) {
 // As mesmas etapas do app (EtapasDoCiclo.Montar): uma por fase da maquina.
 const FASES = [[1, "Pesar"], [2, "Pré"], [3, "Lavar"], [4, "Enxaguar"], [5, "Amaciar"], [7, "Centrifugar"], [8, "Secar"], [10, "Fim"]];
 
+const ultimoAnel = {};   // puid -> progresso desenhado, para o anel deslizar
+
 function cartaoLavadora(a) {
   const i = a.info, u = U(a.puid);
   const cor = i.erro ? "var(--danger)" : i.pausada ? "var(--warn)" : i.concluido ? "var(--ok)" : "var(--accent)";
@@ -690,7 +816,12 @@ function cartaoLavadora(a) {
     const C = 2 * Math.PI * 88;
     const anel = el("div", { class: "anel" });
     anel.append(svg('<circle cx="100" cy="100" r="88" fill="none" stroke="var(--border)" stroke-width="12"/>' +
-      '<circle cx="100" cy="100" r="88" fill="none" stroke="' + cor + '" stroke-width="12" stroke-linecap="round" stroke-dasharray="' + (C * i.progresso) + ' ' + C + '" transform="rotate(-90 100 100)"/>', "0 0 200 200"));
+      '<circle class="prog" cx="100" cy="100" r="88" fill="none" stroke="' + cor + '" stroke-width="12" stroke-linecap="round" stroke-dasharray="' + (C * (ultimoAnel[a.puid] ?? i.progresso)) + ' ' + C + '" transform="rotate(-90 100 100)"/>', "0 0 200 200"));
+    ultimoAnel[a.puid] = i.progresso;
+    anel.depois = () => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const c = anel.querySelector(".prog");
+      if (c) c.setAttribute("stroke-dasharray", (C * i.progresso) + " " + C);
+    }));
     anel.append(el("div", { class: "val" }, el("b", {}, i.restante > 0 ? dur(i.restante) : "--"), el("span", {}, "restantes"),
       i.terminaEm ? el("span", { class: "fim" }, "termina às " + hora(i.terminaEm)) : null));
 
@@ -850,8 +981,9 @@ async function desenharGrafico() {
   corpo.replaceChildren(graficoDoDia(am, ini, fim, (corpo.clientWidth || 936) - 36), resumoDoDia(am));
 }
 
-function graficoDoDia(am, ini, fim, largura) {
-  const W = Math.max(300, largura), H = 240, ml = 34, mr = 10, mt = 10, mb = 24;
+function graficoDoDia(am, ini, fim, largura, opcoes) {
+  const op = opcoes || {};
+  const W = Math.max(260, largura), H = op.H || 240, ml = 34, mr = 10, mt = 10, mb = 24;
   const temps = am.flatMap(s => [s.amb, s.ligado ? s.alvo : null]).filter(v => v != null);
   let lo = Math.floor(Math.min(...temps) - 1), hi = Math.ceil(Math.max(...temps) + 1);
   if (hi - lo < 4) { lo -= 1; hi += 1; }
@@ -862,8 +994,13 @@ function graficoDoDia(am, ini, fim, largura) {
   const passoY = hi - lo > 8 ? 2 : 1;
   for (let v = lo; v <= hi; v += passoY)
     s += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" stroke="var(--border)" stroke-width="1"/><text x="' + (ml - 6) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + v + '°</text>';
-  for (let h = 0; h <= 24; h += 3)
-    s += '<text x="' + X(ini + h * 3600) + '" y="' + (H - 6) + '" text-anchor="' + (h === 0 ? "start" : h === 24 ? "end" : "middle") + '">' + String(h).padStart(2, "0") + 'h</text>';
+  const horas = (fim - ini) / 3600, passoH = horas > 12 ? 3 : 1;
+  for (let t = Math.ceil(ini / 3600) * 3600; t <= fim; t += 3600) {
+    const hh = new Date(t * 1000).getHours();
+    if (hh % passoH) continue;
+    const x = X(t), ancora = x - ml < 14 ? "start" : W - mr - x < 14 ? "end" : "middle";
+    s += '<text x="' + x + '" y="' + (H - 6) + '" text-anchor="' + ancora + '">' + String(t === fim && horas >= 24 ? 24 : hh).padStart(2, "0") + 'h</text>';
+  }
   // faixas com o ar ligado (lacuna maior que 3 min nao conta, como o consumo)
   // trechos seguidos no mesmo modo viram uma faixa so (varias finas deixam riscos)
   let faixa = null;
@@ -907,7 +1044,7 @@ function graficoDoDia(am, ini, fim, largura) {
   });
   g.addEventListener("pointerleave", () => { dica.classList.add("oculto"); cursor.setAttribute("opacity", "0"); });
   return el("div", { style: "overflow-x:auto" }, box,
-    el("div", { class: "legenda" }, el("span", {}, el("i", { style: "background:var(--accent)" }), "ambiente"),
+    op.legenda === false ? null : el("div", { class: "legenda" }, el("span", {}, el("i", { style: "background:var(--accent)" }), "ambiente"),
       el("span", {}, el("i", { style: "background:var(--muted)" }), "temperatura pedida"),
       el("span", {}, el("i", { class: "faixa", style: "background:#2D7DF6" }), "ligado em Frio"),
       el("span", {}, el("i", { class: "faixa", style: "background:#2EA043" }), "ECO"),
@@ -1101,6 +1238,7 @@ async function tudo() {
     tudo.ciclos = Date.now();
     await carregarCiclos();
   }
+  if (estado && Date.now() - (carregarMini.em || 0) > 120000) await carregarMini();
   if (abaAtual === "painel") {
     desenharCartoes();
     if (Date.now() - (carregarResumoMes.em || 0) > 60000) carregarResumoMes();
@@ -1125,7 +1263,13 @@ setInterval(() => { if (!document.hidden) tudo(); }, 30000);
 // O relogio do timer e o tempo restante andam sem leitura nova.
 setInterval(() => { if (!document.hidden && abaAtual === "painel") desenharCartoes(); }, 20000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) tudo(); });
-window.addEventListener("resize", () => { clearTimeout(desenharGrafico.t); if (abaAtual === "consumo") desenharGrafico.t = setTimeout(desenharGrafico, 250); });
+window.addEventListener("resize", () => {
+  clearTimeout(desenharGrafico.t);
+  desenharGrafico.t = setTimeout(() => {
+    if (abaAtual === "consumo") desenharGrafico();
+    else if (abaAtual === "painel") { for (const r of nos.values()) r.sig = ""; desenharCartoes(); }
+  }, 250);
+});
 if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
 </script>
 </body>
