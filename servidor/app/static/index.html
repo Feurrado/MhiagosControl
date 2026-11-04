@@ -172,13 +172,6 @@
   .params b { font-weight:600; }
   .aviso { background:color-mix(in srgb, var(--warn) 14%, transparent); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius:4px; padding:8px 10px; margin-top:10px; font-size:13px; }
   .aviso.perigo { background:color-mix(in srgb, var(--danger) 12%, transparent); border-color:color-mix(in srgb, var(--danger) 45%, transparent); }
-  .recolhe { all:unset; cursor:pointer; display:flex; align-items:center; gap:12px; width:100%; box-sizing:border-box; padding:14px 18px; border-top:1px solid var(--border); }
-  .recolhe b { font-weight:600; }
-  .recolhe .mu { flex:1; }
-  .recolhe svg { width:14px; height:14px; color:var(--muted); transition:transform .15s; }
-  .recolhe.aberto svg { transform:rotate(180deg); }
-  .recolhe:hover { background:var(--hover); }
-  .recolhe-corpo { padding:0 18px 16px; }
 
   /* ---------- tabelas e propriedades ---------- */
   table { width:100%; border-collapse:collapse; font-size:13px; }
@@ -187,13 +180,31 @@
   td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
 
   /* ---------- consumo e ajustes ---------- */
-  /* barras dos ultimos 7 dias, como as horas ligado do ar no app */
-  .dias7 { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin:4px 0 16px; }
-  .dias7 .col { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:11px; color:var(--faint); }
-  .dias7 .trilho { width:100%; height:80px; background:var(--surface-alt); border-radius:4px; display:flex; flex-direction:column; justify-content:flex-end; overflow:hidden; }
-  .dias7 .barra { background:var(--accent); opacity:.6; border-radius:4px; transition:height .5s ease; }
-  .dias7 .hoje .barra { opacity:1; }
-  .dias7 .val { color:var(--text); min-height:14px; white-space:nowrap; }
+  /* consumo num lugar so */
+  .destaques { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .destaques > div { background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; padding:12px 14px; min-width:0; }
+  .destaques small { display:block; color:var(--muted); font-size:12px; }
+  .destaques b { display:block; font:600 24px "Segoe UI Variable Display","Segoe UI",sans-serif; margin:2px 0; white-space:nowrap; }
+  .destaques span { font-size:12px; color:var(--muted); }
+  .destaques .menos { color:var(--ok); } .destaques .mais { color:var(--danger); }
+  table.aparelhos { margin-top:16px; }
+  table.aparelhos td { vertical-align:middle; padding:10px 6px; }
+  table.aparelhos .nome { display:flex; align-items:center; gap:10px; font-weight:600; }
+  table.aparelhos .nome i { width:10px; height:10px; border-radius:3px; flex:none; }
+  table.aparelhos .nome small { display:block; font-weight:400; color:var(--muted); font-size:12px; }
+  table.aparelhos .parcela { width:22%; }
+  .parcela div { height:6px; border-radius:3px; background:var(--surface-alt); overflow:hidden; }
+  .parcela div i { display:block; height:100%; border-radius:3px; }
+  .empilhadas { display:flex; align-items:flex-end; gap:3px; height:160px; margin-top:6px; }
+  .empilhadas .dia { flex:1; height:100%; display:flex; flex-direction:column; justify-content:flex-end; cursor:pointer; border-radius:3px; }
+  .empilhadas .dia:hover, .empilhadas .dia.sel { background:var(--hover); }
+  .empilhadas .dia i { display:block; width:100%; }
+  .empilhadas .dia i:first-child { border-radius:3px 3px 0 0; }
+  .eixo-dias { display:flex; gap:3px; font-size:11px; color:var(--faint); margin-top:4px; }
+  .eixo-dias span { flex:1; text-align:center; white-space:nowrap; overflow:visible; }
+  .info-dia { font-size:13px; color:var(--muted); margin-top:10px; min-height:18px; }
+  .info-dia b { color:var(--text); font-weight:600; }
+  @media (max-width:760px) { .destaques { grid-template-columns:1fr 1fr; } .destaques b { font-size:20px; } table.aparelhos .parcela { display:none; } }
   .barras { display:flex; align-items:flex-end; gap:3px; height:150px; padding-top:8px; }
   .barras div { flex:1; background:var(--accent); border-radius:2px 2px 0 0; min-height:1px; }
   .barras div:hover { background:var(--accent-hover); }
@@ -211,12 +222,6 @@
   #toast.vis { opacity:1; }
 
   /* ---------- custo do mes, grafico e estatisticas ---------- */
-  .resumo-mes { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; max-width:1100px; margin-bottom:14px; }
-  .resumo-mes > div { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 16px; }
-  .resumo-mes small { display:block; color:var(--muted); font-size:12px; }
-  .resumo-mes b { display:block; font:600 22px "Segoe UI Variable Display","Segoe UI",sans-serif; margin:2px 0; }
-  .resumo-mes .menos { color:var(--ok); }
-  .resumo-mes .mais { color:var(--danger); }
   .graf { position:relative; }
   .graf svg text { fill:var(--muted); font-size:11px; }
   .graf .dica { position:absolute; top:0; pointer-events:none; background:var(--surface-alt); border:1px solid var(--border); border-radius:6px;
@@ -236,8 +241,6 @@
   .esqueleto i, .esqueleto .ico { display:block; border-radius:4px; background:linear-gradient(90deg, var(--surface-alt) 25%, var(--hover) 50%, var(--surface-alt) 75%);
     background-size:200% 100%; animation:brilho 1.4s linear infinite; }
   .esqueleto i { height:12px; margin:6px 0; }
-  .mini { margin-top:14px; }
-  .mini .graf svg text { font-size:10px; }
 
   @media (max-width:900px) {
     .ar { grid-template-columns:1fr; }
@@ -292,7 +295,6 @@
         <div><h1>Casa</h1><div class="sub" id="situacao"></div></div>
         <div class="acoes"><button class="b" id="lerAgora">Atualizar</button></div>
       </div>
-      <div id="resumoMes" class="resumo-mes oculto"></div>
       <div class="pilha" id="cartoes">
         <div class="cartao esqueleto"><div class="cab"><div class="ico"></div><div style="flex:1"><i style="width:140px"></i><i style="width:240px"></i></div></div>
           <div class="corpo" style="display:flex;gap:28px"><i style="width:230px;height:230px;border-radius:50%"></i><div style="flex:1"><i style="width:50%;height:48px"></i><i style="height:70px;margin-top:20px"></i><i style="height:44px;margin-top:16px"></i></div></div></div>
@@ -303,19 +305,17 @@
 
     <section id="aba-consumo" class="oculto">
       <div class="topo">
-        <div><h1>Consumo</h1><div class="sub">Histórico guardado no servidor, junto com o que o PC mandou.</div></div>
-        <div class="acoes"><div class="seg" id="periodo"><button data-d="7">7 dias</button><button data-d="30" class="on">30 dias</button><button data-d="90">90 dias</button><button data-d="365">1 ano</button></div></div>
+        <div><h1>Consumo</h1><div class="sub">Ar estimado pelo tempo ligado em cada modo; a lavadora mede a própria energia e água.</div></div>
+        <div class="acoes"><div class="seg" id="periodo"><button data-p="7">7 dias</button><button data-p="30" class="on">30 dias</button><button data-p="mes">Este mês</button></div></div>
       </div>
-      <div class="linha" style="margin-bottom:14px">
-        <button class="b" id="csvAr">Exportar histórico do ar (CSV)</button>
-        <button class="b" id="csvCiclos">Exportar ciclos (CSV)</button>
-      </div>
-      <div class="pilha" style="margin-bottom:14px">
+      <div class="pilha">
+        <div class="cartao" id="consResumo"><div class="corpo mu">Carregando…</div></div>
         <div class="cartao" id="grafico"></div>
+        <div class="cartao oculto" id="consLav"></div>
       </div>
-      <div class="grade" id="consumo"></div>
-      <div class="pilha" style="margin-top:14px">
-        <div class="cartao oculto" id="estatLav"></div>
+      <div class="linha" style="margin-top:14px">
+        <button class="b peq" id="csvAr">Exportar histórico do ar (CSV)</button>
+        <button class="b peq" id="csvCiclos">Exportar ciclos da lavadora (CSV)</button>
       </div>
     </section>
 
@@ -330,7 +330,7 @@
 "use strict";
 let chave = "";
 try { chave = localStorage.getItem("chave") || ""; } catch (e) {}
-let estado = null, pref = null, abaAtual = "painel", diasConsumo = 30;
+let estado = null, pref = null, abaAtual = "painel";
 const pendente = {};          // puid -> {chave: valor} mandado e ainda nao confirmado pela leitura
 const ui = {};                // puid -> {diag, props, consumo}: o que esta aberto em cada cartao
 const nos = new Map();        // puid -> {sig, el}: so redesenha o cartao que mudou
@@ -410,7 +410,7 @@ function trocarAba(a) {
   for (const s of ["painel", "consumo", "ajustes"]) $("aba-" + s).classList.toggle("oculto", s !== a);
   if (a === "consumo") carregarConsumo();
   if (a === "ajustes") desenharAjustes();
-  if (a === "painel") { desenharCartoes(); carregarResumoMes(); }
+  if (a === "painel") desenharCartoes();
   scrollTo(0, 0);
 }
 
@@ -513,8 +513,7 @@ function desenharCartoes() {
   for (const a of estado.lista) {
     const ags = (estado.agendamentos || []).filter(x => x.puid === a.puid);
     const sig = JSON.stringify([a, pendente[a.puid] || null, pref && pref.versao, U(a.puid), ags, ciclosDe(a.puid).length,
-      ags.length ? Math.floor(Date.now() / 60000) : 0,
-      mini[a.puid] ? mini[a.puid].length + ":" + (mini[a.puid].length ? mini[a.puid][mini[a.puid].length - 1].t : 0) : 0]);
+      ags.length ? Math.floor(Date.now() / 60000) : 0]);
     let r = nos.get(a.puid);
     if (r && arrastando === a.puid) { lista.push(r.el); continue; }
     if (!r || r.sig !== sig) {
@@ -720,34 +719,13 @@ function cartaoAr(a) {
           on: { click: () => comando(a, { t_temp_type: String(n) }) } }, t)))) : null);
   }
 
-  const caixaMini = el("div", { class: "graf-mini" }, el("div", { class: "mu" }, mini[a.puid] ? "Nenhuma leitura nas últimas 6 horas." : "Carregando…"));
-  const miniatura = el("div", { class: "sub-cartao mini" }, el("div", { class: "tit" }, "Últimas 6 horas",
-    el("button", { class: "b peq", on: { click: () => { diaGrafico = 0; trocarAba("consumo"); } } }, "Ver o dia")), caixaMini);
-
   const cartao = el("div", { class: "cartao" }, cabecalho(a, icTermometro()),
     el("div", { class: "corpo" },
       el("div", { class: "ar" }, esquerda, direita),
       el("div", { class: "baixo" }, cenas, timer),
-      miniatura,
       funcoes,
       u.diag ? blocoDiagnostico(a, i.falhas.map(x => x.nome)) : null));
-  cartao.depois = () => {
-    const am = mini[a.puid];
-    if (!am || !am.length) return;
-    const fim = Math.floor(Date.now() / 1000), ini = fim - 6 * 3600;
-    caixaMini.replaceChildren(graficoDoDia(am, ini, fim, caixaMini.clientWidth || 600, { H: 130, legenda: false }));
-  };
   return cartao;
-}
-
-const mini = {};   // puid do ar -> amostras das ultimas 6 h
-
-async function carregarMini() {
-  carregarMini.em = Date.now();
-  for (const a of (estado ? estado.lista : []).filter(ehAr)) {
-    try { mini[a.puid] = (await api("historico/ar?puid=" + encodeURIComponent(a.puid) + "&desde=" + (Math.floor(Date.now() / 1000) - 6 * 3600))).amostras; }
-    catch (e) {}
-  }
 }
 
 function resumoCena(c, a) {
@@ -814,8 +792,9 @@ function cartaoLavadora(a) {
         el("div", { class: "mu", style: "font-size:13px;margin-top:4px" }, i.total ? "Ciclo de " + dur(i.total) + "  ·  " + Math.round(i.progresso * 100) + "% concluído" : ""))),
       etapas,
       i.avisos.map(t => el("div", { class: "aviso" }, "⚠  " + t)),
-      i.parametros.length ? [el("div", { class: "rot", style: "margin-top:20px" }, "Este ciclo"),
-        el("div", { class: "params" }, i.parametros.map(([k, v]) => el("div", {}, el("small", {}, k), el("b", {}, v))))] : null,
+      [el("div", { class: "rot", style: "margin-top:20px" }, "Este ciclo"),
+        el("div", { class: "params" }, i.parametros.concat([["Água", i.agua != null ? num(i.agua, 1) + " L" : "--"], ["Energia", i.energia != null ? num(i.energia, 2) + " kWh" : "--"]])
+          .map(([k, v]) => el("div", {}, el("small", {}, k), el("b", {}, v))))],
       u.diag ? blocoDiagnostico(a) : null));
   } else {
     partes.push(el("div", { class: "corpo" },
@@ -824,43 +803,7 @@ function cartaoLavadora(a) {
       u.diag ? blocoDiagnostico(a) : null));
   }
 
-  // Consumo e historico, recolhivel como no app
-  const ultimo = ciclos.length ? ciclos[ciclos.length - 1] : null;
-  const resumo = emCiclo ? "ciclo: " + num(i.agua, 0) + " L · " + num(i.energia, 2) + " kWh"
-    : ultimo ? "último: " + dataHora(ultimo.inicio) + " · " + ultimo.programaNome : "nenhum ciclo gravado";
-  partes.push(el("button", { class: "recolhe" + (u.consumo ? " aberto" : ""), "data-id": a.puid + "cons",
-    on: { click: () => { u.consumo = !u.consumo; desenharCartoes(); } } }, el("b", {}, "Consumo e histórico"), el("span", { class: "mu" }, resumo), icSeta()));
-  if (u.consumo) {
-    partes.push(el("div", { class: "recolhe-corpo" },
-      el("div", { class: "rot", style: "margin-top:4px" }, "Energia por dia"),
-      dias7(emCiclo && i.energia ? ciclos.concat([{ inicio: Date.now() / 1000, energia: i.energia }]) : ciclos, c => c.energia || 0, v => num(v, v < 10 ? 2 : 1) + " kWh"),
-      emCiclo ? el("div", { class: "params", style: "margin-bottom:12px" },
-        el("div", {}, el("small", {}, "Água deste ciclo"), el("b", {}, i.agua != null ? num(i.agua, 1) + " L" : "--")),
-        el("div", {}, el("small", {}, "Energia deste ciclo"), el("b", {}, i.energia != null ? num(i.energia, 2) + " kWh" : "--"))) : null,
-      ciclos.length ? el("table", {}, el("tr", {}, el("th", {}, "Início"), el("th", {}, "Programa"), el("th", { class: "n" }, "Duração"), el("th", { class: "n" }, "Água"), el("th", { class: "n" }, "Energia")),
-        ciclos.slice().reverse().slice(0, 8).map(c => el("tr", {}, el("td", {}, dataHora(c.inicio)), el("td", {}, c.programaNome + (c.concluido ? "" : " (interrompido)")),
-          el("td", { class: "n" }, dur((c.fim - c.inicio) / 60)), el("td", { class: "n" }, num(c.agua, 1) + " L"), el("td", { class: "n" }, num(c.energia, 2) + " kWh"))))
-        : el("div", { class: "mu" }, "Nenhum ciclo gravado ainda."),
-      el("div", { class: "mu", style: "margin-top:10px" }, "A lavadora é só monitorada: a Hisense só aceita comandos com o modo remoto ligado no painel da máquina.")));
-  }
   return el("div", { class: "cartao" }, partes);
-}
-
-/** Os ultimos 7 dias, valor de cada um em cima da barra, hoje em destaque. */
-function dias7(ciclos, f, fmt) {
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  const dias = [];
-  for (let k = 6; k >= 0; k--) { const d = new Date(hoje); d.setDate(d.getDate() - k); dias.push({ d, v: 0 }); }
-  for (const c of ciclos) {
-    const d = new Date(c.inicio * 1000); d.setHours(0, 0, 0, 0);
-    const x = dias.find(y => y.d.getTime() === d.getTime());
-    if (x) x.v += f(c);
-  }
-  const mx = Math.max(0.01, ...dias.map(x => x.v));
-  return el("div", { class: "dias7" }, dias.map((x, n) => el("div", { class: "col" + (n === 6 ? " hoje" : "") },
-    el("span", { class: "val" }, x.v > 0.005 ? fmt(x.v) : ""),
-    el("div", { class: "trilho" }, el("div", { class: "barra", style: "height:" + (x.v / mx * 100) + "%" })),
-    el("span", {}, n === 6 ? "hoje" : x.d.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")))));
 }
 
 async function carregarCiclos() {
@@ -872,10 +815,16 @@ async function carregarCiclos() {
   } catch (e) {}
 }
 
-// ---------------- consumo ----------------
+// ---------------- consumo: tudo num lugar so ----------------
+
+let periodoConsumo = "30";
+const COR_AR = "#2D7DF6", COR_LAV = "#00B0A9";
+const NOME_MES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+const isoDia = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 
 for (const b of document.querySelectorAll("#periodo button")) b.onclick = () => {
-  diasConsumo = +b.dataset.d;
+  periodoConsumo = b.dataset.p;
   for (const x of document.querySelectorAll("#periodo button")) x.classList.toggle("on", x === b);
   carregarConsumo();
 };
@@ -899,50 +848,95 @@ function cartaoSimples(titulo, det, ic, ...corpo) {
     el("div", { class: "corpo" }, corpo));
 }
 
-async function carregarConsumo() {
-  const alvo = $("consumo");
-  desenharGrafico();
-  carregarEstatisticas();
-  try {
-    const r = await api("consumo?dias=" + diasConsumo + "&meses=12");
-    const nomes = Object.fromEntries((estado ? estado.lista : []).map(a => [a.puid, a.apelido]));
-    alvo.replaceChildren(...Object.entries(r.aparelhos).map(([puid, c]) => c.tipo === "ar" ? consumoAr(nomes[puid], c.dias, r.preferencias) : consumoLav(nomes[puid], c.dias, r.preferencias)));
-  } catch (e) { alvo.replaceChildren(el("div", { class: "mu" }, "Erro: " + e.message)); }
+/**
+ * O periodo escolhido e o anterior equivalente (mesma regra do app):
+ * 7 e 30 dias contra os 7 e 30 de antes; o mes contra o mesmo ponto do anterior.
+ */
+function janelas() {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const menos = (d, n) => { const x = new Date(d); x.setDate(x.getDate() - n); return x; };
+  if (periodoConsumo === "mes") {
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const antIni = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const dm = new Date(hoje.getFullYear(), hoje.getMonth(), 0).getDate();
+    const antFim = new Date(hoje.getFullYear(), hoje.getMonth() - 1, Math.min(hoje.getDate(), dm));
+    return { ini: isoDia(ini), fim: isoDia(hoje), antIni: isoDia(antIni), antFim: isoDia(antFim),
+      nome: cap(NOME_MES[hoje.getMonth()]) + " até hoje", contra: "o mesmo dia de " + NOME_MES[antIni.getMonth()], sem: "de " + NOME_MES[antIni.getMonth()] };
+  }
+  const n = +periodoConsumo, ini = menos(hoje, n - 1);
+  return { ini: isoDia(ini), fim: isoDia(hoje), antIni: isoDia(menos(ini, n)), antFim: isoDia(menos(ini, 1)),
+    nome: "Últimos " + n + " dias", contra: "os " + n + " dias anteriores", sem: "dos " + n + " dias anteriores" };
 }
 
-// ---------------- custo do mes (Painel) ----------------
+async function carregarConsumo() {
+  desenharGrafico();
+  carregarLavadoraConsumo();
+  try { desenharResumo(await api("consumo?dias=62&meses=2")); }
+  catch (e) { $("consResumo").replaceChildren(el("div", { class: "corpo mu" }, "Erro: " + e.message)); }
+}
 
-const NOME_MES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-const nomeMes = ym => NOME_MES[parseInt(ym.slice(5)) - 1];
-const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+function desenharResumo(r) {
+  const j = janelas(), p = r.preferencias, lista = estado ? estado.lista : [];
+  const soma = (l, k) => l.reduce((t, d) => t + (d[k] || 0), 0);
+  const ap = Object.entries(r.aparelhos).map(([puid, c]) => {
+    const a = lista.find(x => x.puid === puid);
+    const dias = c.dias.filter(d => d.dia >= j.ini && d.dia <= j.fim), ant = c.dias.filter(d => d.dia >= j.antIni && d.dia <= j.antFim);
+    return { tipo: c.tipo, nome: a ? a.apelido : c.tipo === "ar" ? "Ar" : "Lavadora", cor: c.tipo === "ar" ? COR_AR : COR_LAV, dias,
+      kwh: soma(dias, "kwh"), custo: soma(dias, "custo"), horas: soma(dias, "horas"), agua: soma(dias, "agua"), ciclos: soma(dias, "ciclos"),
+      custoAnt: soma(ant, "custo") };
+  }).sort((x, y) => (x.tipo === "ar" ? 0 : 1) - (y.tipo === "ar" ? 0 : 1));
+  const total = soma(ap, "custo"), kwh = soma(ap, "kwh"), agua = soma(ap, "agua"), ant = soma(ap, "custoAnt");
+  const v = ant > 0.005 ? (total - ant) / ant * 100 : null;
+  const bloco = (rot, val, det, cls) => el("div", {}, el("small", {}, rot), el("b", {}, val), el("span", { class: cls || "" }, det));
 
-async function carregarResumoMes() {
-  carregarResumoMes.em = Date.now();
-  try {
-    const r = await api("resumo-mes");
-    const caixa = $("resumoMes");
-    const at = r.atual, ant = r.anteriorAteHoje;
-    let comp = null;
-    if (ant.custo > 0.005) {
-      const v = (at.custo - ant.custo) / ant.custo * 100;
-      comp = el("small", { class: v <= 0 ? "menos" : "mais" }, (v <= 0 ? "▼ " : "▲ ") + num(Math.abs(v), 0) + "% que no mesmo dia de " + nomeMes(r.mesAnterior));
-    }
-    const nomes = Object.fromEntries((estado ? estado.lista : []).map(a => [a.puid, a]));
-    const partes = Object.entries(r.aparelhos).map(([puid, c]) => {
-      const a = nomes[puid];
-      return el("div", {}, el("small", {}, (a ? a.apelido : "Aparelho") + " em " + nomeMes(r.mes)),
-        el("b", {}, "R$ " + num(c.atual.custo, 2)),
-        el("small", {}, a && ehAr(a) ? num(c.atual.horas, 1) + " h ligado · " + num(c.atual.kwh, 1) + " kWh"
-          : c.atual.ciclos + " ciclos · " + num(c.atual.agua, 0) + " L · " + num(c.atual.kwh, 1) + " kWh"));
-    });
-    caixa.replaceChildren(
-      el("div", {}, el("small", {}, "Custo estimado de " + nomeMes(r.mes)), el("b", {}, "R$ " + num(at.custo, 2)),
-        comp || el("small", {}, "sem dados de " + nomeMes(r.mesAnterior) + " para comparar")),
-      ...partes,
-      el("div", {}, el("small", {}, cap(nomeMes(r.mesAnterior)) + " inteiro"), el("b", {}, "R$ " + num(r.anterior.custo, 2)),
-        el("small", {}, num(r.anterior.kwh, 1) + " kWh a R$ " + num(r.tarifa, 2) + "/kWh")));
-    caixa.classList.remove("oculto");
-  } catch (e) {}
+  const tabela = el("table", { class: "aparelhos" },
+    el("tr", {}, el("th", {}, "Aparelho"), el("th", { class: "n" }, "Energia"), el("th", { class: "n" }, "Custo"), el("th", { class: "n" }, "Uso"), el("th", { class: "parcela" }, "Parte do custo")),
+    ap.map(x => el("tr", {},
+      el("td", {}, el("div", { class: "nome" }, el("i", { style: "background:" + x.cor }),
+        el("div", {}, x.nome, el("small", {}, x.tipo === "ar" ? "estimado pelo tempo ligado" : "medido pela máquina")))),
+      el("td", { class: "n" }, num(x.kwh, 1) + " kWh"),
+      el("td", { class: "n" }, "R$ " + num(x.custo, 2)),
+      el("td", { class: "n" }, x.tipo === "ar" ? num(x.horas, 1) + " h ligado" : x.ciclos + (x.ciclos === 1 ? " ciclo" : " ciclos") + " · " + num(x.agua, 0) + " L"),
+      el("td", { class: "parcela" }, el("div", {}, el("i", { style: "width:" + (total > 0 ? x.custo / total * 100 : 0) + "%;background:" + x.cor }))))));
+
+  $("consResumo").replaceChildren(
+    el("div", { class: "cab" }, el("div", { class: "ico" }, svg('<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M4 20h16M7 16V11M12 16V6M17 16v-7"/>')),
+      el("div", { class: "nomes" }, el("div", { class: "nome" }, j.nome), el("div", { class: "det" }, "ar + lavadora, a R$ " + num(p.tarifa, 2) + "/kWh"))),
+    el("div", { class: "corpo" },
+      el("div", { class: "destaques" },
+        bloco("Custo estimado", "R$ " + num(total, 2), v == null ? "sem dados " + j.sem + " para comparar" : (v <= 0 ? "▼ " : "▲ ") + num(Math.abs(v), 0) + "% contra " + j.contra, v == null ? "" : v <= 0 ? "menos" : "mais"),
+        bloco("Energia", num(kwh, 1) + " kWh", "média de " + num(kwh / Math.max(1, ap[0] ? ap[0].dias.length : 1), 2) + " kWh por dia"),
+        bloco("Água", num(agua, 0) + " L", "só a lavadora")),
+      tabela,
+      el("div", { class: "rot", style: "margin-top:18px" }, "Energia por dia"),
+      empilhadas(ap)));
+}
+
+/** Uma coluna por dia com o ar e a lavadora empilhados; tocar ou passar o mouse mostra o dia. */
+function empilhadas(ap) {
+  const n = ap.length ? ap[0].dias.length : 0;
+  if (!n) return el("div", { class: "mu" }, "Sem dados no período.");
+  const totais = Array.from({ length: n }, (_, k) => ap.reduce((t, x) => t + (x.dias[k] ? x.dias[k].kwh : 0), 0));
+  const mx = Math.max(0.01, ...totais);
+  const info = el("div", { class: "info-dia" });
+  const nomeDia = k => { const [y, m, d] = ap[0].dias[k].dia.split("-").map(Number); return new Date(y, m - 1, d); };
+  const mostrar = k => {
+    if (k == null) { info.replaceChildren("Toque numa barra para ver o dia."); return; }
+    const dt = nomeDia(k), custo = ap.reduce((t, x) => t + (x.dias[k] ? x.dias[k].custo : 0), 0);
+    info.replaceChildren(el("b", {}, dt.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })),
+      ap.map(x => "  ·  " + x.nome + " " + num(x.dias[k] ? x.dias[k].kwh : 0, 2) + " kWh"), "  ·  R$ " + num(custo, 2));
+  };
+  const passo = n <= 7 ? 1 : Math.ceil(n / 8);
+  const colunas = Array.from({ length: n }, (_, k) => {
+    const col = el("div", { class: "dia", on: { mouseenter: () => mostrar(k), click: () => mostrar(k) } },
+      ap.slice().reverse().map(x => el("i", { style: "background:" + x.cor + ";height:" + ((x.dias[k] ? x.dias[k].kwh : 0) / mx * 100) + "%" })));
+    return col;
+  });
+  const eixo = el("div", { class: "eixo-dias" }, Array.from({ length: n }, (_, k) => el("span", {},
+    k === n - 1 ? "hoje" : (n - 1 - k) % passo ? "" : n <= 7 ? nomeDia(k).toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "") : String(nomeDia(k).getDate()).padStart(2, "0") + "/" + String(nomeDia(k).getMonth() + 1).padStart(2, "0"))));
+  mostrar(null);
+  return el("div", {}, el("div", { class: "empilhadas", on: { mouseleave: () => mostrar(null) } }, colunas), eixo, info,
+    el("div", { class: "legenda" }, ap.map(x => el("span", {}, el("i", { class: "faixa", style: "background:" + x.cor + ";opacity:1" }), x.nome))));
 }
 
 // ---------------- grafico da temperatura ambiente (Consumo) ----------------
@@ -963,7 +957,7 @@ async function desenharGrafico() {
     el("button", { class: "b peq", title: "Dia seguinte", disabled: diaGrafico === 0, on: { click: () => { diaGrafico--; desenharGrafico(); } } }, "▶"));
   const corpo = el("div", { class: "corpo" }, el("div", { class: "mu" }, "Carregando…"));
   const cab = el("div", { class: "cab" }, el("div", { class: "ico" }, icTermometro()),
-    el("div", { class: "nomes" }, el("div", { class: "nome" }, "Temperatura ambiente"), el("div", { class: "det" }, (ar.apelido || "") + "  ·  faixas coloridas: ar ligado, na cor do modo")),
+    el("div", { class: "nomes" }, el("div", { class: "nome" }, (ar.apelido || "Ar") + ": temperatura do dia"), el("div", { class: "det" }, "faixas coloridas: ar ligado, na cor do modo")),
     el("div", { class: "dir" }, nav));
   caixa.replaceChildren(cab, corpo);
   let am;
@@ -1060,89 +1054,43 @@ function resumoDoDia(am) {
     el("div", {}, el("b", {}, todas.length ? num(Math.min(...todas), 0) + "° / " + num(Math.max(...todas), 0) + "°" : "--"), el("span", { class: "mu" }, "mínima / máxima")));
 }
 
-// ---------------- estatisticas da lavadora (Consumo) ----------------
+// ---------------- lavadora: ciclos e programas (Consumo) ----------------
 
 const PROGRAMA_LIMPEZA = 6;   // Limpeza do tambor
 
-async function carregarEstatisticas() {
-  const caixa = $("estatLav");
+async function carregarLavadoraConsumo() {
+  const caixa = $("consLav");
   const lav = estado && estado.lista.find(ehLavadora);
   if (!lav) { caixa.classList.add("oculto"); return; }
   let l;
   try { l = (await api("historico/ciclos?desde=0")).ciclos.filter(c => c.puid === lav.puid); } catch (e) { return; }
   caixa.classList.remove("oculto");
-  const concl = l.filter(c => c.concluido);
-  const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
-  const doMes = l.filter(c => c.inicio * 1000 >= inicioMes.getTime());
   const por = {};
-  for (const c of concl) {
+  for (const c of l.filter(c => c.concluido)) {
     const p = por[c.programa] || (por[c.programa] = { nome: c.programaNome, n: 0, seg: 0, agua: 0, energia: 0 });
     p.n++; p.seg += c.fim - c.inicio; p.agua += c.agua || 0; p.energia += c.energia || 0;
   }
   const ranking = Object.values(por).sort((a, b) => b.n - a.n);
-  let ultLimpeza = -1;
-  l.forEach((c, n) => { if (c.programa === PROGRAMA_LIMPEZA && c.concluido) ultLimpeza = n; });
-  const desdeLimpeza = ultLimpeza < 0 ? l.length : l.length - 1 - ultLimpeza;
-  const pede = lav.estado.DrumCleanFlag === "1" || lav.estado.DrumCleanFlag === 1;
-  const tambor = pede ? el("div", { class: "aviso" }, "⚠  A máquina está pedindo a limpeza do tambor (programa Limpeza do tambor, sem roupa).")
-    : el("div", { class: "mu", style: "margin-top:10px" }, "Tambor: " + (ultLimpeza < 0 ? "nenhuma limpeza gravada; " + l.length + " ciclos desde o início do histórico." :
-      "última limpeza em " + dataHora(l[ultLimpeza].inicio) + ", " + desdeLimpeza + (desdeLimpeza === 1 ? " ciclo" : " ciclos") + " desde então.") +
-      " A máquina avisa quando for a hora.");
+  let ult = -1;
+  l.forEach((c, n) => { if (c.programa === PROGRAMA_LIMPEZA && c.concluido) ult = n; });
+  const desde = ult < 0 ? l.length : l.length - 1 - ult;
+  const pede = String(lav.estado.DrumCleanFlag) === "1";
   caixa.replaceChildren(
     el("div", { class: "cab" }, el("div", { class: "ico" }, icLavadora()),
-      el("div", { class: "nomes" }, el("div", { class: "nome" }, "Lavadora: ciclos e programas"), el("div", { class: "det" }, (lav.apelido || "") + "  ·  todo o histórico gravado"))),
+      el("div", { class: "nomes" }, el("div", { class: "nome" }, (lav.apelido || "Lavadora") + ": ciclos"),
+        el("div", { class: "det" }, l.length + (l.length === 1 ? " ciclo gravado" : " ciclos gravados") + (ranking.length ? "  ·  mais usado: " + ranking[0].nome : "")))),
     el("div", { class: "corpo" },
-      el("div", { class: "totais" },
-        el("div", {}, el("b", {}, l.length), el("span", { class: "mu" }, "ciclos no total")),
-        el("div", {}, el("b", {}, doMes.length), el("span", { class: "mu" }, "ciclos em " + NOME_MES[inicioMes.getMonth()])),
-        el("div", {}, el("b", { style: "font-size:16px" }, ranking.length ? ranking[0].nome : "--"), el("span", { class: "mu" }, ranking.length ? "mais usado (" + ranking[0].n + "x)" : "mais usado")),
-        el("div", {}, el("b", {}, desdeLimpeza), el("span", { class: "mu" }, "ciclos desde a limpeza do tambor"))),
-      tambor,
-      ranking.length ? el("table", { style: "margin-top:14px" }, el("tr", {}, el("th", {}, "Programa"), el("th", { class: "n" }, "Ciclos"), el("th", { class: "n" }, "Duração média"),
-        el("th", { class: "n" }, "Água média"), el("th", { class: "n" }, "Energia média")),
-        ranking.map(p => el("tr", {}, el("td", {}, p.nome), el("td", { class: "n" }, p.n), el("td", { class: "n" }, dur(p.seg / p.n / 60)),
-          el("td", { class: "n" }, num(p.agua / p.n, 0) + " L"), el("td", { class: "n" }, num(p.energia / p.n, 2) + " kWh"))))
-        : el("div", { class: "mu", style: "margin-top:10px" }, "Nenhum ciclo concluído gravado ainda."),
-      el("div", { class: "mu", style: "margin-top:10px" }, "As médias contam só os ciclos concluídos.")));
-}
-
-/**
- * Ar e lavadora no mesmo formato: quatro totais e as barras de energia por dia,
- * com o detalhe do dia ao passar o mouse (ou tocar).
- */
-function cartaoConsumo(nome, det, ic, dias, totais, dica) {
-  const mx = Math.max(0.01, ...dias.map(d => d.kwh));
-  const rotulo = el("span", { class: "mu" }, "kWh por dia");
-  const mostrar = d => { rotulo.textContent = d ? dica(d) : "kWh por dia"; };
-  return cartaoSimples(nome, det, ic,
-    el("div", { class: "totais" }, totais.map(([v, t]) => el("div", {}, el("b", {}, v), el("span", { class: "mu" }, t)))),
-    el("div", { class: "barras", on: { mouseleave: () => mostrar(null) } }, dias.map(d => el("div", {
-      title: dica(d), style: "height:" + (d.kwh / mx * 100) + "%" + (d.kwh > 0 ? "" : ";opacity:.25"),
-      on: { mouseenter: () => mostrar(d), click: () => mostrar(d) } }))),
-    el("div", { class: "eixo" }, el("span", {}, dias[0].dia.split("-").reverse().slice(0, 2).join("/")), rotulo, el("span", {}, "hoje")));
-}
-
-const diaBr = d => d.dia.split("-").reverse().slice(0, 2).join("/");
-
-function consumoAr(nome, dias, p) {
-  const h = dias.reduce((s, d) => s + d.horas, 0), k = dias.reduce((s, d) => s + d.kwh, 0), c = dias.reduce((s, d) => s + d.custo, 0);
-  const cartao = cartaoConsumo(nome || "Ar", "estimativa: tempo ligado × potência do modo", icTermometro(), dias,
-    [[num(k, 1) + " kWh", "energia"], ["R$ " + num(c, 2), "a R$ " + num(p.tarifa, 2) + "/kWh"], [num(h, 1) + " h", "ligado"], [num(k / dias.length, 2) + " kWh", "média por dia"]],
-    d => diaBr(d) + ": " + num(d.kwh, 2) + " kWh · R$ " + num(d.custo, 2) + " · " + num(d.horas, 1) + " h ligado");
-  cartao.querySelector(".corpo").append(el("div", { class: "mu", style: "margin-top:10px" },
-    "Potências em Ajustes: frio " + p.potenciaFrio + " W, ECO " + p.potenciaEco + " W, desumidificar " + p.potenciaSeco + " W, ventilar " + p.potenciaVentilar + " W."));
-  return cartao;
-}
-
-function consumoLav(nome, dias, p) {
-  const k = dias.reduce((s, d) => s + d.kwh, 0), c = dias.reduce((s, d) => s + d.custo, 0);
-  const n = dias.reduce((s, d) => s + d.ciclos, 0), ag = dias.reduce((s, d) => s + d.agua, 0);
-  const cartao = cartaoConsumo(nome || "Lavadora", "medido pela máquina em cada ciclo", icLavadora(), dias,
-    [[num(k, 1) + " kWh", "energia"], ["R$ " + num(c, 2), "a R$ " + num(p.tarifa, 2) + "/kWh"], [n + (n === 1 ? " ciclo" : " ciclos"), "no período"], [num(ag, 0) + " L", "água"]],
-    d => diaBr(d) + ": " + num(d.kwh, 2) + " kWh · R$ " + num(d.custo, 2) + " · " + d.ciclos + (d.ciclos === 1 ? " ciclo" : " ciclos") + " · " + num(d.agua, 0) + " L");
-  cartao.querySelector(".corpo").append(el("div", { class: "mu", style: "margin-top:10px" },
-    "A energia e a água vêm da própria lavadora, por ciclo, no dia em que ele começou."));
-  return cartao;
+      pede ? el("div", { class: "aviso", style: "margin-top:0" }, "⚠  A máquina está pedindo a limpeza do tambor (programa Limpeza do tambor, sem roupa).")
+        : el("div", { class: "mu" }, "Tambor: " + (ult < 0 ? "nenhuma limpeza gravada ainda" : "limpo em " + dataHora(l[ult].inicio) + ", " + desde + (desde === 1 ? " ciclo" : " ciclos") + " desde então") + ". A máquina avisa quando for a hora."),
+      el("div", { class: "rot", style: "margin-top:16px" }, "Últimos ciclos"),
+      l.length ? el("table", {}, el("tr", {}, el("th", {}, "Início"), el("th", {}, "Programa"), el("th", { class: "n" }, "Duração"), el("th", { class: "n" }, "Água"), el("th", { class: "n" }, "Energia")),
+        l.slice().reverse().slice(0, 8).map(c => el("tr", {}, el("td", {}, dataHora(c.inicio)), el("td", {}, c.programaNome + (c.concluido ? "" : " (interrompido)")),
+          el("td", { class: "n" }, dur((c.fim - c.inicio) / 60)), el("td", { class: "n" }, num(c.agua, 0) + " L"), el("td", { class: "n" }, num(c.energia, 2) + " kWh"))))
+        : el("div", { class: "mu" }, "Nenhum ciclo gravado ainda."),
+      ranking.length ? [el("div", { class: "rot", style: "margin-top:16px" }, "Média por programa (ciclos concluídos)"),
+        el("table", {}, el("tr", {}, el("th", {}, "Programa"), el("th", { class: "n" }, "Ciclos"), el("th", { class: "n" }, "Duração"), el("th", { class: "n" }, "Água"), el("th", { class: "n" }, "Energia")),
+          ranking.map(p => el("tr", {}, el("td", {}, p.nome), el("td", { class: "n" }, p.n), el("td", { class: "n" }, dur(p.seg / p.n / 60)),
+            el("td", { class: "n" }, num(p.agua / p.n, 0) + " L"), el("td", { class: "n" }, num(p.energia / p.n, 2) + " kWh"))))] : null));
 }
 
 // ---------------- ajustes ----------------
@@ -1248,11 +1196,7 @@ async function tudo() {
     tudo.ciclos = Date.now();
     await carregarCiclos();
   }
-  if (estado && Date.now() - (carregarMini.em || 0) > 120000) await carregarMini();
-  if (abaAtual === "painel") {
-    desenharCartoes();
-    if (Date.now() - (carregarResumoMes.em || 0) > 60000) carregarResumoMes();
-  }
+  if (abaAtual === "painel") desenharCartoes();
 }
 
 async function escutar() {
