@@ -187,6 +187,13 @@
   td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
 
   /* ---------- consumo e ajustes ---------- */
+  /* barras dos ultimos 7 dias, como as horas ligado do ar no app */
+  .dias7 { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin:4px 0 16px; }
+  .dias7 .col { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:11px; color:var(--faint); }
+  .dias7 .trilho { width:100%; height:80px; background:var(--surface-alt); border-radius:4px; display:flex; flex-direction:column; justify-content:flex-end; overflow:hidden; }
+  .dias7 .barra { background:var(--accent); opacity:.6; border-radius:4px; transition:height .5s ease; }
+  .dias7 .hoje .barra { opacity:1; }
+  .dias7 .val { color:var(--text); min-height:14px; white-space:nowrap; }
   .barras { display:flex; align-items:flex-end; gap:3px; height:150px; padding-top:8px; }
   .barras div { flex:1; background:var(--accent); border-radius:2px 2px 0 0; min-height:1px; }
   .barras div:hover { background:var(--accent-hover); }
@@ -825,6 +832,8 @@ function cartaoLavadora(a) {
     on: { click: () => { u.consumo = !u.consumo; desenharCartoes(); } } }, el("b", {}, "Consumo e histórico"), el("span", { class: "mu" }, resumo), icSeta()));
   if (u.consumo) {
     partes.push(el("div", { class: "recolhe-corpo" },
+      el("div", { class: "rot", style: "margin-top:4px" }, "Energia por dia"),
+      dias7(emCiclo && i.energia ? ciclos.concat([{ inicio: Date.now() / 1000, energia: i.energia }]) : ciclos, c => c.energia || 0, v => num(v, v < 10 ? 2 : 1) + " kWh"),
       emCiclo ? el("div", { class: "params", style: "margin-bottom:12px" },
         el("div", {}, el("small", {}, "Água deste ciclo"), el("b", {}, i.agua != null ? num(i.agua, 1) + " L" : "--")),
         el("div", {}, el("small", {}, "Energia deste ciclo"), el("b", {}, i.energia != null ? num(i.energia, 2) + " kWh" : "--"))) : null,
@@ -835,6 +844,23 @@ function cartaoLavadora(a) {
       el("div", { class: "mu", style: "margin-top:10px" }, "A lavadora é só monitorada: a Hisense só aceita comandos com o modo remoto ligado no painel da máquina.")));
   }
   return el("div", { class: "cartao" }, partes);
+}
+
+/** Os ultimos 7 dias, valor de cada um em cima da barra, hoje em destaque. */
+function dias7(ciclos, f, fmt) {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dias = [];
+  for (let k = 6; k >= 0; k--) { const d = new Date(hoje); d.setDate(d.getDate() - k); dias.push({ d, v: 0 }); }
+  for (const c of ciclos) {
+    const d = new Date(c.inicio * 1000); d.setHours(0, 0, 0, 0);
+    const x = dias.find(y => y.d.getTime() === d.getTime());
+    if (x) x.v += f(c);
+  }
+  const mx = Math.max(0.01, ...dias.map(x => x.v));
+  return el("div", { class: "dias7" }, dias.map((x, n) => el("div", { class: "col" + (n === 6 ? " hoje" : "") },
+    el("span", { class: "val" }, x.v > 0.005 ? fmt(x.v) : ""),
+    el("div", { class: "trilho" }, el("div", { class: "barra", style: "height:" + (x.v / mx * 100) + "%" })),
+    el("span", {}, n === 6 ? "hoje" : x.d.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")))));
 }
 
 async function carregarCiclos() {

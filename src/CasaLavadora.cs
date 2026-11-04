@@ -662,6 +662,7 @@ namespace MhiagosControl
 
         private readonly CabecalhoRecolhivel _cabConsumo;
         private readonly Label _consumo;
+        private readonly BarrasPorDia _barras;
         private readonly AnimacaoDeRecolher _animConsumo;
 
         internal CabecalhoRecolhivel CabecalhoDoConsumo { get { return _cabConsumo; } }
@@ -682,7 +683,7 @@ namespace MhiagosControl
         private void AjustarConsumo()
         {
             bool algo = !_compacto && _animConsumo.Valor > 0.001f;
-            _consumo.Visible = _ciclos.Visible = _lbCiclos.Visible = algo;
+            _consumo.Visible = _ciclos.Visible = _lbCiclos.Visible = _barras.Visible = algo;
             _lbEstat.Visible = _estat.Visible = algo && _estat.Text.Length > 0;
             _cabConsumo.Aberto = _animConsumo.Aberto;
             _cabConsumo.Invalidate();
@@ -725,6 +726,10 @@ namespace MhiagosControl
             _cabConsumo.Click += delegate { AlternarConsumo(true); };
             Controls.Add(_cabConsumo);
             _consumo = Rotulo("", Ui.FontBase, Ui.Text);
+            _barras = new BarrasPorDia();
+            _barras.Titulo = T.LavEnergiaPorDia;
+            _barras.Rotulo = v => v.ToString("0.0#") + " kWh";
+            Controls.Add(_barras);
             // Comeca fechada, como o consumo do ar, e lembra a escolha.
             _animConsumo = new AnimacaoDeRecolher(ServicoCasa.Pref.ConsumoLavadoraAberto);
             _animConsumo.Quadro += delegate { AjustarConsumo(); AvisarAltura(); };
@@ -826,6 +831,15 @@ namespace MhiagosControl
             if (c.Energia.HasValue && (c.Energia.Value > 0 || c.Rodando)) cons.Add(T.LavEnergia + ": " + c.Energia.Value.ToString("0.00") + " kWh");
             double[] mes = CiclosDaLavadora.DoMes(A.Puid, DateTime.Today);
             cons.Add(T.LavMes((int)mes[0], mes[1].ToString("0"), mes[2].ToString("0.00")));
+            _barras.Valores.Clear();
+            _barras.Valores.AddRange(BarrasPorDia.EnergiaDaLavadora(A.Puid, 7, DateTime.Today));
+            // O ciclo em curso ainda nao esta gravado: entra em hoje com o que a maquina ja mediu.
+            if (c.Rodando && c.Energia.HasValue && _barras.Valores.Count > 0)
+            {
+                KeyValuePair<DateTime, double> dia = _barras.Valores[_barras.Valores.Count - 1];
+                _barras.Valores[_barras.Valores.Count - 1] = new KeyValuePair<DateTime, double>(dia.Key, dia.Value + c.Energia.Value);
+            }
+            _barras.Invalidate();
             _consumo.Text = string.Join("\n", cons.ToArray());
             _cabConsumo.Resumo = c.Agua.HasValue || c.Energia.HasValue
                 ? T.LavResumoConsumo(c.Agua.HasValue ? c.Agua.Value.ToString("0") : "--", c.Energia.HasValue ? c.Energia.Value.ToString("0.00") : "--")
@@ -860,7 +874,7 @@ namespace MhiagosControl
             _compacto = !(c.Online && c.Rodando);
             if (_compacto)
             {
-                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams, _cabConsumo, _consumo, _ciclos, _lbCiclos, _lbEstat, _estat })
+                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams, _cabConsumo, _consumo, _barras, _ciclos, _lbCiclos, _lbEstat, _estat })
                     x.Visible = false;
                 foreach (Label[] l in _params) l[0].Visible = l[1].Visible = false;
             }
@@ -940,8 +954,10 @@ namespace MhiagosControl
             // Consumo e historico: cabecalho sempre visivel, conteudo animado no fim do cartao.
             _cabConsumo.SetBounds(M, y, iw, Ui.S(38));
             y += Ui.S(38);
-            int topo = y + Ui.S(8);
-            int yc = Bloco(_consumo, M, topo, iw) + Ui.S(10);
+            int topo = y + Ui.S(12);
+            // Barras de energia por dia, como as horas ligado do ar.
+            _barras.SetBounds(M, topo, iw, Ui.S(96));
+            int yc = Bloco(_consumo, M, topo + Ui.S(96 + 14), iw) + Ui.S(10);
             _lbCiclos.SetBounds(M, yc, iw, Ui.S(18));
             yc += Ui.S(22);
             yc = Bloco(_ciclos, M, yc, iw) + Ui.S(6);

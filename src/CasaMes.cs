@@ -184,6 +184,67 @@ namespace MhiagosControl
     }
 
     /// <summary>
+    /// Barras dos ultimos dias com o valor em cima, no estilo das "horas ligado
+    /// por dia" do ar (CartaoHistoricoDoAr.DesenharBarras). Hoje em destaque.
+    /// </summary>
+    internal sealed class BarrasPorDia : Control
+    {
+        public string Titulo = "";
+        public readonly List<KeyValuePair<DateTime, double>> Valores = new List<KeyValuePair<DateTime, double>>();
+        public Func<double, string> Rotulo = v => v.ToString("0.0");
+
+        public BarrasPorDia()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        }
+
+        /// <summary>A energia de cada dia dos ultimos n dias, pelo inicio dos ciclos.</summary>
+        public static List<KeyValuePair<DateTime, double>> EnergiaDaLavadora(string puid, int dias, DateTime hoje)
+        {
+            SortedDictionary<DateTime, double> d = new SortedDictionary<DateTime, double>();
+            for (int i = dias - 1; i >= 0; i--) d[hoje.Date.AddDays(-i)] = 0;
+            foreach (CiclosDaLavadora.Ciclo c in CiclosDaLavadora.Todos(puid))
+                if (d.ContainsKey(c.Inicio.Date)) d[c.Inicio.Date] += c.Energia;
+            return new List<KeyValuePair<DateTime, double>>(d);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            using (SolidBrush b = new SolidBrush(Ui.Surface)) g.FillRectangle(b, ClientRectangle);
+            Ui.Smooth(g);
+            Rectangle r = ClientRectangle;
+            TextRenderer.DrawText(g, Titulo, Ui.FontSmall, new Point(r.X, r.Y), Ui.Muted, TextFormatFlags.NoPadding);
+            Rectangle area = new Rectangle(r.X, r.Y + Ui.S(22), r.Width, r.Height - Ui.S(22 + 18));
+            double maior = 0.01;
+            foreach (KeyValuePair<DateTime, double> kv in Valores) maior = Math.Max(maior, kv.Value);
+            int n = Valores.Count, gap = Ui.S(10);
+            if (n == 0) return;
+            int bw = (area.Width - gap * (n - 1)) / n;
+            for (int i = 0; i < n; i++)
+            {
+                KeyValuePair<DateTime, double> kv = Valores[i];
+                int x = area.X + i * (bw + gap);
+                int h = (int)Math.Round(area.Height * kv.Value / maior);
+                bool hoje = kv.Key == DateTime.Today;
+                using (GraphicsPath p = Ui.RoundRect(new Rectangle(x, area.Y, bw, area.Height), Ui.S(4)))
+                using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(b, p);
+                if (h > Ui.S(3))
+                    using (GraphicsPath p = Ui.RoundRect(new Rectangle(x, area.Bottom - h, bw, h), Ui.S(4)))
+                    using (SolidBrush b = new SolidBrush(hoje ? Ui.Accent : Color.FromArgb(150, Ui.Accent))) g.FillPath(b, p);
+                string rot = hoje ? T.Today : kv.Key.ToString("ddd", CultureInfo.CurrentCulture);
+                TextRenderer.DrawText(g, rot, Ui.FontSmall, new Rectangle(x, area.Bottom + Ui.S(3), bw, Ui.S(16)), Ui.Faint,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
+                if (kv.Value > 0.005)
+                    TextRenderer.DrawText(g, Rotulo(kv.Value), Ui.FontSmall,
+                        new Rectangle(x, Math.Max(area.Y, area.Bottom - h - Ui.S(16)), bw, Ui.S(16)), Ui.Text,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
+            }
+        }
+    }
+
+    /// <summary>
     /// Numeros da lavadora sobre todo o historico gravado: ciclos, o programa
     /// mais usado, medias por programa e ciclos desde a limpeza do tambor.
     /// As medias contam so os ciclos concluidos, como no painel web.
@@ -260,6 +321,7 @@ namespace MhiagosControl
         public static string CasaDetalheMesLavadora(int ciclos, string agua, string kwh) { return ciclos + P(" ciclos · ", " cycles · ") + agua + " L · " + kwh + " kWh"; }
         public static string CasaMesInteiro(string mes) { return P(mes + " inteiro", "All of " + mes); }
         public static string CasaDetalheMesAnterior(string kwh, string tarifa) { return kwh + P(" kWh a R$ ", " kWh at R$ ") + tarifa + "/kWh"; }
+        public static string LavEnergiaPorDia { get { return P("Energia por dia", "Energy per day"); } }
         public static string LavEstatisticas { get { return P("Ciclos e programas (todo o histórico)", "Cycles and programs (whole history)"); } }
         public static string LavEstatTotais(int total, int mes, string programa, int vezes)
         {
