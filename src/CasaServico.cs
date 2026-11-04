@@ -1087,7 +1087,8 @@ namespace MhiagosControl
     {
         private static readonly object _trava = new object();
         private static readonly Dictionary<string, List<AmostraAr>> _series = new Dictionary<string, List<AmostraAr>>();
-        public const int Dias = 35;
+        // Dois meses e pouco: o custo do mes compara com o mes anterior inteiro.
+        public const int Dias = 65;
         /// <summary>Intervalo maximo entre amostras que ainda conta como tempo continuo.</summary>
         public static readonly TimeSpan Continuo = TimeSpan.FromMinutes(3);
 

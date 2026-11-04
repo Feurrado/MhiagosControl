@@ -30,7 +30,7 @@ namespace MhiagosControl
                 fora.Add(new KeyValuePair<string, AmostraAr>("A", Amostra(t0.AddSeconds(10), false)));   // mesma leitura: fica fora
                 fora.Add(new KeyValuePair<string, AmostraAr>("A", Amostra(t0.AddMinutes(5), true)));     // lacuna do PC: entra no meio
                 fora.Add(new KeyValuePair<string, AmostraAr>("A", Amostra(t0.AddMinutes(20), true)));    // depois: entra no fim
-                fora.Add(new KeyValuePair<string, AmostraAr>("A", Amostra(DateTime.Now.AddDays(-40), true)));   // velha demais
+                fora.Add(new KeyValuePair<string, AmostraAr>("A", Amostra(DateTime.Now.AddDays(-70), true)));   // velha demais
                 Igual(2, HistoricoDoAr.Mesclar(fora), "servidor: entram so as amostras sem par a menos de 25 s");
                 List<AmostraAr> l = HistoricoDoAr.Amostras("A", t0.AddMinutes(-1));
                 Igual(4, l.Count, "servidor: quatro amostras depois da juncao");
@@ -74,6 +74,32 @@ namespace MhiagosControl
                 estranho["limiteQuente"] = 99L; estranho["cenas"] = new List<object> { new Dictionary<string, object> { { "nome", "" } } };
                 ServidorCasa.Aplicar(q, estranho);
                 Verdade(q.LimiteQuente == 45 && q.Cenas.Count == 0, "servidor: valores fora da faixa limitados e cena sem nome ignorada");
+
+                // Custo do mes: lavadora pela energia dos ciclos, mes atual x anterior ate o mesmo dia.
+                CiclosDaLavadora.Zerar();
+                DateTime agora = new DateTime(2026, 11, 4, 12, 0, 0);
+                List<KeyValuePair<string, CiclosDaLavadora.Ciclo>> mes = new List<KeyValuePair<string, CiclosDaLavadora.Ciclo>>();
+                mes.Add(new KeyValuePair<string, CiclosDaLavadora.Ciclo>("L", CicloE(new DateTime(2026, 11, 2, 9, 0, 0), 7, 2.0)));
+                mes.Add(new KeyValuePair<string, CiclosDaLavadora.Ciclo>("L", CicloE(new DateTime(2026, 10, 3, 9, 0, 0), 8, 1.0)));
+                mes.Add(new KeyValuePair<string, CiclosDaLavadora.Ciclo>("L", CicloE(new DateTime(2026, 10, 20, 9, 0, 0), 8, 3.0)));
+                mes.Add(new KeyValuePair<string, CiclosDaLavadora.Ciclo>("L", CicloE(new DateTime(2026, 10, 25, 9, 0, 0), 6, 0.5)));
+                CiclosDaLavadora.Mesclar(mes);
+                Aparelho lav = new Aparelho(); lav.Puid = "L"; lav.Tipo = "025"; lav.Apelido = "Josefina";
+                PreferenciasCasa pm = new PreferenciasCasa(); pm.Tarifa = 1.0;
+                ResumoDoMes.Resultado rm = ResumoDoMes.Calcular(new List<Aparelho> { lav }, agora, pm);
+                Verdade(Math.Abs(rm.Atual.Custo - 2.0) < 1e-6 && rm.Atual.Ciclos == 1, "mes: custo de novembro so com o ciclo de novembro");
+                Verdade(Math.Abs(rm.Anterior.Custo - 4.5) < 1e-6 && rm.Anterior.Ciclos == 3, "mes: outubro inteiro");
+                Verdade(Math.Abs(rm.AnteriorAteHoje.Custo - 1.0) < 1e-6, "mes: outubro ate o dia 4");
+                Verdade(Math.Abs(ResumoDoMes.Variacao(rm).Value - 100) < 1e-6, "mes: variacao contra o mesmo ponto do mes anterior");
+
+                // Estatisticas: medias so dos concluidos, mais usado e ciclos desde a limpeza do tambor.
+                List<CiclosDaLavadora.Ciclo> todos = CiclosDaLavadora.Todos("L");
+                List<EstatisticasDaLavadora.PorPrograma> rk = EstatisticasDaLavadora.Ranking(todos);
+                Verdade(rk.Count == 3 && rk[0].Programa == 8 && rk[0].Ciclos == 2 && Math.Abs(rk[0].Energia / rk[0].Ciclos - 2.0) < 1e-6,
+                    "lavadora: Sintetico e o mais usado, com a media de energia");
+                DateTime? ult;
+                Igual(1, EstatisticasDaLavadora.DesdeALimpeza(todos, out ult), "lavadora: um ciclo depois da limpeza do tambor");
+                Verdade(ult.HasValue && ult.Value.Day == 25, "lavadora: data da ultima limpeza");
             }
             finally
             {
@@ -89,6 +115,13 @@ namespace MhiagosControl
             AmostraAr a = new AmostraAr();
             a.Quando = q; a.Ambiente = 27; a.Alvo = 24; a.Ligado = ligado; a.Modo = 2;
             return a;
+        }
+
+        private static CiclosDaLavadora.Ciclo CicloE(DateTime inicio, int programa, double kwh)
+        {
+            CiclosDaLavadora.Ciclo c = Ciclo(inicio, 60, programa, 50);
+            c.Energia = kwh;
+            return c;
         }
 
         private static CiclosDaLavadora.Ciclo Ciclo(DateTime inicio, int minutos, int programa, double agua)

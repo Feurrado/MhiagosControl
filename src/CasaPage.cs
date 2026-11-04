@@ -29,6 +29,7 @@ namespace MhiagosControl
         private readonly FlatBtn _btAtualizar, _btSair;
         private readonly List<CartaoDeAparelho> _cartoes = new List<CartaoDeAparelho>();
         private CartaoHistoricoDoAr _historico;
+        private readonly CartaoDoMes _mes;
         private readonly Segmented _abas;
         private readonly AjustesDaCasa _ajustes;
         private readonly Label _vazio;
@@ -46,6 +47,7 @@ namespace MhiagosControl
         internal CartaoDeLogin Login { get { return _login; } }
         internal List<CartaoDeAparelho> Cartoes { get { return _cartoes; } }
         internal CartaoHistoricoDoAr Historico { get { return _historico; } }
+        internal CartaoDoMes Mes { get { return _mes; } }
         internal AjustesDaCasa Ajustes { get { return _ajustes; } }
         internal Segmented Abas { get { return _abas; } }
 
@@ -114,6 +116,11 @@ namespace MhiagosControl
             _ajustes.Sair += delegate { ServicoCasa.Sair(); };
             _ajustes.ConsumoMudou += delegate { if (_historico != null) _historico.Recalcular(); };
             Controls.Add(_ajustes);
+
+            _mes = new CartaoDoMes();
+            _mes.Visible = false;
+            Controls.Add(_mes);
+            _ajustes.ConsumoMudou += delegate { _mes.Mostrar(ServicoCasa.Aparelhos); };
 
             _vazio = new Label();
             _vazio.Font = Ui.FontBase;
@@ -188,6 +195,7 @@ namespace MhiagosControl
             _btSair.Visible = false;
             foreach (CartaoDeAparelho c in _cartoes) c.Visible = _logado && painel;
             if (_historico != null) _historico.Visible = _logado && painel;
+            _mes.Visible = _logado && painel && _mes.Resultado != null && _mes.Resultado.Aparelhos.Count > 0;
             _ajustes.Visible = _logado && !painel;
             _vazio.Visible = _logado && painel && _cartoes.Count == 0 && !ServicoCasa.Buscando && ServicoCasa.UltimaLeitura != DateTime.MinValue;
             _vazio.Text = T.CasaSemAparelhos;
@@ -274,6 +282,7 @@ namespace MhiagosControl
                     Controls.Remove(_historico); _historico.Dispose(); _historico = null;
                 }
                 if (_historico != null) _historico.Mostrar(primeiroAr);
+                _mes.Mostrar(lista);
             }
             finally { ResumeLayout(); }
         }
@@ -391,6 +400,14 @@ namespace MhiagosControl
                     }
 
                     _vazio.SetBounds(x, y, w, Ui.S(40));
+
+                    // Custo do mes, ar mais lavadora, como no topo do painel web.
+                    if (_mes.Visible)
+                    {
+                        int hm = _mes.Arranjar(w);
+                        _mes.SetBounds(x, y, w, hm);
+                        y += hm + Ui.Gap;
+                    }
 
                     // Duas colunas quando cabem dois cartoes de 460: ar e lavadora
                     // lado a lado, que e como se olha para os dois ao mesmo tempo.

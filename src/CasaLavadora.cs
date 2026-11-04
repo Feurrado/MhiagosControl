@@ -264,6 +264,16 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>Todos os ciclos gravados do aparelho, do mais antigo ao mais novo.</summary>
+        public static List<Ciclo> Todos(string puid)
+        {
+            lock (_trava)
+            {
+                Carregar();
+                return new List<Ciclo>(Lista(puid));
+            }
+        }
+
         /// <summary>Ciclos, litros e kWh dos ciclos registrados no mes da data dada.</summary>
         public static double[] DoMes(string puid, DateTime dia)
         {
@@ -631,7 +641,7 @@ namespace MhiagosControl
     {
         private readonly AnelDoCiclo _anel;
         private readonly EtapasDoCiclo _etapas;
-        private readonly Label _titulo, _programa, _termino, _aviso, _lbParams, _lbCiclos, _ciclos, _tudo;
+        private readonly Label _titulo, _programa, _termino, _aviso, _lbParams, _lbCiclos, _ciclos, _tudo, _lbEstat, _estat;
         private readonly List<Label[]> _params = new List<Label[]>();
         private readonly FlatBtn _btTudo;
         private bool _aberto;
@@ -675,6 +685,7 @@ namespace MhiagosControl
         {
             bool algo = !_compacto && _animConsumo.Valor > 0.001f;
             _consumo.Visible = _ciclos.Visible = _lbCiclos.Visible = algo;
+            _lbEstat.Visible = _estat.Visible = algo && _estat.Text.Length > 0;
             _cabConsumo.Aberto = _animConsumo.Aberto;
             _cabConsumo.Invalidate();
         }
@@ -700,6 +711,8 @@ namespace MhiagosControl
             _lbParams = Rotulo(T.LavParametros, Ui.FontSmall, Ui.Muted);
             _lbCiclos = Rotulo(T.LavUltimosCiclos, Ui.FontSmall, Ui.Muted);
             _ciclos = Rotulo("", Ui.FontSmall, Ui.Text);
+            _lbEstat = Rotulo(T.LavEstatisticas, Ui.FontSmall, Ui.Muted);
+            _estat = Rotulo("", Ui.FontSmall, Ui.Text);
             _btTudo = new FlatBtn();
             _btTudo.Text = T.CasaTodas;
             _btTudo.Click += delegate { _aberto = !_aberto; Preencher(); AvisarAltura(); };
@@ -847,6 +860,7 @@ namespace MhiagosControl
                     (x.Energia > 0 ? "  ·  " + x.Energia.ToString("0.00") + " kWh" : "") +
                     (x.Concluido ? "" : "  ·  " + T.LavInterrompido));
             _ciclos.Text = linhas.Count > 0 ? string.Join("\n", linhas.ToArray()) : T.LavSemCiclosGravados;
+            _estat.Text = EstatisticasDaLavadora.Texto(A, DateTime.Now);
 
             _btTudo.Text = _aberto ? T.CasaMenos : T.CasaTodas;
             List<string> keys = new List<string>(A.Estado.Keys);
@@ -862,7 +876,7 @@ namespace MhiagosControl
             _compacto = !(c.Online && c.Rodando);
             if (_compacto)
             {
-                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams, _btTudo, _tudo, _cabConsumo, _consumo, _ciclos, _lbCiclos })
+                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams, _btTudo, _tudo, _cabConsumo, _consumo, _ciclos, _lbCiclos, _lbEstat, _estat })
                     x.Visible = false;
                 foreach (Label[] l in _params) l[0].Visible = l[1].Visible = false;
             }
@@ -954,6 +968,11 @@ namespace MhiagosControl
             _lbCiclos.SetBounds(M, yc, iw, Ui.S(18));
             yc += Ui.S(22);
             yc = Bloco(_ciclos, M, yc, iw) + Ui.S(6);
+            if (_estat.Text.Length > 0)
+            {
+                _lbEstat.SetBounds(M, yc + Ui.S(4), iw, Ui.S(18));
+                yc = Bloco(_estat, M, yc + Ui.S(26), iw) + Ui.S(6);
+            }
             y += (int)Math.Round((yc - y) * _animConsumo.Valor);
             return y + Ui.S(10);
         }

@@ -214,16 +214,28 @@ namespace MhiagosControl
             Func<DateTime, float> X = delegate(DateTime t) { return area.X + (float)((t - inicio).TotalSeconds / janela.TotalSeconds) * area.Width; };
             Func<float, float> Y = delegate(float v) { return area.Bottom - area.Height * (v - min) / (max - min); };
 
-            // Faixas do ar ligado.
-            using (SolidBrush faixa = new SolidBrush(Color.FromArgb(Ui.Dark ? 28 : 34, Ui.Accent)))
-                for (int i = 0; i < am.Count; i++)
-                {
-                    if (!am[i].Ligado) continue;
-                    DateTime ate = i + 1 < am.Count ? am[i + 1].Quando : am[i].Quando.AddMinutes(1);
-                    if (ate - am[i].Quando > HistoricoDoAr.Continuo) ate = am[i].Quando + HistoricoDoAr.Continuo;
-                    float x0 = Math.Max(area.X, X(am[i].Quando)), x1 = Math.Min(area.Right, X(ate));
-                    if (x1 > x0) g.FillRectangle(faixa, x0, area.Y, x1 - x0, area.Height);
-                }
+            // Faixas do ar ligado, na cor do modo (como no painel web). Trechos
+            // seguidos no mesmo modo viram uma faixa so: varias finas deixam riscos.
+            float fx0 = 0, fx1 = 0;
+            int fModo = int.MinValue;
+            Action fechar = delegate
+            {
+                if (fModo == int.MinValue || fx1 <= fx0) return;
+                using (SolidBrush faixa = new SolidBrush(Color.FromArgb(Ui.Dark ? 40 : 46, TabelaDoAr.CorDoModo(fModo, _a.Tipo))))
+                    g.FillRectangle(faixa, fx0, area.Y, fx1 - fx0, area.Height);
+                fModo = int.MinValue;
+            };
+            for (int i = 0; i < am.Count; i++)
+            {
+                if (!am[i].Ligado) { fechar(); continue; }
+                DateTime ate = i + 1 < am.Count ? am[i + 1].Quando : am[i].Quando.AddMinutes(1);
+                if (ate - am[i].Quando > HistoricoDoAr.Continuo) ate = am[i].Quando + HistoricoDoAr.Continuo;
+                float x0 = Math.Max(area.X, X(am[i].Quando)), x1 = Math.Min(area.Right, X(ate));
+                if (x1 <= x0) continue;
+                if (fModo == am[i].Modo && x0 <= fx1 + 0.5f) fx1 = Math.Max(fx1, x1);
+                else { fechar(); fModo = am[i].Modo; fx0 = x0; fx1 = x1; }
+            }
+            fechar();
 
             Linha(g, am, X, Y, delegate(AmostraAr s) { return s.Ambiente; }, Color.FromArgb(0xF0, 0x8C, 0x3C), 2f);
             Linha(g, am, X, Y, delegate(AmostraAr s) { return s.Ligado ? s.Alvo : float.NaN; }, Ui.Accent, 1.6f);
