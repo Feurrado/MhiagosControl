@@ -641,10 +641,8 @@ namespace MhiagosControl
     {
         private readonly AnelDoCiclo _anel;
         private readonly EtapasDoCiclo _etapas;
-        private readonly Label _titulo, _programa, _termino, _aviso, _lbParams, _lbCiclos, _ciclos, _tudo, _lbEstat, _estat;
+        private readonly Label _titulo, _programa, _termino, _aviso, _lbParams, _lbCiclos, _ciclos, _lbEstat, _estat;
         private readonly List<Label[]> _params = new List<Label[]>();
-        private readonly FlatBtn _btTudo;
-        private bool _aberto;
         private readonly BotaoChave _chave;
         private readonly ToolTip _dica = new ToolTip();
         private readonly Label _diag, _lbDiag;
@@ -713,11 +711,6 @@ namespace MhiagosControl
             _ciclos = Rotulo("", Ui.FontSmall, Ui.Text);
             _lbEstat = Rotulo(T.LavEstatisticas, Ui.FontSmall, Ui.Muted);
             _estat = Rotulo("", Ui.FontSmall, Ui.Text);
-            _btTudo = new FlatBtn();
-            _btTudo.Text = T.CasaTodas;
-            _btTudo.Click += delegate { _aberto = !_aberto; Preencher(); AvisarAltura(); };
-            Controls.Add(_btTudo);
-            _tudo = Rotulo("", Ui.FontSmall, Ui.Muted);
 
             _chave = new BotaoChave();
             _chave.Click += delegate { AlternarDiagnostico(); };
@@ -862,21 +855,12 @@ namespace MhiagosControl
             _ciclos.Text = linhas.Count > 0 ? string.Join("\n", linhas.ToArray()) : T.LavSemCiclosGravados;
             _estat.Text = EstatisticasDaLavadora.Texto(A, DateTime.Now);
 
-            _btTudo.Text = _aberto ? T.CasaMenos : T.CasaTodas;
-            List<string> keys = new List<string>(A.Estado.Keys);
-            keys.Sort(StringComparer.OrdinalIgnoreCase);
-            List<string> todas = new List<string>();
-            foreach (string k in keys) todas.Add(k + " = " + A.Estado[k]);
-            _tudo.Text = string.Join("\n", todas.ToArray());
-            _tudo.Visible = _aberto;
-            _btTudo.Visible = A.Estado.Count > 0;
-
             // Fora de ciclo (parada, pronta ou desconectada) o cartao fica compacto: so o nome
             // no cabecalho e o estado. Anel, etapas, parametros e consumo so com ciclo rodando.
             _compacto = !(c.Online && c.Rodando);
             if (_compacto)
             {
-                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams, _btTudo, _tudo, _cabConsumo, _consumo, _ciclos, _lbCiclos, _lbEstat, _estat })
+                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams, _cabConsumo, _consumo, _ciclos, _lbCiclos, _lbEstat, _estat })
                     x.Visible = false;
                 foreach (Label[] l in _params) l[0].Visible = l[1].Visible = false;
             }
@@ -952,13 +936,6 @@ namespace MhiagosControl
                 y = Bloco(_diag, M, y + Ui.S(26), iw) + Ui.S(14);
             }
 
-            if (_btTudo.Visible)
-            {
-                int bw = TextRenderer.MeasureText(_btTudo.Text, _btTudo.Font).Width + Ui.S(28);
-                _btTudo.SetBounds(M, y, bw, Ui.S(30));
-                y += Ui.S(40);
-            }
-            if (_tudo.Visible) y = Bloco(_tudo, M, y, iw) + Ui.S(6);
 
             // Consumo e historico: cabecalho sempre visivel, conteudo animado no fim do cartao.
             _cabConsumo.SetBounds(M, y, iw, Ui.S(38));

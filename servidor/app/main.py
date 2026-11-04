@@ -231,7 +231,8 @@ def consumo(dias: int = 30, meses: int = 12):
         if a["tipo"] in ("008", "009"):
             r[a["puid"]] = {"tipo": "ar", "dias": casa.consumo_ar(a["puid"], dias)}
         elif a["tipo"] in ("003", "025", "027", "004"):
-            r[a["puid"]] = {"tipo": "lavadora", "meses": casa.consumo_lavadora(a["puid"], meses)}
+            r[a["puid"]] = {"tipo": "lavadora", "dias": casa.consumo_lavadora_dias(a["puid"], dias),
+                            "meses": casa.consumo_lavadora(a["puid"], meses)}
     return {"preferencias": casa.preferencias()["dados"], "aparelhos": r}
 
 

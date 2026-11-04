@@ -325,6 +325,24 @@ def consumo_ar(puid, dias):
             for k, v in d.items()]
 
 
+def consumo_lavadora_dias(puid, dias):
+    """kWh, custo, agua e ciclos por dia, pelo inicio do ciclo (mesmo formato do ar)."""
+    p = preferencias()["dados"]
+    hoje = datetime.now().date()
+    de = hoje - timedelta(days=dias - 1)
+    inicio = int(datetime.combine(de, datetime.min.time()).timestamp())
+    d = {(de + timedelta(days=i)).isoformat(): {"kwh": 0.0, "agua": 0.0, "ciclos": 0, "horas": 0.0} for i in range(dias)}
+    for c in banco.linhas("SELECT inicio, fim, agua, energia FROM ciclos WHERE puid=? AND inicio >= ?", (puid, inicio)):
+        k = datetime.fromtimestamp(c["inicio"]).date().isoformat()
+        if k in d:
+            d[k]["kwh"] += c["energia"] or 0
+            d[k]["agua"] += c["agua"] or 0
+            d[k]["ciclos"] += 1
+            d[k]["horas"] += (c["fim"] - c["inicio"]) / 3600
+    return [{"dia": k, "kwh": round(v["kwh"], 3), "custo": round(v["kwh"] * p["tarifa"], 2), "agua": round(v["agua"], 1),
+             "ciclos": v["ciclos"], "horas": round(v["horas"], 3)} for k, v in d.items()]
+
+
 def consumo_lavadora(puid, meses):
     p = preferencias()["dados"]
     r = []

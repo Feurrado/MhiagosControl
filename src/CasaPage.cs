@@ -1302,8 +1302,6 @@ namespace MhiagosControl
         public static string CasaAberta { get { return P("aberta", "open"); } }
         public static string CasaFechada { get { return P("fechada", "closed"); } }
         public static string CasaTrava { get { return P("Trava de segurança", "Child lock"); } }
-        public static string CasaTodas { get { return P("Todas as propriedades", "All properties"); } }
-        public static string CasaMenos { get { return P("Esconder propriedades", "Hide properties"); } }
         /// <summary>Tipo do aparelho em portugues, quando o nome do modelo vem em chines.</summary>
         public static string CasaTipo(string tipo, string daNuvem)
         {
