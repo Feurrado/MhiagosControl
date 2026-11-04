@@ -679,9 +679,9 @@ namespace MhiagosControl
         public string RetornoPuid = "";
         public int RetornoModo = 2, RetornoTemp = 24, RetornoVento = 2;
         /// <summary>Cartao de consumo do ar aberto (comeca fechado).</summary>
-        public bool ConsumoArAberto;
+        /// <summary>Periodo da aba Consumo: 0 sete dias, 1 trinta dias, 2 este mes.</summary>
+        public int PeriodoConsumo = 1;
         /// <summary>Secao de consumo e historico da lavadora aberta (comeca fechada).</summary>
-        public bool ConsumoLavadoraAberto;
         /// <summary>Clima la fora: cidade escolhida (nome e coordenadas) e a ultima leitura guardada.</summary>
         public string ClimaCidade = "";
         public double ClimaLat = double.NaN, ClimaLon = double.NaN, ClimaTemp = double.NaN;
@@ -744,14 +744,15 @@ namespace MhiagosControl
                         case "tarifa": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out d) && d >= 0) p.Tarifa = d; break;
                         case "desligarem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.DesligarEmUtc = l; break;
                         case "desligarpuid": p.DesligarPuid = v; break;
-                        case "abacasa": if (ehInt) p.AbaCasa = i == 1 ? 1 : 0; break;
+                        // "abacasa" e de quando eram duas abas (1 = Ajustes); "abacasa3": Painel, Consumo, Ajustes.
+                        case "abacasa": if (ehInt) p.AbaCasa = i == 1 ? 2 : 0; break;
+                        case "abacasa3": if (ehInt) p.AbaCasa = Math.Max(0, Math.Min(2, i)); break;
+                        case "periodoconsumo": if (ehInt) p.PeriodoConsumo = Math.Max(0, Math.Min(2, i)); break;
                         case "retornoem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.RetornoEmUtc = l; break;
                         case "retornopuid": p.RetornoPuid = v; break;
                         case "retornomodo": if (ehInt) p.RetornoModo = i; break;
                         case "retornotemp": if (ehInt) p.RetornoTemp = Math.Max(16, Math.Min(32, i)); break;
                         case "retornovento": if (ehInt) p.RetornoVento = i; break;
-                        case "consumoaraberto": p.ConsumoArAberto = v == "1"; break;
-                        case "consumolavadoraaberto": p.ConsumoLavadoraAberto = v == "1"; break;
                         case "climacidade": p.ClimaCidade = v; break;
                         case "climalat": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out d)) p.ClimaLat = d; break;
                         case "climalon": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out d)) p.ClimaLon = d; break;
@@ -790,14 +791,13 @@ namespace MhiagosControl
             sb.AppendLine("tarifa=" + Tarifa.ToString("0.####", CultureInfo.InvariantCulture));
             sb.AppendLine("desligarem=" + DesligarEmUtc.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("desligarpuid=" + (DesligarPuid ?? ""));
-            sb.AppendLine("abacasa=" + AbaCasa.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("abacasa3=" + AbaCasa.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("periodoconsumo=" + PeriodoConsumo.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("retornoem=" + RetornoEmUtc.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("retornopuid=" + (RetornoPuid ?? ""));
             sb.AppendLine("retornomodo=" + RetornoModo.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("retornotemp=" + RetornoTemp.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("retornovento=" + RetornoVento.ToString(CultureInfo.InvariantCulture));
-            sb.AppendLine("consumoaraberto=" + (ConsumoArAberto ? "1" : "0"));
-            sb.AppendLine("consumolavadoraaberto=" + (ConsumoLavadoraAberto ? "1" : "0"));
             sb.AppendLine("climacidade=" + (ClimaCidade ?? ""));
             sb.AppendLine("climalat=" + (double.IsNaN(ClimaLat) ? "" : ClimaLat.ToString("R", CultureInfo.InvariantCulture)));
             sb.AppendLine("climalon=" + (double.IsNaN(ClimaLon) ? "" : ClimaLon.ToString("R", CultureInfo.InvariantCulture)));

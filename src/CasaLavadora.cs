@@ -641,7 +641,7 @@ namespace MhiagosControl
     {
         private readonly AnelDoCiclo _anel;
         private readonly EtapasDoCiclo _etapas;
-        private readonly Label _titulo, _programa, _termino, _aviso, _lbParams, _lbCiclos, _ciclos, _lbEstat, _estat;
+        private readonly Label _titulo, _programa, _termino, _aviso, _lbParams;
         private readonly List<Label[]> _params = new List<Label[]>();
         private readonly BotaoChave _chave;
         private readonly ToolTip _dica = new ToolTip();
@@ -660,34 +660,9 @@ namespace MhiagosControl
             AvisarAltura();
         }
 
-        private readonly CabecalhoRecolhivel _cabConsumo;
-        private readonly Label _consumo;
-        private readonly BarrasPorDia _barras;
-        private readonly AnimacaoDeRecolher _animConsumo;
-
-        internal CabecalhoRecolhivel CabecalhoDoConsumo { get { return _cabConsumo; } }
         private bool _compacto;
         /// <summary>Sem ciclo rodando (ou desconectada): so nome e estado.</summary>
         internal bool Compacto { get { return _compacto; } }
-        public bool ConsumoAberto { get { return _animConsumo.Aberto; } }
-
-        /// <summary>Abre ou fecha a secao de consumo e historico, lembrando em casa.ini.</summary>
-        public void AlternarConsumo(bool animar)
-        {
-            bool abrir = !_animConsumo.Aberto;
-            ServicoCasa.Pref.ConsumoLavadoraAberto = abrir;
-            ServicoCasa.Pref.Salvar();
-            _animConsumo.Ir(abrir, animar && IsHandleCreated && Visible);
-        }
-
-        private void AjustarConsumo()
-        {
-            bool algo = !_compacto && _animConsumo.Valor > 0.001f;
-            _consumo.Visible = _ciclos.Visible = _lbCiclos.Visible = _barras.Visible = algo;
-            _lbEstat.Visible = _estat.Visible = algo && _estat.Text.Length > 0;
-            _cabConsumo.Aberto = _animConsumo.Aberto;
-            _cabConsumo.Invalidate();
-        }
 
         public override int Tipo { get { return 1; } }
 
@@ -708,10 +683,6 @@ namespace MhiagosControl
             _termino = Rotulo("", Ui.FontBase, Ui.Muted);
             _aviso = Rotulo("", Ui.FontSmall, Ui.Warn);
             _lbParams = Rotulo(T.LavParametros, Ui.FontSmall, Ui.Muted);
-            _lbCiclos = Rotulo(T.LavUltimosCiclos, Ui.FontSmall, Ui.Muted);
-            _ciclos = Rotulo("", Ui.FontSmall, Ui.Text);
-            _lbEstat = Rotulo(T.LavEstatisticas, Ui.FontSmall, Ui.Muted);
-            _estat = Rotulo("", Ui.FontSmall, Ui.Text);
 
             _chave = new BotaoChave();
             _chave.Click += delegate { AlternarDiagnostico(); };
@@ -721,24 +692,11 @@ namespace MhiagosControl
             _diag = Rotulo("", Ui.FontSmall, Ui.Text);
             _lbDiag.Visible = _diag.Visible = false;
 
-            _cabConsumo = new CabecalhoRecolhivel();
-            _cabConsumo.Titulo = T.LavConsumoTitulo;
-            _cabConsumo.Click += delegate { AlternarConsumo(true); };
-            Controls.Add(_cabConsumo);
-            _consumo = Rotulo("", Ui.FontBase, Ui.Text);
-            _barras = new BarrasPorDia();
-            _barras.Titulo = T.LavEnergiaPorDia;
-            _barras.Rotulo = v => v.ToString("0.0#") + " kWh";
-            Controls.Add(_barras);
-            // Comeca fechada, como o consumo do ar, e lembra a escolha.
-            _animConsumo = new AnimacaoDeRecolher(ServicoCasa.Pref.ConsumoLavadoraAberto);
-            _animConsumo.Quadro += delegate { AjustarConsumo(); AvisarAltura(); };
-            AjustarConsumo();
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _animConsumo.Dispose(); _dica.Dispose(); }
+            if (disposing) _dica.Dispose();
             base.Dispose(disposing);
         }
 
@@ -823,28 +781,11 @@ namespace MhiagosControl
             if (porta != null) p.Add(new[] { T.CasaPorta, TabelaDaLavadora.Porta(A.Int(porta, 0)) });
             string trava = A.Primeiro("Child_lock", "ChildLockActive", "Child_lock_setting_status");
             if (trava != null) p.Add(new[] { T.CasaTrava, A.Int(trava, 0) != 0 ? T.LavAtiva : T.LavDesativada });
+            // Agua e energia do ciclo vao junto dos parametros; o resto do consumo mora na aba Consumo.
+            if (c.Agua.HasValue) p.Add(new[] { T.LavAgua, c.Agua.Value.ToString("0.#") + " L" });
+            if (c.Energia.HasValue) p.Add(new[] { T.LavEnergia, c.Energia.Value.ToString("0.00") + " kWh" });
             Parametros(p);
 
-            // --- consumo do ciclo e do mes (secao recolhivel)
-            List<string> cons = new List<string>();
-            if (c.Agua.HasValue && (c.Agua.Value > 0 || c.Rodando)) cons.Add(T.LavAgua + ": " + c.Agua.Value.ToString("0.#") + " L");
-            if (c.Energia.HasValue && (c.Energia.Value > 0 || c.Rodando)) cons.Add(T.LavEnergia + ": " + c.Energia.Value.ToString("0.00") + " kWh");
-            double[] mes = CiclosDaLavadora.DoMes(A.Puid, DateTime.Today);
-            cons.Add(T.LavMes((int)mes[0], mes[1].ToString("0"), mes[2].ToString("0.00")));
-            _barras.Valores.Clear();
-            _barras.Valores.AddRange(BarrasPorDia.EnergiaDaLavadora(A.Puid, 7, DateTime.Today));
-            // O ciclo em curso ainda nao esta gravado: entra em hoje com o que a maquina ja mediu.
-            if (c.Rodando && c.Energia.HasValue && _barras.Valores.Count > 0)
-            {
-                KeyValuePair<DateTime, double> dia = _barras.Valores[_barras.Valores.Count - 1];
-                _barras.Valores[_barras.Valores.Count - 1] = new KeyValuePair<DateTime, double>(dia.Key, dia.Value + c.Energia.Value);
-            }
-            _barras.Invalidate();
-            _consumo.Text = string.Join("\n", cons.ToArray());
-            _cabConsumo.Resumo = c.Agua.HasValue || c.Energia.HasValue
-                ? T.LavResumoConsumo(c.Agua.HasValue ? c.Agua.Value.ToString("0") : "--", c.Energia.HasValue ? c.Energia.Value.ToString("0.00") : "--")
-                : T.LavMesCurto((int)mes[0]);
-            _cabConsumo.Invalidate();
             _lbParams.Visible = p.Count > 0;
 
             // --- avisos: limpeza do tambor e erro
@@ -857,32 +798,16 @@ namespace MhiagosControl
             _chave.Invalidate();
             if (_diagAberto) _diag.Text = Diagnostico.Texto(A);
 
-            // --- ultimos ciclos registrados pelo Mhiagos
-            List<CiclosDaLavadora.Ciclo> ult = CiclosDaLavadora.Ultimos(A.Puid, 5);
-            List<string> linhas = new List<string>();
-            foreach (CiclosDaLavadora.Ciclo x in ult)
-                linhas.Add(x.Inicio.ToString("dd/MM HH:mm") + "  ·  " + TabelaDaLavadora.Programa(x.Programa) + "  ·  " +
-                    CiclosDaLavadora.Duracao(x.Fim - x.Inicio) +
-                    (x.Agua > 0 ? "  ·  " + x.Agua.ToString("0") + " L" : "") +
-                    (x.Energia > 0 ? "  ·  " + x.Energia.ToString("0.00") + " kWh" : "") +
-                    (x.Concluido ? "" : "  ·  " + T.LavInterrompido));
-            _ciclos.Text = linhas.Count > 0 ? string.Join("\n", linhas.ToArray()) : T.LavSemCiclosGravados;
-            _estat.Text = EstatisticasDaLavadora.Texto(A, DateTime.Now);
-
             // Fora de ciclo (parada, pronta ou desconectada) o cartao fica compacto: so o nome
             // no cabecalho e o estado. Anel, etapas, parametros e consumo so com ciclo rodando.
             _compacto = !(c.Online && c.Rodando);
             if (_compacto)
             {
-                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams, _cabConsumo, _consumo, _barras, _ciclos, _lbCiclos, _lbEstat, _estat })
+                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams })
                     x.Visible = false;
                 foreach (Label[] l in _params) l[0].Visible = l[1].Visible = false;
             }
-            else
-            {
-                _anel.Visible = _cabConsumo.Visible = true;
-                AjustarConsumo();
-            }
+            else _anel.Visible = true;
         }
 
         public override int Arranjar(int w)
@@ -950,24 +875,7 @@ namespace MhiagosControl
                 y = Bloco(_diag, M, y + Ui.S(26), iw) + Ui.S(14);
             }
 
-
-            // Consumo e historico: cabecalho sempre visivel, conteudo animado no fim do cartao.
-            _cabConsumo.SetBounds(M, y, iw, Ui.S(38));
-            y += Ui.S(38);
-            int topo = y + Ui.S(12);
-            // Barras de energia por dia, como as horas ligado do ar.
-            _barras.SetBounds(M, topo, iw, Ui.S(96));
-            int yc = Bloco(_consumo, M, topo + Ui.S(96 + 14), iw) + Ui.S(10);
-            _lbCiclos.SetBounds(M, yc, iw, Ui.S(18));
-            yc += Ui.S(22);
-            yc = Bloco(_ciclos, M, yc, iw) + Ui.S(6);
-            if (_estat.Text.Length > 0)
-            {
-                _lbEstat.SetBounds(M, yc + Ui.S(4), iw, Ui.S(18));
-                yc = Bloco(_estat, M, yc + Ui.S(26), iw) + Ui.S(6);
-            }
-            y += (int)Math.Round((yc - y) * _animConsumo.Valor);
-            return y + Ui.S(10);
+            return y + Ui.S(6);
         }
 
         private static int Bloco(Label l, int x, int y, int w)

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -86,11 +86,14 @@ namespace MhiagosControl
                 CiclosDaLavadora.Mesclar(mes);
                 Aparelho lav = new Aparelho(); lav.Puid = "L"; lav.Tipo = "025"; lav.Apelido = "Josefina";
                 PreferenciasCasa pm = new PreferenciasCasa(); pm.Tarifa = 1.0;
-                ResumoDoMes.Resultado rm = ResumoDoMes.Calcular(new List<Aparelho> { lav }, agora, pm);
-                Verdade(Math.Abs(rm.Atual.Custo - 2.0) < 1e-6 && rm.Atual.Ciclos == 1, "mes: custo de novembro so com o ciclo de novembro");
-                Verdade(Math.Abs(rm.Anterior.Custo - 4.5) < 1e-6 && rm.Anterior.Ciclos == 3, "mes: outubro inteiro");
-                Verdade(Math.Abs(rm.AnteriorAteHoje.Custo - 1.0) < 1e-6, "mes: outubro ate o dia 4");
-                Verdade(Math.Abs(ResumoDoMes.Variacao(rm).Value - 100) < 1e-6, "mes: variacao contra o mesmo ponto do mes anterior");
+                ConsumoDoPeriodo.Resultado rm = ConsumoDoPeriodo.Calcular(new List<Aparelho> { lav }, ConsumoDoPeriodo.Periodo.Mes, agora, pm);
+                Verdade(Math.Abs(rm.Custo - 2.0) < 1e-6 && rm.Aparelhos[0].Ciclos == 1 && rm.NumDias == 4, "consumo: este mes so com o ciclo de novembro, 4 dias");
+                Verdade(Math.Abs(rm.CustoAnterior - 1.0) < 1e-6, "consumo: outubro ate o dia 4");
+                Verdade(Math.Abs(rm.Variacao.Value - 100) < 1e-6, "consumo: variacao contra o mesmo dia do mes anterior");
+                ConsumoDoPeriodo.Resultado r30 = ConsumoDoPeriodo.Calcular(new List<Aparelho> { lav }, ConsumoDoPeriodo.Periodo.Dias30, agora, pm);
+                Verdade(r30.NumDias == 30 && r30.Aparelhos[0].Ciclos == 3 && Math.Abs(r30.Custo - 5.5) < 1e-6 && Math.Abs(r30.CustoAnterior - 1.0) < 1e-6,
+                    "consumo: 30 dias (06/10 a 04/11) contra os 30 anteriores");
+                Verdade(Math.Abs(r30.Aparelhos[0].Dias[r30.NumDias - 3].Kwh - 2.0) < 1e-6, "consumo: energia no dia do ciclo");
 
                 // Estatisticas: medias so dos concluidos, mais usado e ciclos desde a limpeza do tambor.
                 List<CiclosDaLavadora.Ciclo> todos = CiclosDaLavadora.Todos("L");

@@ -19,152 +19,54 @@ namespace MhiagosControl
     /// Historico e consumo do ar: curva de ambiente e alvo, horas ligado por
     /// dia, consumo ESTIMADO e as preferencias de potencia, tarifa e alertas.
     /// </summary>
+    /// <summary>
+    /// Temperatura do ar ao longo do tempo, na aba Consumo: ambiente, a pedida
+    /// com o ar ligado e faixas na cor do modo. O consumo em si fica no resumo
+    /// da aba (ResumoDoConsumo), junto com o da lavadora.
+    /// </summary>
     internal sealed class CartaoHistoricoDoAr : Card
     {
         private Aparelho _a;
         private readonly Segmented _periodo;
-        private readonly Label _lbConsumo, _nota;
-        private Rectangle _grafico, _barras;
+        private Rectangle _grafico;
         private static readonly int[] Horas = { 6, 24, 24 * 7 };
         private static readonly int M = Ui.S(18);
-        private readonly AnimacaoDeRecolher _anim;
-        private int _alturaAberta;
-        private string _resumo = "";
-
-        /// <summary>Abriu, fechou ou esta animando: a pagina rearranja.</summary>
-        public event EventHandler MudouAltura;
-
-        public bool Aberto { get { return _anim.Aberto; } }
 
         public string Puid { get { return _a != null ? _a.Puid : null; } }
 
         public CartaoHistoricoDoAr()
         {
-            Title = T.CasaHistoricoTitulo;
-            TitleHeight = Ui.S(42);
             _periodo = new Segmented();
             _periodo.SetItems("6 h", "24 h", T.CasaSeteDias);
             _periodo.SelectedIndex = 1;
             _periodo.SelectedIndexChanged += delegate { Invalidate(); };
             Controls.Add(_periodo);
-
-            _lbConsumo = Rotulo("", Ui.FontBase, Ui.Text);
-            _nota = Rotulo(T.CasaEstimativaNotaAjustes, Ui.FontSmall, Ui.Muted);
-
-            // Comeca fechado (decisao do guia) e lembra o que a pessoa escolheu.
-            _anim = new AnimacaoDeRecolher(ServicoCasa.Pref.ConsumoArAberto);
-            _anim.Quadro += delegate { AjustarVisiveis(); Invalidate(); if (MudouAltura != null) MudouAltura(this, EventArgs.Empty); };
-            AjustarVisiveis();
-        }
-
-        /// <summary>Abre ou fecha, animando quando a janela ja esta na tela.</summary>
-        public void Alternar(bool animar)
-        {
-            bool abrir = !_anim.Aberto;
-            ServicoCasa.Pref.ConsumoArAberto = abrir;
-            ServicoCasa.Pref.Salvar();
-            _anim.Ir(abrir, animar && IsHandleCreated && Visible);
-        }
-
-        private void AjustarVisiveis()
-        {
-            bool algo = _anim.Valor > 0.001f;
-            _periodo.Visible = _anim.Aberto;
-            _lbConsumo.Visible = _nota.Visible = algo;
-        }
-
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Left && e.Y < TitleHeight) Alternar(true);
-            base.OnMouseDown(e);
-        }
-
-        protected override void OnMouseMove(MouseEventArgs e)
-        {
-            Cursor = e.Y < TitleHeight ? Cursors.Hand : Cursors.Default;
-            base.OnMouseMove(e);
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing) _anim.Dispose();
-            base.Dispose(disposing);
-        }
-
-        /// <summary>Recalcula com a potencia e a tarifa novas (vem da aba Ajustes).</summary>
-        public void Recalcular() { Mostrar(_a); }
-
-        private Label Rotulo(string t, Font f, Color c)
-        {
-            Label l = new Label();
-            l.Text = t; l.Font = f; l.ForeColor = c; l.AutoSize = false; l.BackColor = Color.Transparent;
-            Controls.Add(l);
-            return l;
         }
 
         public void Mostrar(Aparelho a)
         {
             _a = a;
-            if (a == null) return;
-            SortedDictionary<DateTime, double[]> mes = HistoricoDoAr.PorDia(a.Puid,
-                new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1), DateTime.Now, ServicoCasa.Pref, a.Tipo);
-            double[] hoje = mes.ContainsKey(DateTime.Today) ? mes[DateTime.Today] : new double[2];
-            double hMes = 0, kMes = 0;
-            foreach (double[] v in mes.Values) { hMes += v[0]; kMes += v[1]; }
-            double tarifa = ServicoCasa.Pref.Tarifa;
-            _lbConsumo.Text = T.CasaConsumoHoje(Horas2(hoje[0]), hoje[1].ToString("0.0"), (hoje[1] * tarifa).ToString("0.00")) + "\n" +
-                T.CasaConsumoMes(Horas2(hMes), kMes.ToString("0.0"), (kMes * tarifa).ToString("0.00"));
-            _resumo = T.CasaResumoConsumo(Horas2(hoje[0]), hoje[1].ToString("0.0"));
             Invalidate();
-        }
-
-        private static string Horas2(double h)
-        {
-            int min = (int)Math.Round(h * 60);
-            return min < 60 ? min + " min" : string.Format("{0} h {1:00}", min / 60, min % 60);
         }
 
         public int Arranjar(int w)
         {
-            int iw = w - 2 * M;
             int pw = Ui.S(220);
-            _periodo.SetBounds(w - M - Ui.S(30) - pw, Ui.S(6), pw, Ui.S(30));
-            int y = TitleHeight + Ui.S(12);
-            _grafico = new Rectangle(M, y, iw, Ui.S(170));
-            y = _grafico.Bottom + Ui.S(16);
-            _barras = new Rectangle(M, y, iw, Ui.S(96));
-            y = _barras.Bottom + Ui.S(14);
-
-            Size s = TextRenderer.MeasureText(_lbConsumo.Text.Length > 0 ? _lbConsumo.Text : " ", _lbConsumo.Font, new Size(iw, 0), TextFormatFlags.WordBreak);
-            _lbConsumo.SetBounds(M, y, iw, s.Height + Ui.S(2));
-            y = _lbConsumo.Bottom + Ui.S(2);
-            s = TextRenderer.MeasureText(_nota.Text, _nota.Font, new Size(iw, 0), TextFormatFlags.WordBreak);
-            _nota.SetBounds(M, y, iw, s.Height + Ui.S(2));
-            y = _nota.Bottom + Ui.S(14);
-            _alturaAberta = y;
-            return TitleHeight + 1 + (int)Math.Round((_alturaAberta - TitleHeight - 1) * _anim.Valor);
+            _periodo.SetBounds(w - M - pw, (CabecalhoDeConsumo.Altura - Ui.S(32)) / 2, pw, Ui.S(32));
+            _grafico = new Rectangle(M, CabecalhoDeConsumo.Altura + Ui.S(14), w - 2 * M, Ui.S(190));
+            return _grafico.Bottom + Ui.S(14);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            Graphics g = e.Graphics;
-            Ui.Smooth(g);
-            // Seta de abrir e fechar, e o resumo de hoje com o cartao fechado.
-            Rectangle seta = new Rectangle(Width - M - Ui.S(22), (TitleHeight - Ui.S(22)) / 2, Ui.S(22), Ui.S(22));
-            TextRenderer.DrawText(g, _anim.Aberto ? "\uE70E" : "\uE70D", Ui.FontGlyph9, seta, Ui.Muted,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-            if (!_anim.Aberto && _resumo.Length > 0)
-            {
-                int tx = Ui.S(14) + TextRenderer.MeasureText(Title ?? "", Ui.FontSection).Width + Ui.S(12);
-                TextRenderer.DrawText(g, _resumo, Ui.FontSmall, new Rectangle(tx, 0, Math.Max(0, seta.Left - tx - Ui.S(8)), TitleHeight), Ui.Muted,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-            }
-            if (_a == null || _anim.Valor <= 0.001f) return;
-            g.SetClip(new Rectangle(0, TitleHeight + 1, Width, Math.Max(0, Height - TitleHeight - 2)));
-            DesenharCurva(g, _grafico);
-            DesenharBarras(g, _barras);
-            g.ResetClip();
+            if (_a == null) return;
+            Ui.Smooth(e.Graphics);
+            // Mesmo cabecalho dos outros cartoes da aba Consumo.
+            CabecalhoDeConsumo.Desenhar(e.Graphics, Width, T.CasaTemperaturaDe(_a.Nome), T.CasaFaixasDoModo,
+                delegate(Graphics g, Rectangle r, Color c) { IconesCasa.GlifoCentrado(g, "\uE9CA", Ui.FontGlyph11, Rectangle.Inflate(r, Ui.S(8), Ui.S(8)), c); },
+                _periodo.Left);
+            DesenharCurva(e.Graphics, _grafico);
         }
 
         /// <summary>
@@ -292,38 +194,6 @@ namespace MhiagosControl
                 ponte.DashPattern = new float[] { 3f, 3f };
                 for (int k = 0; k + 1 < trechos.Count; k++)
                     g.DrawLine(ponte, trechos[k][trechos[k].Count - 1], trechos[k + 1][0]);
-            }
-        }
-
-        /// <summary>Horas ligado em cada um dos ultimos 7 dias.</summary>
-        private void DesenharBarras(Graphics g, Rectangle r)
-        {
-            SortedDictionary<DateTime, double[]> d = HistoricoDoAr.PorDia(_a.Puid, DateTime.Today.AddDays(-6), DateTime.Now, ServicoCasa.Pref, _a.Tipo);
-            TextRenderer.DrawText(g, T.CasaHorasLigado, Ui.FontSmall, new Point(r.X, r.Y), Ui.Muted, TextFormatFlags.NoPadding);
-            Rectangle area = new Rectangle(r.X, r.Y + Ui.S(22), r.Width, r.Height - Ui.S(22 + 18));
-            double maior = 1;
-            foreach (double[] v in d.Values) maior = Math.Max(maior, v[0]);
-            int n = d.Count, gap = Ui.S(10);
-            int bw = (area.Width - gap * (n - 1)) / Math.Max(1, n);
-            int i = 0;
-            foreach (KeyValuePair<DateTime, double[]> kv in d)
-            {
-                int x = area.X + i * (bw + gap);
-                int h = (int)Math.Round(area.Height * kv.Value[0] / maior);
-                Rectangle trilho = new Rectangle(x, area.Y, bw, area.Height);
-                using (GraphicsPath p = Ui.RoundRect(trilho, Ui.S(4)))
-                using (SolidBrush b = new SolidBrush(Ui.SurfaceAlt)) g.FillPath(b, p);
-                if (h > Ui.S(3))
-                    using (GraphicsPath p = Ui.RoundRect(new Rectangle(x, area.Bottom - h, bw, h), Ui.S(4)))
-                    using (SolidBrush b = new SolidBrush(kv.Key == DateTime.Today ? Ui.Accent : Color.FromArgb(150, Ui.Accent))) g.FillPath(b, p);
-                string rot = kv.Key == DateTime.Today ? T.Today : kv.Key.ToString("ddd", CultureInfo.CurrentCulture);
-                TextRenderer.DrawText(g, rot, Ui.FontSmall, new Rectangle(x, area.Bottom + Ui.S(3), bw, Ui.S(16)), Ui.Faint,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
-                if (kv.Value[0] > 0.01)
-                    TextRenderer.DrawText(g, kv.Value[0].ToString("0.#") + " h", Ui.FontSmall,
-                        new Rectangle(x, Math.Max(area.Y, area.Bottom - h - Ui.S(16)), bw, Ui.S(16)), Ui.Text,
-                        TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
-                i++;
             }
         }
     }
