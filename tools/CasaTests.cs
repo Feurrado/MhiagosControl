@@ -24,6 +24,7 @@ namespace MhiagosControl
             CasaPagina(root);
             CasaAnimacaoDoAr();
             CasaFluidez(root);
+            CasaServidor();
         }
 
         /// <summary>Fluidez: cache das curvas, quadro do widget, Casa sem refazer o que nao mudou, relogio da janela e fade da troca de pagina.</summary>

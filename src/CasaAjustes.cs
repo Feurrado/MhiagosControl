@@ -93,7 +93,14 @@ namespace MhiagosControl
             _clima = new SecaoDoClima();
             _clima.Rearranjar = delegate { PaginaCasa pc = Parent as PaginaCasa; if (pc != null) pc.Arranjar(); };
             AcrescentarSecao(_clima.Secao);
+
+            // Servidor da casa: le e dispara timers com o PC desligado.
+            _servidor = new SecaoDoServidor();
+            _servidor.Rearranjar = delegate { PaginaCasa pc = Parent as PaginaCasa; if (pc != null) pc.Arranjar(); };
+            AcrescentarSecao(_servidor.Secao);
         }
+
+        private readonly SecaoDoServidor _servidor;
 
         private readonly SecaoDoClima _clima;
         internal SecaoDoClima SecaoClima { get { return _clima; } }

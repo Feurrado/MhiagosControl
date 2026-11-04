@@ -276,6 +276,86 @@ namespace MhiagosControl
             }
             return r;
         }
+        private static string Linha(string puid, Ciclo x)
+        {
+            return puid + ";" + Seg(x.Inicio) + ";" + Seg(x.Fim) + ";" + x.Programa + ";" +
+                x.Agua.ToString("0.##", CultureInfo.InvariantCulture) + ";" +
+                x.Energia.ToString("0.##", CultureInfo.InvariantCulture) + ";" + (x.Concluido ? "1" : "0") + "\n";
+        }
+
+        private static void Regravar()
+        {
+            StringBuilder sb = new StringBuilder();
+            foreach (KeyValuePair<string, List<Ciclo>> kv in _feitos)
+                foreach (Ciclo x in kv.Value) sb.Append(Linha(kv.Key, x));
+            try { GravacaoAtomica.Escrever(Arquivo, sb.ToString(), new UTF8Encoding(false)); }
+            catch (Exception ex) { Log.Error("casa: regravar ciclos", ex); }
+        }
+
+        /// <summary>
+        /// Poe o ciclo na lista em ordem. Se ele se sobrepoe a um que ja esta la,
+        /// e o mesmo ciclo visto pelo PC e pelo servidor da casa: fica um so, do
+        /// inicio mais cedo ao fim mais tarde. Verdadeiro quando o arquivo precisa
+        /// ser regravado (juntou, ou o ciclo nao entrou no fim da lista).
+        /// </summary>
+        private static bool Juntar(string puid, Ciclo novo)
+        {
+            List<Ciclo> l = Lista(puid);
+            foreach (Ciclo x in l)
+            {
+                if (novo.Inicio > x.Fim || novo.Fim < x.Inicio) continue;
+                if (novo.Inicio < x.Inicio) x.Inicio = novo.Inicio;
+                if (novo.Fim > x.Fim) { x.Fim = novo.Fim; x.Concluido = novo.Concluido; }
+                if (novo.Agua > x.Agua) x.Agua = novo.Agua;
+                if (novo.Energia > x.Energia) x.Energia = novo.Energia;
+                if (novo.Programa != 0) x.Programa = novo.Programa;
+                return true;
+            }
+            int i = l.FindLastIndex(x => x.Inicio <= novo.Inicio);
+            l.Insert(i + 1, novo);
+            return i + 1 < l.Count - 1;
+        }
+
+        /// <summary>Junta ciclos de fora (o servidor da casa). Devolve quantos eram novos.</summary>
+        public static int Mesclar(List<KeyValuePair<string, Ciclo>> fora)
+        {
+            int novos = 0;
+            bool mudou = false;
+            lock (_trava)
+            {
+                Carregar();
+                foreach (KeyValuePair<string, Ciclo> kv in fora)
+                {
+                    if (kv.Key.Length == 0) continue;
+                    List<Ciclo> l = Lista(kv.Key);
+                    bool igual = false;
+                    foreach (Ciclo x in l)
+                        if (x.Inicio == kv.Value.Inicio && x.Fim == kv.Value.Fim) { igual = true; break; }
+                    if (igual) continue;
+                    int antes = l.Count;
+                    Juntar(kv.Key, kv.Value);
+                    if (l.Count > antes) novos++;
+                    mudou = true;
+                }
+                if (mudou) Regravar();
+            }
+            return novos;
+        }
+
+        /// <summary>Os ciclos terminados depois da data, para mandar ao servidor.</summary>
+        public static List<KeyValuePair<string, Ciclo>> TerminadosDesde(DateTime desde)
+        {
+            List<KeyValuePair<string, Ciclo>> r = new List<KeyValuePair<string, Ciclo>>();
+            lock (_trava)
+            {
+                Carregar();
+                foreach (KeyValuePair<string, List<Ciclo>> kv in _feitos)
+                    foreach (Ciclo x in kv.Value)
+                        if (x.Fim > desde) r.Add(new KeyValuePair<string, Ciclo>(kv.Key, x));
+            }
+            return r;
+        }
+
         public static void Conferir(Aparelho a, PreferenciasCasa p) { Conferir(a, p, DateTime.Now); }
 
         internal static void Conferir(Aparelho a, PreferenciasCasa p, DateTime agora)
@@ -308,15 +388,10 @@ namespace MhiagosControl
                     if (c.Agua.HasValue) atual.Agua = c.Agua.Value;
                     if (c.Energia.HasValue) atual.Energia = c.Energia.Value;
                     _emCurso.Remove(a.Puid);
-                    Lista(a.Puid).Add(atual);
-                    try
-                    {
-                        File.AppendAllText(Arquivo, a.Puid + ";" + Seg(atual.Inicio) + ";" + Seg(atual.Fim) + ";" + atual.Programa + ";" +
-                            atual.Agua.ToString("0.##", CultureInfo.InvariantCulture) + ";" +
-                            atual.Energia.ToString("0.##", CultureInfo.InvariantCulture) + ";" + (atual.Concluido ? "1" : "0") + "\n",
-                            new UTF8Encoding(false));
-                    }
-                    catch (Exception ex) { Log.Error("casa: gravar ciclo", ex); }
+                    if (Juntar(a.Puid, atual)) Regravar();
+                    else
+                        try { File.AppendAllText(Arquivo, Linha(a.Puid, atual), new UTF8Encoding(false)); }
+                        catch (Exception ex) { Log.Error("casa: gravar ciclo", ex); }
                     if (p.AlertaLavadoraFim && !c.Erro)
                         avisos.Add(new[] { T.LavAvisoFimTitulo(a.Nome), T.LavAvisoFimTexto(TabelaDaLavadora.Programa(atual.Programa),
                             Duracao(atual.Fim - atual.Inicio)) });

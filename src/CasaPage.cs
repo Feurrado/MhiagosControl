@@ -728,6 +728,9 @@ namespace MhiagosControl
         public string Icone = "\uE71B";
         public event EventHandler Confirmar;
 
+        /// <summary>Esconde o texto digitado (chaves de acesso).</summary>
+        public bool Senha { set { _box.UseSystemPasswordChar = value; } }
+
         public string Texto
         {
             get { return _box.Text; }

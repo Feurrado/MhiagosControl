@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mhiagos Casa</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --tx:#1b1d21; --mu:#6b7280; --ac:#2563eb; --bd:#e5e7eb; --ok:#16a34a; --er:#dc2626; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111317; --card:#1b1e24; --tx:#e8eaed; --mu:#9aa0a8; --ac:#60a5fa; --bd:#2a2e36; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.4 system-ui, "Segoe UI", sans-serif; }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; margin:4px 0 12px; }
+  .card { background:var(--card); border:1px solid var(--bd); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .mu { color:var(--mu); font-size:13px; }
+  .big { font-size:34px; font-weight:600; }
+  button, select, input { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--bd); border-radius:8px; padding:8px 12px; }
+  button.on { background:var(--ac); color:#fff; border-color:var(--ac); }
+  button:disabled { opacity:.5; }
+  .er { color:var(--er); }
+  .bar { height:8px; background:var(--bd); border-radius:4px; overflow:hidden; }
+  .bar > div { height:100%; background:var(--ac); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td { padding:4px 0; border-top:1px solid var(--bd); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Mhiagos Casa</h1>
+  <div id="chave" class="card" hidden>
+    <p>Chave de acesso do servidor:</p>
+    <div class="row"><input id="ch" type="password" style="flex:1"><button id="salvar">Entrar</button></div>
+  </div>
+  <div id="login" class="card" hidden>
+    <p><strong>Conectar o servidor à ConnectLife</strong></p>
+    <p class="mu">1. Abra o login e entre com a sua conta (Google). 2. No fim, a página do Home Assistant pode até dar erro: copie o endereço inteiro da barra e cole aqui.</p>
+    <div class="row"><button id="abrir">Abrir o login</button></div>
+    <div class="row" style="margin-top:8px"><input id="colado" placeholder="Endereço final (my.home-assistant.io/...code=...)" style="flex:1"><button id="enviar">Conectar</button></div>
+  </div>
+  <div id="sit" class="mu"></div>
+  <div id="lista"></div>
+</main>
+<script>
+const MODOS = {0:"Ventilar", 2:"Frio", 3:"Desumidificar", 5:"ECO"};
+const VENTO = {2:"Baixa", 3:"Média", 4:"Alta"};
+let chave = "";
+try { chave = localStorage.getItem("chave") || ""; } catch (e) {}
+
+async function api(caminho, metodo, corpo) {
+  const r = await fetch("/api/" + caminho, { method: metodo || "GET",
+    headers: { "Authorization": "Bearer " + chave, "Content-Type": "application/json" },
+    body: corpo ? JSON.stringify(corpo) : undefined });
+  if (r.status === 401) { pedirChave(); throw new Error("chave"); }
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.erro || j.detail || r.status);
+  return j;
+}
+
+function pedirChave() { document.getElementById("chave").hidden = false; }
+document.getElementById("salvar").onclick = () => {
+  chave = document.getElementById("ch").value.trim();
+  try { localStorage.setItem("chave", chave); } catch (e) {}
+  document.getElementById("chave").hidden = true;
+  carregar();
+};
+
+document.getElementById("abrir").onclick = async () => {
+  try { const r = await api("conta/login"); window.open(r.url, "_blank"); } catch (e) { alert(e.message); }
+};
+document.getElementById("enviar").onclick = async (ev) => {
+  ev.target.disabled = true;
+  try { await api("conta/codigo", "POST", { colado: document.getElementById("colado").value }); carregar(); }
+  catch (e) { alert("Falhou: " + e.message); }
+  finally { ev.target.disabled = false; }
+};
+
+function el(tag, attrs, ...filhos) {
+  const e = document.createElement(tag);
+  Object.assign(e, attrs || {});
+  for (const f of filhos) if (f != null) e.append(f);
+  return e;
+}
+
+async function comando(puid, props, botao) {
+  if (botao) botao.disabled = true;
+  try { await api("aparelhos/" + puid + "/comando", "POST", { props, semBipe: true }); setTimeout(carregar, 5000); }
+  catch (e) { alert("Falhou: " + e.message); }
+  finally { if (botao) botao.disabled = false; }
+}
+
+function cartaoAr(a) {
+  const s = a.estado, ligado = s.t_power === "1";
+  const temp = parseInt(s.t_temp || "24"), modo = parseInt(s.t_work_mode || "2"), vento = parseInt(s.t_fan_speed || "2");
+  const pw = el("button", { textContent: ligado ? "Desligar" : "Ligar", className: ligado ? "on" : "" });
+  pw.onclick = () => comando(a.puid, { t_power: ligado ? "0" : "1" }, pw);
+  const menos = el("button", { textContent: "−" }), mais = el("button", { textContent: "+" });
+  menos.onclick = () => comando(a.puid, { t_temp: String(Math.max(16, temp - 1)) }, menos);
+  mais.onclick = () => comando(a.puid, { t_temp: String(Math.min(32, temp + 1)) }, mais);
+  const modos = el("div", { className: "row" });
+  for (const [v, n] of Object.entries(MODOS)) {
+    const b = el("button", { textContent: n, className: ligado && +v === modo ? "on" : "" });
+    b.onclick = () => comando(a.puid, { t_work_mode: v }, b);
+    modos.append(b);
+  }
+  const ventos = el("div", { className: "row" });
+  for (const [v, n] of Object.entries(VENTO)) {
+    const b = el("button", { textContent: n, className: ligado && +v === vento ? "on" : "" });
+    b.onclick = () => comando(a.puid, { t_fan_speed: v }, b);
+    ventos.append(b);
+  }
+  return el("div", { className: "card" },
+    el("div", { className: "row" }, el("strong", { textContent: a.apelido || "Ar" }),
+      el("span", { className: "mu", textContent: a.online ? "conectado" : "desconectado" })),
+    el("div", { className: "row" },
+      el("span", { className: "big", textContent: (s.f_temp_in || "--") + " °C" }),
+      el("span", { className: "mu", textContent: "ambiente" })),
+    el("div", { className: "row" }, pw, menos, el("strong", { textContent: temp + " °C" }), mais),
+    el("p", { className: "mu", textContent: "Modo" }), modos,
+    el("p", { className: "mu", textContent: "Ventilador" }), ventos);
+}
+
+function cartaoLavadora(a, ciclos) {
+  const s = a.estado;
+  const st = parseInt(s.machine_status ?? s.DeviceStatus ?? "-1");
+  const rest = parseInt(s.Selected_program_remaining_time_in_minutes || s.Remaining_time_in_minutes || "0");
+  const total = parseInt(s.Selected_program_total_running_time_in_minutes || s.Selected_program_total_time_in_minutes || "0");
+  const rodando = st === 2 || st === 3;
+  const txt = !a.online ? "Desconectada" : st === 4 ? "Erro" : st === 3 ? "Pausada" : rodando ? "Em funcionamento" : st === 1 ? "Ligada" : "Em espera";
+  const prog = rodando && total > 0 ? Math.max(0, Math.min(1, 1 - rest / total)) : 0;
+  const tab = el("table");
+  for (const c of ciclos.slice(-8).reverse()) {
+    const d = new Date(c.inicio * 1000), min = Math.round((c.fim - c.inicio) / 60);
+    tab.append(el("tr", {}, el("td", { textContent: d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) }),
+      el("td", { textContent: "Programa " + c.programa }), el("td", { textContent: min + " min" }),
+      el("td", { textContent: (c.agua || 0) + " L" })));
+  }
+  return el("div", { className: "card" },
+    el("div", { className: "row" }, el("strong", { textContent: a.apelido || "Lavadora" }),
+      el("span", { className: "mu", textContent: txt })),
+    rodando ? el("div", {}, el("p", { textContent: rest + " min restantes" }),
+      el("div", { className: "bar" }, el("div", { style: "width:" + Math.round(prog * 100) + "%" }))) : null,
+    el("p", { className: "mu", textContent: "Últimos ciclos" }), tab);
+}
+
+async function carregar() {
+  if (!chave) { pedirChave(); return; }
+  try {
+    const [r, h] = await Promise.all([api("aparelhos"), api("historico/ciclos?desde=" + (Math.floor(Date.now() / 1000) - 60 * 86400))]);
+    const sit = document.getElementById("sit");
+    document.getElementById("login").hidden = r.logado;
+    sit.textContent = r.logado
+      ? "Última leitura: " + (r.ultimaLeitura ? new Date(r.ultimaLeitura * 1000).toLocaleTimeString("pt-BR") : "ainda não")
+      : "Servidor sem acesso à ConnectLife.";
+    if (r.erro) sit.append(el("div", { className: "er", textContent: r.erro }));
+    const lista = document.getElementById("lista");
+    lista.replaceChildren();
+    for (const a of r.lista) {
+      if (a.tipo === "008" || a.tipo === "009") lista.append(cartaoAr(a));
+      else if (["003", "025", "027", "004"].includes(a.tipo)) lista.append(cartaoLavadora(a, h.ciclos.filter(c => c.puid === a.puid)));
+    }
+  } catch (e) { if (e.message !== "chave") document.getElementById("sit").textContent = "Erro: " + e.message; }
+}
+carregar();
+setInterval(carregar, 30000);
+</script>
+</body>
+</html>
