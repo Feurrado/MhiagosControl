@@ -685,7 +685,7 @@ function cartaoAr(a) {
     el("div", { class: "liga-linha" },
       el("button", { class: "liga" + (ligado ? " on" : ""), title: "Ligar ou desligar", "data-id": a.puid + "pw",
         disabled: !ok || !i.grava.t_power, on: { click: () => comando(a, { t_power: ligado ? "0" : "1" }) } }, icPower()),
-      el("span", { class: "liga-txt" + (ligado ? " on" : "") }, pendente[a.puid] ? [el("span", { class: "gira" }), "Enviando…"] : ok ? (ligado ? "Ligado" : "Desligado") : "Desconectado"),
+      el("span", { class: "liga-txt" + (ligado ? " on" : "") }, ok ? (ligado ? "Ligado" : "Desligado") : "Desconectado"),
       i.noturnoBotao ? el("div", { class: "noturno" }, "Modo noturno",
         el("button", { class: "redondo" + (noturno && ligado ? " on" : ""), title: "Modo noturno", "data-id": a.puid + "lua", disabled: !ok || !ligado,
           on: { click: () => comando(a, { t_sleep: noturno ? "0" : "1" }) } }, icone("lua"))) : null),
