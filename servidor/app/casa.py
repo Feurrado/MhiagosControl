@@ -243,6 +243,8 @@ def gravar_preferencias(dados, origem):
             novo[k] = v
     r = {"versao": atual["versao"] + 1, "atualizado": int(time.time()), "origem": origem, "dados": novo}
     banco.gravar_kv("preferencias", r)
+    from . import servico
+    servico.avisar_mudanca()
     return preferencias()
 
 

@@ -1,0 +1,15 @@
+{
+  "name": "Mhiagos Casa",
+  "short_name": "Casa",
+  "description": "Ar e lavadora da casa, pelo servidor do Mhiagos Control.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1C1C1F",
+  "theme_color": "#17171A",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import time
+from datetime import date, datetime, time as dtime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -13,7 +14,7 @@ from pydantic import BaseModel
 from . import banco, casa, servico
 from .connectlife import ConnectLifeErro, extrair_codigo
 
-VERSAO = "1.1.0"
+VERSAO = "1.2.0"
 CHAVE = os.environ.get("MHIAGOS_CHAVE", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -45,10 +46,20 @@ def pagina():
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
 
 
-@app.get("/icone.png")
-def icone():
-    """O icone do Mhiagos Control (assets/app-icon.png reduzido), na barra lateral e na aba."""
-    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "icone.png"), media_type="image/png")
+# Icone do Mhiagos Control (assets/app-icon.png reduzido) e o que o celular pede para
+# instalar o painel como app. So estes arquivos, sem chave.
+ESTATICOS = {
+    "icone.png": "image/png", "icone-180.png": "image/png", "icone-192.png": "image/png", "icone-512.png": "image/png",
+    "manifest.webmanifest": "application/manifest+json", "sw.js": "text/javascript",
+}
+
+
+@app.get("/{nome}")
+def estatico(nome: str):
+    if nome not in ESTATICOS:
+        raise HTTPException(404, "nao encontrado")
+    return FileResponse(os.path.join(os.path.dirname(__file__), "static", nome), media_type=ESTATICOS[nome],
+                        headers={"Cache-Control": "no-cache"} if nome == "sw.js" else None)
 
 
 @app.get("/api/saude")
@@ -280,6 +291,57 @@ def historico_ciclos(desde: int = 0):
     return {"agora": int(time.time()),
             "ciclos": ciclos,
             "emCurso": banco.linhas("SELECT * FROM em_curso")}
+
+
+@app.get("/api/mudancas", dependencies=[Depends(autorizado)])
+def mudancas(desde: int = -1):
+    """Espera longa: responde quando algo mudar (leitura nova, timer, ajustes) ou em 25 s.
+    O painel web chama de novo na hora, entao ve a mudanca assim que o servidor ve."""
+    servico.tocar()
+    return {"versao": servico.esperar_mudanca(desde)}
+
+
+@app.get("/api/resumo-mes", dependencies=[Depends(autorizado)])
+def resumo_mes():
+    """Custo estimado deste mes e do anterior (inteiro e ate o mesmo dia), ar mais lavadora."""
+    hoje = date.today()
+    ini_atual = hoje.replace(day=1)
+    ini_ant = (ini_atual - timedelta(days=1)).replace(day=1)
+    mes_atual, mes_ant = ini_atual.strftime("%Y-%m"), ini_ant.strftime("%Y-%m")
+    mesmo_dia = ini_ant.replace(day=min(hoje.day, (ini_atual - ini_ant).days))
+    lim = int(datetime.combine(mesmo_dia, dtime.max).timestamp())
+    tarifa = casa.preferencias()["dados"]["tarifa"]
+    chaves = ("atual", "anterior", "anteriorAteHoje")
+    vazio = lambda: {"kwh": 0.0, "custo": 0.0, "horas": 0.0, "agua": 0.0, "ciclos": 0}
+
+    def onde(mes, ate_hoje):
+        return ["atual"] if mes == mes_atual else ["anterior"] + (["anteriorAteHoje"] if ate_hoje else [])
+
+    r = {k: vazio() for k in chaves}
+    r["aparelhos"] = {}
+    for a in servico.aparelhos():
+        por = {k: vazio() for k in chaves}
+        if a["tipo"] in ("008", "009"):
+            for d in casa.consumo_ar(a["puid"], (hoje - ini_ant).days + 1):
+                for k in onde(d["dia"][:7], d["dia"] <= mesmo_dia.isoformat()):
+                    por[k]["kwh"] += d["kwh"]; por[k]["custo"] += d["custo"]; por[k]["horas"] += d["horas"]
+        elif a["tipo"] in ("003", "025", "027", "004"):
+            ini = int(datetime.combine(ini_ant, dtime.min).timestamp())
+            for c in banco.linhas("SELECT inicio, agua, energia FROM ciclos WHERE puid=? AND inicio >= ?", (a["puid"], ini)):
+                e = c["energia"] or 0
+                for k in onde(datetime.fromtimestamp(c["inicio"]).strftime("%Y-%m"), c["inicio"] <= lim):
+                    por[k]["kwh"] += e; por[k]["custo"] += e * tarifa; por[k]["agua"] += c["agua"] or 0; por[k]["ciclos"] += 1
+        else:
+            continue
+        for k in chaves:
+            for c, v in por[k].items():
+                r[k][c] += v
+            por[k] = {c: round(v, 2) for c, v in por[k].items()}
+        r["aparelhos"][a["puid"]] = por
+    for k in chaves:
+        r[k] = {c: round(v, 2) for c, v in r[k].items()}
+    r.update(mes=mes_atual, mesAnterior=mes_ant, tarifa=tarifa)
+    return r
 
 
 @app.get("/api/eventos", dependencies=[Depends(autorizado)])

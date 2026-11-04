@@ -7,7 +7,7 @@ retorno das cenas) e serve uma página de controle que funciona no celular.
 
 O Mhiagos Control continua falando direto com a nuvem. Com o servidor
 configurado em Casa > Ajustes > Servidor da casa, ele troca o histórico com o
-servidor ao abrir e a cada 10 minutos e entrega os timers para o servidor
+servidor ao abrir e a cada minuto e entrega os timers para o servidor
 disparar com o PC desligado.
 
 ## Instalar
@@ -39,7 +39,26 @@ Todas as rotas pedem `Authorization: Bearer <MHIAGOS_CHAVE>`, menos `/api/saude`
 | `POST /api/historico/importar` | o PC manda o que leu com o servidor parado; repetido não duplica |
 | `GET/POST/DELETE /api/agendamentos` | comandos com hora marcada; vencidos há mais de 15 min são descartados |
 | `GET /api/eventos?desde=<epoch>` | início e fim de ciclo, erros, comandos |
+| `GET /api/mudancas?desde=<versao>` | espera longa: responde quando algo muda (ou em 25 s) com a versão nova |
+| `GET /api/resumo-mes` | custo estimado do mês, do anterior e do anterior até o mesmo dia |
 | `GET/POST/DELETE /api/conta`, `/api/conta/login`, `/api/conta/codigo` | login ConnectLife do servidor |
 
 Variáveis: `MHIAGOS_PERIODO` (s entre leituras, 60), `MHIAGOS_DIAS_AR` (dias de
 histórico do ar, 400).
+
+## No celular como app
+
+Abra o painel no navegador do celular e use "Adicionar à tela inicial". O ícone
+é o do Mhiagos Control. No iPhone abre em tela cheia. No Android o Chrome só
+instala como app de verdade (tela cheia, sem barra de endereço) em HTTPS: pelo
+http da rede local ele vira um atalho que abre no navegador.
+
+## Segurança
+
+- A chave do `.env` é a única proteção da API: o painel só escuta na rede local
+  (`192.168.1.100:8765`). Não abra essa porta no roteador.
+- Troque a senha do root se ela já passou por algum chat ou arquivo: `passwd`
+  no servidor. O acesso de manutenção usa chave SSH.
+- Para acessar de fora de casa, prefira uma VPN (Tailscale ou WireGuard) a
+  expor a porta. Se um dia expor, ponha um proxy com HTTPS na frente (Caddy ou
+  o Nginx Proxy Manager) e continue exigindo a chave.

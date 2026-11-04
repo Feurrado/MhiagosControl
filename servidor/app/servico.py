@@ -37,6 +37,26 @@ _acordar = threading.Event()
 _lendo = threading.Lock()
 _ultimo_cliente = 0
 _diag = {}      # puid -> (quando, lista oficial do autodiagnostico)
+_mudou = threading.Condition()
+_versao = 0     # sobe a cada mudanca que o painel web precisa mostrar
+_assinatura = None
+
+
+# ---------------- avisar o painel web ----------------
+
+def avisar_mudanca():
+    """Algo que a pagina mostra mudou: acorda quem espera em /api/mudancas."""
+    global _versao
+    with _mudou:
+        _versao += 1
+        _mudou.notify_all()
+
+
+def esperar_mudanca(desde, limite=25):
+    """Espera ate a versao sair de 'desde' (ou o limite) e devolve a atual."""
+    with _mudou:
+        _mudou.wait_for(lambda: _versao != desde, timeout=limite)
+        return _versao
 
 
 # ---------------- conta ----------------
@@ -94,6 +114,7 @@ def sair():
         _nuvem = None
         _aparelhos = []
     banco.apagar_kv("conta")
+    avisar_mudanca()
 
 
 def tocar():
@@ -151,7 +172,7 @@ def ler():
 
 
 def _ler():
-    global _aparelhos, _ultima_leitura, _erro, _nuvem
+    global _aparelhos, _ultima_leitura, _erro, _nuvem, _assinatura
     with _trava:
         nuvem = _nuvem
     if nuvem is None:
@@ -178,6 +199,10 @@ def _ler():
             elif ar_condicionado(a):
                 _registrar_ar(a, agora)
         _limpar(agora)
+        assinatura = json.dumps([[a["puid"], a.get("online"), a["estado"]] for a in lista], sort_keys=True, default=str)
+        if assinatura != _assinatura:
+            _assinatura = assinatura
+            avisar_mudanca()
     except ConnectLifeErro as e:
         with _trava:
             _erro = str(e)
@@ -186,6 +211,7 @@ def _ler():
                 _aparelhos = []
                 banco.apagar_kv("conta")
         _evento(None, "erro", str(e))
+        avisar_mudanca()
 
 
 def _meta(nuvem, a):
@@ -370,11 +396,13 @@ def agendar(puid, quando, props, nome):
         c.execute("DELETE FROM agendamentos WHERE puid=? AND nome='retorno'", (puid,))
     cur = c.execute("INSERT INTO agendamentos(puid,quando,props,nome,criado) VALUES(?,?,?,?,?)",
                     (puid, int(quando), json.dumps(props), nome, int(time.time())))
+    avisar_mudanca()
     return cur.lastrowid
 
 
 def cancelar(puid, nome):
     banco.con().execute("DELETE FROM agendamentos WHERE puid=? AND nome=?", (puid, nome))
+    avisar_mudanca()
 
 
 def _laco_agendamentos():
@@ -384,6 +412,7 @@ def _laco_agendamentos():
             agora = int(time.time())
             for ag in banco.linhas("SELECT * FROM agendamentos WHERE quando <= ? ORDER BY quando", (agora,)):
                 banco.con().execute("DELETE FROM agendamentos WHERE id=?", (ag["id"],))
+                avisar_mudanca()
                 # Vencido ha mais de 15 min (servidor estava parado): descarta, como o app.
                 if agora - ag["quando"] > 900:
                     _evento(ag["puid"], "agendamento_descartado", ag["nome"] or "")
