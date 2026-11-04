@@ -864,13 +864,19 @@ namespace MhiagosControl
             Rectangle trilho = new Rectangle(m, yb, Width - 2 * m, Ui.S(4));
             using (GraphicsPath p = Ui.RoundRect(trilho, trilho.Height / 2))
             using (SolidBrush b = new SolidBrush(Ui.Border)) g.FillPath(b, p);
-            int w = (int)Math.Round(trilho.Width * Math.Max(0f, Math.Min(1f, c.Progresso)));
+            // A linha acompanha a ETAPA: o progresso por tempo (1 - restante/total) conta so a fase
+            // em curso (na secagem, o tempo da secagem) e deixava a linha atras de "Lavar" com "Secar" em negrito.
+            int atual = EtapasDoCiclo.Montar(_lav, c, _etapas);
+            int nEtapas = _etapas.Count;
+            float prog = c.Progresso;
+            if (c.Concluido) prog = 1f;
+            else if (atual >= 0 && nEtapas > 0) prog = Math.Max(prog, (atual + 0.5f) / nEtapas);
+            int w = (int)Math.Round(trilho.Width * Math.Max(0f, Math.Min(1f, prog)));
             if (w >= trilho.Height)
                 using (GraphicsPath p = Ui.RoundRect(new Rectangle(trilho.X, trilho.Y, w, trilho.Height), trilho.Height / 2))
                 using (SolidBrush b = new SolidBrush(c.Pausada ? Ui.Warn : Ui.Accent)) g.FillPath(b, p);
 
             // etapas, a atual em negrito
-            int atual = EtapasDoCiclo.Montar(_lav, c, _etapas);
             int n = _etapas.Count;
             if (n == 0) return;
             int y = yb + Ui.S(16), larg = (Width - 2 * m) / n;
