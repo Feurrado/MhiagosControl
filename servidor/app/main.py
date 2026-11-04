@@ -45,6 +45,12 @@ def pagina():
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
 
 
+@app.get("/icone.png")
+def icone():
+    """O icone do Mhiagos Control (assets/app-icon.png reduzido), na barra lateral e na aba."""
+    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "icone.png"), media_type="image/png")
+
+
 @app.get("/api/saude")
 def saude():
     return {"versao": VERSAO, "agora": int(time.time()), **servico.situacao()}
