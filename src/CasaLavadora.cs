@@ -264,6 +264,16 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>Todos os ciclos gravados do aparelho, do mais antigo ao mais novo.</summary>
+        public static List<Ciclo> Todos(string puid)
+        {
+            lock (_trava)
+            {
+                Carregar();
+                return new List<Ciclo>(Lista(puid));
+            }
+        }
+
         /// <summary>Ciclos, litros e kWh dos ciclos registrados no mes da data dada.</summary>
         public static double[] DoMes(string puid, DateTime dia)
         {
@@ -276,6 +286,86 @@ namespace MhiagosControl
             }
             return r;
         }
+        private static string Linha(string puid, Ciclo x)
+        {
+            return puid + ";" + Seg(x.Inicio) + ";" + Seg(x.Fim) + ";" + x.Programa + ";" +
+                x.Agua.ToString("0.##", CultureInfo.InvariantCulture) + ";" +
+                x.Energia.ToString("0.##", CultureInfo.InvariantCulture) + ";" + (x.Concluido ? "1" : "0") + "\n";
+        }
+
+        private static void Regravar()
+        {
+            StringBuilder sb = new StringBuilder();
+            foreach (KeyValuePair<string, List<Ciclo>> kv in _feitos)
+                foreach (Ciclo x in kv.Value) sb.Append(Linha(kv.Key, x));
+            try { GravacaoAtomica.Escrever(Arquivo, sb.ToString(), new UTF8Encoding(false)); }
+            catch (Exception ex) { Log.Error("casa: regravar ciclos", ex); }
+        }
+
+        /// <summary>
+        /// Poe o ciclo na lista em ordem. Se ele se sobrepoe a um que ja esta la,
+        /// e o mesmo ciclo visto pelo PC e pelo servidor da casa: fica um so, do
+        /// inicio mais cedo ao fim mais tarde. Verdadeiro quando o arquivo precisa
+        /// ser regravado (juntou, ou o ciclo nao entrou no fim da lista).
+        /// </summary>
+        private static bool Juntar(string puid, Ciclo novo)
+        {
+            List<Ciclo> l = Lista(puid);
+            foreach (Ciclo x in l)
+            {
+                if (novo.Inicio > x.Fim || novo.Fim < x.Inicio) continue;
+                if (novo.Inicio < x.Inicio) x.Inicio = novo.Inicio;
+                if (novo.Fim > x.Fim) { x.Fim = novo.Fim; x.Concluido = novo.Concluido; }
+                if (novo.Agua > x.Agua) x.Agua = novo.Agua;
+                if (novo.Energia > x.Energia) x.Energia = novo.Energia;
+                if (novo.Programa != 0) x.Programa = novo.Programa;
+                return true;
+            }
+            int i = l.FindLastIndex(x => x.Inicio <= novo.Inicio);
+            l.Insert(i + 1, novo);
+            return i + 1 < l.Count - 1;
+        }
+
+        /// <summary>Junta ciclos de fora (o servidor da casa). Devolve quantos eram novos.</summary>
+        public static int Mesclar(List<KeyValuePair<string, Ciclo>> fora)
+        {
+            int novos = 0;
+            bool mudou = false;
+            lock (_trava)
+            {
+                Carregar();
+                foreach (KeyValuePair<string, Ciclo> kv in fora)
+                {
+                    if (kv.Key.Length == 0) continue;
+                    List<Ciclo> l = Lista(kv.Key);
+                    bool igual = false;
+                    foreach (Ciclo x in l)
+                        if (x.Inicio == kv.Value.Inicio && x.Fim == kv.Value.Fim) { igual = true; break; }
+                    if (igual) continue;
+                    int antes = l.Count;
+                    Juntar(kv.Key, kv.Value);
+                    if (l.Count > antes) novos++;
+                    mudou = true;
+                }
+                if (mudou) Regravar();
+            }
+            return novos;
+        }
+
+        /// <summary>Os ciclos terminados depois da data, para mandar ao servidor.</summary>
+        public static List<KeyValuePair<string, Ciclo>> TerminadosDesde(DateTime desde)
+        {
+            List<KeyValuePair<string, Ciclo>> r = new List<KeyValuePair<string, Ciclo>>();
+            lock (_trava)
+            {
+                Carregar();
+                foreach (KeyValuePair<string, List<Ciclo>> kv in _feitos)
+                    foreach (Ciclo x in kv.Value)
+                        if (x.Fim > desde) r.Add(new KeyValuePair<string, Ciclo>(kv.Key, x));
+            }
+            return r;
+        }
+
         public static void Conferir(Aparelho a, PreferenciasCasa p) { Conferir(a, p, DateTime.Now); }
 
         internal static void Conferir(Aparelho a, PreferenciasCasa p, DateTime agora)
@@ -308,15 +398,10 @@ namespace MhiagosControl
                     if (c.Agua.HasValue) atual.Agua = c.Agua.Value;
                     if (c.Energia.HasValue) atual.Energia = c.Energia.Value;
                     _emCurso.Remove(a.Puid);
-                    Lista(a.Puid).Add(atual);
-                    try
-                    {
-                        File.AppendAllText(Arquivo, a.Puid + ";" + Seg(atual.Inicio) + ";" + Seg(atual.Fim) + ";" + atual.Programa + ";" +
-                            atual.Agua.ToString("0.##", CultureInfo.InvariantCulture) + ";" +
-                            atual.Energia.ToString("0.##", CultureInfo.InvariantCulture) + ";" + (atual.Concluido ? "1" : "0") + "\n",
-                            new UTF8Encoding(false));
-                    }
-                    catch (Exception ex) { Log.Error("casa: gravar ciclo", ex); }
+                    if (Juntar(a.Puid, atual)) Regravar();
+                    else
+                        try { File.AppendAllText(Arquivo, Linha(a.Puid, atual), new UTF8Encoding(false)); }
+                        catch (Exception ex) { Log.Error("casa: gravar ciclo", ex); }
                     if (p.AlertaLavadoraFim && !c.Erro)
                         avisos.Add(new[] { T.LavAvisoFimTitulo(a.Nome), T.LavAvisoFimTexto(TabelaDaLavadora.Programa(atual.Programa),
                             Duracao(atual.Fim - atual.Inicio)) });
@@ -451,26 +536,36 @@ namespace MhiagosControl
         }
 
         /// <summary>
-        /// Preenche os nomes das etapas (Secar so quando o ciclo seca) e devolve
-        /// o indice da atual pela fase, ou -1. Usado aqui e na Visao geral.
+        /// As mesmas etapas do painel web, uma por fase da maquina:
+        /// Pesar, Pre, Lavar, Enxaguar, Amaciar, Centrifugar, Secar (so quando o
+        /// ciclo seca) e Fim. Antirrugas (6) e arejando (9) ficam na etapa anterior.
         /// </summary>
         internal static int Montar(Aparelho a, CicloAtual c, List<string> nomes)
         {
             bool seca = a.Int("dry_time", 0) > 0 || a.Int("DryingSwitch", 0) == 1 || c.Fase == 8 || c.Fase == 9;
+            List<int> fases = new List<int> { 1, 2, 3, 4, 5, 7 };
+            if (seca) fases.Add(8);
+            fases.Add(10);
             nomes.Clear();
-            nomes.Add(T.LavEtapaLavar);
-            nomes.Add(T.LavEtapaEnxaguar);
-            nomes.Add(T.LavEtapaCentrifugar);
-            if (seca) nomes.Add(T.LavEtapaSecar);
-            nomes.Add(T.LavEtapaFim);
-            switch (c.Fase)
+            foreach (int f in fases) nomes.Add(Nome(f));
+            if (c.Fase <= 0 || c.Fase > 10) return -1;
+            int atual = -1;
+            for (int i = 0; i < fases.Count; i++) if (fases[i] <= c.Fase) atual = i;
+            return atual;
+        }
+
+        private static string Nome(int fase)
+        {
+            switch (fase)
             {
-                case 1: case 2: case 3: return 0;
-                case 4: case 5: return 1;
-                case 6: case 7: return 2;
-                case 8: case 9: return seca ? 3 : 2;
-                case 10: return nomes.Count - 1;
-                default: return -1;
+                case 1: return T.LavEtapaPesar;
+                case 2: return T.LavEtapaPre;
+                case 3: return T.LavEtapaLavar;
+                case 4: return T.LavEtapaEnxaguar;
+                case 5: return T.LavEtapaAmaciar;
+                case 7: return T.LavEtapaCentrifugar;
+                case 8: return T.LavEtapaSecar;
+                default: return T.LavEtapaFim;
             }
         }
 
@@ -546,10 +641,8 @@ namespace MhiagosControl
     {
         private readonly AnelDoCiclo _anel;
         private readonly EtapasDoCiclo _etapas;
-        private readonly Label _titulo, _programa, _termino, _aviso, _lbParams, _lbCiclos, _ciclos, _tudo;
+        private readonly Label _titulo, _programa, _termino, _aviso, _lbParams;
         private readonly List<Label[]> _params = new List<Label[]>();
-        private readonly FlatBtn _btTudo;
-        private bool _aberto;
         private readonly BotaoChave _chave;
         private readonly ToolTip _dica = new ToolTip();
         private readonly Label _diag, _lbDiag;
@@ -567,32 +660,9 @@ namespace MhiagosControl
             AvisarAltura();
         }
 
-        private readonly CabecalhoRecolhivel _cabConsumo;
-        private readonly Label _consumo;
-        private readonly AnimacaoDeRecolher _animConsumo;
-
-        internal CabecalhoRecolhivel CabecalhoDoConsumo { get { return _cabConsumo; } }
         private bool _compacto;
         /// <summary>Sem ciclo rodando (ou desconectada): so nome e estado.</summary>
         internal bool Compacto { get { return _compacto; } }
-        public bool ConsumoAberto { get { return _animConsumo.Aberto; } }
-
-        /// <summary>Abre ou fecha a secao de consumo e historico, lembrando em casa.ini.</summary>
-        public void AlternarConsumo(bool animar)
-        {
-            bool abrir = !_animConsumo.Aberto;
-            ServicoCasa.Pref.ConsumoLavadoraAberto = abrir;
-            ServicoCasa.Pref.Salvar();
-            _animConsumo.Ir(abrir, animar && IsHandleCreated && Visible);
-        }
-
-        private void AjustarConsumo()
-        {
-            bool algo = !_compacto && _animConsumo.Valor > 0.001f;
-            _consumo.Visible = _ciclos.Visible = _lbCiclos.Visible = algo;
-            _cabConsumo.Aberto = _animConsumo.Aberto;
-            _cabConsumo.Invalidate();
-        }
 
         public override int Tipo { get { return 1; } }
 
@@ -613,13 +683,6 @@ namespace MhiagosControl
             _termino = Rotulo("", Ui.FontBase, Ui.Muted);
             _aviso = Rotulo("", Ui.FontSmall, Ui.Warn);
             _lbParams = Rotulo(T.LavParametros, Ui.FontSmall, Ui.Muted);
-            _lbCiclos = Rotulo(T.LavUltimosCiclos, Ui.FontSmall, Ui.Muted);
-            _ciclos = Rotulo("", Ui.FontSmall, Ui.Text);
-            _btTudo = new FlatBtn();
-            _btTudo.Text = T.CasaTodas;
-            _btTudo.Click += delegate { _aberto = !_aberto; Preencher(); AvisarAltura(); };
-            Controls.Add(_btTudo);
-            _tudo = Rotulo("", Ui.FontSmall, Ui.Muted);
 
             _chave = new BotaoChave();
             _chave.Click += delegate { AlternarDiagnostico(); };
@@ -629,20 +692,11 @@ namespace MhiagosControl
             _diag = Rotulo("", Ui.FontSmall, Ui.Text);
             _lbDiag.Visible = _diag.Visible = false;
 
-            _cabConsumo = new CabecalhoRecolhivel();
-            _cabConsumo.Titulo = T.LavConsumoTitulo;
-            _cabConsumo.Click += delegate { AlternarConsumo(true); };
-            Controls.Add(_cabConsumo);
-            _consumo = Rotulo("", Ui.FontBase, Ui.Text);
-            // Comeca fechada, como o consumo do ar, e lembra a escolha.
-            _animConsumo = new AnimacaoDeRecolher(ServicoCasa.Pref.ConsumoLavadoraAberto);
-            _animConsumo.Quadro += delegate { AjustarConsumo(); AvisarAltura(); };
-            AjustarConsumo();
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _animConsumo.Dispose(); _dica.Dispose(); }
+            if (disposing) _dica.Dispose();
             base.Dispose(disposing);
         }
 
@@ -727,19 +781,11 @@ namespace MhiagosControl
             if (porta != null) p.Add(new[] { T.CasaPorta, TabelaDaLavadora.Porta(A.Int(porta, 0)) });
             string trava = A.Primeiro("Child_lock", "ChildLockActive", "Child_lock_setting_status");
             if (trava != null) p.Add(new[] { T.CasaTrava, A.Int(trava, 0) != 0 ? T.LavAtiva : T.LavDesativada });
+            // Agua e energia do ciclo vao junto dos parametros; o resto do consumo mora na aba Consumo.
+            if (c.Agua.HasValue) p.Add(new[] { T.LavAgua, c.Agua.Value.ToString("0.#") + " L" });
+            if (c.Energia.HasValue) p.Add(new[] { T.LavEnergia, c.Energia.Value.ToString("0.00") + " kWh" });
             Parametros(p);
 
-            // --- consumo do ciclo e do mes (secao recolhivel)
-            List<string> cons = new List<string>();
-            if (c.Agua.HasValue && (c.Agua.Value > 0 || c.Rodando)) cons.Add(T.LavAgua + ": " + c.Agua.Value.ToString("0.#") + " L");
-            if (c.Energia.HasValue && (c.Energia.Value > 0 || c.Rodando)) cons.Add(T.LavEnergia + ": " + c.Energia.Value.ToString("0.00") + " kWh");
-            double[] mes = CiclosDaLavadora.DoMes(A.Puid, DateTime.Today);
-            cons.Add(T.LavMes((int)mes[0], mes[1].ToString("0"), mes[2].ToString("0.00")));
-            _consumo.Text = string.Join("\n", cons.ToArray());
-            _cabConsumo.Resumo = c.Agua.HasValue || c.Energia.HasValue
-                ? T.LavResumoConsumo(c.Agua.HasValue ? c.Agua.Value.ToString("0") : "--", c.Energia.HasValue ? c.Energia.Value.ToString("0.00") : "--")
-                : T.LavMesCurto((int)mes[0]);
-            _cabConsumo.Invalidate();
             _lbParams.Visible = p.Count > 0;
 
             // --- avisos: limpeza do tambor e erro
@@ -752,40 +798,16 @@ namespace MhiagosControl
             _chave.Invalidate();
             if (_diagAberto) _diag.Text = Diagnostico.Texto(A);
 
-            // --- ultimos ciclos registrados pelo Mhiagos
-            List<CiclosDaLavadora.Ciclo> ult = CiclosDaLavadora.Ultimos(A.Puid, 5);
-            List<string> linhas = new List<string>();
-            foreach (CiclosDaLavadora.Ciclo x in ult)
-                linhas.Add(x.Inicio.ToString("dd/MM HH:mm") + "  ·  " + TabelaDaLavadora.Programa(x.Programa) + "  ·  " +
-                    CiclosDaLavadora.Duracao(x.Fim - x.Inicio) +
-                    (x.Agua > 0 ? "  ·  " + x.Agua.ToString("0") + " L" : "") +
-                    (x.Energia > 0 ? "  ·  " + x.Energia.ToString("0.00") + " kWh" : "") +
-                    (x.Concluido ? "" : "  ·  " + T.LavInterrompido));
-            _ciclos.Text = linhas.Count > 0 ? string.Join("\n", linhas.ToArray()) : T.LavSemCiclosGravados;
-
-            _btTudo.Text = _aberto ? T.CasaMenos : T.CasaTodas;
-            List<string> keys = new List<string>(A.Estado.Keys);
-            keys.Sort(StringComparer.OrdinalIgnoreCase);
-            List<string> todas = new List<string>();
-            foreach (string k in keys) todas.Add(k + " = " + A.Estado[k]);
-            _tudo.Text = string.Join("\n", todas.ToArray());
-            _tudo.Visible = _aberto;
-            _btTudo.Visible = A.Estado.Count > 0;
-
             // Fora de ciclo (parada, pronta ou desconectada) o cartao fica compacto: so o nome
             // no cabecalho e o estado. Anel, etapas, parametros e consumo so com ciclo rodando.
             _compacto = !(c.Online && c.Rodando);
             if (_compacto)
             {
-                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams, _btTudo, _tudo, _cabConsumo, _consumo, _ciclos, _lbCiclos })
+                foreach (Control x in new Control[] { _anel, _programa, _termino, _etapas, _aviso, _lbParams })
                     x.Visible = false;
                 foreach (Label[] l in _params) l[0].Visible = l[1].Visible = false;
             }
-            else
-            {
-                _anel.Visible = _cabConsumo.Visible = true;
-                AjustarConsumo();
-            }
+            else _anel.Visible = true;
         }
 
         public override int Arranjar(int w)
@@ -820,9 +842,11 @@ namespace MhiagosControl
             y = Bloco(_titulo, cx, y, cw) + Ui.S(2);
             if (_programa.Visible) y = Bloco(_programa, cx, y, cw) + Ui.S(2);
             if (_termino.Visible) y = Bloco(_termino, cx, y, cw) + Ui.S(10);
-            if (_etapas.Visible) { _etapas.SetBounds(cx, y + Ui.S(6), cw, Ui.S(48)); y += Ui.S(60); }
             if (_aviso.Visible) y = Bloco(_aviso, cx, y + Ui.S(4), cw) + Ui.S(4);
             y = Math.Max(y, lado ? y0 + anel : y) + Ui.S(14);
+
+            // Etapas na largura toda do cartao, como no painel web: sao oito.
+            if (_etapas.Visible) { _etapas.SetBounds(M, y, iw, Ui.S(48)); y += Ui.S(60); }
 
             // Parametros em grade: rotulo pequeno em cima, valor embaixo.
             if (_lbParams.Visible)
@@ -851,24 +875,7 @@ namespace MhiagosControl
                 y = Bloco(_diag, M, y + Ui.S(26), iw) + Ui.S(14);
             }
 
-            if (_btTudo.Visible)
-            {
-                int bw = TextRenderer.MeasureText(_btTudo.Text, _btTudo.Font).Width + Ui.S(28);
-                _btTudo.SetBounds(M, y, bw, Ui.S(30));
-                y += Ui.S(40);
-            }
-            if (_tudo.Visible) y = Bloco(_tudo, M, y, iw) + Ui.S(6);
-
-            // Consumo e historico: cabecalho sempre visivel, conteudo animado no fim do cartao.
-            _cabConsumo.SetBounds(M, y, iw, Ui.S(38));
-            y += Ui.S(38);
-            int topo = y + Ui.S(8);
-            int yc = Bloco(_consumo, M, topo, iw) + Ui.S(10);
-            _lbCiclos.SetBounds(M, yc, iw, Ui.S(18));
-            yc += Ui.S(22);
-            yc = Bloco(_ciclos, M, yc, iw) + Ui.S(6);
-            y += (int)Math.Round((yc - y) * _animConsumo.Valor);
-            return y + Ui.S(10);
+            return y + Ui.S(6);
         }
 
         private static int Bloco(Label l, int x, int y, int w)
@@ -927,11 +934,14 @@ namespace MhiagosControl
         public static string LavCicloDe(string total, int pct) { return P("Ciclo de " + total + "  ·  " + pct + "% concluído", total + " cycle  ·  " + pct + "% done"); }
         public static string LavSemCiclo { get { return P("sem ciclo", "no cycle"); } }
         public static string LavUltimaLeitura(string h) { return P("Última leitura conhecida às " + h + ". Os valores abaixo podem estar desatualizados.", "Last known reading at " + h + ". The values below may be out of date."); }
+        public static string LavEtapaPesar { get { return P("Pesar", "Weigh"); } }
+        public static string LavEtapaPre { get { return P("Pré", "Pre"); } }
+        public static string LavEtapaAmaciar { get { return P("Amaciar", "Soften"); } }
         public static string LavEtapaLavar { get { return P("Lavar", "Wash"); } }
         public static string LavEtapaEnxaguar { get { return P("Enxaguar", "Rinse"); } }
         public static string LavEtapaCentrifugar { get { return P("Centrifugar", "Spin"); } }
         public static string LavEtapaSecar { get { return P("Secar", "Dry"); } }
-        public static string LavEtapaFim { get { return P("Pronto", "Done"); } }
+        public static string LavEtapaFim { get { return P("Fim", "Done"); } }
         public static string LavParametros { get { return P("Este ciclo", "This cycle"); } }
         public static string LavEnxagues { get { return P("Enxágues", "Rinses"); } }
         public static string LavExtra { get { return P("a mais", "extra"); } }

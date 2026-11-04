@@ -1,0 +1,15 @@
+# Mhiagos Casa: le a nuvem ConnectLife 24 h e guarda o historico na rede local.
+# A chave fica em .env (MHIAGOS_CHAVE=...), fora do repositorio.
+services:
+  mhiagos-casa:
+    build: .
+    image: mhiagos-casa:latest
+    container_name: mhiagos-casa
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "192.168.1.100:8765:8765"
+    volumes:
+      - dados:/data
+volumes:
+  dados:

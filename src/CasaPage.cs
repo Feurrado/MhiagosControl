@@ -29,6 +29,8 @@ namespace MhiagosControl
         private readonly FlatBtn _btAtualizar, _btSair;
         private readonly List<CartaoDeAparelho> _cartoes = new List<CartaoDeAparelho>();
         private CartaoHistoricoDoAr _historico;
+        private readonly ResumoDoConsumo _resumo;
+        private readonly CartaoCiclosDaLavadora _ciclosLav;
         private readonly Segmented _abas;
         private readonly AjustesDaCasa _ajustes;
         private readonly Label _vazio;
@@ -46,10 +48,12 @@ namespace MhiagosControl
         internal CartaoDeLogin Login { get { return _login; } }
         internal List<CartaoDeAparelho> Cartoes { get { return _cartoes; } }
         internal CartaoHistoricoDoAr Historico { get { return _historico; } }
+        internal ResumoDoConsumo Resumo { get { return _resumo; } }
+        internal CartaoCiclosDaLavadora CiclosDaLavadora { get { return _ciclosLav; } }
         internal AjustesDaCasa Ajustes { get { return _ajustes; } }
         internal Segmented Abas { get { return _abas; } }
 
-        /// <summary>0 Painel, 1 Ajustes.</summary>
+        /// <summary>0 Painel, 1 Consumo, 2 Ajustes.</summary>
         internal int Aba
         {
             get { return _abas.SelectedIndex; }
@@ -100,8 +104,8 @@ namespace MhiagosControl
             _btSair.Visible = false;
 
             _abas = new Segmented();
-            _abas.SetItems(T.CasaPainel, T.CasaAjustes);
-            _abas.SelectedIndex = ServicoCasa.Pref.AbaCasa == 1 ? 1 : 0;
+            _abas.SetItems(T.CasaPainel, T.CasaConsumoAba, T.CasaAjustes);
+            _abas.SelectedIndex = Math.Max(0, Math.Min(2, ServicoCasa.Pref.AbaCasa));
             _abas.SelectedIndexChanged += delegate
             {
                 ServicoCasa.Pref.AbaCasa = _abas.SelectedIndex;
@@ -112,8 +116,16 @@ namespace MhiagosControl
 
             _ajustes = new AjustesDaCasa();
             _ajustes.Sair += delegate { ServicoCasa.Sair(); };
-            _ajustes.ConsumoMudou += delegate { if (_historico != null) _historico.Recalcular(); };
             Controls.Add(_ajustes);
+
+            // Aba Consumo: tudo de consumo e historico num lugar so, como no painel web.
+            _resumo = new ResumoDoConsumo();
+            _resumo.Visible = false;
+            Controls.Add(_resumo);
+            _ciclosLav = new CartaoCiclosDaLavadora();
+            _ciclosLav.Visible = false;
+            Controls.Add(_ciclosLav);
+            _ajustes.ConsumoMudou += delegate { _resumo.Mostrar(ServicoCasa.Aparelhos); };
 
             _vazio = new Label();
             _vazio.Font = Ui.FontBase;
@@ -183,12 +195,14 @@ namespace MhiagosControl
         private void MostrarModo()
         {
             _login.Visible = !_logado;
-            bool painel = _abas.SelectedIndex == 0;
+            bool painel = _abas.SelectedIndex == 0, consumo = _abas.SelectedIndex == 1;
             _titulo.Visible = _situacao.Visible = _btAtualizar.Visible = _abas.Visible = _logado;
             _btSair.Visible = false;
             foreach (CartaoDeAparelho c in _cartoes) c.Visible = _logado && painel;
-            if (_historico != null) _historico.Visible = _logado && painel;
-            _ajustes.Visible = _logado && !painel;
+            if (_historico != null) _historico.Visible = _logado && consumo;
+            _resumo.Visible = _logado && consumo;
+            _ciclosLav.Visible = _logado && consumo && _ciclosLav.Puid != null;
+            _ajustes.Visible = _logado && _abas.SelectedIndex == 2;
             _vazio.Visible = _logado && painel && _cartoes.Count == 0 && !ServicoCasa.Buscando && ServicoCasa.UltimaLeitura != DateTime.MinValue;
             _vazio.Text = T.CasaSemAparelhos;
             _login.Vigiar(!_logado && Visible);
@@ -266,7 +280,6 @@ namespace MhiagosControl
                 if (primeiroAr != null && _historico == null)
                 {
                     _historico = new CartaoHistoricoDoAr();
-                    _historico.MudouAltura += delegate { Arranjar(); };
                     Controls.Add(_historico);
                 }
                 else if (primeiroAr == null && _historico != null)
@@ -274,6 +287,10 @@ namespace MhiagosControl
                     Controls.Remove(_historico); _historico.Dispose(); _historico = null;
                 }
                 if (_historico != null) _historico.Mostrar(primeiroAr);
+                Aparelho lavadora = null;
+                foreach (Aparelho a in lista) if (a.Lavadora) { lavadora = a; break; }
+                _resumo.Mostrar(lista);
+                _ciclosLav.Mostrar(lavadora);
             }
             finally { ResumeLayout(); }
         }
@@ -375,7 +392,7 @@ namespace MhiagosControl
                     int x = (util - w) / 2;
                     int y = 0;
 
-                    int ba = BotaoW(_btAtualizar), aw = Ui.S(200);
+                    int ba = BotaoW(_btAtualizar), aw = Ui.S(300);
                     _btAtualizar.SetBounds(x + w - ba, y + Ui.S(4), ba, Ui.S(32));
                     _abas.SetBounds(_btAtualizar.Left - Ui.S(10) - aw, y + Ui.S(4), aw, Ui.S(32));
                     int th = TextRenderer.MeasureText(_titulo.Text, _titulo.Font).Height;
@@ -392,6 +409,15 @@ namespace MhiagosControl
 
                     _vazio.SetBounds(x, y, w, Ui.S(40));
 
+                    // Aba Consumo: resumo do periodo, temperatura do ar e ciclos da lavadora.
+                    foreach (Control c in new Control[] { _resumo, _historico, _ciclosLav })
+                    {
+                        if (c == null || !c.Visible) continue;
+                        int h = c == _resumo ? _resumo.Arranjar(w) : c == _historico ? _historico.Arranjar(w) : _ciclosLav.Arranjar(w);
+                        c.SetBounds(x, y, w, h);
+                        y += h + Ui.Gap;
+                    }
+
                     // Duas colunas quando cabem dois cartoes de 460: ar e lavadora
                     // lado a lado, que e como se olha para os dois ao mesmo tempo.
                     // O ar tem o painel completo e ocupa a largura toda, no alto.
@@ -400,12 +426,6 @@ namespace MhiagosControl
                         if (!(c is CartaoDoAr)) continue;
                         int h = c.Arranjar(w);
                         c.SetBounds(x, y, w, h);
-                        y += h + Ui.Gap;
-                    }
-                    if (_historico != null && _historico.Visible)
-                    {
-                        int h = _historico.Arranjar(w);
-                        _historico.SetBounds(x, y, w, h);
                         y += h + Ui.Gap;
                     }
                     int resto = 0;
@@ -727,6 +747,9 @@ namespace MhiagosControl
         /// <summary>Glifo a esquerda; nulo tira o glifo e o texto encosta na borda.</summary>
         public string Icone = "\uE71B";
         public event EventHandler Confirmar;
+
+        /// <summary>Esconde o texto digitado (chaves de acesso).</summary>
+        public bool Senha { set { _box.UseSystemPasswordChar = value; } }
 
         public string Texto
         {
@@ -1282,8 +1305,6 @@ namespace MhiagosControl
         public static string CasaAberta { get { return P("aberta", "open"); } }
         public static string CasaFechada { get { return P("fechada", "closed"); } }
         public static string CasaTrava { get { return P("Trava de segurança", "Child lock"); } }
-        public static string CasaTodas { get { return P("Todas as propriedades", "All properties"); } }
-        public static string CasaMenos { get { return P("Esconder propriedades", "Hide properties"); } }
         /// <summary>Tipo do aparelho em portugues, quando o nome do modelo vem em chines.</summary>
         public static string CasaTipo(string tipo, string daNuvem)
         {

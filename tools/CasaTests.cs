@@ -24,6 +24,7 @@ namespace MhiagosControl
             CasaPagina(root);
             CasaAnimacaoDoAr();
             CasaFluidez(root);
+            CasaServidor();
         }
 
         /// <summary>Fluidez: cache das curvas, quadro do widget, Casa sem refazer o que nao mudou, relogio da janela e fade da troca de pagina.</summary>
@@ -454,10 +455,10 @@ namespace MhiagosControl
                             Verdade(ar.SecaoRetorno.Parent == casa.Ajustes, "padrao das cenas mora em Ajustes " + sufixo);
 
                             // Aba Ajustes: Funcoes, Preferencias, Alertas, Estimativa e Conta.
-                            casa.Aba = 1;
+                            casa.Aba = 2;
                             casa.Arranjar();
-                            Verdade(casa.Ajustes.Visible && !ar.Visible && !casa.Cartoes[1].Visible && (casa.Historico == null || !casa.Historico.Visible),
-                                "aba Ajustes esconde os cartoes " + sufixo);
+                            Verdade(casa.Ajustes.Visible && !ar.Visible && !casa.Cartoes[1].Visible && (casa.Historico == null || !casa.Historico.Visible) && !casa.Resumo.Visible,
+                                "aba Ajustes esconde os cartoes e o consumo " + sufixo);
                             foreach (Secao s in casa.Ajustes.Secoes)
                                 if (s.Visible) SemSobrepor(s, "ajustes " + s.Titulo + " " + sufixo);
                             SemSobrepor(casa.Ajustes, "aba Ajustes " + sufixo);
@@ -476,25 +477,33 @@ namespace MhiagosControl
                             BotaoChave chave = ar.Chave;
                             Verdade(chave.Visible && chave.Bottom <= Ui.S(64) && chave.Right < ar.Width - Ui.S(18) - Ui.S(60),
                                 "chave do diagnostico no cabecalho, antes do selo " + sufixo);
-                            CartaoHistoricoDoAr hist = casa.Historico;
-                            Verdade(hist != null && hist.Visible && hist.Top > ar.Bottom && hist.Bottom < casa.Cartoes[1].Top,
-                                "historico e consumo logo abaixo do ar " + sufixo);
-                            if (hist != null) SemSobrepor(hist, "historico " + sufixo);
+                            Verdade(!casa.Resumo.Visible && (casa.Historico == null || !casa.Historico.Visible), "Painel sem consumo: so os controles " + sufixo);
                             CaptureEvolution(form, "casa-aparelhos-" + sufixo);
                             if (language == T.PtBr && largura == 1300) CapturarEm(System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe"), "icones"), ar, "icones-ar-chave-e-lua");
-                            if (largura == 1300 && hist != null)
+
+                            // Aba Consumo: resumo, temperatura do ar e ciclos da lavadora, nessa ordem.
+                            casa.Aba = 1;
+                            casa.Arranjar();
+                            CartaoHistoricoDoAr hist = casa.Historico;
+                            Verdade(casa.Resumo.Visible && !ar.Visible && !casa.Ajustes.Visible && hist != null && hist.Visible && hist.Top > casa.Resumo.Bottom,
+                                "aba Consumo: resumo e temperatura " + sufixo);
+                            Verdade(casa.Resumo.Resultado != null && casa.Resumo.Resultado.Aparelhos.Count >= 1, "resumo com os aparelhos " + sufixo);
+                            SemSobrepor(casa.Resumo, "resumo do consumo " + sufixo);
+                            if (casa.CiclosDaLavadora.Visible)
+                                Verdade(casa.CiclosDaLavadora.Top > hist.Bottom && casa.CiclosDaLavadora.Right <= casa.Width - Pagina.LarguraDaBarra, "ciclos da lavadora por ultimo " + sufixo);
+                            foreach (int per in new[] { 0, 2, 1 })
                             {
-                                // Item 4: o cartao de consumo comeca fechado, abre e lembra.
-                                Verdade(!hist.Aberto && hist.Height <= hist.TitleHeight + 2, "consumo do ar comeca fechado " + sufixo);
-                                hist.Alternar(false);
-                                casa.Arranjar();
-                                Verdade(hist.Aberto && hist.Height > Ui.S(300) && ServicoCasa.Pref.ConsumoArAberto, "consumo abre e lembra " + sufixo);
-                                SemSobrepor(hist, "historico aberto " + sufixo);
-                                Verdade(hist.Bottom < casa.Cartoes[1].Top, "lavadora desce com o consumo aberto " + sufixo);
-                                CaptureEvolution(hist, "casa-historico-" + sufixo);
-                                hist.Alternar(false);
-                                casa.Arranjar();
-                                Verdade(!hist.Aberto && !ServicoCasa.Pref.ConsumoArAberto, "fecha de novo " + sufixo);
+                                casa.Resumo.Periodo.SelectedIndex = per;
+                                Verdade(casa.Resumo.Resultado.NumDias == (per == 0 ? 7 : per == 1 ? 30 : DateTime.Today.Day), "periodo " + per + " com os dias certos " + sufixo);
+                            }
+                            CaptureEvolution(form, "casa-consumo-" + sufixo);
+                            if (largura == 1300) CaptureEvolution(casa.Resumo, "casa-resumo-" + sufixo);
+                            if (largura == 1300) CaptureEvolution(hist, "casa-temperatura-" + sufixo);
+                            if (largura == 1300 && casa.CiclosDaLavadora.Visible) CaptureEvolution(casa.CiclosDaLavadora, "casa-ciclos-" + sufixo);
+                            casa.Aba = 0;
+                            casa.Arranjar();
+                            if (largura == 1300)
+                            {
                                 ServicoCasa.DefinirTimer("p1", 60);
                                 ar.Atualizar();
                                 ar.AlternarDiagnostico();
@@ -539,7 +548,7 @@ namespace MhiagosControl
                                 AnelDoCiclo anel = (AnelDoCiclo)Field(lv, "_anel");
                                 Label titulo = (Label)Field(lv, "_titulo");
                                 if (estado == "secando")
-                                    Verdade(anel.Grande == "1 h 25" && titulo.Text == T.LavFaseSecagem && ((EtapasDoCiclo)Field(lv, "_etapas")).Atual == 3,
+                                    Verdade(anel.Grande == "1 h 25" && titulo.Text == T.LavFaseSecagem && ((EtapasDoCiclo)Field(lv, "_etapas")).Atual == 6,
                                         "secando: 1 h 25 restantes, etapa Secar " + sufixo);
                                 EtapasDoCiclo et = (EtapasDoCiclo)Field(lv, "_etapas");
                                 if (et.Visible)
@@ -578,31 +587,20 @@ namespace MhiagosControl
                                 {
                                     // Fora de ciclo: cartao compacto, so o nome e o estado.
                                     Verdade(lv.Compacto && !((Control)Field(lv, "_anel")).Visible && !((Control)Field(lv, "_etapas")).Visible
-                                        && !lv.CabecalhoDoConsumo.Visible && ((Label)Field(lv, "_titulo")).Visible && lv.Height < Ui.S(140), "lavadora fora de ciclo compacta " + sufixo);
-                                    lv.AlternarConsumo(false);
-                                    casa.Arranjar();
-                                    Verdade(!((Label)Field(lv, "_consumo")).Visible, "consumo nao aparece no compacto " + sufixo);
+                                        && ((Label)Field(lv, "_titulo")).Visible && lv.Height < Ui.S(140), "lavadora fora de ciclo compacta " + sufixo);
                                     SemSobrepor(lv, "lavadora compacta " + sufixo);
-                                    lv.AlternarConsumo(false);
-                                    casa.Arranjar();
                                     if (language == T.PtBr && largura == 1300) CapturarEm(System.IO.Path.GetTempPath() + "clprobe", lv, "lavadora-compacta-" + estado);
                                     continue;
                                 }
                                 Verdade(!lv.Compacto, "lavadora em ciclo com o cartao completo " + sufixo);
-                                // Item 5: consumo e historico da lavadora, recolhivel, comeca fechado.
-                                Verdade(!lv.ConsumoAberto && !((Label)Field(lv, "_consumo")).Visible && lv.CabecalhoDoConsumo.Visible,
-                                    "consumo da lavadora comeca fechado " + sufixo);
                                 CaptureEvolution(lv, "casa-lavadora-" + sufixo);
                                 if (language == T.PtBr && estado == "secando" && largura == 1300) CapturarEm(System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clprobe"), "icones"), lv, "icones-lavadora-casa");
-                                lv.AlternarConsumo(false);
-                                casa.Arranjar();
-                                Verdade(lv.ConsumoAberto && ((Label)Field(lv, "_consumo")).Visible && ServicoCasa.Pref.ConsumoLavadoraAberto,
-                                    "consumo da lavadora abre e lembra " + sufixo);
-                                SemSobrepor(lv, "lavadora com consumo aberto " + sufixo);
-                                if (estado == "secando") Verdade(((Label)Field(lv, "_consumo")).Text.Contains("168"), "agua do ciclo na secao de consumo");
-                                CaptureEvolution(lv, "casa-lavadora-consumo-" + sufixo);
-                                lv.AlternarConsumo(false);
-                                casa.Arranjar();
+                                if (estado == "secando")
+                                {
+                                    bool agua = false;
+                                    foreach (Label[] par in (List<Label[]>)Field(lv, "_params")) agua |= par[1].Visible && par[1].Text.Contains("168");
+                                    Verdade(agua, "agua do ciclo junto dos parametros " + sufixo);
+                                }
                             }
                         }
                         casa.MostrarSemNuvem(Exemplo());

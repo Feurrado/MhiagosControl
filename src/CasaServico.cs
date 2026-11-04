@@ -68,6 +68,7 @@ namespace MhiagosControl
             ArmarTimerDesligar(true);
             ArmarRetorno(true);
             Reprogramar();
+            ServidorCasa.Iniciar();
         }
 
         private static void Usar(ConnectLifeNuvem nuvem)
@@ -420,6 +421,49 @@ namespace MhiagosControl
             CancelarRetorno();
             ArmarTimerDesligar(false);
             Avisar();
+            EntregarAoServidor(true);
+        }
+
+        /// <summary>
+        /// Repassa o timer de desligar (ou o retorno da cena) ao servidor da casa,
+        /// para disparar com o PC desligado. O timer local continua armado: ao
+        /// vencer, pergunta ao servidor se ele cuidou (ServidorCasa.ServidorCuida).
+        /// </summary>
+        private static void EntregarAoServidor(bool desligar)
+        {
+            if (!ServidorCasa.Configurado) return;
+            long alvo;
+            string puid;
+            Dictionary<string, string> props = new Dictionary<string, string>();
+            lock (_trava)
+            {
+                alvo = desligar ? Pref.DesligarEmUtc : Pref.RetornoEmUtc;
+                puid = desligar ? Pref.DesligarPuid : Pref.RetornoPuid;
+            }
+            if (alvo == 0) return;
+            if (desligar) props["t_power"] = "0";
+            else
+            {
+                Dictionary<string, int> cmd = PadraoDeRetorno(Pref).Comando(Achar(puid));
+                if (cmd == null) return;
+                foreach (KeyValuePair<string, int> kv in cmd) props[kv.Key] = kv.Value.ToString(CultureInfo.InvariantCulture);
+            }
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                long id = ServidorCasa.Agendar(puid, new DateTime(alvo, DateTimeKind.Utc), props, desligar ? "desligar" : "retorno");
+                if (id == 0) return;
+                bool vale;
+                lock (_trava)
+                {
+                    // Cancelado ou trocado enquanto o pedido ia: o do servidor nao vale mais.
+                    vale = (desligar ? Pref.DesligarEmUtc : Pref.RetornoEmUtc) == alvo;
+                    if (vale)
+                    {
+                        if (desligar) Pref.ServidorDesligarId = id; else Pref.ServidorRetornoId = id;
+                    }
+                }
+                if (vale) Pref.Salvar(); else ServidorCasa.Cancelar(id);
+            });
         }
 
         public static void CancelarTimer()
@@ -429,6 +473,8 @@ namespace MhiagosControl
                 if (Pref.DesligarEmUtc == 0) return;
                 Pref.DesligarEmUtc = 0;
                 Pref.DesligarPuid = "";
+                ServidorCasa.Cancelar(Pref.ServidorDesligarId);
+                Pref.ServidorDesligarId = 0;
                 if (_timerDesligar != null) { _timerDesligar.Dispose(); _timerDesligar = null; }
             }
             Pref.Salvar();
@@ -466,9 +512,12 @@ namespace MhiagosControl
             string puid;
             lock (_trava) { alvo = Pref.DesligarEmUtc; puid = Pref.DesligarPuid; }
             if (alvo == 0 || DateTime.UtcNow.Ticks < alvo || !Logado) return;
+            long noServidor;
+            lock (_trava) { noServidor = Pref.ServidorDesligarId; Pref.ServidorDesligarId = 0; }
             CancelarTimer();
             Aparelho a = Achar(puid);
             string nome = a != null ? a.Nome : T.CasaAr;
+            if (ServidorCasa.ServidorCuida(noServidor)) { AvisoWindows(T.CasaTimerTitulo(nome), T.CasaTimerDesligou); return; }
             Dictionary<string, string> p = new Dictionary<string, string>();
             p["t_power"] = "0";
             Enviar(puid, p, delegate(Exception ex)
@@ -500,6 +549,7 @@ namespace MhiagosControl
             Log.Write("casa: retorno ao padrao em " + minutos + " min");
             ArmarRetorno(false);
             Avisar();
+            EntregarAoServidor(false);
         }
 
         public static void CancelarRetorno()
@@ -509,6 +559,8 @@ namespace MhiagosControl
                 if (Pref.RetornoEmUtc == 0) return;
                 Pref.RetornoEmUtc = 0;
                 Pref.RetornoPuid = "";
+                ServidorCasa.Cancelar(Pref.ServidorRetornoId);
+                Pref.ServidorRetornoId = 0;
                 if (_timerRetorno != null) { _timerRetorno.Dispose(); _timerRetorno = null; }
             }
             Pref.Salvar();
@@ -551,9 +603,12 @@ namespace MhiagosControl
             string puid;
             lock (_trava) { alvo = Pref.RetornoEmUtc; puid = Pref.RetornoPuid; }
             if (alvo == 0 || DateTime.UtcNow.Ticks < alvo || !Logado) return;
+            long noServidor;
+            lock (_trava) { noServidor = Pref.ServidorRetornoId; Pref.ServidorRetornoId = 0; }
             CancelarRetorno();
             Aparelho a = Achar(puid);
             string nome = a != null ? a.Nome : T.CasaAr;
+            if (ServidorCasa.ServidorCuida(noServidor)) { AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaRetornoFeito); return; }
             Dictionary<string, int> cmd = PadraoDeRetorno(Pref).Comando(a);
             if (cmd == null) { AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaTimerFalhou(T.CasaCenaIndisponivel)); return; }
             Dictionary<string, string> p = new Dictionary<string, string>();
@@ -564,6 +619,40 @@ namespace MhiagosControl
                 else AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaTimerFalhou(ex.Message));
             });
         }
+
+        // ---------------- vindo do servidor da casa ----------------
+
+        /// <summary>
+        /// O servidor tem um timer de desligar (ou retorno de cena) que o PC nao
+        /// conhece: foi criado pelo painel web. O PC passa a mostrar e a vigiar.
+        /// Mesmo horario (diferenca de segundos) e o que o proprio PC entregou.
+        /// </summary>
+        internal static void AdotarDoServidor(bool desligar, string puid, DateTime quandoUtc, long id)
+        {
+            lock (_trava)
+            {
+                long local = desligar ? Pref.DesligarEmUtc : Pref.RetornoEmUtc;
+                long ticks = Math.Abs(local - quandoUtc.Ticks) < TimeSpan.TicksPerSecond * 2 ? local : quandoUtc.Ticks;
+                if (desligar) { Pref.DesligarEmUtc = ticks; Pref.DesligarPuid = puid; Pref.ServidorDesligarId = id; }
+                else { Pref.RetornoEmUtc = ticks; Pref.RetornoPuid = puid; Pref.ServidorRetornoId = id; }
+            }
+            Pref.Salvar();
+            if (desligar) ArmarTimerDesligar(false); else ArmarRetorno(false);
+            Avisar();
+        }
+
+        /// <summary>O agendamento sumiu do servidor antes da hora: cancelado pelo painel web.</summary>
+        internal static void SoltarDoServidor(bool desligar)
+        {
+            lock (_trava)
+            {
+                if (desligar) Pref.ServidorDesligarId = 0; else Pref.ServidorRetornoId = 0;
+            }
+            if (desligar) CancelarTimer(); else CancelarRetorno();
+        }
+
+        /// <summary>Preferencias trocadas pelo servidor: quem mostra redesenha.</summary>
+        internal static void AvisarMudanca() { Avisar(); }
 
         internal static void AvisoWindows(string titulo, string texto)
         {
@@ -590,9 +679,9 @@ namespace MhiagosControl
         public string RetornoPuid = "";
         public int RetornoModo = 2, RetornoTemp = 24, RetornoVento = 2;
         /// <summary>Cartao de consumo do ar aberto (comeca fechado).</summary>
-        public bool ConsumoArAberto;
+        /// <summary>Periodo da aba Consumo: 0 sete dias, 1 trinta dias, 2 este mes.</summary>
+        public int PeriodoConsumo = 1;
         /// <summary>Secao de consumo e historico da lavadora aberta (comeca fechada).</summary>
-        public bool ConsumoLavadoraAberto;
         /// <summary>Clima la fora: cidade escolhida (nome e coordenadas) e a ultima leitura guardada.</summary>
         public string ClimaCidade = "";
         public double ClimaLat = double.NaN, ClimaLon = double.NaN, ClimaTemp = double.NaN;
@@ -601,6 +690,11 @@ namespace MhiagosControl
         public long ClimaEmUtc;
         public long DesligarEmUtc;
         public string DesligarPuid = "";
+        /// <summary>Servidor da casa (ServidorCasa): endereco, marcas da sincronizacao e agendamentos entregues.</summary>
+        public string Servidor = "";
+        public long ServidorArAte, ServidorCiclosAte, ServidorEnviadoAte, ServidorDesligarId, ServidorRetornoId, ServidorPrefVersao;
+        /// <summary>Resumo das preferencias compartilhadas na ultima troca com o servidor: diferente, mudaram aqui.</summary>
+        public string ServidorPrefHash = "";
         /// <summary>Cenas do ar, na ordem dos botoes. Sem nenhuma gravada, as de fabrica.</summary>
         public List<CenaCasa> Cenas = CenaCasa.Padrao();
 
@@ -650,14 +744,15 @@ namespace MhiagosControl
                         case "tarifa": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out d) && d >= 0) p.Tarifa = d; break;
                         case "desligarem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.DesligarEmUtc = l; break;
                         case "desligarpuid": p.DesligarPuid = v; break;
-                        case "abacasa": if (ehInt) p.AbaCasa = i == 1 ? 1 : 0; break;
+                        // "abacasa" e de quando eram duas abas (1 = Ajustes); "abacasa3": Painel, Consumo, Ajustes.
+                        case "abacasa": if (ehInt) p.AbaCasa = i == 1 ? 2 : 0; break;
+                        case "abacasa3": if (ehInt) p.AbaCasa = Math.Max(0, Math.Min(2, i)); break;
+                        case "periodoconsumo": if (ehInt) p.PeriodoConsumo = Math.Max(0, Math.Min(2, i)); break;
                         case "retornoem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.RetornoEmUtc = l; break;
                         case "retornopuid": p.RetornoPuid = v; break;
                         case "retornomodo": if (ehInt) p.RetornoModo = i; break;
                         case "retornotemp": if (ehInt) p.RetornoTemp = Math.Max(16, Math.Min(32, i)); break;
                         case "retornovento": if (ehInt) p.RetornoVento = i; break;
-                        case "consumoaraberto": p.ConsumoArAberto = v == "1"; break;
-                        case "consumolavadoraaberto": p.ConsumoLavadoraAberto = v == "1"; break;
                         case "climacidade": p.ClimaCidade = v; break;
                         case "climalat": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out d)) p.ClimaLat = d; break;
                         case "climalon": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out d)) p.ClimaLon = d; break;
@@ -665,6 +760,14 @@ namespace MhiagosControl
                         case "climacodigo": if (ehInt) p.ClimaCodigo = i; break;
                         case "climadia": p.ClimaDia = v != "0"; break;
                         case "climaem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ClimaEmUtc = l; break;
+                        case "servidor": p.Servidor = v; break;
+                        case "servidorarate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorArAte = l; break;
+                        case "servidorciclosate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorCiclosAte = l; break;
+                        case "servidorenviadoate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorEnviadoAte = l; break;
+                        case "servidordesligarid": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorDesligarId = l; break;
+                        case "servidorretornoid": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorRetornoId = l; break;
+                        case "servidorprefversao": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorPrefVersao = l; break;
+                        case "servidorprefhash": p.ServidorPrefHash = v; break;
                         case "cena": { CenaCasa cena = CenaCasa.DeLinha(v); if (cena != null) { if (!lidas) { p.Cenas.Clear(); lidas = true; } if (p.Cenas.Count < CenaCasa.MaxCenas) p.Cenas.Add(cena); } break; }
                     }
                 }
@@ -688,14 +791,13 @@ namespace MhiagosControl
             sb.AppendLine("tarifa=" + Tarifa.ToString("0.####", CultureInfo.InvariantCulture));
             sb.AppendLine("desligarem=" + DesligarEmUtc.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("desligarpuid=" + (DesligarPuid ?? ""));
-            sb.AppendLine("abacasa=" + AbaCasa.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("abacasa3=" + AbaCasa.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("periodoconsumo=" + PeriodoConsumo.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("retornoem=" + RetornoEmUtc.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("retornopuid=" + (RetornoPuid ?? ""));
             sb.AppendLine("retornomodo=" + RetornoModo.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("retornotemp=" + RetornoTemp.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("retornovento=" + RetornoVento.ToString(CultureInfo.InvariantCulture));
-            sb.AppendLine("consumoaraberto=" + (ConsumoArAberto ? "1" : "0"));
-            sb.AppendLine("consumolavadoraaberto=" + (ConsumoLavadoraAberto ? "1" : "0"));
             sb.AppendLine("climacidade=" + (ClimaCidade ?? ""));
             sb.AppendLine("climalat=" + (double.IsNaN(ClimaLat) ? "" : ClimaLat.ToString("R", CultureInfo.InvariantCulture)));
             sb.AppendLine("climalon=" + (double.IsNaN(ClimaLon) ? "" : ClimaLon.ToString("R", CultureInfo.InvariantCulture)));
@@ -703,6 +805,14 @@ namespace MhiagosControl
             sb.AppendLine("climacodigo=" + ClimaCodigo.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("climadia=" + (ClimaDia ? "1" : "0"));
             sb.AppendLine("climaem=" + ClimaEmUtc.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("servidor=" + (Servidor ?? ""));
+            sb.AppendLine("servidorarate=" + ServidorArAte.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("servidorciclosate=" + ServidorCiclosAte.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("servidorenviadoate=" + ServidorEnviadoAte.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("servidordesligarid=" + ServidorDesligarId.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("servidorretornoid=" + ServidorRetornoId.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("servidorprefversao=" + ServidorPrefVersao.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("servidorprefhash=" + (ServidorPrefHash ?? ""));
             foreach (CenaCasa cena in Cenas) sb.AppendLine("cena=" + cena.Linha());
             try { GravacaoAtomica.Escrever(Arquivo, sb.ToString(), new UTF8Encoding(false)); }
             catch (Exception ex) { Log.Error("casa: gravar casa.ini", ex); }
@@ -977,7 +1087,8 @@ namespace MhiagosControl
     {
         private static readonly object _trava = new object();
         private static readonly Dictionary<string, List<AmostraAr>> _series = new Dictionary<string, List<AmostraAr>>();
-        public const int Dias = 35;
+        // Dois meses e pouco: o custo do mes compara com o mes anterior inteiro.
+        public const int Dias = 65;
         /// <summary>Intervalo maximo entre amostras que ainda conta como tempo continuo.</summary>
         public static readonly TimeSpan Continuo = TimeSpan.FromMinutes(3);
 
@@ -1052,6 +1163,43 @@ namespace MhiagosControl
         }
 
         internal static void Acrescentar(string puid, AmostraAr s) { lock (_trava) Serie(puid).Add(s); }
+
+        /// <summary>
+        /// Junta amostras de fora (o servidor da casa): entra so a que nao tem
+        /// outra do mesmo ar a menos de 25 s, que e o PC e o servidor lendo a
+        /// mesma hora. Devolve quantas entraram; regrava o arquivo em ordem.
+        /// </summary>
+        public static int Mesclar(List<KeyValuePair<string, AmostraAr>> fora)
+        {
+            DateTime corte = DateTime.Now.AddDays(-Dias);
+            int n = 0;
+            lock (_trava)
+            {
+                foreach (KeyValuePair<string, AmostraAr> kv in fora)
+                {
+                    if (kv.Key.Length == 0 || kv.Value.Quando < corte) continue;
+                    List<AmostraAr> l = Serie(kv.Key);
+                    int i = l.FindLastIndex(x => x.Quando <= kv.Value.Quando);
+                    if (i >= 0 && (kv.Value.Quando - l[i].Quando).TotalSeconds < 25) continue;
+                    if (i + 1 < l.Count && (l[i + 1].Quando - kv.Value.Quando).TotalSeconds < 25) continue;
+                    l.Insert(i + 1, kv.Value);
+                    n++;
+                }
+                if (n > 0) Regravar();
+            }
+            return n;
+        }
+
+        /// <summary>As amostras de todos os ares depois da data, para mandar ao servidor.</summary>
+        public static List<KeyValuePair<string, AmostraAr>> Desde(DateTime desde)
+        {
+            List<KeyValuePair<string, AmostraAr>> r = new List<KeyValuePair<string, AmostraAr>>();
+            lock (_trava)
+                foreach (KeyValuePair<string, List<AmostraAr>> kv in _series)
+                    foreach (AmostraAr s in kv.Value)
+                        if (s.Quando > desde) r.Add(new KeyValuePair<string, AmostraAr>(kv.Key, s));
+            return r;
+        }
 
         private static string Linha(string puid, AmostraAr s)
         {

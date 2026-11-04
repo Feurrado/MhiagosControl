@@ -32,6 +32,7 @@ namespace MhiagosControl
         public static int Main(string[] args)
         {
             System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
+            ServidorCasa.Desligado = true;   // os testes nunca falam com o servidor da casa
             if (args.Length > 0 && args[0] == "--regression-child")
                 return RegressionChild(args);
             if (args.Length > 2 && args[0] == "--medir-animacao")
