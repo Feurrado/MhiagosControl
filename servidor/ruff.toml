@@ -1,0 +1,9 @@
+# Lint do servidor (a CI roda "ruff check"). Regras de erro de verdade: sintaxe,
+# nomes indefinidos, imports sobrando e armadilhas comuns (bugbear). O estilo
+# compacto do projeto (ponto e virgula, lambda, variavel "l") fica de fora.
+line-length = 130
+target-version = "py312"
+
+[lint]
+select = ["E4", "E7", "E9", "F", "B"]
+ignore = ["E702", "E731", "E741"]

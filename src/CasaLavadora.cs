@@ -428,55 +428,6 @@ namespace MhiagosControl
         }
     }
 
-    /// <summary>
-    /// Cabecalho de uma secao recolhivel dentro de um cartao: titulo, resumo a
-    /// direita do titulo e a seta. O clique e de quem usa (Click).
-    /// </summary>
-    internal sealed class CabecalhoRecolhivel : Control
-    {
-        public string Titulo = "", Resumo = "";
-        public bool Aberto;
-        private Transicao _t;
-        private Transicao TH { get { return _t ?? (_t = new Transicao(this)); } }
-
-        public CabecalhoRecolhivel()
-        {
-            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
-                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
-            Cursor = Cursors.Hand;
-            TabStop = true;
-            AccessibleRole = AccessibleRole.PushButton;
-        }
-
-        protected override void OnMouseEnter(EventArgs e) { TH.Ir(1f); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { TH.Ir(0f); base.OnMouseLeave(e); }
-        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
-        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
-        protected override void OnKeyDown(KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space) { OnClick(EventArgs.Empty); e.Handled = true; }
-            base.OnKeyDown(e);
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            Graphics g = e.Graphics;
-            using (SolidBrush b = new SolidBrush(Ui.Misturar(Ui.Surface, Ui.Hover, TH.Valor))) g.FillRectangle(b, ClientRectangle);
-            using (Pen p = new Pen(Ui.Border)) g.DrawLine(p, 0, 0, Width, 0);
-            AccessibleName = Titulo;
-            Size t = TextRenderer.MeasureText(Titulo, Ui.FontMed);
-            TextRenderer.DrawText(g, Titulo, Ui.FontMed, new Rectangle(0, 0, t.Width + Ui.S(4), Height), Ui.Text,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
-            Rectangle seta = new Rectangle(Width - Ui.S(22), (Height - Ui.S(22)) / 2, Ui.S(22), Ui.S(22));
-            TextRenderer.DrawText(g, Aberto ? "\uE70E" : "\uE70D", Ui.FontGlyph9, seta, Ui.Muted,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-            int rx = t.Width + Ui.S(12);
-            if (Resumo.Length > 0)
-                TextRenderer.DrawText(g, Resumo, Ui.FontSmall, new Rectangle(rx, 0, Math.Max(0, seta.Left - rx - Ui.S(8)), Height), Ui.Muted,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-            if (Focused && ShowFocusCues) using (Pen p = new Pen(Ui.Accent, 2f)) g.DrawRectangle(p, 1, 1, Width - 3, Height - 3);
-        }
-    }
     /// <summary>Anel de progresso do ciclo, com o tempo restante no meio.</summary>
     internal sealed class AnelDoCiclo : Control
     {
