@@ -43,6 +43,18 @@ class ConnectLifeErro(Exception):
         self.pede_login = pede_login
 
 
+def pede_login_no_token(status):
+    """So 400 e 401 do endpoint de token dizem que o acesso acabou (invalid_grant).
+    403, 408, 429 e o resto sao do caminho, nao da conta: tratar como "entre de novo"
+    apagava o login por um soluco da nuvem."""
+    return status in (400, 401)
+
+
+def pede_login_na_api(status):
+    """Na API, so o 401: um 403 tambem sai de proxy e de limite de taxa."""
+    return status == 401
+
+
 def novo_source_id():
     semente = uuid.uuid4().hex + str(time.time_ns())
     return "td001002000" + hashlib.md5(semente.encode()).hexdigest()
@@ -98,14 +110,23 @@ def _texto(v):
 
 
 class ConnectLife:
-    def __init__(self, refresh_token, source_id=None, ao_mudar_token=None):
+    def __init__(self, refresh_token, source_id=None, ao_mudar_token=None, cliente=None):
         self.refresh_token = refresh_token
         self.source_id = source_id or novo_source_id()
         self.ao_mudar_token = ao_mudar_token
         self._access = None
         self._expira = 0.0
         self._trava = threading.Lock()
-        self._http = httpx.Client(timeout=20.0, headers={"User-Agent": "MhiagosCasa", "Accept": "application/json"})
+        # Uma renovacao por vez: o refresh token gira, e leitura e comando renovando
+        # juntos mandariam o mesmo token duas vezes.
+        self._renovando = threading.Lock()
+        self._http = cliente or httpx.Client(timeout=20.0, headers={"User-Agent": "MhiagosCasa", "Accept": "application/json"})
+
+    def fechar(self):
+        try:
+            self._http.close()
+        except Exception:
+            pass
 
     # ---------------- token ----------------
 
@@ -127,7 +148,7 @@ class ConnectLife:
             raise ConnectLifeErro("Sem resposta da ConnectLife: " + type(e).__name__)
         if r.status_code != 200:
             log.warning("token recusado %s %s", r.status_code, r.text[:300])
-            if 400 <= r.status_code < 500:
+            if pede_login_no_token(r.status_code):
                 raise ConnectLifeErro("A ConnectLife recusou o acesso: entre de novo.", True)
             raise ConnectLifeErro("Falha temporaria da ConnectLife.")
         o = r.json()
@@ -149,11 +170,19 @@ class ConnectLife:
         if self.ao_mudar_token:
             self.ao_mudar_token(self.refresh_token, self.source_id)
 
-    def _acesso(self):
+    def _valido(self):
         with self._trava:
-            if self._access and time.time() < self._expira:
-                return self._access
-        self._renovar()
+            return self._access if self._access and time.time() < self._expira else None
+
+    def _acesso(self):
+        a = self._valido()
+        if a:
+            return a
+        with self._renovando:
+            a = self._valido()          # quem esperou na fila acha o acesso ja renovado
+            if a:
+                return a
+            self._renovar()
         with self._trava:
             return self._access
 
@@ -212,7 +241,7 @@ class ConnectLife:
 
         if r.status_code != 200:
             log.warning("%s respondeu %s %s", _caminho(url), r.status_code, r.text[:300])
-            if r.status_code in (401, 403):
+            if pede_login_na_api(r.status_code):
                 raise ConnectLifeErro("A sessao da ConnectLife expirou: entre de novo.", True)
             raise ConnectLifeErro("Falha temporaria da ConnectLife.")
         try:

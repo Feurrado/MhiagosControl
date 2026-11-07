@@ -910,6 +910,18 @@ namespace MhiagosControl
 
         private static List<CenaCasa> Lista { get { return ServicoCasa.Pref.Cenas; } }
 
+        /// <summary>
+        /// Copia, muda e publica a lista nova. A sincronizacao com o servidor e a
+        /// gravacao do casa.ini percorrem a lista em outra thread: mudar a mesma
+        /// lista no lugar fazia a outra ponta cair em "colecao modificada".
+        /// </summary>
+        private static void MudarLista(Action<List<CenaCasa>> mudar)
+        {
+            List<CenaCasa> nova = new List<CenaCasa>(ServicoCasa.Pref.Cenas);
+            mudar(nova);
+            ServicoCasa.Pref.Cenas = nova;
+        }
+
         private void AlternarEdicao()
         {
             _cenas.Editando = !_cenas.Editando;
@@ -961,15 +973,20 @@ namespace MhiagosControl
         private void SalvarCena()
         {
             CenaCasa c = _editor.Ler();
-            if (_editando >= 0 && _editando < Lista.Count) Lista[_editando] = c;
-            else if (Lista.Count < CenaCasa.MaxCenas) Lista.Add(c);
+            int editando = _editando;
+            MudarLista(delegate(List<CenaCasa> l)
+            {
+                if (editando >= 0 && editando < l.Count) l[editando] = c;
+                else if (l.Count < CenaCasa.MaxCenas) l.Add(c);
+            });
             Gravar();
             FecharEditor();
         }
 
         private void ExcluirCena()
         {
-            if (_editando >= 0 && _editando < Lista.Count) Lista.RemoveAt(_editando);
+            int editando = _editando;
+            MudarLista(delegate(List<CenaCasa> l) { if (editando >= 0 && editando < l.Count) l.RemoveAt(editando); });
             Gravar();
             FecharEditor();
         }
@@ -978,9 +995,12 @@ namespace MhiagosControl
         {
             int de = _editando, para = _editando + passo;
             if (de < 0 || para < 0 || para >= Lista.Count) return;
-            CenaCasa c = Lista[de];
-            Lista.RemoveAt(de);
-            Lista.Insert(para, c);
+            MudarLista(delegate(List<CenaCasa> l)
+            {
+                CenaCasa c = l[de];
+                l.RemoveAt(de);
+                l.Insert(para, c);
+            });
             _editando = para;
             _cenas.Selecionada = para;
             Gravar();
