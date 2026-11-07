@@ -512,7 +512,8 @@ function desenharCartoes() {
   const lista = [];
   for (const a of estado.lista) {
     const ags = (estado.agendamentos || []).filter(x => x.puid === a.puid);
-    const sig = JSON.stringify([a, pendente[a.puid] || null, pref && pref.versao, U(a.puid), ags, ciclosDe(a.puid).length,
+    const falhos = (estado.agendamentosFalhos || []).filter(x => x.puid === a.puid);
+    const sig = JSON.stringify([a, pendente[a.puid] || null, pref && pref.versao, U(a.puid), ags, falhos, ciclosDe(a.puid).length,
       ags.length ? Math.floor(Date.now() / 60000) : 0]);
     let r = nos.get(a.puid);
     if (r && arrastando === a.puid) { lista.push(r.el); continue; }
@@ -700,11 +701,17 @@ function cartaoAr(a) {
       el("div", { class: "bola" }, icone(c.icone)), el("span", {}, el("b", {}, c.nome), el("small", {}, resumoCena(c, a))))))
       : el("div", { class: "mu" }, "Nenhuma cena."));
   const tm = agendamento(a.puid, "desligar"), rt = agendamento(a.puid, "retorno");
+  // O servidor desistiu depois das tentativas (a nuvem nao respondeu): avisa aqui, onde o timer foi pedido.
+  const falho = (estado.agendamentosFalhos || []).find(x => x.puid === a.puid);
+  const textoFalho = falho ? (falho.nome === "retorno" ? "A volta ao padrão" : "O timer de desligar") + " das " + hora(falho.quando) +
+    " falhou depois de " + falho.tentativas + (falho.tentativas === 1 ? " tentativa" : " tentativas") +
+    (falho.detalhe ? ": " + falho.detalhe : ".") : null;
   const timer = el("div", { class: "sub-cartao" }, el("div", { class: "tit" }, "Desligar automaticamente"),
     el("div", { class: "linha" }, [["30 min", 30], ["1 h", 60], ["2 h", 120]].map(([t, m]) =>
       el("button", { class: "b", style: "min-width:72px", disabled: !ok || !ligado, on: { click: () => definirTimer(a, m) } }, t)),
       tm ? el("button", { class: "b perigo", on: { click: () => cancelarAg(a, "timer") } }, "Cancelar") : null),
     el("div", { class: "estado-timer" }, tm ? "Desliga às " + hora(tm.quando) + " (em " + dur((tm.quando - Date.now() / 1000) / 60) + ")" : "Nenhum timer ativo."),
+    textoFalho ? el("div", { class: "aviso perigo", style: "margin:0 0 8px" }, textoFalho) : null,
     rt ? el("div", { class: "linha", style: "margin-bottom:6px" }, el("span", {}, "Volta ao padrão às " + hora(rt.quando)),
       el("button", { class: "b peq", on: { click: () => cancelarAg(a, "retorno") } }, "Manter a cena")) : null,
     el("div", { class: "mu" }, "O servidor dispara o timer mesmo com o PC desligado."));

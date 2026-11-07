@@ -33,6 +33,11 @@ namespace MhiagosControl
         {
             System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
             ServidorCasa.Desligado = true;   // os testes nunca falam com o servidor da casa
+            // O log dos testes vai para um arquivo proprio: antes ia para o log.txt de
+            // quem usa o app, e os erros de proposito da suite apareciam como erros do app.
+            string logDosTestes = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                "MhiagosControl-testes-" + System.Diagnostics.Process.GetCurrentProcess().Id + ".log");
+            StaticField(typeof(Log), "_path", logDosTestes);
             if (args.Length > 0 && args[0] == "--regression-child")
                 return RegressionChild(args);
             if (args.Length > 2 && args[0] == "--medir-animacao")
@@ -95,6 +100,11 @@ namespace MhiagosControl
             Console.WriteLine(_falhas == 0
                 ? string.Format("{0} verificacoes, todas passaram", _ok)
                 : string.Format("{0} verificacoes, {1} FALHARAM", _ok + _falhas, _falhas));
+            if (_falhas == 0)
+            {
+                try { System.IO.File.Delete(logDosTestes); System.IO.File.Delete(logDosTestes + ".1"); } catch { }
+            }
+            else Console.WriteLine("log dos testes: " + logDosTestes);
             return _falhas == 0 ? 0 : 1;
         }
 

@@ -14,9 +14,38 @@ disparar com o PC desligado.
 
 ```sh
 mkdir -p /opt/mhiagos-casa && cd /opt/mhiagos-casa
-# copie Dockerfile, docker-compose.yml, requirements.txt e app/ para cá
+# copie o conteúdo de servidor/ para cá (Dockerfile, docker-compose.yml, requirements.lock, app/...)
 (umask 077; echo "MHIAGOS_CHAVE=$(openssl rand -hex 24)" > .env)
 docker compose up -d --build
+```
+
+O serviço roda sem root (uid 10001), com o sistema de arquivos só de leitura
+(grava só em `/data`), sem capacidades extras do kernel, com limite de memória e
+de processos e com o log limitado a 3 arquivos de 5 MB. O serviço `permissoes`
+do compose acerta o dono do volume a cada subida (quem vem da 1.2 tinha os
+arquivos como root) e termina.
+
+## Atualizar
+
+Copie a pasta `servidor/` de novo para `/opt/mhiagos-casa` (sem apagar o `.env`)
+e rode `docker compose up -d --build`. O banco ganha sozinho o que a versão nova
+precisar.
+
+As dependências ficam travadas com hash em `requirements.lock`. Para subir de
+versão, edite `requirements.txt` e gere o lock de novo, conferindo os testes:
+
+```sh
+pip-compile --generate-hashes --allow-unsafe --strip-extras --output-file requirements.lock requirements.txt
+```
+
+## Backup
+
+`backup.sh` copia o `casa.db` para `/opt/mhiagos-casa/backups` com a API de backup
+do SQLite (consistente com o serviço gravando), confere a cópia e guarda as 14
+últimas. No cron do root:
+
+```
+30 3 * * * /opt/mhiagos-casa/backup.sh >> /var/log/mhiagos-casa-backup.log 2>&1
 ```
 
 Depois abra `http://<servidor>:8765`, cole a chave do `.env`, clique em
@@ -37,7 +66,8 @@ Todas as rotas pedem `Authorization: Bearer <MHIAGOS_CHAVE>`, menos `/api/saude`
 | `GET /api/historico/ar?desde=<epoch>` | amostras do ar (uma por leitura, no máximo a cada 50 s) |
 | `GET /api/historico/ciclos?desde=<epoch>` | ciclos terminados depois de `desde` e o que está em curso |
 | `POST /api/historico/importar` | o PC manda o que leu com o servidor parado; repetido não duplica |
-| `GET/POST/DELETE /api/agendamentos` | comandos com hora marcada; vencidos há mais de 15 min são descartados |
+| `GET/POST/DELETE /api/agendamentos` | comandos com hora marcada; se a nuvem falha, tenta de novo (60, 120, 180 s) até 15 min depois da hora; vencidos há mais de 15 min sem tentativa são descartados |
+| `GET /api/agendamentos/{id}/resultado` | `pendente`, `feito`, `falhou`, `descartado`, `cancelado` ou `desconhecido` (o PC pergunta antes de dar o timer como feito) |
 | `GET /api/eventos?desde=<epoch>` | início e fim de ciclo, erros, comandos |
 | `GET /api/mudancas?desde=<versao>` | espera longa: responde quando algo muda (ou em 25 s) com a versão nova |
 | `GET /api/resumo-mes` | custo estimado do mês, do anterior e do anterior até o mesmo dia |
@@ -45,6 +75,16 @@ Todas as rotas pedem `Authorization: Bearer <MHIAGOS_CHAVE>`, menos `/api/saude`
 
 Variáveis: `MHIAGOS_PERIODO` (s entre leituras, 60), `MHIAGOS_DIAS_AR` (dias de
 histórico do ar, 400).
+
+## Testes
+
+De dentro de `servidor/`, com as dependências do `requirements.txt`:
+
+```sh
+python -m unittest discover -s tests -v
+```
+
+A ConnectLife é simulada; a CI roda os mesmos testes a cada PR.
 
 ## No celular como app
 
@@ -56,7 +96,12 @@ http da rede local ele vira um atalho que abre no navegador.
 ## Segurança
 
 - A chave do `.env` é a única proteção da API: o painel só escuta na rede local
-  (`192.168.1.100:8765`). Não abra essa porta no roteador.
+  (`192.168.1.100:8765`). Não abra essa porta no roteador. Ela viaja sem HTTPS:
+  troque a chave se o Wi-Fi de casa tiver convidados.
+- A API confere tipo e faixa de tudo que grava (preferências, histórico importado,
+  agendamentos, comandos) e responde 422 ou 400 em vez de guardar lixo. A página
+  vai com `Content-Security-Policy` e não abre dentro de outro site.
+- O login colado precisa ser do pedido que o servidor abriu (o `state` confere).
 - Troque a senha do root se ela já passou por algum chat ou arquivo: `passwd`
   no servidor. O acesso de manutenção usa chave SSH.
 - Para acessar de fora de casa, prefira uma VPN (Tailscale ou WireGuard) a

@@ -27,6 +27,17 @@ namespace MhiagosControl
         private static DateTime _ultimaLeitura = DateTime.MinValue;
         private static string _erro;
 
+        /// <summary>
+        /// Primeira recusa de login de uma sequencia. A conta so e esquecida se a
+        /// recusa se repete uma leitura depois (com 1 min ou mais entre as duas):
+        /// apagar na primeira derrubava o login por um soluco da nuvem.
+        /// </summary>
+        private static DateTime _primeiraRecusa = DateTime.MinValue;
+        internal const int SegundosEntreRecusas = 60;
+
+        /// <summary>O cofre ja avisou que nao grava; o aviso do Windows sai uma vez por execucao.</summary>
+        private static bool _avisouCofre;
+
         /// <summary>Alguma coisa mudou: lista, erro, timer ou login. Sai de qualquer thread.</summary>
         public static event EventHandler Mudou;
 
@@ -77,8 +88,13 @@ namespace MhiagosControl
             if (nuvem == null) return;
             nuvem.TokenMudou += delegate
             {
-                if (!CofreConnectLife.Gravar(nuvem.RefreshToken, nuvem.SourceId))
-                    Log.Write("ConnectLife: acesso nao gravado no cofre");
+                if (CofreConnectLife.Gravar(nuvem.RefreshToken, nuvem.SourceId)) return;
+                // Sem isso o token novo so existe na memoria: o proximo arranque
+                // usaria o velho. O erro fica no estado da pagina e sai um aviso.
+                lock (_trava) _erro = T.CasaAcessoNaoGravado;
+                bool avisar;
+                lock (_trava) { avisar = !_avisouCofre; _avisouCofre = true; }
+                if (avisar) AvisoWindows(T.CasaAvisoTitulo, T.CasaAcessoNaoGravado);
             };
         }
 
@@ -101,9 +117,37 @@ namespace MhiagosControl
                     if (_ciclo != null) { _ciclo.Dispose(); _ciclo = null; }
                     return;
                 }
-                if (_ciclo == null) _ciclo = new Timer(delegate { Ler(); }, null, 2000, periodo);
+                if (_ciclo == null) _ciclo = new Timer(delegate { Protegido("leitura agendada", Ler); }, null, 2000, periodo);
                 else _ciclo.Change(periodo, periodo);
             }
+        }
+
+        /// <summary>
+        /// Corpo de timer e de tarefa do pool. Uma excecao solta numa thread
+        /// dessas termina o processo, e com ele o mostrador do cooler.
+        /// </summary>
+        /// <summary>Tarefa no pool, protegida como os timers.</summary>
+        internal static void NoFundo(string contexto, Action acao)
+        {
+            ThreadPool.QueueUserWorkItem(delegate { Protegido(contexto, acao); });
+        }
+
+        internal static void Protegido(string contexto, Action acao)
+        {
+            try { acao(); }
+            catch (Exception ex) { Log.Error("casa: " + contexto, ex); }
+        }
+
+        /// <summary>
+        /// Recusa de login: so na segunda seguida, com pelo menos
+        /// SegundosEntreRecusas entre as duas, a conta e esquecida.
+        /// </summary>
+        internal static bool EsquecerConta(ref DateTime primeira, DateTime agoraUtc)
+        {
+            if (primeira == DateTime.MinValue) { primeira = agoraUtc; return false; }
+            if ((agoraUtc - primeira).TotalSeconds < SegundosEntreRecusas) return false;
+            primeira = DateTime.MinValue;
+            return true;
         }
 
         private static void Avisar()
@@ -124,7 +168,7 @@ namespace MhiagosControl
         /// <summary>Troca o code por tokens e le a lista. fim recebe a falha, ou nulo. Sai do fundo.</summary>
         public static void Entrar(string code, Action<Exception> fim)
         {
-            ThreadPool.QueueUserWorkItem(delegate
+            NoFundo("login", delegate
             {
                 Exception erro = null;
                 try
@@ -136,7 +180,7 @@ namespace MhiagosControl
                         Log.Write("ConnectLife: acesso nao gravado no cofre");
                     nova.UsarCofre = true;
                     Usar(nova);
-                    lock (_trava) _erro = null;
+                    lock (_trava) { _erro = null; _primeiraRecusa = DateTime.MinValue; }
                     Reprogramar();
                     LerAgora();
                 }
@@ -154,6 +198,7 @@ namespace MhiagosControl
                 _nuvem = null;
                 _aparelhos = new List<Aparelho>();
                 _erro = null;
+                _primeiraRecusa = DateTime.MinValue;
                 _ultimaLeitura = DateTime.MinValue;
                 _simulado = false;
             }
@@ -192,7 +237,7 @@ namespace MhiagosControl
                 _buscando = true;
             }
             Avisar();
-            ThreadPool.QueueUserWorkItem(delegate { LerAgora(); });
+            NoFundo("leitura", delegate { LerAgora(); });
         }
 
         private static void LerAgora()
@@ -210,6 +255,7 @@ namespace MhiagosControl
                     _aparelhos = lista;
                     _ultimaLeitura = DateTime.Now;
                     _erro = null;
+                    _primeiraRecusa = DateTime.MinValue;
                 }
                 foreach (Aparelho a in lista)
                 {
@@ -223,17 +269,21 @@ namespace MhiagosControl
             }
             catch (ConnectLifeErro ex)
             {
+                bool esqueceu = false;
                 lock (_trava)
                 {
-                    if (ex.PedeLogin && nuvem == _nuvem)
+                    if (nuvem != _nuvem) return;   // saiu da conta no meio
+                    if (ex.PedeLogin && EsquecerConta(ref _primeiraRecusa, DateTime.UtcNow))
                     {
                         CofreConnectLife.Apagar();
                         _nuvem = null;
                         _aparelhos = new List<Aparelho>();
+                        esqueceu = true;
                     }
                     _erro = ex.Message;
                 }
-                if (ex.PedeLogin) Reprogramar();
+                if (esqueceu) { Log.Write("ConnectLife: acesso recusado duas vezes, conta esquecida"); Reprogramar(); }
+                else if (ex.PedeLogin) Log.Write("ConnectLife: acesso recusado, nova tentativa na proxima leitura");
             }
             catch (Exception ex)
             {
@@ -327,7 +377,7 @@ namespace MhiagosControl
             if (nuvem == null || simulado) { if (fim != null) fim(null); return; }
             Aparelho a = Achar(puid);
             bool semBipe = SemBipe && a != null && a.ArCondicionado && Grava(a, "t_beep");
-            ThreadPool.QueueUserWorkItem(delegate
+            NoFundo("comando", delegate
             {
                 Exception erro = null;
                 try
@@ -379,7 +429,7 @@ namespace MhiagosControl
             }
             Avisar();
             List<Aparelho> lista = Aparelhos;
-            ThreadPool.QueueUserWorkItem(delegate
+            NoFundo("atualizar", delegate
             {
                 bool pediu = false;
                 foreach (Aparelho a in lista)
@@ -427,7 +477,7 @@ namespace MhiagosControl
         /// <summary>
         /// Repassa o timer de desligar (ou o retorno da cena) ao servidor da casa,
         /// para disparar com o PC desligado. O timer local continua armado: ao
-        /// vencer, pergunta ao servidor se ele cuidou (ServidorCasa.ServidorCuida).
+        /// vencer, pergunta ao servidor o que ele fez (ServidorCasa.EstadoDoAgendamento).
         /// </summary>
         private static void EntregarAoServidor(bool desligar)
         {
@@ -448,7 +498,7 @@ namespace MhiagosControl
                 if (cmd == null) return;
                 foreach (KeyValuePair<string, int> kv in cmd) props[kv.Key] = kv.Value.ToString(CultureInfo.InvariantCulture);
             }
-            ThreadPool.QueueUserWorkItem(delegate
+            NoFundo("entregar ao servidor", delegate
             {
                 long id = ServidorCasa.Agendar(puid, new DateTime(alvo, DateTimeKind.Utc), props, desligar ? "desligar" : "retorno");
                 if (id == 0) return;
@@ -498,26 +548,91 @@ namespace MhiagosControl
                 CancelarTimer();
                 return;
             }
-            long ms = Math.Max(1000, (long)falta.TotalMilliseconds);
+            ArmarDesligarEm(Math.Max(1000, (long)falta.TotalMilliseconds));
+        }
+
+        private static void ArmarDesligarEm(long ms)
+        {
             lock (_trava)
             {
                 if (_timerDesligar != null) _timerDesligar.Dispose();
-                _timerDesligar = new Timer(delegate { ConferirTimer(); }, null, ms, Timeout.Infinite);
+                _timerDesligar = new Timer(delegate { Protegido("timer de desligar", ConferirTimer); }, null, ms, Timeout.Infinite);
             }
+        }
+
+        // ---------------- disparo dos agendamentos ----------------
+
+        /// <summary>Atraso maximo para ainda mandar: o mesmo dos 15 min do arranque e do servidor.</summary>
+        internal const int LimiteDeAtrasoMin = 15;
+
+        /// <summary>Com o servidor ainda tentando, o PC espera ate este atraso antes de assumir.</summary>
+        internal const int EsperaPeloServidorMin = 2;
+
+        internal enum Decisao { Esperar, ServidorFez, Cancelado, PcManda, Descartar }
+
+        /// <summary>
+        /// O que fazer com um agendamento vencido, dado o atraso e o que o
+        /// servidor diz dele (nulo: sem servidor). Atrasado demais nao vai: o
+        /// PC suspenso a noite toda nao pode desligar ou mexer no ar de manha,
+        /// horas depois de quem pediu - a mesma regra do arranque.
+        /// </summary>
+        internal static Decisao DecidirAgendamento(long alvoTicks, DateTime agoraUtc, string noServidor)
+        {
+            double atrasoMin = (agoraUtc.Ticks - alvoTicks) / (double)TimeSpan.TicksPerMinute;
+            if (noServidor == ServidorCasa.Feito) return Decisao.ServidorFez;
+            if (noServidor == ServidorCasa.Cancelado) return Decisao.Cancelado;
+            if (noServidor == ServidorCasa.Pendente && atrasoMin <= EsperaPeloServidorMin) return Decisao.Esperar;
+            return atrasoMin > LimiteDeAtrasoMin ? Decisao.Descartar : Decisao.PcManda;
+        }
+
+        /// <summary>
+        /// Assume um agendamento vencido: so um chamador (o relogio ou a leitura)
+        /// passa, e o do servidor sai de cena se ele nao o cumpriu.
+        /// </summary>
+        private static bool Assumir(bool desligar, long alvo, long noServidor, Decisao d)
+        {
+            lock (_trava)
+            {
+                if ((desligar ? Pref.DesligarEmUtc : Pref.RetornoEmUtc) != alvo) return false;
+                if (desligar)
+                {
+                    Pref.DesligarEmUtc = 0; Pref.DesligarPuid = ""; Pref.ServidorDesligarId = 0;
+                    if (_timerDesligar != null) { _timerDesligar.Dispose(); _timerDesligar = null; }
+                }
+                else
+                {
+                    Pref.RetornoEmUtc = 0; Pref.RetornoPuid = ""; Pref.ServidorRetornoId = 0;
+                    if (_timerRetorno != null) { _timerRetorno.Dispose(); _timerRetorno = null; }
+                }
+            }
+            Pref.Salvar();
+            Avisar();
+            // Pendente ou falho la, quem decide agora e o PC: o do servidor nao pode disparar depois.
+            if (noServidor > 0 && d != Decisao.ServidorFez && d != Decisao.Cancelado) ServidorCasa.Cancelar(noServidor);
+            return true;
         }
 
         private static void ConferirTimer()
         {
-            long alvo;
+            long alvo, noServidor;
             string puid;
-            lock (_trava) { alvo = Pref.DesligarEmUtc; puid = Pref.DesligarPuid; }
+            lock (_trava) { alvo = Pref.DesligarEmUtc; puid = Pref.DesligarPuid; noServidor = Pref.ServidorDesligarId; }
             if (alvo == 0 || DateTime.UtcNow.Ticks < alvo || !Logado) return;
-            long noServidor;
-            lock (_trava) { noServidor = Pref.ServidorDesligarId; Pref.ServidorDesligarId = 0; }
-            CancelarTimer();
+            Decisao d = DecidirAgendamento(alvo, DateTime.UtcNow, noServidor > 0 ? ServidorCasa.EstadoDoAgendamento(noServidor) : null);
+            if (d == Decisao.Esperar) { ArmarDesligarEm(30000); return; }
+            if (!Assumir(true, alvo, noServidor, d)) return;
+
             Aparelho a = Achar(puid);
             string nome = a != null ? a.Nome : T.CasaAr;
-            if (ServidorCasa.ServidorCuida(noServidor)) { AvisoWindows(T.CasaTimerTitulo(nome), T.CasaTimerDesligou); return; }
+            switch (d)
+            {
+                case Decisao.ServidorFez: AvisoWindows(T.CasaTimerTitulo(nome), T.CasaTimerDesligou); return;
+                case Decisao.Cancelado: return;
+                case Decisao.Descartar:
+                    Log.Write("casa: timer de desligar vencido ha mais de " + LimiteDeAtrasoMin + " min, descartado");
+                    AvisoWindows(T.CasaTimerTitulo(nome), T.CasaAgendamentoAtrasado);
+                    return;
+            }
             Dictionary<string, string> p = new Dictionary<string, string>();
             p["t_power"] = "0";
             Enviar(puid, p, delegate(Exception ex)
@@ -580,11 +695,15 @@ namespace MhiagosControl
                 CancelarRetorno();
                 return;
             }
-            long ms = Math.Max(1000, (long)falta.TotalMilliseconds);
+            ArmarRetornoEm(Math.Max(1000, (long)falta.TotalMilliseconds));
+        }
+
+        private static void ArmarRetornoEm(long ms)
+        {
             lock (_trava)
             {
                 if (_timerRetorno != null) _timerRetorno.Dispose();
-                _timerRetorno = new Timer(delegate { ConferirRetorno(); }, null, ms, Timeout.Infinite);
+                _timerRetorno = new Timer(delegate { Protegido("retorno da cena", ConferirRetorno); }, null, ms, Timeout.Infinite);
             }
         }
 
@@ -599,16 +718,25 @@ namespace MhiagosControl
 
         private static void ConferirRetorno()
         {
-            long alvo;
+            long alvo, noServidor;
             string puid;
-            lock (_trava) { alvo = Pref.RetornoEmUtc; puid = Pref.RetornoPuid; }
+            lock (_trava) { alvo = Pref.RetornoEmUtc; puid = Pref.RetornoPuid; noServidor = Pref.ServidorRetornoId; }
             if (alvo == 0 || DateTime.UtcNow.Ticks < alvo || !Logado) return;
-            long noServidor;
-            lock (_trava) { noServidor = Pref.ServidorRetornoId; Pref.ServidorRetornoId = 0; }
-            CancelarRetorno();
+            Decisao d = DecidirAgendamento(alvo, DateTime.UtcNow, noServidor > 0 ? ServidorCasa.EstadoDoAgendamento(noServidor) : null);
+            if (d == Decisao.Esperar) { ArmarRetornoEm(30000); return; }
+            if (!Assumir(false, alvo, noServidor, d)) return;
+
             Aparelho a = Achar(puid);
             string nome = a != null ? a.Nome : T.CasaAr;
-            if (ServidorCasa.ServidorCuida(noServidor)) { AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaRetornoFeito); return; }
+            switch (d)
+            {
+                case Decisao.ServidorFez: AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaRetornoFeito); return;
+                case Decisao.Cancelado: return;
+                case Decisao.Descartar:
+                    Log.Write("casa: retorno vencido ha mais de " + LimiteDeAtrasoMin + " min, descartado");
+                    AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaAgendamentoAtrasado);
+                    return;
+            }
             Dictionary<string, int> cmd = PadraoDeRetorno(Pref).Comando(a);
             if (cmd == null) { AvisoWindows(T.CasaRetornoTitulo(nome), T.CasaTimerFalhou(T.CasaCenaIndisponivel)); return; }
             Dictionary<string, string> p = new Dictionary<string, string>();
@@ -776,7 +904,19 @@ namespace MhiagosControl
             return p;
         }
 
+        /// <summary>
+        /// Uma gravacao por vez. A interface, a sincronizacao com o servidor e os
+        /// timers gravam de threads diferentes; sem a fila, uma gravacao com o
+        /// retrato mais velho podia terminar por ultimo e desfazer a outra.
+        /// </summary>
+        private static readonly object _gravacao = new object();
+
         public void Salvar()
+        {
+            lock (_gravacao) SalvarAgora();
+        }
+
+        private void SalvarAgora()
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("alertafalha=" + (AlertaFalha ? "1" : "0"));
@@ -813,7 +953,10 @@ namespace MhiagosControl
             sb.AppendLine("servidorretornoid=" + ServidorRetornoId.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidorprefversao=" + ServidorPrefVersao.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidorprefhash=" + (ServidorPrefHash ?? ""));
-            foreach (CenaCasa cena in Cenas) sb.AppendLine("cena=" + cena.Linha());
+            // A lista e trocada inteira (a edicao copia antes de mudar): percorrer
+            // a referencia lida aqui nao cruza com uma mudanca no meio.
+            List<CenaCasa> cenas = Cenas;
+            foreach (CenaCasa cena in cenas) sb.AppendLine("cena=" + cena.Linha());
             try { GravacaoAtomica.Escrever(Arquivo, sb.ToString(), new UTF8Encoding(false)); }
             catch (Exception ex) { Log.Error("casa: gravar casa.ini", ex); }
         }

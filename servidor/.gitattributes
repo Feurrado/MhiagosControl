@@ -1,0 +1,2 @@
+# Scripts que rodam no servidor Linux: sempre LF, mesmo vindo de um checkout no Windows.
+*.sh text eol=lf

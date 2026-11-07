@@ -45,6 +45,7 @@ namespace MhiagosControl
                 RegressionInstaller(root);
                 RegressionEvolution(root);
                 RegressionBugFixes(root);
+                RevisaoDeProducao(root);
             }
             finally
             {

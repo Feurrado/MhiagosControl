@@ -220,6 +220,9 @@ namespace MhiagosControl
         public static string CasaTimerTitulo(string nome) { return P(nome + ": timer", nome + ": timer"); }
         public static string CasaTimerDesligou { get { return P("Desliguei o ar, como programado.", "Turned the AC off, as scheduled."); } }
         public static string CasaTimerFalhou(string erro) { return P("Não consegui desligar o ar: " + erro, "Could not turn the AC off: " + erro); }
+        public static string CasaAgendamentoAtrasado { get { return P("O horário passou com o PC em suspensão. Não mandei nada, para não mexer no ar fora de hora.", "The time passed while the PC was asleep. Nothing was sent, so the AC is not changed late."); } }
+        public static string CasaAvisoTitulo { get { return P("Casa (ConnectLife)", "Home (ConnectLife)"); } }
+        public static string CasaAcessoNaoGravado { get { return P("O acesso renovado da ConnectLife não foi gravado. O login pode cair quando o app abrir de novo.", "The renewed ConnectLife access was not saved. The login may drop when the app opens again."); } }
         public static string CasaAlertaFalhaTitulo(string nome) { return P(nome + ": falha", nome + ": fault"); }
         public static string CasaAlertaOfflineTitulo(string nome) { return P(nome + " desconectado", nome + " offline"); }
         public static string CasaAlertaOfflineTexto(int min) { return P("Sem contato com a nuvem há mais de " + min + " minutos.", "No contact with the cloud for over " + min + " minutes."); }
