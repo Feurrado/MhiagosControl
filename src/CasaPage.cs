@@ -544,10 +544,9 @@ namespace MhiagosControl
             _abriu = true;
             // O que ja estava copiado antes de abrir nao vale como resposta.
             try { _ultimoVisto = Clipboard.ContainsText() ? Clipboard.GetText() : null; } catch { }
-            try { Process.Start(ConnectLifeNuvem.EnderecoDeLogin(Estado)); }
-            catch (Exception ex)
+            // Sem a elevacao do app: a conta Google entra num navegador comum.
+            if (!Navegador.Abrir(ConnectLifeNuvem.EnderecoDeLogin(Estado)))
             {
-                Log.Error("abrir o login da ConnectLife", ex);
                 Mostrar(T.CasaSemNavegador, true);
                 return;
             }

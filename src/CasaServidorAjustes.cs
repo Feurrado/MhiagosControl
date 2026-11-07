@@ -134,8 +134,8 @@ namespace MhiagosControl
             string e = ServidorCasa.Endereco;
             if (e.Length == 0) return;
             if (e.IndexOf("://", StringComparison.Ordinal) < 0) e = "http://" + e;
-            try { Process.Start(e); }
-            catch (Exception ex) { Log.Error("casa: abrir pagina do servidor", ex); }
+            // So http(s), e sem a elevacao do app: o endereco vem do casa.ini.
+            Navegador.Abrir(e);
         }
 
         public int Arranjar(Secao s, int w)

@@ -4,6 +4,7 @@ Mesma logica do ServicoCasa do Mhiagos (src/CasaServico.cs e src/CasaLavadora.cs
 para o historico do servidor e o do PC baterem quando sincronizam.
 """
 
+import hmac
 import json
 import logging
 import os
@@ -125,9 +126,17 @@ def url_de_login():
     return endereco_de_login(_estado_login)
 
 
+def estado_de_login_valido(estado):
+    """O state veio do login que este servidor abriu agora (tempo constante)."""
+    esperado = _estado_login
+    return bool(esperado) and hmac.compare_digest(str(estado), esperado)
+
+
 def entrar_com_codigo(code):
+    global _estado_login
     n = ConnectLife(None, None, _gravar_token)
     n.trocar_codigo(code)
+    _estado_login = None          # um state vale para um login so
     _usar(n)
     ler()
 
