@@ -1,0 +1,412 @@
+MHIAGOS CONTROL: DOCUMENTACAO DE ARQUITETURA
+Versao do app: 2.31.0   Servidor da Casa: 1.3.0   Data: 07/11/2026
+Repositorio: github.com/Feurrado/MhiagosControl (branch main)
+
+Este documento explica o projeto para quem chega de fora: o que ele faz, como o
+codigo esta organizado, como os dados fluem, onde cada coisa e guardada e quais
+decisoes explicam o que parece estranho. Os nomes de classes e arquivos sao os
+reais; o codigo e escrito em portugues, entao os nomes tambem.
+
+
+=====================================================================
+1. O QUE E
+=====================================================================
+
+Um aplicativo de bandeja para Windows 10/11 que substitui o software de fabrica
+do cooler Rise Mode Temp 6 Pro (e irmaos): o cooler tem dois mostradores de 3
+digitos, e o app escolhe qual sensor do PC vai em cada um. Em volta disso cresceu
+uma central de monitoramento:
+
+  - Painel do cooler: perfis, rodizio de perfis, perfil por jogo, apagar por
+    ociosidade (src: Profiles, TrayContext, PanelCycle, PanelKeepalive, HidPanel).
+  - Metricas: graficos historicos de sensores (MetricHistory, SettingsForm.Metricas).
+  - Especificacoes da maquina (SpecSheet, SpecMosaic).
+  - Baterias de perifericos: headset Logitech G325, mouse Attack Shark X11 e
+    aparelhos Bluetooth, com estimativa de duracao e widget na area de trabalho
+    (Peripherals, BatteryHistory, BatteryPage, BatteryWidget, WidgetDeBateria).
+  - Casa: ar-condicionado de janela e lava e seca Hisense pela nuvem ConnectLife
+    (Casa*.cs, ConnectLife.cs) e um servidor opcional em Docker que faz isso 24 h
+    (pasta servidor/).
+  - Visao geral: resumo de tudo (VisaoNova, SettingsForm.VisaoGeral).
+
+Ha duas edicoes: a completa (esta) e a "enxuta" (so painel CPU, metricas e
+especificacoes), mantida na branch edicao-cpu.
+
+
+=====================================================================
+2. COMO COMPILAR, TESTAR E EMPACOTAR
+=====================================================================
+
+Nao ha SDK nem projeto .csproj. Tudo e compilado pelo csc.exe do .NET Framework
+4.x que ja vem no Windows (C# 5: sem "$""" interpolada, sem "?."), em 64 bits.
+
+  build.ps1                 compila src\*.cs em bin\MhiagosControl.exe (winexe,
+                            manifesto requireAdministrator, icone e imagens como
+                            recursos embutidos). Copia as DLLs de lib\ para bin\
+                            e a biblioteca do HWiNFO para bin\engine\.
+  tools\build-tests.ps1     compila os MESMOS fontes de src\ junto com os de tools\
+                            em Tests.exe (console) e roda. Compilar contra os
+                            fontes (e nao contra o exe) permite testar o que e
+                            "internal" sem abrir a visibilidade.
+  tools\build-installer.ps1 gera dist\MhiagosControlSetup.exe: um instalador de
+                            um arquivo so, com o app embutido como recursos
+                            (tools\Installer.cs). Parametro -SemMotor omite a
+                            biblioteca do HWiNFO (obrigatorio para publicar).
+  tools\build-bench.ps1     banco de provas do ciclo de atualizacao. Precisa de
+                            PowerShell de administrador (sem isso as fontes
+                            abrem pela metade e a medicao nao vale).
+
+Arquivos de src\ sao CRLF com BOM; o Git converte (core.autocrlf). tools\Tests.cs
+e outros de tools\ tem o ponto de entrada de teste ([STAThread] Main).
+
+CI (.github/workflows/build.yml), a cada push na main e a cada PR:
+  - job "build" (Windows): suite completa, instalador -SemMotor, validacao do
+    pacote (recursos obrigatorios presentes e a DLL comercial ausente) e SHA-256.
+  - job "servidor" (Linux): instala o requirements.lock com hash, ruff, testes
+    unittest, constroi a imagem Docker e valida o docker-compose.
+  As Actions sao fixadas por SHA de commit.
+
+Suite de testes: cerca de 5.400 verificacoes em ~30 s (tools\*Tests.cs). Os testes
+usam log, historicos e cofre proprios em pasta temporaria; nada vai para os dados
+de quem usa o app. Ha tambem ferramentas dentro do Tests.exe: --captura-escala
+(imagens das paginas em 100, 125, 150, 200% de DPI), --captura-tela, --medir-
+pintura, --medir-animacao, --anim-real, --specs.
+
+
+=====================================================================
+3. VISAO GERAL DA ARQUITETURA
+=====================================================================
+
+Um unico processo .NET Framework, elevado (administrador), com WinForms.
+
+  +-------------------------------------------------------------+
+  |  Program.Main (TrayApp.cs)                                  |
+  |   mutex de instancia unica + evento de ativacao + evento de |
+  |   saida (instalador)                                        |
+  |   TrayContext : ApplicationContext   (icone de bandeja)     |
+  |     |                                                       |
+  |     |-- Thread "SensorInit"  abre as fontes de sensores     |
+  |     |-- Thread "PanelUpdate" (WorkerLoop) 1 Hz              |
+  |     |      le sensores -> PanelCycle -> PanelKeepalive      |
+  |     |-- Thread "PanelKeepalive" reenvia o quadro (HID)      |
+  |     |-- Threads de perifericos (G HUB, X11, Bluetooth)      |
+  |     |-- Timers e pool da Casa (ConnectLife, servidor)       |
+  |     '-- Thread de UI: bandeja, SettingsForm, widget         |
+  +-------------------------------------------------------------+
+
+Principio central: o que e lento (sensores, HID, rede) nunca roda na thread de
+interface. Quem produz dados publica um retrato imutavel (referencia trocada de
+uma vez, como _live e _snapshot em TrayContext) e quem consome le a referencia.
+A thread de UI so recebe resultados por BeginInvoke.
+
+Camadas, de baixo para cima:
+  hardware/rede  ->  fontes (Sensors*, Peripherals, ConnectLife, HidPanel)
+                 ->  orquestracao (TrayContext*, PanelCycle, Servico*)
+                 ->  estado persistente (Config, historicos, cofre)
+                 ->  interface (SettingsForm*, paginas, widget)
+
+
+=====================================================================
+4. O PAINEL DO COOLER (o nucleo original)
+=====================================================================
+
+4.1 Protocolo (HidPanel.cs, docs\PROTOCOLO.md)
+  Levantado por engenharia reversa (captura USB do software de fabrica).
+  Dispositivo VID 0x1A2C. Canal: colecao HID vendor-defined UsagePage 0xFF01,
+  Usage 1, sem report de entrada, report de feature de 64 bytes. Envio:
+  HidD_SetFeature de um quadro com ReportID 0x07:
+     [0]=0x07  [1..3]=centena,dezena,unidade do painel 1
+     [4]=flags (bit0 = Fahrenheit, bit4 = porcentagem)
+     [5..7]=centena,dezena,unidade do painel 2   [8..63]=0
+  Digito 0x0A apaga o digito ("sem leitura", diferente de zero). Valores sao
+  limitados a 0..999. O firmware tem watchdog: sem reenvio o painel apaga.
+  Aceita qualquer PID do fabricante que exponha a colecao certa (o 4984 tem
+  preferencia); o VID:PID achado vai para o log e para a aba Sobre.
+
+4.2 Ciclo de atualizacao (TrayContext.Ciclo.cs)
+  WorkerLoop roda a 1 Hz (e a 4 Hz so para FPS/frametime do RTSS, "caminho
+  rapido"). Cada volta (UpdateOnce):
+    1. pega a copia do perfil ativo (_live) ou o do rodizio (Rodar);
+    2. SensorCycle.Refresh/Read le os sensores dos dois paineis;
+    3. PanelCycle.Prepare aplica divisor, limites e ociosidade e monta o
+       PanelFrame;
+    4. PanelKeepalive.Publish entrega o quadro;
+    5. atualiza dica da bandeja, historico de bateria e avisos.
+  A copia do perfil existe porque a janela de configuracao edita a lista de
+  perfis em outra thread; a thread de fundo nunca le _cfg direto.
+
+4.3 Keepalive (PanelKeepalive.cs)
+  Thread unica que e a UNICA que escreve no HID. Reenvia o ultimo quadro a cada
+  800 ms (para o watchdog), com minimo de 250 ms entre envios. Se o quadro tiver
+  mais de 5 s, manda "apagado" em vez de um numero velho. Falha de envio fecha o
+  dispositivo e tenta reabrir a cada 5 s.
+
+4.4 Foco de leitura
+  Com a janela fechada, so os grupos dos sensores em uso sao lidos (medido: 54 ms
+  para 19 grupos contra 3,6 ms para 2). Com a janela aberta, le tudo.
+
+4.5 Perfis, jogos, rodizio, ociosidade
+  Profile (Profiles.cs) = qual sensor em cada mostrador, escala (divisor), unidade.
+  Rodizio gira perfis a cada N segundos pelo relogio monotonico (nao pelo relogio
+  de parede). Perfil por jogo: TrayContext.Jogo vigia o processo em primeiro plano
+  e usa GameIdentity para nome e icone. Ociosidade apaga o mostrador (GetLastInputInfo).
+
+
+=====================================================================
+5. SENSORES (Sensors.cs, SensorSources.cs, Hw*.cs)
+=====================================================================
+
+Interface ISensorSource; quatro fontes, juntadas por Sensors:
+  - HwInfoSensorSource / HwInfo.cs: carrega a DLL do HWiNFO
+    (api-ms-win-core-sysinfo-825-64.dll, em engine\) por LoadLibraryW e chama
+    funcoes por ORDINAL (850 init, 156 contagem, 263 poll, 678 selecao, 952 nome
+    de grupo, 641 leitura). E uma biblioteca comercial (REALiX) que NAO e
+    distribuida no instalador publico.
+  - LibreSensorSource: LibreHardwareMonitor 0.9.6 (lib\LibreHardwareMonitorLib.dll).
+    Le temperatura/potencia da CPU pelo driver PawnIO (precisa estar instalado).
+    So abre quando o HWiNFO nao esta disponivel.
+  - RtssSensorSource / Rtss.cs: FPS e frametime pela memoria compartilhada
+    "RTSSSharedMemoryV2" do RivaTuner. Ha tambem ajuste do Config do RTSS.
+  - BateriaSensorSource: baterias dos perifericos viram sensores "bat:...".
+Sensors tambem cria sensores sinteticos (medias de nucleos) e converte unidades
+(MB para GB). SensorEntry e o item de lista com Id estavel, categoria e rotulo.
+SensorSemantics resolve nomes portateis para recuperacao de configuracao.
+Anotacao importante: "GPU Memory Usage" do HWiNFO e invalido em AMD; usa-se
+"GPU D3D Memory Dedicated".
+
+
+=====================================================================
+6. INTERFACE
+=====================================================================
+
+6.1 Janela de configuracao: SettingsForm (partial, um arquivo por assunto)
+  SettingsForm.cs (casca, navegacao, autosave), .VisaoGeral, .Paineis, .Perfis,
+  .Metricas, .Specs, .Configuracoes, .Baterias, .Sobre, e SettingsTools.cs
+  (atalhos de teclado, backup/restauracao, relatorio de suporte). Paginas: Visao
+  geral, Painel CPU (Paineis|Perfis), Metricas, Especificacoes, Configuracoes,
+  Baterias, Casa, Sobre. A ordem do menu lateral e reordenavel (navorder).
+  SettingsSession: a janela edita um rascunho; so vai para o Config no salvar.
+  Autosave: 350 ms depois da ultima edicao; "Desfazer" guarda um snapshot.
+  FaixaDeAviso substitui caixas de dialogo; ErroInesperado mostra erro sem a
+  excecao crua.
+
+6.2 Sistema visual (Ui.cs, Theme.cs, Motion.cs, Mica.cs, Lang.cs)
+  - Ui: tokens de cor/fonte e controles desenhados a mao (FlatBtn, Card, Toggle...).
+    TODA medida em pixel passa por Ui.S(px), que aplica a escala de DPI e do
+    "texto maior" do Windows. Cores de tema vem da tabela Tons; Theme.Recolorir
+    troca de claro para escuro.
+  - Motion: relogio unico de animacao sincronizado com o vsync (DwmFlush numa
+    thread, posta na interface); tempos e curvas padrao (cubic-bezier 0.4,0,0.2,1).
+    Novas animacoes assinam o Motion; nunca criam Timer proprio. Sem DWM ou sem
+    interface presa (testes), cai num Timer de 10 ms. Transicao cuida de hover/press.
+  - CollapsiblePanel/AnimacaoDeRecolher: paineis que abrem e fecham (250 ms).
+  - Mica so na barra de titulo (Windows 11).
+  - Lang.cs: classe parcial T com todos os textos em portugues e ingles (P(pt,en)).
+    Ha teste de completude do idioma.
+  - Decisoes: troca de pagina e instantanea (3 transicoes foram testadas e
+    descartadas); sem transicao no rodape da barra lateral.
+
+6.3 Widget de bateria (BatteryWidget.cs, WidgetDeBateria.*.cs)
+  Janela em camadas (UpdateLayeredWindow) sobre a area de trabalho, desenhada em
+  DIB 32 bits reaproveitado entre quadros. Formatos aneis ou lista, vidro nitido/
+  desfocado/fosco, mostra opcionalmente a casa. Presenca animada de aparelhos
+  (PresencaAnimada). Posicao ancorada por canto e monitor.
+
+6.4 Bandeja (TrayContext.Bandeja/Menu/Janelas)
+  Icone com pilha vermelha quando algum aparelho esta com 30% ou menos,
+  notificacoes (AvisoComIcone usa o icone do app no corpo), menu com perfis.
+
+
+=====================================================================
+7. PERIFERICOS E BATERIAS (Peripherals.cs, BatteryHistory.cs)
+=====================================================================
+
+  Leitores, cada um em sua thread, parados pelo evento _stop:
+  - LeitorGHub: WebSocket local do G HUB (ws://localhost:9010, subprotocolo
+    "json", Origin file://). GET /devices/list e /battery/<id>/state dao
+    percentual, carregando e horas restantes estimadas pelo G HUB.
+  - LeitorAttackShark: abre a colecao HID do dongle (VID 1D57 PID FA60) so para
+    leitura; o dongle empurra um report de 5 bytes (03 55 xx cabo bateria). O
+    bit 0x02 do byte 3 e "no cabo". Silencio de 6,5 s = mouse desligado.
+  - LeitorBluetooth: propriedades de bateria do Windows por ContainerId.
+  BatteryHistory grava baterias.dat: descargas, ultima carga, amostras de 5 min
+  por 7 dias. Estimativa: so degraus COMPLETOS entram na media (o G325 informa de
+  10 em 10%), ritmo por faixa de 10%, esquecimento 0,99 por ponto. AvisosDeBateria
+  dispara em 30%, 10%, carga completa e ~2 h restantes.
+
+
+=====================================================================
+8. CASA (ConnectLife)
+=====================================================================
+
+8.1 No app (Casa*.cs, ConnectLife.cs)
+  Os aparelhos nao abrem porta na rede local; tudo passa pela nuvem Hisense.
+  - ConnectLife.cs: cliente. Login OAuth no navegador (conta Google), usando o
+    cliente que a Hisense publicou para o Home Assistant (o client secret e
+    publico). Chamadas a juapi-3rd.hijuconn.com assinadas com HMAC-SHA256. O
+    refresh token GIRA a cada renovacao e precisa ser regravado sempre. Renovacao
+    serializada; so 400/401 do token e 401 da API contam como "entre de novo".
+  - ServicoCasa (CasaServico.cs): estado estatico da casa. Le a nuvem a cada 30 s
+    (pagina visivel) ou 60 s; comandos com Enviar (t_beep=0 vai junto; t_sleep so
+    em comando sozinho); timer de desligar e retorno de cena (padrao 24 C, Frio,
+    baixa); regra: vencido ha mais de 15 min e descartado. Alertas (falha,
+    desconectado, quente, fim de ciclo). A conta so e esquecida na segunda recusa.
+  - Cofre.cs: segredos (acesso ConnectLife, chave do servidor) em
+    %LOCALAPPDATA%\MhiagosControl\cofre-*.dat, cifrados com DPAPI do usuario
+    com entropia por alvo. O Gerenciador de Credenciais so serve de migracao
+    (ele falhava com erro 1312 no app elevado).
+  - Modelos: Aparelho/MetaPropriedade (o que o modelo declara gravar),
+    CartaoDoAr (CasaAr.cs), CartaoDaLavadora (CasaLavadora.cs: ciclo, etapas,
+    CiclosDaLavadora), CenaCasa (CasaCenas.cs), consumo (CasaConsumo.cs),
+    historico do ar (HistoricoDoAr: casa-historico.txt), Clima (Open-Meteo).
+  - Estimativa de consumo do ar: horas ligado por modo x potencia configurada x
+    tarifa. A lavadora informa energia e agua por ciclo.
+
+8.2 Servidor da Casa (pasta servidor/)
+  Backend Python 3.12, FastAPI + uvicorn + httpx + SQLite, em Docker no HOME01
+  (Debian, 192.168.1.100:8765, so na rede local).
+  app/main.py        API HTTP (Bearer com chave do .env, comparacao em tempo
+                     constante), validacao Pydantic, cabecalhos de seguranca
+  app/servico.py     laco de leitura da nuvem, ciclos da lavadora, agendamentos
+                     (timer de desligar, retorno) com NOVA TENTATIVA e resultado
+  app/connectlife.py porte do cliente C# (mesma assinatura HMAC, mesmas regras)
+  app/casa.py        o que cada cartao mostra, preferencias validadas, consumo
+  app/tabelas.py     nomes de programas, modos e falhas
+  app/banco.py       SQLite, uma conexao por thread, transacao() para varios passos
+  app/static/        painel web (index.html unico, JS puro, sem CDN), manifest
+  Rotas principais: /api/saude (sem chave), /api/aparelhos, /comando, /cena,
+  /timer, /api/historico/ar|ciclos|importar, /api/consumo, /api/resumo-mes,
+  /api/agendamentos e /{id}/resultado, /api/preferencias, /api/mudancas (espera
+  longa assincrona), /api/conta*.
+  O PC sincroniza a cada minuto (CasaServidor.cs): troca historico nos dois
+  sentidos, preferencias com versao, e entrega timers para o servidor disparar com
+  o PC desligado. No vencimento, o PC pergunta o resultado ao servidor (Pendente,
+  Feito, Falhou, Cancelado, Indisponivel) e so manda ele mesmo se preciso.
+  Decisao em aberto: PC e servidor tem logins ConnectLife PROPRIOS e ambos leem a
+  nuvem; a logica da Casa existe duplicada em C# e Python.
+  Container: usuario 10001, so leitura, sem capacidades, limite de memoria e
+  processos, log com rotacao, imagem base fixada por digest, dependencias com hash
+  (requirements.lock). backup.sh faz copia consistente do casa.db (14 mantidas).
+
+
+=====================================================================
+9. PERSISTENCIA: ONDE FICA CADA DADO
+=====================================================================
+
+Pasta de dados: %LOCALAPPDATA%\MhiagosControl  (gravavel sem elevacao; REGRA:
+nada lido daqui vira caminho executado ou biblioteca carregada).
+  config.ini (+ .bak)       perfis, jogos, rodizio, metricas, janela, idioma
+  casa.ini                  preferencias da Casa, servidor, timers, cenas
+  widget.ini                widget de bateria
+  history.dat               historico das metricas (baldes)
+  baterias.dat              historico de bateria
+  casa-historico.txt        amostras do ar;  casa-ciclos.txt  ciclos da lavadora
+  cofre-ConnectLife.dat, cofre-CasaServidor.dat   segredos (DPAPI)
+  nome.txt                  primeiro nome para a saudacao
+  reinicios.txt             controle do reinicio automatico
+  log.txt (+ .1)            log com rotacao de 512 KB
+Gravacao: GravacaoAtomica (arquivo temporario unico, Flush ate o disco, troca
+atomica). config.ini tem copia .bak e recuperacao se o principal estiver
+corrompido. Instalacao: Program Files\Mhiagos Control, pasta protegida (so
+administradores gravam), engine\ com a DLL do HWiNFO quando houver.
+
+
+=====================================================================
+10. CICLO DE VIDA, ERROS E ROBUSTEZ
+=====================================================================
+
+  - Instancia unica: mutex Local\MhiagosControl_SingleInstance; a segunda
+    execucao acende o evento de ativacao e sai. O instalador acende um evento de
+    saida (encerramento limpo, que grava historicos).
+  - Inicio com o Windows: tarefa agendada "onlogon" com /rl highest (sem UAC).
+    O app abre a janela so se foi aberto pelo executavel (nao no logon).
+  - Encerramento (TrayContext.Sessao): ordem fixa; espera as threads ate 3 s;
+    so descarta HID e sensores se todas pararam.
+  - Excecoes: ThreadException da UI e registrada e ignorada; excecao terminal em
+    thread de fundo e registrada e o app se REABRE sozinho (no maximo 3 vezes em
+    10 min, Reinicio.cs). Callbacks de timer e de pool da Casa passam por Protegido.
+  - [STAThread] no Program.Main e obrigatorio (area de transferencia e dialogos).
+  - Navegador.Abrir: so http(s) e aberto via explorer.exe, para o navegador nao
+    herdar a elevacao.
+  - Suspensao: timers vencidos mais de 15 min nao disparam; leitores reabrem.
+  - Primeira execucao sem HWiNFO: PawnIo.cs detecta o driver; sem ele e sem
+    temperatura de CPU, avisa na bandeja e o Sobre instala por winget.
+
+
+=====================================================================
+11. SEGURANCA (modelo de ameaca resumido)
+=====================================================================
+
+  - O app roda como administrador porque os sensores (HWiNFO, PawnIO) exigem.
+    Consequencia: tudo que ele le de lugares gravaveis por usuario comum e dado,
+    nunca codigo (HwInfo.Adotar confere a ACL da origem; Navegador filtra
+    esquemas; ServidorCasa so fala http/https).
+  - Segredos: DPAPI do usuario; chave do servidor 192 bits, comparada em tempo
+    constante; sem token em log.
+  - Rede: o servidor so escuta na rede local, sem HTTPS (a chave viaja em claro;
+    troque-a se houver convidados no Wi-Fi). CSP, X-Frame-Options, no-store.
+  - Cadeia de entrega: SHA-256 publicado ao lado do instalador; sem assinatura de
+    codigo (decisao pendente).
+  - Licenca: o instalador publico NUNCA contem a DLL comercial do HWiNFO; o CI
+    falha se ela aparecer. Instaladores com a DLL sao so de uso pessoal.
+
+
+=====================================================================
+12. MAPA RAPIDO DOS ARQUIVOS (src\)
+=====================================================================
+
+  Entrada e orquestracao:  TrayApp.cs (Program, TrayContext), TrayContext.*.cs
+  Painel/HID:              HidPanel, PanelCycle, PanelKeepalive, PanelPreview
+  Sensores:                Sensors, SensorSources, SensorCycle, SensorSemantics,
+                           HwInfo, Rtss, ReadingSnapshot, RuntimeContracts
+  Configuracao:            Profiles (Config, Profile), ConfigTiming,
+                           ConfigurationBackup, SettingsSession, GameBindingList
+  Interface:               SettingsForm*.cs, PageLayouts, VisaoNova, Ui, Theme,
+                           Motion, CollapsiblePanel, MenuTema, Mica, SplashForm,
+                           FaixaDeAviso, ErroInesperado, Lang
+  Metricas e specs:        MetricHistory, WindowNavigator, SpecSheet, SpecMosaic,
+                           SystemInfo, MemorySlots
+  Perifericos:             Peripherals, PeripheralStrip, BatteryHistory,
+                           BatteryPage, BatteryWidget, WidgetDeBateria.*
+  Casa:                    ConnectLife, Casa*.cs, Clima, ClimaAjustes, Cofre
+  Sistema:                 Autostart, TaskbarIdentity, AliasDoWindows, Navegador,
+                           PawnIo, Reinicio, GravacaoAtomica, Log (e Paths),
+                           AssemblyInfo
+  Testes e ferramentas:    tools\*.cs
+  Servidor:                servidor\ (ver secao 8.2)
+  Documentos:              README.md, docs\PROTOCOLO.md (protocolo e medicoes),
+                           docs\qa-2026-10-28.md, este arquivo
+
+
+=====================================================================
+13. CONVENCOES E ARMADILHAS PARA QUEM MEXE NO CODIGO
+=====================================================================
+
+  - C# 5 apenas. Escapes unicode (\u...) em textos: algumas ferramentas de edicao
+    os convertem; confira apos editar.
+  - Medida de layout sempre por Ui.S(). Campos estaticos que usam Ui.S precisam
+    vir DEPOIS de Ui.Escala no arquivo (ordem de inicializacao).
+  - Teste novo precisa entrar em tools\build-tests.ps1. Testes de layout do
+    tamanho padrao pulam em tela pequena (CI roda em 1024x768).
+  - Animacao nova: assine o Motion. Respeite Ui.Animacoes.
+  - Estado compartilhado com thread de fundo: publique copias, nao mude listas no
+    lugar (as cenas da Casa mudam por copia pelo mesmo motivo).
+  - Nunca deixe os testes falarem com a nuvem, com o servidor ou com a pasta de
+    dados real (ServidorCasa.Desligado, Cofre.Pasta, Log, caminhos trocaveis).
+  - Servidor: rode "python -m unittest discover -s tests" dentro de servidor/;
+    tests\comum.py precisa ser importado antes do app (a chave e lida ao importar).
+  - Release: so versoes x.y.0, instalador da CI (sem o motor), nunca o local.
+  - Fora de escopo ate segunda ordem: DPI por monitor, dividir o SettingsForm
+    (ja e partial por assunto), teste real de suspensao.
+
+
+=====================================================================
+14. PENDENCIAS E DIVIDA CONHECIDA
+=====================================================================
+
+  - Separar a parte elevada (sensores e HID) da interface (hoje tudo e elevado).
+  - O PC passar a usar o servidor como fonte unica da Casa (logica duplicada).
+  - HTTPS na rede local (Caddy ou Tailscale) e assinatura de codigo.
+  - Medir o custo por ciclo com o Bench.exe elevado; repouso medido: ~2,4% de um
+    nucleo com o widget ativo, sem vazamento de GDI/handles.
+  - Endurecer o SSH do servidor (senha e root).
