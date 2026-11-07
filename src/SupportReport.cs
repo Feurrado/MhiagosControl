@@ -17,6 +17,7 @@ namespace MhiagosControl
             // Sem a versao e a fonte de sensores, todo relatorio comecava com "qual versao?".
             text.AppendLine("Version: " + AppInfo.Versao);
             text.AppendLine("HWiNFO engine: " + (HwInfo.Installed ? "present" : "absent"));
+            text.AppendLine("PawnIO: " + (PawnIo.Instalado ? "installed" : "absent"));
             text.AppendLine("UTC: " + utcNow.ToString("O", CultureInfo.InvariantCulture));
             text.AppendLine("Windows: " + Environment.OSVersion.Version);
             text.AppendLine("CLR: " + Environment.Version);

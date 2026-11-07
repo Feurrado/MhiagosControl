@@ -261,6 +261,11 @@
     .cab { padding:12px 14px; }
     .corpo { padding:14px; }
   }
+  /* Celular estreito: oito rotulos nao cabem lado a lado. Ficam o comeco, a etapa atual e o fim. */
+  @media (max-width:400px) {
+    .passo span { display:none; }
+    .passo:first-child span, .passo:last-child span, .passo.atual span { display:block; }
+  }
 </style>
 </head>
 <body>

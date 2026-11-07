@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -33,6 +34,49 @@ namespace MhiagosControl
             CenasEntreThreads(root);
             EnderecosSemElevacao();
             VersaoEIsolamento();
+            EdicaoPublicaENomes(root);
+        }
+
+        private static void EdicaoPublicaENomes(string root)
+        {
+            List<SensorEntry> semTemperatura = new List<SensorEntry>();
+            List<SensorEntry> comTemperatura = new List<SensorEntry>();
+            SensorEntry t = new SensorEntry();
+            t.Id = "lhm:/cpu/0/temperature/0"; t.Label = "CPU Package"; t.Type = LibreHardwareMonitor.Hardware.SensorType.Temperature;
+            comTemperatura.Add(t);
+            Verdade(TrayContext.FaltaPawnIo(false, false, semTemperatura), "pawnio: sem HWiNFO, sem PawnIO e sem temperatura da CPU, avisa");
+            Verdade(!TrayContext.FaltaPawnIo(true, false, semTemperatura), "pawnio: com a biblioteca do HWiNFO, nao avisa");
+            Verdade(!TrayContext.FaltaPawnIo(false, true, semTemperatura), "pawnio: com o PawnIO instalado, nao avisa");
+            Verdade(!TrayContext.FaltaPawnIo(false, false, comTemperatura), "pawnio: com a temperatura da CPU lida, nao avisa");
+            Verdade(T.AvisoDoMotor(false).Contains("PawnIO") && T.AvisoDoMotor(true).Contains("PawnIO") &&
+                    T.AvisoDoMotor(false) != T.AvisoDoMotor(true), "pawnio: aviso do Sobre diferente com e sem o PawnIO");
+            Verdade(T.AvisoDoMotor(false).IndexOf("instalador oficial", StringComparison.OrdinalIgnoreCase) < 0,
+                "pawnio: o aviso nao manda mais reinstalar pelo instalador oficial (que nao traz a biblioteca)");
+
+            using (Bitmap bmp = new Bitmap(10, 10))
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                string apoio = "100% → 41%  ·  " + T.SinceTracking("06/11, 14:00");
+                Verdade(CartaoDeBateria.CabeEmDuasLinhas(g, apoio, Ui.S(150)), "baterias: a linha de apoio do bloco cabe em duas linhas");
+                Verdade(!CartaoDeBateria.CabeEmDuasLinhas(g, apoio + " " + apoio + " " + apoio, Ui.S(150)),
+                    "baterias: texto que nao cabe em duas linhas e detectado (vira uma linha com reticencias)");
+            }
+
+            string antesArquivo = Visao.ArquivoDoNome;
+            object antesNome = typeof(Visao).GetField("_nome", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            Visao.ArquivoDoNome = Path.Combine(root, "nome.txt");
+            try
+            {
+                Verdade(Visao.NomeGuardado() == null, "saudacao: sem nome guardado, nenhum (nada de login cortado)");
+                Visao.NomeAchado("Thiago");
+                Igual("Thiago", Visao.NomeGuardado(), "saudacao: o nome achado fica guardado para a proxima abertura");
+                Igual("Thiago", Visao.PrimeiroNome("thiago moreira"), "saudacao: primeiro nome com maiuscula");
+            }
+            finally
+            {
+                Visao.ArquivoDoNome = antesArquivo;
+                typeof(Visao).GetField("_nome", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, antesNome);
+            }
         }
 
         private static void VersaoEIsolamento()

@@ -61,8 +61,10 @@ namespace MhiagosControl
             // Sem o motor do HWiNFO, o aviso inteiro fica a mostra embaixo dos
             // blocos: antes perder o HWiNFO so aparecia no log, e o aplicativo
             // seguia sem temperatura nem potencia da CPU sem dizer por que.
-            _sobreAvisoMotor = MakeLabel(T.EngineMissing, 0, 0, Ui.FontSmall);
+            _sobreAvisoMotor = MakeLabel(T.AvisoDoMotor(PawnIo.Instalado), 0, 0, Ui.FontSmall);
             _sobreAvisoMotor.ForeColor = Ui.Warn;
+            // Sem o PawnIO, o aviso e o caminho: o clique instala pelo winget.
+            _sobreAvisoMotor.Click += delegate { if (!PawnIo.Instalado) InstalarPawnIo(); };
             page.Controls.Add(_sobreAvisoMotor);
 
             AtualizarSituacaoDoSobre();
@@ -119,10 +121,17 @@ namespace MhiagosControl
             foreach (SensorEntry s in _sensors)
                 if (s.Source == "HWiNFO") hw++; else lhm++;
             _blocoFontes.Valor = T.SensorsFrom("HWiNFO", hw);
-            _blocoFontes.CorDoValor = hw == 0 ? (Color?)Ui.Warn : null;
-            _blocoFontes.Ponto = hw == 0 ? Ui.Warn : PeripheralStrip.Verde;
+            // Sem o HWiNFO mas com o PawnIO e a edicao publica funcionando como deve:
+            // so e alerta quando nem o PawnIO esta la.
+            bool alerta = hw == 0 && !PawnIo.Instalado;
+            _blocoFontes.CorDoValor = alerta ? (Color?)Ui.Warn : null;
+            _blocoFontes.Ponto = alerta ? Ui.Warn : PeripheralStrip.Verde;
             _blocoFontes.Apoio = T.SensorsFrom("LibreHardwareMonitor", lhm);
             _sobreAvisoMotor.Visible = hw == 0;
+            bool pawn = PawnIo.Instalado;
+            _sobreAvisoMotor.Text = T.AvisoDoMotor(pawn);
+            _sobreAvisoMotor.ForeColor = pawn ? Ui.Muted : Ui.Warn;
+            _sobreAvisoMotor.Cursor = pawn ? Cursors.Default : Cursors.Hand;
 
             _blocoPainel.Invalidate();
             _blocoFontes.Invalidate();
@@ -240,6 +249,30 @@ namespace MhiagosControl
         private static void Abrir(string url)
         {
             Navegador.Abrir(url);
+        }
+
+        /// <summary>
+        /// Instala o PawnIO pelo winget, numa janela visivel (como o RTSS): e um
+        /// driver de outra gente entrando a pedido de um clique, e o minimo e
+        /// que se veja o comando e a resposta. O Windows ainda pede permissao.
+        /// </summary>
+        private void InstalarPawnIo()
+        {
+            string winget = Rtss.Winget();
+            if (winget == null) { _sobreAvisoMotor.Text = T.PawnIoSemWinget; return; }
+            try
+            {
+                System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo(
+                    System.IO.Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+                    "/s /k \"" + Winget(winget, PawnIo.PacoteWinget) + "\"");
+                psi.UseShellExecute = true;
+                System.Diagnostics.Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("instalacao do PawnIO pelo winget", ex);
+                _sobreAvisoMotor.Text = T.PawnIoSemWinget;
+            }
         }
 
         private void OnToggleShowAll(object sender, EventArgs e)

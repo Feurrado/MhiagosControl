@@ -465,10 +465,23 @@ namespace MhiagosControl
                 TextRenderer.DrawText(g, blocos[i][0], Ui.FontSmall, new Rectangle(x, b.Y + Ui.S(9), w, Ui.S(16)), Ui.Muted, Uma);
                 TextRenderer.DrawText(g, blocos[i][1], Ui.FontTileValue, new Rectangle(x, b.Y + Ui.S(25), w, Ui.S(22)), Ui.Text, Uma);
                 if (!string.IsNullOrEmpty(blocos[i][2]))
-                    // a linha de apoio quebra em duas, em vez de terminar em reticencias
-                    TextRenderer.DrawText(g, blocos[i][2], Ui.FontSmall, new Rectangle(x, b.Y + Ui.S(47), w, Ui.S(32)), Ui.Muted,
-                        TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
+                {
+                    // a linha de apoio quebra em duas, em vez de terminar em reticencias;
+                    // se nem em duas cabe, uma so com reticencias: a terceira linha era
+                    // cortada calada ("acompanhando desde" sem a data, em ~1000 px)
+                    Rectangle apoio = new Rectangle(x, b.Y + Ui.S(47), w, Ui.S(32));
+                    TextFormatFlags quebra = TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis;
+                    TextRenderer.DrawText(g, blocos[i][2], Ui.FontSmall, apoio, Ui.Muted,
+                        CabeEmDuasLinhas(g, blocos[i][2], w) ? quebra : Uma);
+                }
             }
+        }
+
+        internal static bool CabeEmDuasLinhas(IDeviceContext g, string texto, int largura)
+        {
+            Size s = TextRenderer.MeasureText(g, texto, Ui.FontSmall, new Size(largura, int.MaxValue),
+                TextFormatFlags.NoPadding | TextFormatFlags.WordBreak);
+            return s.Height <= Ui.S(32);
         }
 
         /// <summary>Rotulo, valor e linha de apoio de cada bloco.</summary>

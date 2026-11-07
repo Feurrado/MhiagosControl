@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.IO;
 using System.Management;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -93,7 +95,11 @@ namespace MhiagosControl
                 if (!_buscou)
                 {
                     _buscou = true;
-                    _nome = PrimeiroNome(Environment.UserName);
+                    // O nome da ultima vez, enquanto a consulta nao volta. O login do
+                    // Windows nao serve de reserva: numa conta Microsoft ele e o comeco
+                    // do e-mail cortado em 5 letras ("Thiag"). Sem nome guardado, a
+                    // frase sai sem nome ate a consulta chegar.
+                    _nome = NomeGuardado() ?? "";
                     Thread t = new Thread(BuscarNome);
                     t.IsBackground = true;
                     t.Start();
@@ -102,8 +108,43 @@ namespace MhiagosControl
             }
         }
 
+        /// <summary>Onde o primeiro nome fica guardado entre execucoes; os testes trocam.</summary>
+        internal static string ArquivoDoNome;
+
+        private static string CaminhoDoNome { get { return ArquivoDoNome ?? Path.Combine(Paths.DataDir, "nome.txt"); } }
+
+        internal static string NomeGuardado()
+        {
+            try
+            {
+                if (!File.Exists(CaminhoDoNome)) return null;
+                string n = File.ReadAllText(CaminhoDoNome, Encoding.UTF8).Trim();
+                return n.Length > 0 && n.Length <= 40 ? n : null;
+            }
+            catch (Exception ex) { Log.Error("nome guardado", ex); return null; }
+        }
+
+        private static void GuardarNome(string nome)
+        {
+            try { GravacaoAtomica.Escrever(CaminhoDoNome, nome, new UTF8Encoding(false)); }
+            catch (Exception ex) { Log.Error("guardar o nome", ex); }
+        }
+
+        /// <summary>O nome que a consulta achou (ou o login, se ela nao achou nada) passa a valer e fica guardado.</summary>
+        internal static void NomeAchado(string nome)
+        {
+            if (string.IsNullOrEmpty(nome)) return;
+            bool mudou = nome != _nome;
+            _nome = nome;
+            if (NomeGuardado() != nome) GuardarNome(nome);
+            if (!mudou) return;
+            EventHandler h = NomeChegou;
+            if (h != null) h(null, EventArgs.Empty);
+        }
+
         private static void BuscarNome()
         {
+            string achado = null;
             try
             {
                 string login = Environment.UserName.Replace("\\", "\\\\").Replace("'", "\\'");
@@ -112,10 +153,12 @@ namespace MhiagosControl
                     foreach (ManagementBaseObject o in s.Get())
                     {
                         string f = o["FullName"] as string;
-                        if (!string.IsNullOrEmpty(f) && f.Trim().Length > 0) { _nome = PrimeiroNome(f); EventHandler h = NomeChegou; if (h != null) h(null, EventArgs.Empty); break; }
+                        if (!string.IsNullOrEmpty(f) && f.Trim().Length > 0) { achado = PrimeiroNome(f); break; }
                     }
             }
             catch (Exception ex) { Log.Error("nome do usuario", ex); }
+            // Conta sem nome completo: o login e o que ha (numa conta local ele e o nome escolhido).
+            NomeAchado(string.IsNullOrEmpty(achado) ? PrimeiroNome(Environment.UserName) : achado);
         }
 
         internal static string PrimeiroNome(string s)
