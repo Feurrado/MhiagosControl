@@ -38,6 +38,9 @@ máquina.
 
 > Como o painel foi levantado, como os sensores são lidos e o que foi medido em
 > vez de suposto está em **[docs/PROTOCOLO.md](docs/PROTOCOLO.md)**.
+>
+> Para entender o código e a arquitetura (threads, fluxo de dados, onde cada dado fica,
+> servidor da Casa, segurança): **[docs/ARQUITETURA.txt](docs/ARQUITETURA.txt)**.
 
 ---
 
