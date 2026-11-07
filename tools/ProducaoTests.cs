@@ -31,6 +31,38 @@ namespace MhiagosControl
             TimerDepoisDaSuspensao(root);
             FreioDoReinicio();
             CenasEntreThreads(root);
+            EnderecosSemElevacao();
+        }
+
+        private static void EnderecosSemElevacao()
+        {
+            Uri u;
+            Verdade(Navegador.Seguro("http://192.168.1.100:8765", out u) && Navegador.Seguro("https://github.com/x", out u),
+                "navegador: http e https com host passam");
+            Verdade(!Navegador.Seguro("file:///C:/Windows/System32/calc.exe", out u), "navegador: file: e recusado");
+            Verdade(!Navegador.Seguro("ms-msdt:/id x", out u) && !Navegador.Seguro("search-ms:query=x", out u),
+                "navegador: esquemas do Windows sao recusados");
+            Verdade(!Navegador.Seguro("C:\\Users\\Public\\x.exe", out u) && !Navegador.Seguro("", out u) && !Navegador.Seguro(null, out u),
+                "navegador: caminho de programa e vazio sao recusados");
+            Verdade(!Navegador.Seguro("http://usuario:senha@192.168.1.100/", out u), "navegador: endereco com usuario e senha e recusado");
+
+            List<string> abertos = new List<string>();
+            Navegador.Interceptar = delegate(string url) { abertos.Add(url); };
+            try
+            {
+                Verdade(Navegador.Abrir("https://github.com/Feurrado/MhiagosControl") && abertos.Count == 1,
+                    "navegador: endereco bom abre");
+                Verdade(!Navegador.Abrir("file:///C:/x.exe") && abertos.Count == 1, "navegador: endereco ruim nao chega a abrir");
+            }
+            finally { Navegador.Interceptar = null; }
+
+            bool antes = ServidorCasa.Desligado;
+            try
+            {
+                Igual(T.ServidorEnderecoInvalido, ServidorCasa.Testar("file:///C:/Windows/win.ini", "chave"),
+                    "servidor da casa: endereco file: nem chega a virar pedido");
+            }
+            finally { ServidorCasa.Desligado = antes; }
         }
 
         private static void CofreComDpapi(string root)

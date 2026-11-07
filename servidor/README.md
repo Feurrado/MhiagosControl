@@ -14,9 +14,38 @@ disparar com o PC desligado.
 
 ```sh
 mkdir -p /opt/mhiagos-casa && cd /opt/mhiagos-casa
-# copie Dockerfile, docker-compose.yml, requirements.txt e app/ para cá
+# copie o conteúdo de servidor/ para cá (Dockerfile, docker-compose.yml, requirements.lock, app/...)
 (umask 077; echo "MHIAGOS_CHAVE=$(openssl rand -hex 24)" > .env)
 docker compose up -d --build
+```
+
+O serviço roda sem root (uid 10001), com o sistema de arquivos só de leitura
+(grava só em `/data`), sem capacidades extras do kernel, com limite de memória e
+de processos e com o log limitado a 3 arquivos de 5 MB. O serviço `permissoes`
+do compose acerta o dono do volume a cada subida (quem vem da 1.2 tinha os
+arquivos como root) e termina.
+
+## Atualizar
+
+Copie a pasta `servidor/` de novo para `/opt/mhiagos-casa` (sem apagar o `.env`)
+e rode `docker compose up -d --build`. O banco ganha sozinho o que a versão nova
+precisar.
+
+As dependências ficam travadas com hash em `requirements.lock`. Para subir de
+versão, edite `requirements.txt` e gere o lock de novo, conferindo os testes:
+
+```sh
+pip-compile --generate-hashes --allow-unsafe --strip-extras --output-file requirements.lock requirements.txt
+```
+
+## Backup
+
+`backup.sh` copia o `casa.db` para `/opt/mhiagos-casa/backups` com a API de backup
+do SQLite (consistente com o serviço gravando), confere a cópia e guarda as 14
+últimas. No cron do root:
+
+```
+30 3 * * * /opt/mhiagos-casa/backup.sh >> /var/log/mhiagos-casa-backup.log 2>&1
 ```
 
 Depois abra `http://<servidor>:8765`, cole a chave do `.env`, clique em
@@ -67,7 +96,12 @@ http da rede local ele vira um atalho que abre no navegador.
 ## Segurança
 
 - A chave do `.env` é a única proteção da API: o painel só escuta na rede local
-  (`192.168.1.100:8765`). Não abra essa porta no roteador.
+  (`192.168.1.100:8765`). Não abra essa porta no roteador. Ela viaja sem HTTPS:
+  troque a chave se o Wi-Fi de casa tiver convidados.
+- A API confere tipo e faixa de tudo que grava (preferências, histórico importado,
+  agendamentos, comandos) e responde 422 ou 400 em vez de guardar lixo. A página
+  vai com `Content-Security-Policy` e não abre dentro de outro site.
+- O login colado precisa ser do pedido que o servidor abriu (o `state` confere).
 - Troque a senha do root se ela já passou por algum chat ou arquivo: `passwd`
   no servidor. O acesso de manutenção usa chave SSH.
 - Para acessar de fora de casa, prefira uma VPN (Tailscale ou WireGuard) a

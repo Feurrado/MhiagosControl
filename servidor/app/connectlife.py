@@ -83,6 +83,22 @@ def extrair_codigo(colado):
     return p.get("code") or None
 
 
+def extrair_estado(colado):
+    """O state do endereco colado (final ou da pagina intermediaria do HA), ou None sem ele."""
+    texto = (colado or "").strip()
+    if "?" not in texto:
+        return None
+    p = _consulta(texto)
+    for _ in range(3):
+        if "state" in p:
+            return p["state"]
+        aninhado = p.get("redirect", "")
+        if "?" not in aninhado:
+            break
+        p = _consulta(aninhado)
+    return None
+
+
 def _consulta(texto):
     q = texto.split("?", 1)[1] if "?" in texto else texto
     q = q.split("#", 1)[0]

@@ -228,6 +228,71 @@ PREF_PADRAO = {
 }
 
 
+class PreferenciaInvalida(ValueError):
+    """Valor de preferencia com tipo ou faixa errados: a API responde 422 e nada e gravado."""
+
+
+_BOOLEANAS = ("alertaFalha", "alertaDesconectado", "alertaQuente", "alertaLavadoraFim", "semBipe")
+_INTEIRAS = {"limiteQuente": (16, 45), "potenciaFrio": (0, 10000), "potenciaEco": (0, 10000),
+             "potenciaSeco": (0, 10000), "potenciaVentilar": (0, 10000), "retornoModo": (-1, 10),
+             "retornoTemp": (16, 32), "retornoVento": (-3, 20)}
+_CENA_INTEIRAS = {"modo": (-1, 10), "temp": (-1, 40), "vento": (-3, 20), "noturno": (-1, 1), "duracao": (0, 24 * 60)}
+
+
+def _inteiro(nome, v, faixa):
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        raise PreferenciaInvalida("%s: precisa ser um numero" % nome)
+    v = int(round(v))
+    if not faixa[0] <= v <= faixa[1]:
+        raise PreferenciaInvalida("%s fora da faixa (%d a %d)" % (nome, faixa[0], faixa[1]))
+    return v
+
+
+def _validar_cenas(v):
+    if not isinstance(v, list) or len(v) > 8:
+        raise PreferenciaInvalida("cenas: lista de ate 8")
+    r = []
+    for c in v:
+        if not isinstance(c, dict):
+            raise PreferenciaInvalida("cena invalida")
+        nome = c.get("nome")
+        if not isinstance(nome, str) or not 1 <= len(nome.strip()) <= 40:
+            raise PreferenciaInvalida("cena sem nome ou com nome de mais de 40 letras")
+        icone = c.get("icone", "floco")
+        desligar = c.get("desligar", False)
+        if not isinstance(icone, str) or len(icone) > 20 or not isinstance(desligar, bool):
+            raise PreferenciaInvalida("cena %s invalida" % nome.strip())
+        x = {"nome": nome.strip(), "icone": icone, "desligar": desligar}
+        for campo, faixa in _CENA_INTEIRAS.items():
+            x[campo] = _inteiro("cena " + campo, c.get(campo, 0 if campo == "duracao" else -1), faixa)
+        r.append(x)
+    return r
+
+
+def validar_preferencias(dados):
+    """So as chaves conhecidas, com o tipo e a faixa certos. Antes uma tarifa em texto
+    ficava gravada e derrubava o consumo e o resumo do mes com erro 500."""
+    if not isinstance(dados, dict):
+        raise PreferenciaInvalida("preferencias: precisa ser um objeto")
+    limpo = {}
+    for k, v in dados.items():
+        if k not in PREF_PADRAO:
+            continue
+        if k in _BOOLEANAS:
+            if not isinstance(v, bool):
+                raise PreferenciaInvalida("%s: verdadeiro ou falso" % k)
+            limpo[k] = v
+        elif k in _INTEIRAS:
+            limpo[k] = _inteiro(k, v, _INTEIRAS[k])
+        elif k == "tarifa":
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v < 100:
+                raise PreferenciaInvalida("tarifa: numero de 0 a 100")
+            limpo[k] = round(float(v), 4)
+        elif k == "cenas":
+            limpo[k] = _validar_cenas(v)
+    return limpo
+
+
 def preferencias():
     p = banco.ler_kv("preferencias") or {}
     dados = dict(PREF_PADRAO)
@@ -236,11 +301,10 @@ def preferencias():
 
 
 def gravar_preferencias(dados, origem):
+    limpo = validar_preferencias(dados or {})
     atual = preferencias()
     novo = dict(atual["dados"])
-    for k, v in (dados or {}).items():
-        if k in PREF_PADRAO:
-            novo[k] = v
+    novo.update(limpo)
     r = {"versao": atual["versao"] + 1, "atualizado": int(time.time()), "origem": origem, "dados": novo}
     banco.gravar_kv("preferencias", r)
     from . import servico

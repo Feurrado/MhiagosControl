@@ -491,6 +491,10 @@ namespace MhiagosControl
             string endereco, string chave)
         {
             if (endereco.IndexOf("://", StringComparison.Ordinal) < 0) endereco = "http://" + endereco;
+            // So http(s): o endereco vem do casa.ini, gravavel sem elevacao, e um "file:"
+            // viraria leitura e escrita de arquivo pelo app elevado (FileWebRequest).
+            Uri seguro;
+            if (!Navegador.Seguro(endereco, out seguro)) throw new IOException(T.ServidorEnderecoInvalido);
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create(endereco + caminho);
             req.Method = metodo;
             req.UserAgent = "MhiagosControl";
@@ -566,6 +570,7 @@ namespace MhiagosControl
         public static string ServidorSemResposta { get { return P("o servidor não respondeu", "the server did not respond"); } }
         public static string ServidorChaveErrada { get { return P("chave de acesso recusada", "access key rejected"); } }
         public static string ServidorErroHttp(int c) { return P("o servidor respondeu " + c, "the server answered " + c); }
+        public static string ServidorEnderecoInvalido { get { return P("endereço inválido: use http:// ou https:// com o IP ou nome do servidor", "invalid address: use http:// or https:// with the server's IP or name"); } }
         public static string ServidorFalhou(string m) { return P("Falha ao sincronizar: " + m, "Sync failed: " + m); }
         public static string ServidorSincronizado(DateTime d) { return P("Sincronizado às " + d.ToString("HH:mm"), "Synced at " + d.ToString("HH:mm")); }
     }

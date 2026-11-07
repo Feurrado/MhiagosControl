@@ -1,0 +1,7 @@
+.env
+tests/
+backups/
+__pycache__/
+*.pyc
+README.md
+backup.sh

@@ -1,15 +1,47 @@
 # Mhiagos Casa: le a nuvem ConnectLife 24 h e guarda o historico na rede local.
 # A chave fica em .env (MHIAGOS_CHAVE=...), fora do repositorio.
 services:
+  # Antes do servico, a cada subida: o volume veio da 1.2 com dono root, e o servico
+  # agora roda sem root (uid 10001). So o chown, sem rede e so com o poder de chown.
+  permissoes:
+    image: mhiagos-casa:latest
+    pull_policy: never
+    user: "0:0"
+    command: ["chown", "-R", "10001:10001", "/data"]
+    network_mode: none
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - dados:/data
+
   mhiagos-casa:
     build: .
     image: mhiagos-casa:latest
     container_name: mhiagos-casa
     restart: unless-stopped
     env_file: .env
+    depends_on:
+      permissoes:
+        condition: service_completed_successfully
     ports:
       - "192.168.1.100:8765:8765"
     volumes:
       - dados:/data
+    # Endurecimento: nada grava fora de /data e /tmp, nenhuma capacidade extra do kernel,
+    # sem ganhar privilegio por setuid, e limites para um vazamento nao derrubar o servidor.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
 volumes:
   dados:
