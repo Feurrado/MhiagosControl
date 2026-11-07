@@ -1381,7 +1381,7 @@ namespace MhiagosControl
     public static partial class T
     {
         public static string CasaModoN { get { return P("Modo {0}", "Mode {0}"); } }
-        public static string CasaNoturnoLigado { get { return P("Noturno ligado", "Sleep on"); } }
+        public static string CasaNoturnoLigado { get { return P("LEDs apagados", "LEDs off"); } }
         public static string CasaEco { get { return P("ECO", "Eco"); } }
         public static string CasaSemBipe { get { return P("Comandos sem bipe", "Silent commands (no beep)"); } }
         public static string CasaVelocidadeN { get { return P("Nível {0}", "Level {0}"); } }
