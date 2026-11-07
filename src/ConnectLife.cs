@@ -41,6 +41,13 @@ namespace MhiagosControl
         private const string DigestVazio = "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
 
         private readonly object _trava = new object();
+
+        /// <summary>
+        /// Uma renovacao por vez. O refresh token gira: leitura e comando
+        /// renovando juntos mandariam o mesmo token duas vezes, e a segunda
+        /// podia voltar recusada e derrubar a conta.
+        /// </summary>
+        private readonly object _renovando = new object();
         private string _access;
         private DateTime _expira = DateTime.MinValue;
 
@@ -175,7 +182,7 @@ namespace MhiagosControl
             if (status != 200)
             {
                 Log.Write("ConnectLife: token recusado " + status + " " + Corte(resposta));
-                if (status >= 400 && status < 500) throw new ConnectLifeErro(T.CasaLoginRecusado, true);
+                if (PedeLoginNoToken(status)) throw new ConnectLifeErro(T.CasaLoginRecusado, true);
                 throw new ConnectLifeErro(T.CasaFalhaTemporaria, false);
             }
 
@@ -201,9 +208,25 @@ namespace MhiagosControl
         {
             lock (_trava)
                 if (_access != null && DateTime.UtcNow < _expira) return _access;
-            Renovar();
+            lock (_renovando)
+            {
+                // Quem esperou na fila pode achar o acesso ja renovado por outro.
+                lock (_trava)
+                    if (_access != null && DateTime.UtcNow < _expira) return _access;
+                Renovar();
+            }
             lock (_trava) return _access;
         }
+
+        /// <summary>
+        /// So 400 e 401 do endpoint de token dizem que o acesso acabou
+        /// (invalid_grant). 403, 408, 429 e os demais sao do caminho, nao da
+        /// conta: tratar como "entre de novo" apagava o login por um soluco.
+        /// </summary>
+        internal static bool PedeLoginNoToken(int status) { return status == 400 || status == 401; }
+
+        /// <summary>Na API, so o 401: um 403 tambem sai de proxy e limite de taxa.</summary>
+        internal static bool PedeLoginNaApi(int status) { return status == 401; }
 
         // ---------------- aparelhos ----------------
 
@@ -286,7 +309,7 @@ namespace MhiagosControl
             if (status != 200)
             {
                 Log.Write("ConnectLife: " + Caminho(url) + " respondeu " + status + " " + Corte(resposta));
-                if (status == 401 || status == 403) throw new ConnectLifeErro(T.CasaSessaoExpirou, true);
+                if (PedeLoginNaApi(status)) throw new ConnectLifeErro(T.CasaSessaoExpirou, true);
                 throw new ConnectLifeErro(T.CasaFalhaTemporaria, false);
             }
 
@@ -525,9 +548,9 @@ namespace MhiagosControl
     }
 
     /// <summary>
-    /// O acesso guardado no Gerenciador de Credenciais do Windows: so o refresh
-    /// token e o identificador do cliente, que cabem folgados no limite do cofre.
-    /// O access token vive so na memoria e e renovado ao abrir.
+    /// O acesso guardado no Cofre (arquivo com DPAPI): so o refresh token e o
+    /// identificador do cliente. O access token vive so na memoria e e
+    /// renovado ao abrir.
     /// </summary>
     internal static class CofreConnectLife
     {
@@ -536,13 +559,10 @@ namespace MhiagosControl
         public static bool Ler(out string refresh, out string sourceId)
         {
             refresh = null; sourceId = null;
-            IntPtr p;
-            if (!CredRead(Alvo, 1, 0, out p)) return false;
             try
             {
-                CREDENTIAL c = (CREDENTIAL)Marshal.PtrToStructure(p, typeof(CREDENTIAL));
-                if (c.CredentialBlobSize == 0 || c.CredentialBlob == IntPtr.Zero) return false;
-                string texto = Marshal.PtrToStringUni(c.CredentialBlob, (int)c.CredentialBlobSize / 2);
+                string texto = Cofre.Ler(Alvo);
+                if (string.IsNullOrEmpty(texto)) return false;
                 Dictionary<string, object> o = Json.Ler(texto) as Dictionary<string, object>;
                 if (o == null) return false;
                 refresh = Json.Texto(o, "refresh_token");
@@ -550,7 +570,6 @@ namespace MhiagosControl
                 return !string.IsNullOrEmpty(refresh);
             }
             catch (Exception ex) { Log.Error("ler o acesso da ConnectLife", ex); return false; }
-            finally { CredFree(p); }
         }
 
         public static bool Gravar(string refresh, string sourceId)
@@ -558,59 +577,13 @@ namespace MhiagosControl
             Dictionary<string, object> o = new Dictionary<string, object>();
             o["refresh_token"] = refresh;
             o["source_id"] = sourceId;
-            byte[] blob = Encoding.Unicode.GetBytes(Json.Escrever(o));
-            IntPtr mem = Marshal.AllocHGlobal(blob.Length);
-            try
-            {
-                Marshal.Copy(blob, 0, mem, blob.Length);
-                CREDENTIAL c = new CREDENTIAL();
-                c.Type = 1;                       // CRED_TYPE_GENERIC
-                c.TargetName = Alvo;
-                c.CredentialBlobSize = (uint)blob.Length;
-                c.CredentialBlob = mem;
-                c.Persist = 2;                    // CRED_PERSIST_LOCAL_MACHINE
-                c.UserName = "ConnectLife";
-                if (CredWrite(ref c, 0)) return true;
-                Log.Write("ConnectLife: CredWrite falhou " + Marshal.GetLastWin32Error());
-                return false;
-            }
-            finally { Marshal.FreeHGlobal(mem); }
+            return Cofre.Gravar(Alvo, Json.Escrever(o));
         }
 
         public static void Apagar()
         {
-            if (!CredDelete(Alvo, 1, 0) && Marshal.GetLastWin32Error() != 1168)
-                Log.Write("ConnectLife: CredDelete falhou " + Marshal.GetLastWin32Error());
+            Cofre.Apagar(Alvo);
         }
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct CREDENTIAL
-        {
-            public uint Flags;
-            public uint Type;
-            public string TargetName;
-            public string Comment;
-            public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
-            public uint CredentialBlobSize;
-            public IntPtr CredentialBlob;
-            public uint Persist;
-            public uint AttributeCount;
-            public IntPtr Attributes;
-            public string TargetAlias;
-            public string UserName;
-        }
-
-        [DllImport("advapi32.dll", EntryPoint = "CredReadW", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredRead(string target, uint type, uint flags, out IntPtr credential);
-
-        [DllImport("advapi32.dll", EntryPoint = "CredWriteW", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredWrite(ref CREDENTIAL credential, uint flags);
-
-        [DllImport("advapi32.dll", EntryPoint = "CredDeleteW", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredDelete(string target, uint type, uint flags);
-
-        [DllImport("advapi32.dll")]
-        private static extern void CredFree(IntPtr buffer);
     }
 
     /// <summary>

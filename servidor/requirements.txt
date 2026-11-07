@@ -1,3 +1,6 @@
-fastapi==0.115.6
-uvicorn==0.34.0
+# Dependencias diretas. O requirements.lock (pip-compile --generate-hashes) fixa as
+# transitivas com hash; e ele que o Dockerfile e a CI instalam.
+fastapi==0.162.2
+uvicorn==0.54.0
 httpx==0.28.1
+starlette>=1.10.0

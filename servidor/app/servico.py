@@ -4,6 +4,7 @@ Mesma logica do ServicoCasa do Mhiagos (src/CasaServico.cs e src/CasaLavadora.cs
 para o historico do servidor e o do PC baterem quando sincronizam.
 """
 
+import hmac
 import json
 import logging
 import os
@@ -40,6 +41,14 @@ _diag = {}      # puid -> (quando, lista oficial do autodiagnostico)
 _mudou = threading.Condition()
 _versao = 0     # sobe a cada mudanca que o painel web precisa mostrar
 _assinatura = None
+# Primeira recusa de login de uma sequencia (time.time()). A conta so e esquecida se a
+# recusa se repete uma leitura depois, com 60 s ou mais entre as duas.
+_primeira_recusa = 0.0
+SEGUNDOS_ENTRE_RECUSAS = 60
+
+# Agendamentos: atraso maximo para ainda mandar (o mesmo do app) e espera entre tentativas.
+LIMITE_ATRASO = 900
+ESPERA_TENTATIVA = (60, 120, 180)
 
 
 # ---------------- avisar o painel web ----------------
@@ -50,6 +59,11 @@ def avisar_mudanca():
     with _mudou:
         _versao += 1
         _mudou.notify_all()
+
+
+def versao():
+    with _mudou:
+        return _versao
 
 
 def esperar_mudanca(desde, limite=25):
@@ -74,12 +88,23 @@ def iniciar():
 
 
 def _usar(nuvem):
-    global _nuvem, _aparelhos, _erro
+    global _nuvem, _aparelhos, _erro, _primeira_recusa
     with _trava:
+        antiga = _nuvem
         _nuvem = nuvem
         _aparelhos = []
         _erro = None
+        _primeira_recusa = 0.0
+    _soltar(antiga)
     _acordar.set()
+
+
+def _soltar(nuvem):
+    """Fecha o cliente HTTP de uma conta trocada, com folga para a leitura que ainda o usa."""
+    if nuvem is not None and hasattr(nuvem, "fechar"):
+        t = threading.Timer(30.0, nuvem.fechar)
+        t.daemon = True
+        t.start()
 
 
 def logado():
@@ -101,9 +126,17 @@ def url_de_login():
     return endereco_de_login(_estado_login)
 
 
+def estado_de_login_valido(estado):
+    """O state veio do login que este servidor abriu agora (tempo constante)."""
+    esperado = _estado_login
+    return bool(esperado) and hmac.compare_digest(str(estado), esperado)
+
+
 def entrar_com_codigo(code):
+    global _estado_login
     n = ConnectLife(None, None, _gravar_token)
     n.trocar_codigo(code)
+    _estado_login = None          # um state vale para um login so
     _usar(n)
     ler()
 
@@ -111,8 +144,10 @@ def entrar_com_codigo(code):
 def sair():
     global _nuvem, _aparelhos
     with _trava:
+        antiga = _nuvem
         _nuvem = None
         _aparelhos = []
+    _soltar(antiga)
     banco.apagar_kv("conta")
     avisar_mudanca()
 
@@ -161,9 +196,13 @@ def _laco():
             log.exception("leitura")
 
 
-def ler():
-    # Uma leitura por vez: o laco, o painel e o comando podem pedir juntos.
+def ler(esperar=False):
+    """Uma leitura por vez: o laco, o painel e o comando podem pedir juntos.
+    esperar=True (o "Atualizar" do painel): com outra leitura em curso, espera ela
+    terminar em vez de voltar na hora com o estado velho."""
     if not _lendo.acquire(blocking=False):
+        if esperar and _lendo.acquire(timeout=45):
+            _lendo.release()          # a leitura que estava em curso ja trouxe o estado novo
         return
     try:
         _ler()
@@ -171,8 +210,17 @@ def ler():
         _lendo.release()
 
 
+def esquecer_conta(primeira, agora):
+    """(esquecer?, nova primeira recusa): so na segunda recusa seguida, com SEGUNDOS_ENTRE_RECUSAS entre elas."""
+    if not primeira:
+        return False, agora
+    if agora - primeira < SEGUNDOS_ENTRE_RECUSAS:
+        return False, primeira
+    return True, 0.0
+
+
 def _ler():
-    global _aparelhos, _ultima_leitura, _erro, _nuvem, _assinatura
+    global _aparelhos, _ultima_leitura, _erro, _nuvem, _assinatura, _primeira_recusa
     with _trava:
         nuvem = _nuvem
     if nuvem is None:
@@ -193,6 +241,7 @@ def _ler():
             _aparelhos = lista
             _ultima_leitura = agora
             _erro = None
+            _primeira_recusa = 0.0
         for a in lista:
             if lavadora(a):
                 _conferir_ciclo(a, agora)
@@ -204,12 +253,22 @@ def _ler():
             _assinatura = assinatura
             avisar_mudanca()
     except ConnectLifeErro as e:
+        esqueceu = False
         with _trava:
+            if nuvem is not _nuvem:      # a conta mudou no meio: o erro e da antiga
+                return
             _erro = str(e)
-            if e.pede_login and nuvem is _nuvem:
-                _nuvem = None
-                _aparelhos = []
-                banco.apagar_kv("conta")
+            if e.pede_login:
+                esqueceu, _primeira_recusa = esquecer_conta(_primeira_recusa, time.time())
+                if esqueceu:
+                    _nuvem = None
+                    _aparelhos = []
+        if esqueceu:
+            banco.apagar_kv("conta")
+            _soltar(nuvem)
+            log.warning("acesso recusado duas vezes: conta esquecida")
+        elif e.pede_login:
+            log.warning("acesso recusado: nova tentativa na proxima leitura")
         _evento(None, "erro", str(e))
         avisar_mudanca()
 
@@ -287,7 +346,15 @@ def _conferir_ciclo(a, agora):
     if "Electricit_consumption_int" in a["estado"]:
         energia = _int(a, "Electricit_consumption_int") + _int(a, "Electricit_consumption_decimal") / 100.0
 
-    c = banco.con()
+    with banco.transacao() as c:
+        _registrar_ciclo(c, a, agora, trabalhando, concluido, status, programa, agua, energia)
+    erro = status == 4 or _int(a, "error_code") != 0
+    if erro:
+        _evento(a["puid"], "lavadora_erro", "Codigo %d" % _int(a, "error_code"), uma_vez=True)
+
+
+def _registrar_ciclo(c, a, agora, trabalhando, concluido, status, programa, agua, energia):
+    """Abre ou fecha o ciclo: varios passos que acontecem juntos (dentro de uma transacao)."""
     atual = c.execute("SELECT * FROM em_curso WHERE puid=?", (a["puid"],)).fetchone()
     if trabalhando:
         if atual is None:
@@ -311,18 +378,15 @@ def _conferir_ciclo(a, agora):
                    energia if energia is not None else atual["energia"], 1 if ok else 0))
         c.execute("DELETE FROM em_curso WHERE puid=?", (a["puid"],))
         _evento(a["puid"], "ciclo_fim", "Programa %d, %d min" % (atual["programa"], (agora - atual["inicio"]) // 60))
-    erro = status == 4 or _int(a, "error_code") != 0
-    if erro:
-        _evento(a["puid"], "lavadora_erro", "Codigo %d" % _int(a, "error_code"), uma_vez=True)
 
 
 def _evento(puid, tipo, texto, uma_vez=False):
-    c = banco.con()
-    if uma_vez:
-        r = c.execute("SELECT tipo FROM eventos WHERE puid IS ? ORDER BY id DESC LIMIT 1", (puid,)).fetchone()
-        if r and r["tipo"] == tipo:
-            return
-    c.execute("INSERT INTO eventos(t,puid,tipo,texto) VALUES(?,?,?,?)", (int(time.time()), puid, tipo, texto))
+    with banco.transacao() as c:
+        if uma_vez:
+            r = c.execute("SELECT tipo FROM eventos WHERE puid IS ? ORDER BY id DESC LIMIT 1", (puid,)).fetchone()
+            if r and r["tipo"] == tipo:
+                return
+        c.execute("INSERT INTO eventos(t,puid,tipo,texto) VALUES(?,?,?,?)", (int(time.time()), puid, tipo, texto))
 
 
 _ultima_limpeza = 0
@@ -336,6 +400,7 @@ def _limpar(agora):
     c = banco.con()
     c.execute("DELETE FROM amostras_ar WHERE t < ?", (agora - DIAS_AR * 86400,))
     c.execute("DELETE FROM eventos WHERE t < ?", (agora - 90 * 86400,))
+    c.execute("DELETE FROM resultados WHERE t < ?", (agora - 7 * 86400,))
 
 
 # ---------------- comandos ----------------
@@ -387,40 +452,98 @@ def diagnostico(puid):
 
 # ---------------- agendamentos ----------------
 
+def _resultado(c, ident, puid, nome, quando, estado, tentativas, detalhe):
+    c.execute("INSERT OR REPLACE INTO resultados(id,puid,nome,quando,estado,t,tentativas,detalhe) VALUES(?,?,?,?,?,?,?,?)",
+              (ident, puid, nome, quando, estado, int(time.time()), tentativas or 0, detalhe))
+
+
+def _apagar_agendamentos(c, onde, args, estado, detalhe=None):
+    """Tira da fila e deixa o resultado de cada um: o PC pergunta pelo id o que aconteceu."""
+    for r in c.execute("SELECT id, puid, nome, quando, tentativas, erro FROM agendamentos WHERE " + onde, args).fetchall():
+        _resultado(c, r["id"], r["puid"], r["nome"], r["quando"], estado, r["tentativas"], detalhe or r["erro"])
+    c.execute("DELETE FROM agendamentos WHERE " + onde, args)
+
+
 def agendar(puid, quando, props, nome):
     """Um por aparelho e nome: o novo substitui. Timer de desligar cancela o retorno da cena (como o app)."""
-    c = banco.con()
-    if nome:
-        c.execute("DELETE FROM agendamentos WHERE puid=? AND nome=?", (puid, nome))
-    if nome == "desligar":
-        c.execute("DELETE FROM agendamentos WHERE puid=? AND nome='retorno'", (puid,))
-    cur = c.execute("INSERT INTO agendamentos(puid,quando,props,nome,criado) VALUES(?,?,?,?,?)",
-                    (puid, int(quando), json.dumps(props), nome, int(time.time())))
+    with banco.transacao() as c:
+        if nome:
+            _apagar_agendamentos(c, "puid=? AND nome=?", (puid, nome), "cancelado", "substituido")
+        if nome == "desligar":
+            _apagar_agendamentos(c, "puid=? AND nome='retorno'", (puid,), "cancelado", "timer de desligar")
+        cur = c.execute("INSERT INTO agendamentos(puid,quando,props,nome,criado) VALUES(?,?,?,?,?)",
+                        (puid, int(quando), json.dumps(props), nome, int(time.time())))
+        ident = cur.lastrowid
     avisar_mudanca()
-    return cur.lastrowid
+    return ident
 
 
 def cancelar(puid, nome):
-    banco.con().execute("DELETE FROM agendamentos WHERE puid=? AND nome=?", (puid, nome))
+    with banco.transacao() as c:
+        _apagar_agendamentos(c, "puid=? AND nome=?", (puid, nome), "cancelado")
     avisar_mudanca()
+
+
+def cancelar_id(ident):
+    with banco.transacao() as c:
+        _apagar_agendamentos(c, "id=?", (ident,), "cancelado")
+    avisar_mudanca()
+
+
+def resultado(ident):
+    """pendente (na fila, talvez tentando de novo), feito, falhou, descartado, cancelado ou desconhecido."""
+    r = banco.con().execute("SELECT tentativas, erro FROM agendamentos WHERE id=?", (ident,)).fetchone()
+    if r:
+        return {"estado": "pendente", "tentativas": r["tentativas"], "erro": r["erro"]}
+    r = banco.con().execute("SELECT estado, t, tentativas, detalhe FROM resultados WHERE id=?", (ident,)).fetchone()
+    if r:
+        return {"estado": r["estado"], "quando": r["t"], "tentativas": r["tentativas"], "erro": r["detalhe"]}
+    return {"estado": "desconhecido"}
+
+
+def falhas_recentes(desde):
+    """Agendamentos que desistiram depois das tentativas: o painel web mostra no cartao do timer."""
+    return banco.linhas("SELECT id, puid, nome, quando, t, tentativas, detalhe FROM resultados "
+                        "WHERE estado='falhou' AND t > ? ORDER BY t DESC LIMIT 10", (desde,))
 
 
 def _laco_agendamentos():
     while True:
         time.sleep(10)
         try:
-            agora = int(time.time())
-            for ag in banco.linhas("SELECT * FROM agendamentos WHERE quando <= ? ORDER BY quando", (agora,)):
-                banco.con().execute("DELETE FROM agendamentos WHERE id=?", (ag["id"],))
-                avisar_mudanca()
-                # Vencido ha mais de 15 min (servidor estava parado): descarta, como o app.
-                if agora - ag["quando"] > 900:
-                    _evento(ag["puid"], "agendamento_descartado", ag["nome"] or "")
-                    continue
-                try:
-                    enviar(ag["puid"], json.loads(ag["props"]), casa.preferencias()["dados"].get("semBipe", False))
-                    _evento(ag["puid"], "agendamento", ag["nome"] or "")
-                except Exception as e:
-                    _evento(ag["puid"], "agendamento_falhou", "%s: %s" % (ag["nome"] or "", e))
+            processar_agendamentos(int(time.time()))
         except Exception:
             log.exception("agendamentos")
+
+
+def processar_agendamentos(agora, enviar_fn=None):
+    """Manda os vencidos. Se a nuvem falha, o agendamento fica na fila e tenta de novo
+    (60, 120, 180 s...) ate LIMITE_ATRASO depois da hora; so entao desiste e grava
+    'falhou'. Antes ele saia da fila antes de mandar, e uma falha o perdia sem aviso.
+    Vencido ha mais de LIMITE_ATRASO sem nenhuma tentativa (servidor parado): descarta."""
+    enviar_fn = enviar_fn or enviar
+    for ag in banco.linhas("SELECT * FROM agendamentos WHERE quando <= ? AND (proxima IS NULL OR proxima <= ?) "
+                           "ORDER BY quando", (agora, agora)):
+        nome = ag["nome"] or ""
+        if agora - ag["quando"] > LIMITE_ATRASO:
+            tentou = ag["tentativas"] > 0
+            with banco.transacao() as c:
+                _apagar_agendamentos(c, "id=?", (ag["id"],), "falhou" if tentou else "descartado")
+            _evento(ag["puid"], "agendamento_falhou" if tentou else "agendamento_descartado",
+                    "%s: %s" % (nome, ag["erro"]) if tentou and ag["erro"] else nome)
+            avisar_mudanca()
+            continue
+        try:
+            enviar_fn(ag["puid"], json.loads(ag["props"]), casa.preferencias()["dados"].get("semBipe", False))
+        except Exception as e:
+            n = ag["tentativas"] + 1
+            espera = ESPERA_TENTATIVA[min(n, len(ESPERA_TENTATIVA)) - 1]
+            banco.con().execute("UPDATE agendamentos SET tentativas=?, proxima=?, erro=? WHERE id=?",
+                                (n, agora + espera, str(e)[:300], ag["id"]))
+            log.warning("agendamento %s (%s) falhou na tentativa %d: %s", ag["id"], nome, n, e)
+            avisar_mudanca()
+            continue
+        with banco.transacao() as c:
+            _apagar_agendamentos(c, "id=?", (ag["id"],), "feito")
+        _evento(ag["puid"], "agendamento", nome)
+        avisar_mudanca()

@@ -1,25 +1,64 @@
 """API da Casa na rede local. Toda rota sob /api, menos /api/saude, pede a chave."""
 
+import asyncio
 import hmac
 import json
 import logging
 import os
+import re
 import time
+from contextlib import asynccontextmanager
 from datetime import date, datetime, time as dtime, timedelta
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from . import banco, casa, servico
-from .connectlife import ConnectLifeErro, extrair_codigo
+from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.2.0"
+VERSAO = "1.3.0"
 CHAVE = os.environ.get("MHIAGOS_CHAVE", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # uma linha por leitura, e a URL leva o sourceId
-app = FastAPI(title="Mhiagos Casa", version=VERSAO, docs_url=None, redoc_url=None)
+
+@asynccontextmanager
+async def _vida(_app):
+    if len(CHAVE) < 16:
+        raise RuntimeError("MHIAGOS_CHAVE ausente ou curta (minimo 16 caracteres)")
+    banco.con()
+    servico.iniciar()
+    yield
+
+
+app = FastAPI(title="Mhiagos Casa", version=VERSAO, docs_url=None, redoc_url=None, openapi_url=None, lifespan=_vida)
+
+# A pagina so carrega o que vem daqui (sem CDN): bloqueia script de fora, moldura em outro
+# site (clique enganado) e vazamento do endereco no Referer. Script e estilo sao embutidos
+# no index.html, por isso o 'unsafe-inline'.
+CABECALHOS = {
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+                               "script-src 'self' 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; "
+                               "worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+}
+CORPO_MAXIMO = 32 * 1024 * 1024   # a importacao de 400 dias de ar cabe folgada
+
+
+@app.middleware("http")
+async def _protecao(request: Request, call_next):
+    tamanho = request.headers.get("content-length")
+    if tamanho and tamanho.isdigit() and int(tamanho) > CORPO_MAXIMO:
+        return JSONResponse({"detail": "corpo grande demais"}, status_code=413)
+    resposta = await call_next(request)
+    for k, v in CABECALHOS.items():
+        resposta.headers.setdefault(k, v)
+    if request.url.path.startswith("/api/"):
+        resposta.headers.setdefault("Cache-Control", "no-store")
+    return resposta
 
 
 def autorizado(authorization: str = Header(default="")):
@@ -28,17 +67,38 @@ def autorizado(authorization: str = Header(default="")):
         raise HTTPException(401, "chave invalida")
 
 
-@app.on_event("startup")
-def _inicio():
-    if len(CHAVE) < 16:
-        raise RuntimeError("MHIAGOS_CHAVE ausente ou curta (minimo 16 caracteres)")
-    banco.con()
-    servico.iniciar()
-
-
 @app.exception_handler(ConnectLifeErro)
 def _erro_nuvem(_, e: ConnectLifeErro):
     return JSONResponse({"erro": str(e), "pedeLogin": e.pede_login}, status_code=409 if e.pede_login else 502)
+
+
+@app.exception_handler(casa.PreferenciaInvalida)
+def _pref_invalida(_, e):
+    return JSONResponse({"erro": str(e)}, status_code=422)
+
+
+# ---------------- validacao do que chega ----------------
+
+CHAVE_PROP = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,47}$")
+VALOR_PROP = re.compile(r"^[A-Za-z0-9_.\-]{1,24}$")
+INTEIRO = re.compile(r"^-?\d{1,5}$")
+
+
+def validar_props(props, a=None):
+    """Formato de comando da nuvem: poucas chaves curtas, valores curtos. Num ar com o
+    modelo conhecido, so propriedades que ele grava, e com valor inteiro (como o app manda)."""
+    if not props:
+        raise HTTPException(400, "sem propriedades")
+    if len(props) > 12:
+        raise HTTPException(400, "propriedades demais")
+    for k, v in props.items():
+        if not CHAVE_PROP.match(k) or not VALOR_PROP.match(v):
+            raise HTTPException(400, "propriedade invalida: %s" % k[:48])
+        if a is not None and ar_condicionado(a):
+            if not casa.grava(a, k):
+                raise HTTPException(400, "o aparelho nao aceita %s" % k)
+            if not INTEIRO.match(v):
+                raise HTTPException(400, "valor invalido para %s" % k)
 
 
 @app.get("/")
@@ -75,7 +135,7 @@ class Conta(BaseModel):
 
 
 class Codigo(BaseModel):
-    colado: str
+    colado: str = Field(max_length=4096)
 
 
 @app.post("/api/conta", dependencies=[Depends(autorizado)])
@@ -94,6 +154,11 @@ def login_codigo(c: Codigo):
     code = extrair_codigo(c.colado)
     if not code:
         raise HTTPException(400, "nenhum code no endereco colado")
+    # O endereco final traz o state do pedido: tem de ser o deste servidor (senao e o
+    # login de outra conta, colado por engano ou de proposito).
+    estado = extrair_estado(c.colado)
+    if estado is not None and not servico.estado_de_login_valido(estado):
+        raise HTTPException(400, "este endereco nao e do login aberto agora: abra o login de novo")
     servico.entrar_com_codigo(code)
     return servico.situacao()
 
@@ -107,7 +172,7 @@ def sair():
 # ---------------- aparelhos ----------------
 
 class Comando(BaseModel):
-    props: dict[str, str]
+    props: dict[str, str] = Field(max_length=12)
     semBipe: bool | None = None
     # Mudanca manual cancela o retorno da cena (como no app).
     manual: bool = True
@@ -129,17 +194,22 @@ def _sem_bipe(pedido):
     return casa.preferencias()["dados"].get("semBipe", False) if pedido is None else pedido
 
 
+def _estado_completo():
+    return {**servico.situacao(), "lista": _leves(servico.aparelhos()), "agendamentos": _agendamentos(),
+            "agendamentosFalhos": servico.falhas_recentes(int(time.time()) - 86400)}
+
+
 @app.get("/api/aparelhos", dependencies=[Depends(autorizado)])
 def aparelhos():
     servico.tocar()
-    return {**servico.situacao(), "lista": _leves(servico.aparelhos()), "agendamentos": _agendamentos()}
+    return _estado_completo()
 
 
 @app.post("/api/aparelhos/ler", dependencies=[Depends(autorizado)])
 def ler_agora():
     servico.tocar()
-    servico.ler()
-    return {**servico.situacao(), "lista": _leves(servico.aparelhos()), "agendamentos": _agendamentos()}
+    servico.ler(esperar=True)   # com uma leitura em curso, espera ela em vez de devolver o estado velho
+    return _estado_completo()
 
 
 @app.get("/api/aparelhos/{puid}/propriedades", dependencies=[Depends(autorizado)])
@@ -149,8 +219,7 @@ def propriedades(puid: str):
 
 @app.post("/api/aparelhos/{puid}/comando", dependencies=[Depends(autorizado)])
 def comando(puid: str, c: Comando):
-    if not c.props:
-        raise HTTPException(400, "sem propriedades")
+    validar_props(c.props, _aparelho(puid))
     servico.enviar(puid, c.props, _sem_bipe(c.semBipe))
     if c.manual:
         servico.cancelar(puid, "retorno")
@@ -158,7 +227,7 @@ def comando(puid: str, c: Comando):
 
 
 class Cena(BaseModel):
-    indice: int
+    indice: int = Field(ge=0, le=31)
 
 
 @app.post("/api/aparelhos/{puid}/cena", dependencies=[Depends(autorizado)])
@@ -182,7 +251,7 @@ def cena(puid: str, c: Cena):
 
 
 class Timer(BaseModel):
-    minutos: int
+    minutos: int = Field(ge=1, le=24 * 60)
 
 
 @app.post("/api/aparelhos/{puid}/timer", dependencies=[Depends(autorizado)])
@@ -209,7 +278,7 @@ def cancelar_retorno(puid: str):
 
 class Preferencias(BaseModel):
     dados: dict
-    origem: str = "web"
+    origem: str = Field("web", max_length=16)
 
 
 @app.get("/api/preferencias", dependencies=[Depends(autorizado)])
@@ -295,11 +364,17 @@ def historico_ciclos(desde: int = 0):
 
 
 @app.get("/api/mudancas", dependencies=[Depends(autorizado)])
-def mudancas(desde: int = -1):
+async def mudancas(desde: int = -1):
     """Espera longa: responde quando algo mudar (leitura nova, timer, ajustes) ou em 25 s.
-    O painel web chama de novo na hora, entao ve a mudanca assim que o servidor ve."""
+    O painel web chama de novo na hora, entao ve a mudanca assim que o servidor ve.
+    Assincrona: antes cada aba aberta segurava uma das 40 threads do servidor por 25 s."""
     servico.tocar()
-    return {"versao": servico.esperar_mudanca(desde)}
+    for _ in range(100):
+        v = servico.versao()
+        if v != desde:
+            return {"versao": v}
+        await asyncio.sleep(0.25)
+    return {"versao": servico.versao()}
 
 
 @app.get("/api/resumo-mes", dependencies=[Depends(autorizado)])
@@ -350,17 +425,52 @@ def eventos(desde: int = 0):
     return {"eventos": banco.linhas("SELECT * FROM eventos WHERE t > ? ORDER BY id LIMIT 1000", (desde,))}
 
 
+PUID = r"^[A-Za-z0-9_.:\-]{1,64}$"
+EPOCA = dict(gt=1_500_000_000, lt=4_000_000_000)
+
+
+class AmostraIn(BaseModel):
+    puid: str = Field(pattern=PUID)
+    t: int = Field(**EPOCA)
+    amb: float | None = Field(None, ge=-50, le=100)
+    alvo: float | None = Field(None, ge=-50, le=120)
+    ligado: int = Field(0, ge=0, le=1)
+    modo: int = Field(-1, ge=-1, le=20)
+
+
+class CicloIn(BaseModel):
+    puid: str = Field(pattern=PUID)
+    inicio: int = Field(**EPOCA)
+    fim: int = Field(**EPOCA)
+    programa: int = Field(0, ge=0, le=999)
+    agua: float = Field(0, ge=0, le=10_000)
+    energia: float = Field(0, ge=0, le=1_000)
+    concluido: int = Field(0, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _duracao(self):
+        if not 0 <= self.fim - self.inicio <= 3 * 86400:
+            raise ValueError("ciclo com fim antes do inicio ou mais de 3 dias")
+        return self
+
+
 class Importacao(BaseModel):
-    amostras: list[dict] = []
-    ciclos: list[dict] = []
+    amostras: list[AmostraIn] = Field(default_factory=list, max_length=600_000)
+    ciclos: list[CicloIn] = Field(default_factory=list, max_length=20_000)
 
 
 @app.post("/api/historico/importar", dependencies=[Depends(autorizado)])
 def importar(i: Importacao):
-    """O PC manda o que leu enquanto o servidor nao existia. Repetido nao duplica."""
-    c = banco.con()
+    """O PC manda o que leu enquanto o servidor nao existia. Repetido nao duplica.
+    Numa transacao so: com um commit por linha, a primeira troca grande passava dos 30 s
+    do PC e era refeita a cada minuto."""
+    with banco.transacao() as c:
+        return _importar(c, i)
+
+
+def _importar(c, i):
     na = nc = 0
-    for a in i.amostras:
+    for a in (x.model_dump() for x in i.amostras):
         t = int(a["t"])
         # O PC e o servidor lendo a mesma hora: fica so uma (como HistoricoDoAr.Mesclar).
         if c.execute("SELECT 1 FROM amostras_ar WHERE puid=? AND t > ? AND t < ?", (a["puid"], t - 25, t + 25)).fetchone():
@@ -368,7 +478,7 @@ def importar(i: Importacao):
         c.execute("INSERT INTO amostras_ar(puid,t,amb,alvo,ligado,modo) VALUES(?,?,?,?,?,?)",
                   (a["puid"], t, a.get("amb"), a.get("alvo"), int(a.get("ligado", 0)), int(a.get("modo", -1))))
         na += 1
-    for x in i.ciclos:
+    for x in (y.model_dump() for y in i.ciclos):
         ini, fim = int(x["inicio"]), int(x["fim"])
         # Sobreposto a um que ja esta aqui e o mesmo ciclo: junta, do inicio mais cedo ao fim mais tarde.
         igual = c.execute("SELECT * FROM ciclos WHERE puid=? AND inicio <= ? AND fim >= ?", (x["puid"], fim, ini)).fetchone()
@@ -389,10 +499,10 @@ def importar(i: Importacao):
 # ---------------- agendamentos ----------------
 
 class Agendamento(BaseModel):
-    puid: str
-    quando: int
-    props: dict[str, str]
-    nome: str | None = None
+    puid: str = Field(pattern=PUID)
+    quando: int = Field(**EPOCA)
+    props: dict[str, str] = Field(max_length=12)
+    nome: str | None = Field(None, pattern=r"^[a-z_]{1,20}$")
 
 
 def _agendamentos():
@@ -406,12 +516,25 @@ def agendamentos():
 
 @app.post("/api/agendamentos", dependencies=[Depends(autorizado)])
 def agendar(a: Agendamento):
-    if not a.props:
-        raise HTTPException(400, "sem propriedades")
+    agora = int(time.time())
+    if not agora - servico.LIMITE_ATRASO <= a.quando <= agora + 7 * 86400:
+        raise HTTPException(400, "horario fora da faixa (ate 15 min atras e 7 dias a frente)")
+    # Com a lista de aparelhos lida, so os que existem. Sem ela (logo depois de subir,
+    # ou sem a conta), aceita: o PC entrega o timer mesmo assim.
+    aparelho = servico.achar(a.puid)
+    if aparelho is None and servico.aparelhos():
+        raise HTTPException(404, "aparelho desconhecido")
+    validar_props(a.props, aparelho)
     return {"id": servico.agendar(a.puid, a.quando, a.props, a.nome)}
 
 
 @app.delete("/api/agendamentos/{ident}", dependencies=[Depends(autorizado)])
 def cancelar(ident: int):
-    banco.con().execute("DELETE FROM agendamentos WHERE id=?", (ident,))
+    servico.cancelar_id(ident)
     return {"ok": True}
+
+
+@app.get("/api/agendamentos/{ident}/resultado", dependencies=[Depends(autorizado)])
+def resultado_do_agendamento(ident: int):
+    """O que aconteceu com um agendamento: o PC pergunta antes de dar o timer como feito."""
+    return servico.resultado(ident)

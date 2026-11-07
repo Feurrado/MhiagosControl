@@ -235,8 +235,7 @@ namespace MhiagosControl
 
         private static void AbrirNoNavegador(string url)
         {
-            try { System.Diagnostics.Process.Start(url); }
-            catch (Exception ex) { Log.Error("abrir " + url, ex); }
+            Navegador.Abrir(url);
         }
 
         // ---------------- pagina: Sobre ----------------

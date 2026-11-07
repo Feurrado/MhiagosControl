@@ -34,7 +34,14 @@ namespace MhiagosControl
             string temp = caminho + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                using (FileStream fs = File.Create(temp)) conteudo(fs);
+                using (FileStream fs = File.Create(temp))
+                {
+                    conteudo(fs);
+                    // Ate o disco antes da troca: sem isso uma queda de energia
+                    // podia deixar a troca feita e o conteudo ainda no cache,
+                    // e o arquivo voltava vazio no arranque seguinte.
+                    fs.Flush(true);
+                }
                 if (File.Exists(caminho)) File.Replace(temp, caminho, null);
                 else File.Move(temp, caminho);
             }
