@@ -795,15 +795,38 @@ namespace MhiagosControl
             return P(fonte + ": " + n + " sensores", fonte + ": " + n + " sensors");
         }
 
-        public static string EngineMissing
+        /// <summary>
+        /// O aviso do Sobre sem a biblioteca do HWiNFO. O texto antigo mandava
+        /// reinstalar pelo instalador oficial, que na edicao publica nao traz a
+        /// biblioteca, e dizia que sem ela a temperatura da CPU nunca e lida -
+        /// com o PawnIO, a LibreHardwareMonitor le.
+        /// </summary>
+        public static string AvisoDoMotor(bool pawnIo)
+        {
+            return pawnIo
+                ? P("Sem a biblioteca do HWiNFO: os sensores vêm da LibreHardwareMonitor, com o PawnIO.",
+                    "No HWiNFO library: sensors come from LibreHardwareMonitor, with PawnIO.")
+                : P("Sem a biblioteca do HWiNFO e sem o PawnIO, temperatura, potência e clock real da CPU não são lidos.\n" +
+                    "Clique aqui para instalar o PawnIO pelo winget (o Windows pede permissão) e abra o app de novo.",
+                    "Without the HWiNFO library and without PawnIO, CPU temperature, power and real clock are not read.\n" +
+                    "Click here to install PawnIO with winget (Windows asks for permission), then reopen the app.");
+        }
+
+        public static string PawnIoFaltando
         {
             get
             {
-                return P(
-                    "Sem a biblioteca do HWiNFO em engine\\, temperatura, potência e clock real da CPU não são lidos.\n" +
-                    "Reinstalar pelo instalador oficial repõe a pasta engine\\ completa.",
-                    "Without the HWiNFO library in engine\\, CPU temperature, power and real clock are not read.\n" +
-                    "Reinstalling with the official installer restores the full engine\\ folder.");
+                return P("A temperatura da CPU precisa do PawnIO. Clique para ver como instalar.",
+                         "CPU temperature needs PawnIO. Click to see how to install it.");
+            }
+        }
+
+        public static string PawnIoSemWinget
+        {
+            get
+            {
+                return P("O winget não está disponível. Instale o PawnIO pelo site pawnio.eu e abra o app de novo.",
+                         "winget is not available. Install PawnIO from pawnio.eu and reopen the app.");
             }
         }
 
@@ -951,7 +974,7 @@ namespace MhiagosControl
         public static string UseHours(string duracao) { return P(duracao + " de uso", duracao + " of use"); }
         public static string UpTo(int pct) { return P("até " + pct + "%", "up to " + pct + "%"); }
         public static string TookTime(string duracao) { return P("levou " + duracao, "took " + duracao); }
-        public static string SinceTracking(string quando) { return P("acompanhando desde " + quando, "tracking since " + quando); }
+        public static string SinceTracking(string quando) { return P("medido desde " + quando, "measured since " + quando); }
         public static string EndedAt(string quando) { return P("terminou " + quando, "ended " + quando); }
         public static string Today { get { return P("hoje", "today"); } }
         public static string Yesterday { get { return P("ontem", "yesterday"); } }

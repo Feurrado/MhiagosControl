@@ -38,6 +38,8 @@ namespace MhiagosControl
             string logDosTestes = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
                 "MhiagosControl-testes-" + System.Diagnostics.Process.GetCurrentProcess().Id + ".log");
             StaticField(typeof(Log), "_path", logDosTestes);
+            // E o nome da saudacao: a consulta roda nos testes e guardava o nome na pasta de quem usa o app.
+            Visao.ArquivoDoNome = logDosTestes + ".nome.txt";
             if (args.Length > 0 && args[0] == "--regression-child")
                 return RegressionChild(args);
             if (args.Length > 2 && args[0] == "--medir-animacao")
@@ -102,7 +104,7 @@ namespace MhiagosControl
                 : string.Format("{0} verificacoes, {1} FALHARAM", _ok + _falhas, _falhas));
             if (_falhas == 0)
             {
-                try { System.IO.File.Delete(logDosTestes); System.IO.File.Delete(logDosTestes + ".1"); } catch { }
+                try { System.IO.File.Delete(logDosTestes); System.IO.File.Delete(logDosTestes + ".1"); System.IO.File.Delete(logDosTestes + ".nome.txt"); } catch { }
             }
             else Console.WriteLine("log dos testes: " + logDosTestes);
             return _falhas == 0 ? 0 : 1;
