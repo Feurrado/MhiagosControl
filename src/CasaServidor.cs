@@ -14,10 +14,9 @@ namespace MhiagosControl
     /// e ciclos da lavadora e roda os agendamentos com o PC desligado.
     ///
     /// O PC continua falando direto com a nuvem; com o servidor configurado ele
-    /// tambem sincroniza o historico nos dois sentidos (ao abrir e a cada 10 min)
+    /// tambem sincroniza o historico nos dois sentidos (ao abrir e a cada minuto)
     /// e entrega o timer de desligar e o retorno das cenas para o servidor
-    /// disparar. Endereco no casa.ini; a chave da API no Gerenciador de
-    /// Credenciais.
+    /// disparar. Endereco no casa.ini; a chave da API no Cofre (DPAPI).
     /// </summary>
     internal static class ServidorCasa
     {
@@ -65,7 +64,7 @@ namespace MhiagosControl
                 if (_ciclo != null || Desligado) return;
                 // A cada minuto: o historico vai so a diferenca, e timers e ajustes
                 // mudados pelo painel web chegam logo.
-                _ciclo = new Timer(delegate { Sincronizar(); }, null, 5000, 60 * 1000);
+                _ciclo = new Timer(delegate { ServicoCasa.Protegido("sincronizar com o servidor", Sincronizar); }, null, 5000, 60 * 1000);
             }
         }
 
@@ -76,7 +75,7 @@ namespace MhiagosControl
             ServicoCasa.Pref.Salvar();
             if (!string.IsNullOrEmpty(chave))
             {
-                if (!Cofre.Gravar(AlvoDoCofre, "CasaServidor", chave.Trim())) Log.Write("casa: chave do servidor nao gravada no cofre");
+                if (!Cofre.Gravar(AlvoDoCofre, chave.Trim())) Log.Write("casa: chave do servidor nao gravada no cofre");
                 lock (_trava) _chave = chave.Trim();
             }
             if (Endereco.Length == 0) Definir("", false);
@@ -436,24 +435,37 @@ namespace MhiagosControl
             });
         }
 
+        // Estados de um agendamento no servidor (GET /api/agendamentos/{id}/resultado).
+        public const string Pendente = "pendente", Feito = "feito", Falhou = "falhou", Descartado = "descartado",
+                            Cancelado = "cancelado", Desconhecido = "desconhecido", Indisponivel = "indisponivel";
+
         /// <summary>
-        /// O timer local venceu e o servidor tinha o mesmo agendamento. Verdadeiro:
-        /// o servidor ja disparou (ou vai disparar), o PC nao manda de novo. Falso
-        /// (servidor fora do ar): quem manda e o PC, e o do servidor e cancelado.
+        /// O que o servidor fez com um agendamento que o PC tambem vigia. Antes
+        /// bastava ele estar no ar e logado para o PC dar como feito; se a nuvem
+        /// falhasse na hora, o ar ficava ligado e ninguem sabia. Indisponivel:
+        /// servidor fora do ar, sem a conta ou sem responder - o PC decide.
         /// </summary>
-        public static bool ServidorCuida(long id)
+        public static string EstadoDoAgendamento(long id)
         {
-            if (id <= 0 || !Configurado) return false;
+            if (id <= 0 || !Configurado) return Indisponivel;
             try
             {
-                // Pendente ou ja disparado, tanto faz: o laco do servidor roda a cada
-                // 10 s. So importa que ele esteja no ar e com a conta.
-                if (Json.Texto(Pedir("GET", "/api/saude", null), "logado") == "true") return true;
-                Log.Write("casa: servidor sem a conta ConnectLife no timer, o PC dispara");
+                Dictionary<string, object> r = Pedir("GET", "/api/agendamentos/" +
+                    id.ToString(CultureInfo.InvariantCulture) + "/resultado", null);
+                return Json.Texto(r, "estado") ?? Desconhecido;
             }
-            catch (Exception ex) { Log.Write("casa: servidor indisponivel no timer, o PC dispara: " + ex.Message); }
-            Cancelar(id);
-            return false;
+            catch (ServidorHttpErro ex)
+            {
+                if (ex.Status != 404) { Log.Write("casa: resultado do agendamento: " + ex.Message); return Indisponivel; }
+                // Servidor 1.2 (sem a rota): o jeito antigo, logado vale como feito.
+                try { return Json.Texto(Pedir("GET", "/api/saude", null), "logado") == "true" ? Feito : Indisponivel; }
+                catch (Exception e2) { Log.Write("casa: servidor indisponivel no timer: " + e2.Message); return Indisponivel; }
+            }
+            catch (Exception ex)
+            {
+                Log.Write("casa: servidor indisponivel no timer, o PC decide: " + ex.Message);
+                return Indisponivel;
+            }
         }
 
         // ---------------- HTTP ----------------
@@ -505,8 +517,8 @@ namespace MhiagosControl
                 if (r == null) throw new IOException(T.ServidorSemResposta);
                 using (r)
                 {
-                    if (r.StatusCode == HttpStatusCode.Unauthorized) throw new IOException(T.ServidorChaveErrada);
-                    throw new IOException(T.ServidorErroHttp((int)r.StatusCode));
+                    if (r.StatusCode == HttpStatusCode.Unauthorized) throw new ServidorHttpErro(401, T.ServidorChaveErrada);
+                    throw new ServidorHttpErro((int)r.StatusCode, T.ServidorErroHttp((int)r.StatusCode));
                 }
             }
         }
@@ -530,75 +542,11 @@ namespace MhiagosControl
         internal static long Seg(DateTime d) { return (long)(d.ToUniversalTime() - Zero).TotalSeconds; }
     }
 
-    /// <summary>Segredo generico no Gerenciador de Credenciais (texto unico).</summary>
-    internal static class Cofre
+    /// <summary>Resposta HTTP de erro do servidor da casa, com o codigo (404 = rota que a versao dele nao tem).</summary>
+    internal sealed class ServidorHttpErro : IOException
     {
-        public static string Ler(string alvo)
-        {
-            IntPtr p;
-            if (!CredRead(alvo, 1, 0, out p)) return null;
-            try
-            {
-                CREDENTIAL c = (CREDENTIAL)System.Runtime.InteropServices.Marshal.PtrToStructure(p, typeof(CREDENTIAL));
-                if (c.CredentialBlobSize == 0 || c.CredentialBlob == IntPtr.Zero) return null;
-                return System.Runtime.InteropServices.Marshal.PtrToStringUni(c.CredentialBlob, (int)c.CredentialBlobSize / 2);
-            }
-            finally { CredFree(p); }
-        }
-
-        public static bool Gravar(string alvo, string usuario, string segredo)
-        {
-            byte[] blob = Encoding.Unicode.GetBytes(segredo);
-            IntPtr mem = System.Runtime.InteropServices.Marshal.AllocHGlobal(blob.Length);
-            try
-            {
-                System.Runtime.InteropServices.Marshal.Copy(blob, 0, mem, blob.Length);
-                CREDENTIAL c = new CREDENTIAL();
-                c.Type = 1;
-                c.TargetName = alvo;
-                c.CredentialBlobSize = (uint)blob.Length;
-                c.CredentialBlob = mem;
-                c.Persist = 2;
-                c.UserName = usuario;
-                return CredWrite(ref c, 0);
-            }
-            finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(mem); }
-        }
-
-        public static void Apagar(string alvo) { CredDelete(alvo, 1, 0); }
-
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential,
-            CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-        private struct CREDENTIAL
-        {
-            public uint Flags;
-            public uint Type;
-            public string TargetName;
-            public string Comment;
-            public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
-            public uint CredentialBlobSize;
-            public IntPtr CredentialBlob;
-            public uint Persist;
-            public uint AttributeCount;
-            public IntPtr Attributes;
-            public string TargetAlias;
-            public string UserName;
-        }
-
-        [System.Runtime.InteropServices.DllImport("advapi32.dll", EntryPoint = "CredReadW",
-            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredRead(string target, uint type, uint flags, out IntPtr credential);
-
-        [System.Runtime.InteropServices.DllImport("advapi32.dll", EntryPoint = "CredWriteW",
-            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredWrite(ref CREDENTIAL credential, uint flags);
-
-        [System.Runtime.InteropServices.DllImport("advapi32.dll", EntryPoint = "CredDeleteW",
-            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredDelete(string target, uint type, uint flags);
-
-        [System.Runtime.InteropServices.DllImport("advapi32.dll")]
-        private static extern void CredFree(IntPtr buffer);
+        public readonly int Status;
+        public ServidorHttpErro(int status, string mensagem) : base(mensagem) { Status = status; }
     }
 
     public static partial class T

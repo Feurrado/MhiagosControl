@@ -37,7 +37,8 @@ Todas as rotas pedem `Authorization: Bearer <MHIAGOS_CHAVE>`, menos `/api/saude`
 | `GET /api/historico/ar?desde=<epoch>` | amostras do ar (uma por leitura, no máximo a cada 50 s) |
 | `GET /api/historico/ciclos?desde=<epoch>` | ciclos terminados depois de `desde` e o que está em curso |
 | `POST /api/historico/importar` | o PC manda o que leu com o servidor parado; repetido não duplica |
-| `GET/POST/DELETE /api/agendamentos` | comandos com hora marcada; vencidos há mais de 15 min são descartados |
+| `GET/POST/DELETE /api/agendamentos` | comandos com hora marcada; se a nuvem falha, tenta de novo (60, 120, 180 s) até 15 min depois da hora; vencidos há mais de 15 min sem tentativa são descartados |
+| `GET /api/agendamentos/{id}/resultado` | `pendente`, `feito`, `falhou`, `descartado`, `cancelado` ou `desconhecido` (o PC pergunta antes de dar o timer como feito) |
 | `GET /api/eventos?desde=<epoch>` | início e fim de ciclo, erros, comandos |
 | `GET /api/mudancas?desde=<versao>` | espera longa: responde quando algo muda (ou em 25 s) com a versão nova |
 | `GET /api/resumo-mes` | custo estimado do mês, do anterior e do anterior até o mesmo dia |
@@ -45,6 +46,16 @@ Todas as rotas pedem `Authorization: Bearer <MHIAGOS_CHAVE>`, menos `/api/saude`
 
 Variáveis: `MHIAGOS_PERIODO` (s entre leituras, 60), `MHIAGOS_DIAS_AR` (dias de
 histórico do ar, 400).
+
+## Testes
+
+De dentro de `servidor/`, com as dependências do `requirements.txt`:
+
+```sh
+python -m unittest discover -s tests -v
+```
+
+A ConnectLife é simulada; a CI roda os mesmos testes a cada PR.
 
 ## No celular como app
 

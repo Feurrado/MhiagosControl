@@ -1,5 +1,6 @@
 """API da Casa na rede local. Toda rota sob /api, menos /api/saude, pede a chave."""
 
+import asyncio
 import hmac
 import json
 import logging
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 from . import banco, casa, servico
 from .connectlife import ConnectLifeErro, extrair_codigo
 
-VERSAO = "1.2.0"
+VERSAO = "1.3.0"
 CHAVE = os.environ.get("MHIAGOS_CHAVE", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -129,17 +130,22 @@ def _sem_bipe(pedido):
     return casa.preferencias()["dados"].get("semBipe", False) if pedido is None else pedido
 
 
+def _estado_completo():
+    return {**servico.situacao(), "lista": _leves(servico.aparelhos()), "agendamentos": _agendamentos(),
+            "agendamentosFalhos": servico.falhas_recentes(int(time.time()) - 86400)}
+
+
 @app.get("/api/aparelhos", dependencies=[Depends(autorizado)])
 def aparelhos():
     servico.tocar()
-    return {**servico.situacao(), "lista": _leves(servico.aparelhos()), "agendamentos": _agendamentos()}
+    return _estado_completo()
 
 
 @app.post("/api/aparelhos/ler", dependencies=[Depends(autorizado)])
 def ler_agora():
     servico.tocar()
-    servico.ler()
-    return {**servico.situacao(), "lista": _leves(servico.aparelhos()), "agendamentos": _agendamentos()}
+    servico.ler(esperar=True)   # com uma leitura em curso, espera ela em vez de devolver o estado velho
+    return _estado_completo()
 
 
 @app.get("/api/aparelhos/{puid}/propriedades", dependencies=[Depends(autorizado)])
@@ -295,11 +301,17 @@ def historico_ciclos(desde: int = 0):
 
 
 @app.get("/api/mudancas", dependencies=[Depends(autorizado)])
-def mudancas(desde: int = -1):
+async def mudancas(desde: int = -1):
     """Espera longa: responde quando algo mudar (leitura nova, timer, ajustes) ou em 25 s.
-    O painel web chama de novo na hora, entao ve a mudanca assim que o servidor ve."""
+    O painel web chama de novo na hora, entao ve a mudanca assim que o servidor ve.
+    Assincrona: antes cada aba aberta segurava uma das 40 threads do servidor por 25 s."""
     servico.tocar()
-    return {"versao": servico.esperar_mudanca(desde)}
+    for _ in range(100):
+        v = servico.versao()
+        if v != desde:
+            return {"versao": v}
+        await asyncio.sleep(0.25)
+    return {"versao": servico.versao()}
 
 
 @app.get("/api/resumo-mes", dependencies=[Depends(autorizado)])
@@ -357,8 +369,14 @@ class Importacao(BaseModel):
 
 @app.post("/api/historico/importar", dependencies=[Depends(autorizado)])
 def importar(i: Importacao):
-    """O PC manda o que leu enquanto o servidor nao existia. Repetido nao duplica."""
-    c = banco.con()
+    """O PC manda o que leu enquanto o servidor nao existia. Repetido nao duplica.
+    Numa transacao so: com um commit por linha, a primeira troca grande passava dos 30 s
+    do PC e era refeita a cada minuto."""
+    with banco.transacao() as c:
+        return _importar(c, i)
+
+
+def _importar(c, i):
     na = nc = 0
     for a in i.amostras:
         t = int(a["t"])
@@ -413,5 +431,11 @@ def agendar(a: Agendamento):
 
 @app.delete("/api/agendamentos/{ident}", dependencies=[Depends(autorizado)])
 def cancelar(ident: int):
-    banco.con().execute("DELETE FROM agendamentos WHERE id=?", (ident,))
+    servico.cancelar_id(ident)
     return {"ok": True}
+
+
+@app.get("/api/agendamentos/{ident}/resultado", dependencies=[Depends(autorizado)])
+def resultado_do_agendamento(ident: int):
+    """O que aconteceu com um agendamento: o PC pergunta antes de dar o timer como feito."""
+    return servico.resultado(ident)

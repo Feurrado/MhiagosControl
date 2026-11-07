@@ -40,6 +40,7 @@ $srcs += (Join-Path $root 'tools\PendenciasTests.cs')
 $srcs += (Join-Path $root 'tools\RevisaoVisualTests.cs')
 $srcs += (Join-Path $root 'tools\CasaTests.cs')
 $srcs += (Join-Path $root 'tools\ServidorCasaTests.cs')
+$srcs += (Join-Path $root 'tools\ProducaoTests.cs')
 $srcs += (Join-Path $root 'tools\Installer.cs')
 
 $arguments = @(
