@@ -844,7 +844,16 @@ namespace MhiagosControl
             string backup = path + ".bak";
             try
             {
-                File.WriteAllText(temp, text, Encoding.UTF8);
+                // Como o File.WriteAllText com UTF8 (com BOM), mas ate o disco
+                // antes da troca: veja GravacaoAtomica.
+                using (FileStream fs = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    byte[] bom = Encoding.UTF8.GetPreamble();
+                    byte[] corpo = Encoding.UTF8.GetBytes(text);
+                    fs.Write(bom, 0, bom.Length);
+                    fs.Write(corpo, 0, corpo.Length);
+                    fs.Flush(true);
+                }
                 if (File.Exists(path))
                 {
                     // File.Replace nao guarda a versao anterior quando o terceiro

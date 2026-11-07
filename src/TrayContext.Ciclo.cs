@@ -138,7 +138,26 @@ namespace MhiagosControl
             if (falha != null)
                 Avisar(T.SensorInitFailed(falha.Message, Log.Path),
                     T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else if (FaltaPawnIo(HwInfo.Installed, PawnIo.Instalado, _cache))
+                // Edicao publica sem o PawnIO: o mostrador de cima fica vazio e
+                // ninguem dizia por que. O clique abre o Sobre, onde ele instala.
+                NotificarComAcao(T.AppName, T.PawnIoFaltando, delegate { _paginaPedida = "sobre"; PedirConfiguracao(); });
             WarnAboutOriginalTask();
+        }
+
+        /// <summary>
+        /// Sem a biblioteca do HWiNFO, sem o PawnIO e sem nenhuma temperatura de
+        /// CPU na lista: e o caso de avisar. Com qualquer um dos tres, fica quieto.
+        /// </summary>
+        internal static bool FaltaPawnIo(bool motorHwInfo, bool pawnIo, IList<SensorEntry> sensores)
+        {
+            if (motorHwInfo || pawnIo) return false;
+            if (sensores != null)
+                foreach (SensorEntry s in sensores)
+                    if (s != null && s.Type == SensorType.Temperature && s.Label != null &&
+                        s.Label.IndexOf("CPU", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return false;
+            return true;
         }
 
         /// <summary>Substitui o MessageBox do arranque; os testes respondem por aqui.</summary>

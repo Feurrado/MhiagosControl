@@ -343,7 +343,8 @@ namespace MhiagosControl
             }
 
             // Aberto pelo executavel (e nao pelo logon do Windows): mostra a janela
-            if (_activationSignal != null && !Program.IniciadoComOWindows()) _openWhenReady = true;
+            // Reaberto sozinho depois de uma queda tambem nao: ninguem pediu a janela.
+            if (_activationSignal != null && !Program.IniciadoComOWindows() && !Program.Reaberto) _openWhenReady = true;
 
             Microsoft.Win32.SystemEvents.SessionEnded += new Microsoft.Win32.SessionEndedEventHandler(OnSessionEnded);
 
@@ -428,8 +429,18 @@ namespace MhiagosControl
             return false;
         }
 
-        [STAThread]
         [DllImport("user32.dll")] private static extern bool AllowSetForegroundWindow(int pid);
+
+        /// <summary>Esta execucao e o reinicio automatico depois de uma queda (veja Reinicio).</summary>
+        internal static bool Reaberto { get { return TemArgumento(Reinicio.Argumento); } }
+
+        /// <summary>Espera o mutex da instancia que caiu. Abandonado conta como recebido.</summary>
+        private static bool EsperarMutex(Mutex mutex)
+        {
+            try { return mutex.WaitOne(15000); }
+            catch (AbandonedMutexException) { return true; }
+            catch (Exception ex) { Log.Error("esperar a instancia anterior", ex); return false; }
+        }
 
         /// <summary>
         /// O app subiu junto com o Windows (tarefa de logon) ou a pessoa o abriu? Quem abre pelo
@@ -453,6 +464,13 @@ namespace MhiagosControl
             catch { return false; }
         }
 
+        /// <summary>
+        /// STA obrigatorio: area de transferencia, dialogos de arquivo e o
+        /// SystemEvents dependem dele. O atributo ficou um tempo no DllImport
+        /// logo acima, e a interface rodava em MTA: Copiar e Colar falhavam
+        /// calados e os dialogos de exportar podiam travar. Um teste confere.
+        /// </summary>
+        [STAThread]
         public static void Main()
         {
             // Duas instancias disputariam o painel e o resultado piscaria.
@@ -481,6 +499,9 @@ namespace MhiagosControl
                 false, EventResetMode.AutoReset, ActivationName))
             using (Mutex mutex = new Mutex(true, MutexName, out createdNew))
             {
+                // Reaberto depois de uma queda: o processo antigo ainda pode estar
+                // terminando com o mutex na mao. Espera ele soltar.
+                if (!createdNew && TemArgumento(Reinicio.Argumento)) createdNew = EsperarMutex(mutex);
                 if (!createdNew)
                 {
                     // A instancia existente traz sua unica janela para frente.
@@ -509,6 +530,8 @@ namespace MhiagosControl
                 {
                     Exception ex = e.ExceptionObject as Exception;
                     if (ex != null) Log.Error("excecao sem tratamento" + (e.IsTerminating ? " (o app vai fechar)" : ""), ex);
+                    // Sem isto o mostrador do cooler apagava ate o proximo logon.
+                    if (e.IsTerminating) Reinicio.Pedir();
                 };
 
                 try

@@ -1,7 +1,7 @@
 # Mhiagos Control, edição enxuta
 
 Esta branch (`edicao-cpu`) guarda o código da **edição enxuta** (release
-[`v2.30.0-cpu`](https://github.com/Feurrado/MhiagosControl/releases/tag/v2.30.0-cpu)):
+[`v2.31.0-cpu`](https://github.com/Feurrado/MhiagosControl/releases/tag/v2.31.0-cpu)):
 controle do painel do cooler (Painel CPU, com Perfis), Métricas e
 Especificações, sem a página Casa, sem bateria de periféricos e sem widget.
 
