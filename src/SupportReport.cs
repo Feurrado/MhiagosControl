@@ -14,6 +14,9 @@ namespace MhiagosControl
         {
             StringBuilder text = new StringBuilder();
             text.AppendLine("Mhiagos Control - diagnostic / format 1");
+            // Sem a versao e a fonte de sensores, todo relatorio comecava com "qual versao?".
+            text.AppendLine("Version: " + AppInfo.Versao);
+            text.AppendLine("HWiNFO engine: " + (HwInfo.Installed ? "present" : "absent"));
             text.AppendLine("UTC: " + utcNow.ToString("O", CultureInfo.InvariantCulture));
             text.AppendLine("Windows: " + Environment.OSVersion.Version);
             text.AppendLine("CLR: " + Environment.Version);

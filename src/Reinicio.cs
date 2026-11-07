@@ -25,7 +25,7 @@ namespace MhiagosControl
         internal const int JanelaMin = 10;
 
         /// <summary>Arquivo com os instantes dos reinicios recentes; os testes trocam.</summary>
-        internal static string Arquivo;
+        internal static string Arquivo { get; set; }
 
         private static string Caminho { get { return Arquivo ?? Path.Combine(Paths.DataDir, "reinicios.txt"); } }
 

@@ -32,6 +32,16 @@ namespace MhiagosControl
             FreioDoReinicio();
             CenasEntreThreads(root);
             EnderecosSemElevacao();
+            VersaoEIsolamento();
+        }
+
+        private static void VersaoEIsolamento()
+        {
+            Igual(AppInfo.Versao, MhiagosSetup.Setup.Versao, "versao: instalador e app dizem a mesma");
+            Igual(AppInfo.Versao + ".0", typeof(Program).Assembly.GetName().Version.ToString(),
+                "versao: o executavel leva a versao do app no recurso");
+            Verdade(!Log.Path.StartsWith(Paths.DataDir, StringComparison.OrdinalIgnoreCase),
+                "testes: o log nao vai para o log.txt de quem usa o app");
         }
 
         private static void EnderecosSemElevacao()

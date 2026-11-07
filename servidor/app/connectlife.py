@@ -161,7 +161,7 @@ class ConnectLife:
             r = self._http.post(URL_TOKEN, content=urlencode(campos),
                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
         except httpx.HTTPError as e:
-            raise ConnectLifeErro("Sem resposta da ConnectLife: " + type(e).__name__)
+            raise ConnectLifeErro("Sem resposta da ConnectLife: " + type(e).__name__) from e
         if r.status_code != 200:
             log.warning("token recusado %s %s", r.status_code, r.text[:300])
             if pede_login_no_token(r.status_code):
@@ -253,7 +253,7 @@ class ConnectLife:
             else:
                 r = self._http.post(alvo, content=corpo.encode("utf-8"), headers=cab)
         except httpx.HTTPError as e:
-            raise ConnectLifeErro("Sem resposta da ConnectLife: " + type(e).__name__)
+            raise ConnectLifeErro("Sem resposta da ConnectLife: " + type(e).__name__) from e
 
         if r.status_code != 200:
             log.warning("%s respondeu %s %s", _caminho(url), r.status_code, r.text[:300])
@@ -263,7 +263,7 @@ class ConnectLife:
         try:
             o = r.json()
         except ValueError:
-            raise ConnectLifeErro("Resposta estranha da ConnectLife.")
+            raise ConnectLifeErro("Resposta estranha da ConnectLife.") from None
         resultado = _texto(o.get("resultCode"))
         if resultado is None or resultado == "0":
             return o
