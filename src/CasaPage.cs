@@ -1259,7 +1259,7 @@ namespace MhiagosControl
                 case "t_eco": return P("Econômico", "ECO");
                 case "t_super": return P("Turbo", "Turbo");
                 case "t_fan_mute": return P("Silencioso", "Quiet");
-                case "t_sleep": return P("Modo noturno", "Sleep");
+                case "t_sleep": return P("Apagar LEDs", "LEDs off");
                 case "t_up_down": return P("Oscilar na vertical", "Vertical swing");
                 case "t_left_right": return P("Oscilar na horizontal", "Horizontal swing");
                 case "t_8heat": return P("Antifrio 8 °C", "8 °C frost guard");
