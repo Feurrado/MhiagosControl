@@ -559,9 +559,14 @@ function mostrarInteiro(e) {
  */
 function trocarConteudo(caixa, ...filhos) {
   const h0 = caixa.offsetHeight;
+  caixa.style.minHeight = "";
   caixa.replaceChildren(...filhos);
   caixa.classList.remove("recarregando");
-  const h1 = caixa.offsetHeight;
+  let h1 = caixa.offsetHeight;
+  // Encolher perto do fim da pagina obriga o navegador a puxar a rolagem a cada quadro,
+  // e no Android a barra de abas fixa treme junto. Nesse caso a caixa guarda a altura antiga.
+  const sobra = document.documentElement.scrollHeight - (scrollY + innerHeight);
+  if (h1 < h0 && sobra < h0 - h1) { caixa.style.minHeight = h0 + "px"; h1 = h0; }
   if (!h0 || Math.abs(h1 - h0) < 3 || semMovimento() || !caixa.animate) return;
   caixa.style.overflow = "hidden";
   caixa.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 260, easing: "cubic-bezier(.2,0,0,1)" })
