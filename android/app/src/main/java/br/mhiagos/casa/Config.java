@@ -16,7 +16,7 @@ final class Config {
     private static final String CHAVE_INTERNO = "url";       // nome antigo: quem ja tinha o app mantem o endereco
     private static final String CHAVE_EXTERNO = "externo";
     /** Depois de o externo falhar, o interno vai primeiro por este tempo. */
-    private static final long RESERVA_MS = 60 * 1000;
+    private static final long RESERVA_MS = 15 * 1000;
     private static long externoFalhouEm = 0;
 
     private Config() {}

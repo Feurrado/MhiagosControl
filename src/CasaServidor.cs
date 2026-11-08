@@ -50,8 +50,8 @@ namespace MhiagosControl
 
         // Depois de uma falha do externo, o interno vai primeiro por este tempo (sem esperar
         // o limite de tempo do externo a cada pedido).
-        private const int ReservaSeg = 60;
-        private const int LimiteDoPrimeiroMs = 8000;
+        private const int ReservaSeg = 15;
+        private const int LimiteDoPrimeiroMs = 5000;
         private static DateTime _externoFalhouEm = DateTime.MinValue;
 
         private static string Chave
