@@ -128,6 +128,64 @@ class LoginOAuth(Base):
         self.assertFalse(servico.estado_de_login_valido("qualquer"))
 
 
+IP_REAL = main.ip_do_cliente
+
+
+class BloqueioDeChave(Base):
+    def setUp(self):
+        super().setUp()
+        main._falhas.clear()
+        # O cliente de teste nao tem IP real: usa o X-Forwarded-For como o proxy faria.
+        p = mock.patch.object(main, "ip_do_cliente", lambda r: r.headers.get("x-forwarded-for", "?"))
+        p.start()
+        self.addCleanup(p.stop)
+        self.addCleanup(main._falhas.clear)
+
+    def _errar(self, n, ip="203.0.113.9"):
+        return [self.cliente.get("/api/aparelhos", headers={"Authorization": "Bearer errada",
+                                                            "X-Forwarded-For": ip}).status_code for _ in range(n)]
+
+    def test_bloqueia_depois_de_varios_erros_e_nao_afeta_outro_ip(self):
+        codigos = self._errar(main.FALHAS_MAX)
+        self.assertEqual(set(codigos), {401})
+        r = self.cliente.get("/api/aparelhos", headers={**self.cab, "X-Forwarded-For": "203.0.113.9"})
+        self.assertEqual(r.status_code, 429)   # nem a chave certa passa durante o bloqueio
+        self.assertIn("retry-after", r.headers)
+        r = self.cliente.get("/api/aparelhos", headers={**self.cab, "X-Forwarded-For": "198.51.100.7"})
+        self.assertEqual(r.status_code, 200)
+
+    def test_bloqueio_dobra_na_reincidencia_e_expira(self):
+        self._errar(main.FALHAS_MAX)
+        primeiro = main._bloqueado("203.0.113.9")
+        self.assertGreater(primeiro, main.BLOQUEIO_BASE - 5)
+        main._falhas["203.0.113.9"]["ate"] = 0   # expirou
+        self._errar(main.FALHAS_MAX)
+        self.assertGreater(main._bloqueado("203.0.113.9"), 2 * main.BLOQUEIO_BASE - 5)
+
+    def test_saude_nunca_e_bloqueada(self):
+        self._errar(main.FALHAS_MAX)
+        self.assertEqual(self.cliente.get("/api/saude", headers={"X-Forwarded-For": "203.0.113.9"}).status_code, 200)
+
+    def test_encaminhado_so_vale_de_par_privado(self):
+        class Req:
+            def __init__(self, par, xff):
+                self.client = type("C", (), {"host": par})()
+                self.headers = {"x-forwarded-for": xff}
+        self.assertEqual(IP_REAL(Req("192.168.1.100", "1.2.3.4, 5.6.7.8")), "5.6.7.8")
+        self.assertEqual(IP_REAL(Req("172.18.0.1", "5.6.7.8")), "5.6.7.8")
+        self.assertEqual(IP_REAL(Req("8.8.8.8", "5.6.7.8")), "8.8.8.8")
+        self.assertEqual(IP_REAL(Req("192.168.1.100", "lixo")), "192.168.1.100")
+
+    def test_hsts_so_com_proxy_https(self):
+        self.assertNotIn("strict-transport-security", self.cliente.get("/api/saude").headers)
+        r = self.cliente.get("/api/saude", headers={"X-Forwarded-Proto": "https"})
+        self.assertIn("max-age=", r.headers["strict-transport-security"])
+
+    def test_corpo_comum_tem_limite_menor(self):
+        r = self.cliente.put("/api/preferencias", headers=self.cab, content=b"x" * (main.CORPO_COMUM + 1))
+        self.assertEqual(r.status_code, 413)
+
+
 class ValidacaoDireta(unittest.TestCase):
     def test_preferencias_sem_objeto(self):
         with self.assertRaises(casa.PreferenciaInvalida):
