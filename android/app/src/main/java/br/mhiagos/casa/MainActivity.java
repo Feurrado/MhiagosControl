@@ -32,7 +32,10 @@ public class MainActivity extends Activity {
     private TextView erroTexto, carregando;
     private final List<String> falhas = new ArrayList<String>();
     /** Quanto esperar um endereco que tem reserva antes de passar para ela. */
-    private static final int LIMITE_COM_RESERVA_MS = 5000;
+    private static final int LIMITE_COM_RESERVA_MS = 4000;
+    /** Depois que a sonda confirma o endereco, quanto a pagina pode levar para carregar. */
+    private static final int LIMITE_CARGA_MS = 15000;
+    private int tentativa;
     /** O ultimo endereco da lista tambem tem limite: sem ele a tela ficava vazia para sempre. */
     private static final int LIMITE_DO_ULTIMO_MS = 12000;
 
@@ -142,9 +145,49 @@ public class MainActivity extends Activity {
         erro.setVisibility(View.GONE);
         carregando.setText("Conectando a\n" + urlAtual + "\n…");
         carregando.setVisibility(View.VISIBLE);
-        web.loadUrl(urlAtual);
-        // Todo endereco tem limite de tempo: com reserva, passa para ela; sem, mostra o erro.
-        relogio.postDelayed(aoEsgotar, indice < enderecos.size() - 1 ? LIMITE_COM_RESERVA_MS : LIMITE_DO_ULTIMO_MS);
+        if (indice >= enderecos.size() - 1) {
+            web.loadUrl(urlAtual);
+            relogio.postDelayed(aoEsgotar, LIMITE_DO_ULTIMO_MS);
+            return;
+        }
+        // Com reserva: antes de carregar, sonda o endereco por fora da WebView (rapido e sem depender
+        // dos erros dela). Sem resposta em poucos segundos, cai logo para o proximo.
+        final int vez = ++tentativa;
+        final String alvo = urlAtual;
+        relogio.postDelayed(aoEsgotar, LIMITE_COM_RESERVA_MS);
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final boolean ok = sondar(alvo);
+                relogio.post(new Runnable() {
+                    @Override public void run() {
+                        if (vez != tentativa || falhou) return;
+                        if (ok) {
+                            relogio.removeCallbacks(aoEsgotar);
+                            web.loadUrl(alvo);
+                            relogio.postDelayed(aoEsgotar, LIMITE_CARGA_MS);
+                        } else {
+                            tentarOutroOuFalhar("sem resposta");
+                        }
+                    }
+                });
+            }
+        }).start();
+    }
+
+    /** Qualquer resposta HTTP abaixo de 500 em ate 3 s conta como endereco vivo. */
+    private static boolean sondar(String url) {
+        java.net.HttpURLConnection c = null;
+        try {
+            c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            c.setConnectTimeout(3000);
+            c.setReadTimeout(3000);
+            c.setInstanceFollowRedirects(true);
+            return c.getResponseCode() < 500;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (c != null) c.disconnect();
+        }
     }
 
     private boolean ehExterno(String url) {
@@ -155,6 +198,7 @@ public class MainActivity extends Activity {
     /** O endereco atual nao respondeu: tenta o proximo; sem mais nenhum, mostra o erro. */
     private void tentarOutroOuFalhar(String motivo) {
         relogio.removeCallbacks(aoEsgotar);
+        tentativa++;
         falhas.add(urlAtual + "  (" + motivo + ")");
         if (ehExterno(urlAtual)) Config.externoFalhou();
         if (indice < enderecos.size() - 1) {
