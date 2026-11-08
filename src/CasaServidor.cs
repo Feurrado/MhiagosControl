@@ -34,12 +34,25 @@ namespace MhiagosControl
         /// <summary>Testes: nao fala com o servidor.</summary>
         internal static bool Desligado;
 
+        /// <summary>Endereco interno (rede local): a reserva quando o externo nao responde.</summary>
         public static string Endereco { get { return (ServicoCasa.Pref.Servidor ?? "").Trim().TrimEnd('/'); } }
+
+        /// <summary>Endereco externo (https pela internet): tentado primeiro quando existe.</summary>
+        public static string EnderecoExterno { get { return (ServicoCasa.Pref.ServidorExterno ?? "").Trim().TrimEnd('/'); } }
+
+        /// <summary>O endereco para abrir a pagina no navegador: o externo, se houver.</summary>
+        public static string EnderecoDaPagina { get { return EnderecoExterno.Length > 0 ? EnderecoExterno : Endereco; } }
 
         public static bool Configurado
         {
-            get { return !Desligado && Endereco.Length > 0 && !string.IsNullOrEmpty(Chave); }
+            get { return !Desligado && (Endereco.Length > 0 || EnderecoExterno.Length > 0) && !string.IsNullOrEmpty(Chave); }
         }
+
+        // Depois de uma falha do externo, o interno vai primeiro por este tempo (sem esperar
+        // o limite de tempo do externo a cada pedido).
+        private const int ReservaSeg = 15;
+        private const int LimiteDoPrimeiroMs = 5000;
+        private static DateTime _externoFalhouEm = DateTime.MinValue;
 
         private static string Chave
         {
@@ -68,17 +81,18 @@ namespace MhiagosControl
             }
         }
 
-        /// <summary>Grava endereco e chave (chave vazia mantem a guardada) e sincroniza.</summary>
-        public static void Configurar(string endereco, string chave)
+        /// <summary>Grava os enderecos e a chave (chave vazia mantem a guardada) e sincroniza.</summary>
+        public static void Configurar(string externo, string interno, string chave)
         {
-            ServicoCasa.Pref.Servidor = (endereco ?? "").Trim().TrimEnd('/');
+            ServicoCasa.Pref.ServidorExterno = (externo ?? "").Trim().TrimEnd('/');
+            ServicoCasa.Pref.Servidor = (interno ?? "").Trim().TrimEnd('/');
             ServicoCasa.Pref.Salvar();
             if (!string.IsNullOrEmpty(chave))
             {
                 if (!Cofre.Gravar(AlvoDoCofre, chave.Trim())) Log.Write("casa: chave do servidor nao gravada no cofre");
                 lock (_trava) _chave = chave.Trim();
             }
-            if (Endereco.Length == 0) Definir("", false);
+            if (Endereco.Length == 0 && EnderecoExterno.Length == 0) Definir("", false);
             Iniciar();
             Sincronizar();
         }
@@ -87,6 +101,7 @@ namespace MhiagosControl
         public static void Esquecer()
         {
             ServicoCasa.Pref.Servidor = "";
+            ServicoCasa.Pref.ServidorExterno = "";
             ServicoCasa.Pref.ServidorDesligarId = 0;
             ServicoCasa.Pref.ServidorRetornoId = 0;
             ServicoCasa.Pref.ServidorPrefVersao = 0;
@@ -482,13 +497,74 @@ namespace MhiagosControl
             catch (Exception ex) { return ex.Message; }
         }
 
+        /// <summary>
+        /// Testa cada endereco preenchido (externo e interno) com a mesma chave. Nulo quando todos
+        /// responderam; senao o motivo, dizendo qual falhou.
+        /// </summary>
+        public static string TestarEnderecos(string externo, string interno, string chave)
+        {
+            bool algum;
+            return TestarEnderecos(externo, interno, chave, out algum);
+        }
+
+        /// <summary>Como acima; algumOk diz se pelo menos um dos enderecos preenchidos respondeu (basta para salvar: o outro e reserva).</summary>
+        public static string TestarEnderecos(string externo, string interno, string chave, out bool algumOk)
+        {
+            algumOk = false;
+            List<string> erros = new List<string>();
+            string e = (externo ?? "").Trim(), i = (interno ?? "").Trim();
+            if (e.Length > 0) { string r = Testar(e, chave); if (r != null) erros.Add(T.ServidorEnderecoExterno + ": " + r); else algumOk = true; }
+            if (i.Length > 0) { string r = Testar(i, chave); if (r != null) erros.Add(T.ServidorEnderecoInterno + ": " + r); else algumOk = true; }
+            return erros.Count == 0 ? null : string.Join(" | ", erros.ToArray());
+        }
+
+        /// <summary>
+        /// Com os dois enderecos, tenta o externo e, se ele nao responder (sem rede, sem resposta,
+        /// tempo esgotado), o interno. Resposta de erro do servidor (401, 404...) nao troca de
+        /// endereco: ele respondeu. Um pedido que ja enviou corpo (POST) nao e repetido no outro
+        /// endereco, para nao duplicar o que o servidor pode ter feito.
+        /// </summary>
         private static Dictionary<string, object> Pedir(string metodo, string caminho, Dictionary<string, object> carga)
         {
-            return Pedir(metodo, caminho, carga, Endereco, Chave);
+            string externo = EnderecoExterno, interno = Endereco, chave = Chave;
+            if (externo.Length == 0) return Pedir(metodo, caminho, carga, interno, chave);
+            if (interno.Length == 0) return Pedir(metodo, caminho, carga, externo, chave);
+            bool internoPrimeiro;
+            lock (_trava) internoPrimeiro = (DateTime.UtcNow - _externoFalhouEm).TotalSeconds < ReservaSeg;
+            string primeiro = internoPrimeiro ? interno : externo, segundo = internoPrimeiro ? externo : interno;
+            try
+            {
+                Dictionary<string, object> r = Pedir(metodo, caminho, carga, primeiro, chave, LimiteDoPrimeiroMs);
+                if (!internoPrimeiro) lock (_trava) _externoFalhouEm = DateTime.MinValue;
+                return r;
+            }
+            catch (ServidorSemRespostaErro ex)
+            {
+                if (ex.CorpoEnviado) throw;
+                if (!internoPrimeiro) lock (_trava) _externoFalhouEm = DateTime.UtcNow;
+                Log.Write("casa: " + (internoPrimeiro ? "interno" : "externo") + " sem resposta, tentando o outro endereco");
+            }
+            try
+            {
+                Dictionary<string, object> r = Pedir(metodo, caminho, carga, segundo, chave);
+                if (internoPrimeiro) lock (_trava) _externoFalhouEm = DateTime.MinValue;
+                return r;
+            }
+            catch (ServidorSemRespostaErro)
+            {
+                if (internoPrimeiro) lock (_trava) _externoFalhouEm = DateTime.UtcNow;
+                throw;
+            }
         }
 
         private static Dictionary<string, object> Pedir(string metodo, string caminho, Dictionary<string, object> carga,
             string endereco, string chave)
+        {
+            return Pedir(metodo, caminho, carga, endereco, chave, 15000);
+        }
+
+        private static Dictionary<string, object> Pedir(string metodo, string caminho, Dictionary<string, object> carga,
+            string endereco, string chave, int limiteMs)
         {
             if (endereco.IndexOf("://", StringComparison.Ordinal) < 0) endereco = "http://" + endereco;
             // So http(s): o endereco vem do casa.ini, gravavel sem elevacao, e um "file:"
@@ -498,10 +574,11 @@ namespace MhiagosControl
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create(endereco + caminho);
             req.Method = metodo;
             req.UserAgent = "MhiagosControl";
-            req.Timeout = 15000;
+            req.Timeout = limiteMs;
             req.ReadWriteTimeout = 30000;
             req.Accept = "application/json";
             req.Headers["Authorization"] = "Bearer " + chave;
+            bool corpoEnviado = false;
             try
             {
                 if (carga != null)
@@ -509,7 +586,7 @@ namespace MhiagosControl
                     byte[] b = Encoding.UTF8.GetBytes(Json.Escrever(carga));
                     req.ContentType = "application/json";
                     req.ContentLength = b.Length;
-                    using (Stream s = req.GetRequestStream()) s.Write(b, 0, b.Length);
+                    using (Stream s = req.GetRequestStream()) { s.Write(b, 0, b.Length); corpoEnviado = true; }
                 }
                 using (HttpWebResponse r = (HttpWebResponse)req.GetResponse())
                 using (StreamReader sr = new StreamReader(r.GetResponseStream(), Encoding.UTF8))
@@ -518,10 +595,15 @@ namespace MhiagosControl
             catch (WebException ex)
             {
                 HttpWebResponse r = ex.Response as HttpWebResponse;
-                if (r == null) throw new IOException(T.ServidorSemResposta);
+                if (r == null) throw new ServidorSemRespostaErro(corpoEnviado);
                 using (r)
                 {
                     if (r.StatusCode == HttpStatusCode.Unauthorized) throw new ServidorHttpErro(401, T.ServidorChaveErrada);
+                    // O proxy (Funnel) ou o limite de tentativas respondeu no lugar do servidor: o pedido nao
+                    // foi processado, entao o outro endereco pode tentar (como se nao houvesse resposta).
+                    int codigo = (int)r.StatusCode;
+                    if (codigo == 429 || codigo == 502 || codigo == 503 || codigo == 504)
+                        throw new ServidorSemRespostaErro(false, T.ServidorErroHttp(codigo));
                     throw new ServidorHttpErro((int)r.StatusCode, T.ServidorErroHttp((int)r.StatusCode));
                 }
             }
@@ -546,6 +628,14 @@ namespace MhiagosControl
         internal static long Seg(DateTime d) { return (long)(d.ToUniversalTime() - Zero).TotalSeconds; }
     }
 
+    /// <summary>Nenhum endereco respondeu (sem rede, recusou, tempo esgotado). CorpoEnviado: um POST ja foi escrito.</summary>
+    internal sealed class ServidorSemRespostaErro : IOException
+    {
+        public readonly bool CorpoEnviado;
+        public ServidorSemRespostaErro(bool corpoEnviado) : base(T.ServidorSemResposta) { CorpoEnviado = corpoEnviado; }
+        public ServidorSemRespostaErro(bool corpoEnviado, string mensagem) : base(mensagem) { CorpoEnviado = corpoEnviado; }
+    }
+
     /// <summary>Resposta HTTP de erro do servidor da casa, com o codigo (404 = rota que a versao dele nao tem).</summary>
     internal sealed class ServidorHttpErro : IOException
     {
@@ -556,7 +646,8 @@ namespace MhiagosControl
     public static partial class T
     {
         public static string ServidorSecao { get { return P("Servidor da casa", "Home server"); } }
-        public static string ServidorEndereco { get { return P("Endereço (ex.: 192.168.1.100:8765)", "Address (e.g. 192.168.1.100:8765)"); } }
+        public static string ServidorEnderecoExterno { get { return P("Endereço externo (https://home01.suarede.ts.net)", "External address (https://home01.yournet.ts.net)"); } }
+        public static string ServidorEnderecoInterno { get { return P("Endereço interno (192.168.1.100:8765)", "Internal address (192.168.1.100:8765)"); } }
         public static string ServidorChave { get { return P("Chave de acesso (vazio mantém a guardada)", "Access key (empty keeps the saved one)"); } }
         public static string ServidorSalvar { get { return P("Salvar e testar", "Save and test"); } }
         public static string ServidorSincronizar { get { return P("Sincronizar agora", "Sync now"); } }
@@ -565,12 +656,13 @@ namespace MhiagosControl
         public static string ServidorEsquecer { get { return P("Esquecer", "Forget"); } }
         public static string ServidorTestando { get { return P("Testando…", "Testing…"); } }
         public static string ServidorNaoConfigurado { get { return P("Sem servidor: só este PC lê os aparelhos.", "No server: only this PC reads the devices."); } }
-        public static string ServidorNota { get { return P("O servidor continua lendo o ar e a lavadora com o PC desligado, guarda o histórico e dispara o timer de desligar e o retorno das cenas. Histórico, cenas, ajustes e timers são trocados com ele a cada minuto, então o que mudar no painel web aparece aqui.", "The server keeps reading the AC and washer with the PC off, stores the history and fires the off timer and scene return. History, scenes, settings and timers are exchanged every minute, so changes made on the web panel show up here."); } }
+        public static string ServidorNota { get { return P("O servidor continua lendo o ar e a lavadora com o PC desligado, guarda o histórico e dispara o timer de desligar e o retorno das cenas. Histórico, cenas, ajustes e timers são trocados com ele a cada minuto, então o que mudar no painel web aparece aqui. O endereço externo é tentado primeiro; se não responder, o app usa o interno. Deixe um dos dois vazio para usar só o outro.", "The server keeps reading the AC and washer with the PC off, stores the history and fires the off timer and scene return. History, scenes, settings and timers are exchanged every minute, so changes made on the web panel show up here. The external address is tried first; if it does not answer, the app uses the internal one. Leave one empty to use only the other."); } }
         public static string ServidorSemConta { get { return P("Servidor no ar, mas sem a conta ConnectLife: entre pela página do servidor.", "Server is up but has no ConnectLife account: sign in on the server page."); } }
         public static string ServidorSemResposta { get { return P("o servidor não respondeu", "the server did not respond"); } }
         public static string ServidorChaveErrada { get { return P("chave de acesso recusada", "access key rejected"); } }
         public static string ServidorErroHttp(int c) { return P("o servidor respondeu " + c, "the server answered " + c); }
         public static string ServidorEnderecoInvalido { get { return P("endereço inválido: use http:// ou https:// com o IP ou nome do servidor", "invalid address: use http:// or https:// with the server's IP or name"); } }
+        public static string ServidorSalvoComAviso(string m) { return P("salvo, mas um endereço não respondeu: " + m, "saved, but one address did not answer: " + m); }
         public static string ServidorFalhou(string m) { return P("Falha ao sincronizar: " + m, "Sync failed: " + m); }
         public static string ServidorSincronizado(DateTime d) { return P("Sincronizado às " + d.ToString("HH:mm"), "Synced at " + d.ToString("HH:mm")); }
     }

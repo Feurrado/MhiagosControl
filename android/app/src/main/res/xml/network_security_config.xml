@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Uso pessoal: o painel roda em http:// na rede local (sem HTTPS), e o endereco
+     e configuravel no app, entao o texto puro fica liberado. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
