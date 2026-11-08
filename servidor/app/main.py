@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, model_validator
 
-from . import banco, casa, servico
+from . import avisos, banco, casa, servico
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
 VERSAO = "1.4.0"
@@ -277,6 +277,15 @@ def _estado_completo():
 def aparelhos():
     servico.tocar()
     return _estado_completo()
+
+
+@app.post("/api/avisos/teste", dependencies=[Depends(autorizado)])
+def aviso_teste():
+    """Manda uma notificacao de teste para o topico do ntfy gravado em Ajustes."""
+    erro = avisos.publicar("Mhiagos Casa", "Teste: as notificações do servidor chegam neste celular.", 3, ["bell"])
+    if erro:
+        raise HTTPException(424 if "ntfy" in erro else 409, erro)   # 502 faria o app trocar de endereco
+    return {"ok": True}
 
 
 @app.post("/api/aparelhos/ler", dependencies=[Depends(autorizado)])

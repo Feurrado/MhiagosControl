@@ -6,6 +6,7 @@ HistoricoDoAr.PorDia (src/CasaServico.cs). Assim o painel web e o app mostram
 e mandam a mesma coisa.
 """
 
+import re
 import time
 from datetime import datetime, timedelta
 
@@ -224,7 +225,7 @@ CENAS_PADRAO = [
 PREF_PADRAO = {
     "alertaFalha": True, "alertaDesconectado": True, "alertaQuente": True, "alertaLavadoraFim": True,
     "limiteQuente": 28, "potenciaFrio": 1100, "potenciaEco": 1100, "potenciaSeco": 600, "potenciaVentilar": 60,
-    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "cenas": CENAS_PADRAO,
+    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "ntfyTopico": "", "cenas": CENAS_PADRAO,
 }
 
 
@@ -290,6 +291,10 @@ def validar_preferencias(dados):
             limpo[k] = round(float(v), 4)
         elif k == "cenas":
             limpo[k] = _validar_cenas(v)
+        elif k == "ntfyTopico":
+            if not isinstance(v, str) or (v and not re.match(r"^[A-Za-z0-9_-]{8,64}$", v)):
+                raise PreferenciaInvalida("ntfyTopico: vazio ou de 8 a 64 letras, numeros, - e _")
+            limpo[k] = v
     return limpo
 
 

@@ -28,6 +28,7 @@
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="Endereço do painel"
+            android:theme="@style/TemaEscuro"
             android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>

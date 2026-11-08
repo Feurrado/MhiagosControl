@@ -1,5 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Toque longo no icone. Os de acao abrem o painel com ?acao=..., que a pagina executa (ver atalho() no index.html). -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="desligar"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/atalho_desligar">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="casa://atalho?acao=desligar"
+            android:targetClass="br.mhiagos.casa.MainActivity"
+            android:targetPackage="br.mhiagos.casa" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="timer60"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/atalho_timer">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="casa://atalho?acao=timer60"
+            android:targetClass="br.mhiagos.casa.MainActivity"
+            android:targetPackage="br.mhiagos.casa" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="ligar"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/atalho_ligar">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="casa://atalho?acao=ligar"
+            android:targetClass="br.mhiagos.casa.MainActivity"
+            android:targetPackage="br.mhiagos.casa" />
+    </shortcut>
     <shortcut
         android:shortcutId="endereco"
         android:enabled="true"

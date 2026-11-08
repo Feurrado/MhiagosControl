@@ -1,8 +1,17 @@
 <resources>
-    <style name="Tema" parent="android:Theme.Material.NoActionBar">
+    <!-- Claro; o escuro fica em values-night. O tema decide tambem o prefers-color-scheme da WebView. -->
+    <style name="Tema" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/fundo</item>
         <item name="android:statusBarColor">@color/barra</item>
         <item name="android:navigationBarColor">@color/barra</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">#2D7DF6</item>
+    </style>
+    <!-- Tela de endereco: desenhada em escuro no codigo, fica sempre escura. -->
+    <style name="TemaEscuro" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#1C1C1F</item>
+        <item name="android:statusBarColor">#17171A</item>
+        <item name="android:navigationBarColor">#17171A</item>
         <item name="android:colorAccent">#4DA3FF</item>
     </style>
 </resources>

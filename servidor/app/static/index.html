@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#17171A">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#EAECF0">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#17171A">
 <link rel="icon" href="/icone.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icone-180.png">
@@ -329,6 +330,9 @@
     .tile.horiz { min-height:48px; }
     .cena { min-height:52px; }
     .chavinha { min-height:44px; }
+    /* Cinco modos nao cabem numa linha no celular ("Calor" ficava cortado): quebram em linhas. */
+    .tiles { grid-template-columns:repeat(auto-fit,minmax(96px,1fr)) !important; }
+    .tile { min-width:0; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { transition:none !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; }
@@ -403,6 +407,7 @@
 <script>
 "use strict";
 let chave = "";
+let ajSecao = "alertas", ajAberto = false;   // secao dos Ajustes; no celular, se o detalhe esta aberto
 try { chave = localStorage.getItem("chave") || ""; } catch (e) {}
 let estado = null, pref = null, abaAtual = "painel";
 const pendente = {};          // puid -> {chave: valor} mandado e ainda nao confirmado pela leitura
@@ -481,16 +486,36 @@ $("lerAgora").onclick = async ev => {
 };
 $("servidorNome").textContent = location.host;
 
-for (const b of document.querySelectorAll("nav .item")) b.onclick = () => trocarAba(b.dataset.aba);
+/**
+ * Aba e secao dos Ajustes ficam no endereco (#consumo, #ajustes-cenas): o voltar do Android
+ * e do navegador navega dentro do painel em vez de fechar o app.
+ */
+const ABAS = ["painel", "consumo", "ajustes"];
+function irPara(h, substituir) {
+  if (("#" + h) === location.hash) { aplicarHash(); return; }
+  if (substituir) { history.replaceState(null, "", "#" + h); aplicarHash(); }
+  else location.hash = h;
+}
+function aplicarHash() {
+  const h = location.hash.slice(1) || "painel";
+  const [aba, sec] = h.split("-");
+  aplicarHash.daLista = aplicarHash.ultimo === "ajustes" && !!sec;   // o Voltar do detalhe pode usar o historico
+  aplicarHash.ultimo = h;
+  if (!ABAS.includes(aba)) { trocarAba("painel"); return; }
+  if (aba === "ajustes") { ajAberto = !!sec; if (sec) ajSecao = sec; }
+  trocarAba(aba);
+}
+addEventListener("hashchange", aplicarHash);
+for (const b of document.querySelectorAll("nav .item")) b.onclick = () => irPara(b.dataset.aba);
 function trocarAba(a) {
-  if (a === "ajustes" && abaAtual === "ajustes") ajAberto = false;   // tocar na aba de novo volta para a lista
+  const mudou = abaAtual !== a;
   abaAtual = a;
   for (const b of document.querySelectorAll("nav .item")) { const on = b.dataset.aba === a; b.classList.toggle("ativo", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); }
   for (const s of ["painel", "consumo", "ajustes"]) $("aba-" + s).classList.toggle("oculto", s !== a);
   if (a === "consumo") carregarConsumo();
   if (a === "ajustes") desenharAjustes();
   if (a === "painel") desenharCartoes();
-  scrollTo(0, 0);
+  if (mudou || a === "ajustes") scrollTo(0, 0);
 }
 
 // ---------------- icones (como IconesDeCena e os desenhados no app) ----------------
@@ -793,7 +818,7 @@ function cartaoAr(a) {
 
   // Cenas e timer lado a lado, como no app
   const cenas = el("div", { class: "sub-cartao" }, el("div", { class: "tit" }, "Cenas",
-      el("button", { class: "b peq", on: { click: () => { ajSecao = "cenas"; ajAberto = true; trocarAba("ajustes"); } } }, "Editar")),
+      el("button", { class: "b peq", on: { click: () => irPara("ajustes-cenas") } }, "Editar")),
     pref && pref.dados.cenas.length ? el("div", { class: "cenas" }, pref.dados.cenas.map((c, n) => el("button", { class: "cena", disabled: !ok,
       "data-id": a.puid + "cena" + n, on: { click: () => rodarCena(a, n, c) } },
       el("div", { class: "bola" }, icone(c.icone)), el("span", {}, el("b", {}, c.nome), el("small", {}, resumoCena(c, a))))))
@@ -1147,7 +1172,9 @@ function graficoDoDia(am, ini, fim, largura, opcoes) {
     dica.classList.remove("oculto");
     dica.style.left = Math.min(Math.max(0, X(m.t) - dica.offsetWidth / 2), W - dica.offsetWidth) + "px";
   });
-  g.addEventListener("pointerleave", () => { dica.classList.add("oculto"); cursor.setAttribute("opacity", "0"); });
+  // No toque a dica fica ate o proximo toque (o pointerleave vem logo depois de soltar o dedo).
+  g.addEventListener("pointerleave", ev => { if (ev.pointerType === "mouse") { dica.classList.add("oculto"); cursor.setAttribute("opacity", "0"); } });
+  g.addEventListener("pointerdown", ev => { if (ev.pointerType !== "mouse") g.dispatchEvent(new PointerEvent("pointermove", ev)); });
   return el("div", { style: "overflow-x:auto" }, box,
     op.legenda === false ? null : el("div", { class: "legenda" }, el("span", {}, el("i", { style: "background:var(--accent)" }), "ambiente"),
       el("span", {}, el("i", { style: "background:var(--muted)" }), "temperatura pedida"),
@@ -1239,7 +1266,6 @@ function opcoesModo(sel, comNenhum) {
   return l.map(([v, n]) => el("option", { value: v, selected: v === sel }, n));
 }
 
-let ajSecao = "alertas", ajAberto = false;
 const AJ_ICONES = {
   alertas: '<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/>',
   ar: '<path d="M3 8h12a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/>',
@@ -1258,6 +1284,24 @@ function ajSvg(n, cls) {
   s.innerHTML = AJ_ICONES[n]; return s;
 }
 
+/** Os mesmos alertas no celular, pelo app gratuito ntfy: o servidor publica num topico que so voce conhece. */
+function blocoCelular(d) {
+  const topico = d.ntfyTopico || "";
+  const novo = () => "casa-" + Array.from(crypto.getRandomValues(new Uint8Array(10)), b => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
+  const inp = el("input", { value: topico, maxLength: 64, placeholder: "nenhum", style: "flex:1;min-width:0", "aria-label": "Tópico do ntfy",
+    on: { change: e => gravarPref({ ntfyTopico: e.target.value.trim() }) } });
+  return el("div", { class: "sub-cartao", style: "margin-top:14px" },
+    el("div", { class: "tit" }, "No celular", el("span", { class: "mu", style: "font-weight:400" }, topico ? "ligado" : "desligado")),
+    el("div", { class: "mu", style: "margin-bottom:10px" }, "Instale o app ntfy (Android ou iOS), toque em + e assine o tópico abaixo. " +
+      "O servidor manda os alertas ligados acima, mesmo com o PC desligado. Quem souber o tópico recebe os avisos, então use um aleatório."),
+    el("div", { class: "linha" }, inp,
+      el("button", { class: "b", on: { click: () => gravarPref({ ntfyTopico: novo() }) } }, topico ? "Trocar" : "Gerar tópico")),
+    topico ? el("div", { class: "linha", style: "margin-top:8px" },
+      el("button", { class: "b", on: { click: async () => { try { await navigator.clipboard.writeText(topico); aviso("Tópico copiado"); } catch (e) { inp.select(); } } } }, "Copiar"),
+      el("button", { class: "b", on: { click: async () => { try { await api("avisos/teste", "POST"); aviso("Teste enviado"); } catch (e) { aviso("Não foi: " + e.message); } } } }, "Enviar teste"),
+      el("button", { class: "b perigo", on: { click: () => gravarPref({ ntfyTopico: "" }) } }, "Desligar")) : null);
+}
+
 function desenharAjustes() {
   const g = $("ajustes");
   if (!pref) { g.replaceChildren(el("div", { class: "mu" }, "Carregando…")); carregarPref(); return; }
@@ -1265,12 +1309,13 @@ function desenharAjustes() {
   const ar = estado && estado.lista.find(ehAr);
   const ventos = ar ? ar.info.ventos : [{ valor: 2, nome: "Baixa" }, { valor: 3, nome: "Média" }, { valor: 4, nome: "Alta" }];
 
-  const alertas = cartaoSimples("Alertas do Windows", "avisos que o Mhiagos Control mostra no PC", null,
+  const alertas = cartaoSimples("Alertas", "no Windows, pelo Mhiagos Control no PC, e no celular se ligado abaixo", null,
     chaveLinha("Falha no aparelho", d.alertaFalha, false, v => gravarPref({ alertaFalha: v })),
     chaveLinha("Aparelho desconectado", d.alertaDesconectado, false, v => gravarPref({ alertaDesconectado: v })),
     chaveLinha("Ambiente quente", d.alertaQuente, false, v => gravarPref({ alertaQuente: v })),
     el("div", { class: "form", style: "margin:4px 0 8px" }, campoNum("Limite quente (°C)", "limiteQuente")),
-    chaveLinha("Fim do ciclo da lavadora", d.alertaLavadoraFim, false, v => gravarPref({ alertaLavadoraFim: v })));
+    chaveLinha("Fim do ciclo da lavadora", d.alertaLavadoraFim, false, v => gravarPref({ alertaLavadoraFim: v })),
+    blocoCelular(d));
 
   const consumo = cartaoSimples("Estimativa de consumo do ar", "o ar não informa o consumo", null,
     el("div", { class: "form" }, campoNum("Frio (W)", "potenciaFrio"), campoNum("ECO (W)", "potenciaEco"),
@@ -1331,7 +1376,7 @@ function desenharAjustes() {
 
   const sim = b => b ? 1 : 0;
   const secoes = [
-    ["alertas", "Alertas do Windows", sim(d.alertaFalha) + sim(d.alertaDesconectado) + sim(d.alertaQuente) + sim(d.alertaLavadoraFim) + " de 4 ligados", alertas],
+    ["alertas", "Alertas", sim(d.alertaFalha) + sim(d.alertaDesconectado) + sim(d.alertaQuente) + sim(d.alertaLavadoraFim) + " de 4 ligados" + (d.ntfyTopico ? " · no celular" : ""), alertas],
     ["ar", "Ar-condicionado", (d.semBipe ? "Sem bipe" : "Com bipe") + " · " + (ehF ? "°F" : "°C"), arCartao],
     ["consumo", "Consumo do ar", "Tarifa R$ " + String(d.tarifa).replace(".", ","), consumo],
     ["retorno", "Retorno das cenas", (({ 0: "Ventilar", 2: "Frio", 3: "Desumidificar", 5: "ECO" })[d.retornoModo] || "Manter") + " · " + d.retornoTemp + " °C", retorno],
@@ -1341,10 +1386,10 @@ function desenharAjustes() {
   if (!secoes.some(x => x[0] === ajSecao)) ajSecao = "alertas";
   const atual = secoes.find(x => x[0] === ajSecao);
   const itens = secoes.map(([k, t, r]) => el("button", { class: "aj-item" + (k === ajSecao ? " sel" : ""), type: "button",
-    on: { click: () => { ajSecao = k; ajAberto = true; desenharAjustes(); scrollTo(0, 0); } } },
+    on: { click: () => irPara("ajustes-" + k, matchMedia("(min-width:761px)").matches) } },
     (() => { const i = el("div", { class: "aj-ic" }); i.style.background = AJ_COR[k]; i.appendChild(ajSvg(k)); return i; })(),
     el("div", { class: "aj-tx" }, el("b", {}, t), el("span", {}, r)), ajSvg("seta", "aj-seta")));
-  const voltar = el("button", { class: "aj-voltar", type: "button", on: { click: () => { ajAberto = false; desenharAjustes(); scrollTo(0, 0); } } }, ajSvg("voltar"), "Ajustes");
+  const voltar = el("button", { class: "aj-voltar", type: "button", on: { click: () => { if (aplicarHash.daLista) history.back(); else irPara("ajustes", true); } } }, ajSvg("voltar"), "Ajustes");
   g.className = "aj" + (ajAberto ? " det" : "");
   g.replaceChildren(el("div", { class: "aj-lista" }, itens), el("div", { class: "aj-detalhe" }, voltar, atual[3]));
 }
@@ -1375,6 +1420,7 @@ async function escutar() {
   }
 }
 
+if (location.hash) aplicarHash(); else history.replaceState(null, "", location.pathname + location.search + "#painel");
 tudo().then(atalho);
 escutar();
 
@@ -1382,13 +1428,18 @@ escutar();
 function atalho() {
   const q = new URLSearchParams(location.search);
   if (![...q.keys()].length) return;
-  history.replaceState(null, "", "/");
-  if (["painel", "consumo", "ajustes"].includes(q.get("aba"))) trocarAba(q.get("aba"));
+  history.replaceState(null, "", "/" + (location.hash || "#painel"));
+  if (ABAS.includes(q.get("aba"))) irPara(q.get("aba"), true);
   const ar = estado && estado.lista.find(ehAr), ac = q.get("acao");
   if (!ar || !ac) return;
-  if (ac === "ligar") comando(ar, { t_power: "1" });
-  else if (ac === "desligar") comando(ar, { t_power: "0" });
-  else if (/^timer\d+$/.test(ac)) definirTimer(ar, parseInt(ac.slice(5)));
+  let rotulo, fazer;
+  if (ac === "ligar") { rotulo = "Ligar o ar"; fazer = () => comando(ar, { t_power: "1" }); }
+  else if (ac === "desligar") { rotulo = "Desligar o ar"; fazer = () => comando(ar, { t_power: "0" }); }
+  else if (/^timer\d+$/.test(ac)) { rotulo = "Desligar o ar em " + dur(parseInt(ac.slice(5))); fazer = () => definirTimer(ar, parseInt(ac.slice(5))); }
+  else return;
+  // App Android (WebView) ou app instalado: veio do atalho do icone. Aberto por um link qualquer, confirma antes.
+  if (/; wv\)/.test(navigator.userAgent) || matchMedia("(display-mode: standalone)").matches) { fazer(); return; }
+  aviso(rotulo + "?", { texto: "Confirmar", fazer });
 }
 
 // Puxar para atualizar (no topo da pagina, so no toque).
