@@ -33,6 +33,10 @@
   ::-webkit-scrollbar-track { background:transparent; }
   ::-webkit-scrollbar-thumb { background:var(--thumb); border-radius:5px; border:2px solid transparent; background-clip:padding-box; }
   html, body { margin:0; background:var(--window); color:var(--text); }
+  /* Nada que desliza de lado (grafico, abas, Ajustes) pode alargar a pagina: no celular isso
+     deixava a pagina rolar de lado por um instante e a barra de abas andava junto. */
+  html, body { overflow-x:clip; }
+  #grafico > .corpo, .aj-detalhe, .aj-coluna { overflow-x:clip; }
   body { font:14px/1.35 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
   button { font:inherit; color:inherit; }
   svg { display:block; }
