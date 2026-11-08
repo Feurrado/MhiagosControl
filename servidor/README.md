@@ -104,6 +104,12 @@ http da rede local ele vira um atalho que abre no navegador.
 - O login colado precisa ser do pedido que o servidor abriu (o `state` confere).
 - Troque a senha do root se ela já passou por algum chat ou arquivo: `passwd`
   no servidor. O acesso de manutenção usa chave SSH.
-- Para acessar de fora de casa, prefira uma VPN (Tailscale ou WireGuard) a
-  expor a porta. Se um dia expor, ponha um proxy com HTTPS na frente (Caddy ou
-  o Nginx Proxy Manager) e continue exigindo a chave.
+- Para acessar de fora de casa, o jeito mais seguro é o Tailscale só na tailnet:
+  `sudo tailscale serve --bg http://192.168.1.100:8765` (HTTPS em
+  `https://home01.<tailnet>.ts.net`, sem abrir porta no roteador).
+- Publicado na internet (`tailscale funnel`), a chave é a única barreira. Desde a
+  1.4.0 o servidor bloqueia o IP depois de 8 chaves erradas em 10 min (15 min,
+  dobrando a cada reincidência, até 24 h; responde 429), usa o IP real do
+  `X-Forwarded-For` só quando o par é privado/Tailscale, manda HSTS quando o proxy
+  diz que veio em HTTPS, recusa corpo sem `Content-Length` (411) e limita o corpo a
+  256 KB (32 MB só em `/api/historico/importar`). Use uma chave longa (`openssl rand -hex 24`).

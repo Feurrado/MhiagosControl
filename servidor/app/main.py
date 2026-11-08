@@ -2,6 +2,7 @@
 
 import asyncio
 import hmac
+import ipaddress
 import json
 import logging
 import os
@@ -17,7 +18,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import banco, casa, servico
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.3.0"
+VERSAO = "1.4.0"
 CHAVE = os.environ.get("MHIAGOS_CHAVE", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -46,24 +47,97 @@ CABECALHOS = {
     "Referrer-Policy": "no-referrer",
 }
 CORPO_MAXIMO = 32 * 1024 * 1024   # a importacao de 400 dias de ar cabe folgada
+CORPO_COMUM = 256 * 1024          # qualquer outra rota: preferencias e comandos sao pequenos
 
 
 @app.middleware("http")
 async def _protecao(request: Request, call_next):
+    if "transfer-encoding" in request.headers:
+        # Sem tamanho declarado o limite abaixo nao vale; os clientes (painel, PC, app) sempre declaram.
+        return JSONResponse({"detail": "envie com content-length"}, status_code=411)
     tamanho = request.headers.get("content-length")
-    if tamanho and tamanho.isdigit() and int(tamanho) > CORPO_MAXIMO:
+    limite = CORPO_MAXIMO if request.url.path == "/api/historico/importar" else CORPO_COMUM
+    if tamanho and tamanho.isdigit() and int(tamanho) > limite:
         return JSONResponse({"detail": "corpo grande demais"}, status_code=413)
     resposta = await call_next(request)
     for k, v in CABECALHOS.items():
         resposta.headers.setdefault(k, v)
+    # HSTS so quando o proxy (Tailscale Serve/Funnel) diz que o cliente veio em HTTPS.
+    if request.headers.get("x-forwarded-proto", "").lower() == "https":
+        resposta.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
     if request.url.path.startswith("/api/"):
         resposta.headers.setdefault("Cache-Control", "no-store")
     return resposta
 
 
-def autorizado(authorization: str = Header(default="")):
+# ---------------- bloqueio de quem erra a chave ----------------
+# Com o painel aberto na internet (Funnel), a chave e a unica barreira: depois de
+# FALHAS_MAX erros dentro de JANELA, o IP fica bloqueado por um tempo que dobra a cada
+# reincidencia (ate BLOQUEIO_TETO). Em memoria: reiniciar o servidor zera, e tudo bem.
+FALHAS_MAX = 8
+JANELA = 600
+BLOQUEIO_BASE = 900
+BLOQUEIO_TETO = 86400
+_MAX_IPS = 10000
+_falhas: dict[str, dict] = {}
+
+
+def _agora():
+    return time.monotonic()
+
+
+def ip_do_cliente(request: Request) -> str:
+    """Atras do Tailscale (porta local ou da rede privada) o IP real vem em X-Forwarded-For,
+    escrito pelo proxy no fim da lista. De um par publico o cabecalho nao vale (e forjavel)."""
+    par = request.client.host if request.client else ""
+    try:
+        ip = ipaddress.ip_address(par)
+        confiavel = ip.is_private or ip.is_loopback or ip in ipaddress.ip_network("100.64.0.0/10")
+    except ValueError:
+        confiavel = False
+    encaminhado = request.headers.get("x-forwarded-for", "")
+    if confiavel and encaminhado:
+        ultimo = encaminhado.split(",")[-1].strip()
+        try:
+            return str(ipaddress.ip_address(ultimo))
+        except ValueError:
+            pass
+    return par or "?"
+
+
+def _bloqueado(ip: str) -> int:
+    """Segundos que faltam de bloqueio (0 = livre)."""
+    f = _falhas.get(ip)
+    return max(0, int(f["ate"] - _agora())) if f else 0
+
+
+def _registrar_falha(ip: str):
+    agora = _agora()
+    if len(_falhas) >= _MAX_IPS:   # esvazia o que ja expirou; se ainda cheio, descarta o mais antigo
+        for k in [k for k, v in _falhas.items() if v["ate"] < agora and agora - v["ultima"] > JANELA]:
+            del _falhas[k]
+        if len(_falhas) >= _MAX_IPS:
+            del _falhas[min(_falhas, key=lambda k: _falhas[k]["ultima"])]
+    f = _falhas.setdefault(ip, {"n": 0, "ate": 0.0, "ultima": agora, "vezes": 0})
+    if agora - f["ultima"] > JANELA and f["ate"] < agora:
+        f["n"] = 0
+    f["n"] += 1
+    f["ultima"] = agora
+    if f["n"] >= FALHAS_MAX:
+        f["ate"] = agora + min(BLOQUEIO_TETO, BLOQUEIO_BASE * 2 ** f["vezes"])
+        f["vezes"] += 1
+        f["n"] = 0
+        logging.getLogger("mhiagos.auth").warning("IP %s bloqueado por erros de chave", ip)
+
+
+def autorizado(request: Request, authorization: str = Header(default="")):
+    ip = ip_do_cliente(request)
+    resta = _bloqueado(ip)
+    if resta:
+        raise HTTPException(429, "tentativas demais: tente mais tarde", headers={"Retry-After": str(resta)})
     dado = authorization[7:] if authorization.startswith("Bearer ") else ""
     if not CHAVE or not hmac.compare_digest(dado.encode(), CHAVE.encode()):
+        _registrar_falha(ip)
         raise HTTPException(401, "chave invalida")
 
 
