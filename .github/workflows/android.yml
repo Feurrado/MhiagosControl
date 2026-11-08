@@ -1,0 +1,87 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: "Versao do app (ex.: 1.0.0). Se preenchida, publica um release android-v<versao> com o APK."
+        required: false
+        default: ""
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+
+      - name: Preparar chave de assinatura
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_KEYPASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          KS="$RUNNER_TEMP/casa.jks"
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$KS"
+            echo "KEYSTORE_FILE=$KS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=$KS_ALIAS" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=${KS_KEYPASS:-$KS_PASS}" >> "$GITHUB_ENV"
+            echo "::notice::APK assinado com a chave fixa dos secrets."
+          else
+            # Sem secrets: chave descartavel gerada neste build. Serve para testar, mas
+            # a assinatura muda a cada build e o Android recusa atualizar por cima.
+            keytool -genkeypair -keystore "$KS" -storetype PKCS12 -storepass casa-temp -keypass casa-temp \
+              -alias casa -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Mhiagos Casa (temporaria)"
+            echo "KEYSTORE_FILE=$KS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=casa-temp" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=casa" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=casa-temp" >> "$GITHUB_ENV"
+            echo "::warning::Secrets ANDROID_KEYSTORE_* ausentes: APK assinado com chave temporaria."
+          fi
+
+      - name: Compilar APK de release
+        env:
+          APP_VERSION_NAME: ${{ inputs.versao || '1.0.0' }}
+          APP_VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew --no-daemon --console=plain assembleRelease
+
+      - name: Renomear APK
+        run: cp app/build/outputs/apk/release/app-release.apk MhiagosCasa.apk
+
+      - name: Enviar APK como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: MhiagosCasa-apk
+          path: android/MhiagosCasa.apk
+          if-no-files-found: error
+
+      - name: Publicar release
+        if: ${{ inputs.versao != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: android-v${{ inputs.versao }}
+        run: |
+          gh release create "$TAG" MhiagosCasa.apk --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "App Android da Casa $TAG" \
+            --notes "APK do painel da Casa (WebView). Instale por sideload e ajuste o endereco pelo atalho Endereco do painel, se precisar."

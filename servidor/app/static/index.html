@@ -248,12 +248,13 @@
   }
   @media (max-width:760px) {
     .app { flex-direction:column; }
-    nav { width:auto; height:auto; flex-direction:row; align-items:center; padding:8px 10px; gap:4px; position:sticky; top:0; z-index:5; }
-    .marca { padding:0 8px 0 2px; }
-    .marca span, .perfil, nav .rodape { display:none; }
-    .item { flex:1; justify-content:center; padding:8px; }
-    .item.ativo::before { left:12px; right:12px; top:auto; bottom:2px; width:auto; height:3px; }
-    main { padding:14px 12px 30px; }
+    /* Celular: a navegacao vira barra de abas no rodape, com icone sobre o rotulo. */
+    nav { width:auto; height:auto; flex-direction:row; align-items:stretch; padding:6px 8px calc(6px + env(safe-area-inset-bottom)); gap:4px; position:fixed; left:0; right:0; bottom:0; top:auto; z-index:5; border-top:1px solid var(--line, rgba(128,128,128,.25)); }
+    .marca, .perfil, nav .rodape { display:none; }
+    .item { flex:1; flex-direction:column; justify-content:center; gap:3px; padding:6px 4px; margin:0; font-size:11px; }
+    .item svg { width:22px; height:22px; }
+    .item.ativo::before { left:30%; right:30%; top:0; bottom:auto; width:auto; height:3px; }
+    main { padding:14px 12px calc(84px + env(safe-area-inset-bottom)); }
     .topo .acoes .b { display:none; }
     .lav { grid-template-columns:1fr; justify-items:center; text-align:center; }
     .passo span { font-size:10px; }
