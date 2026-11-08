@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import avisos, banco, casa, servico
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.5.0"
+VERSAO = "1.6.0"
 CHAVE = os.environ.get("MHIAGOS_CHAVE", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
