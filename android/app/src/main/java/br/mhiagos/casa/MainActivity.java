@@ -4,13 +4,16 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
+import android.net.http.SslError;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -19,15 +22,19 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** Painel da Casa em tela cheia: uma WebView apontando para o servidor do Mhiagos Control. */
 public class MainActivity extends Activity {
     private WebView web;
     private LinearLayout erro;
-    private TextView erroTexto;
-    /** Quanto esperar o externo antes de usar o interno (a WebView sozinha esperaria meio minuto). */
-    private static final int LIMITE_DO_EXTERNO_MS = 10000;
+    private TextView erroTexto, carregando;
+    private final List<String> falhas = new ArrayList<String>();
+    /** Quanto esperar um endereco que tem reserva antes de passar para ela. */
+    private static final int LIMITE_COM_RESERVA_MS = 15000;
+    /** O ultimo endereco da lista tambem tem limite: sem ele a tela ficava vazia para sempre. */
+    private static final int LIMITE_DO_ULTIMO_MS = 25000;
 
     private final Handler relogio = new Handler();
     private List<String> enderecos;
@@ -35,6 +42,8 @@ public class MainActivity extends Activity {
     private String urlAtual = "";
     private String assinatura = "";
     private boolean falhou;
+    /** O app saiu da tela com um carregamento em curso (o limite de tempo foi cancelado): recomeca ao voltar. */
+    private boolean recomecar;
     private final Runnable aoEsgotar = new Runnable() {
         @Override public void run() { tentarOutroOuFalhar("tempo esgotado"); }
     };
@@ -65,6 +74,13 @@ public class MainActivity extends Activity {
         erro = montarErro();
         erro.setVisibility(View.GONE);
         raiz.addView(erro, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        carregando = new TextView(this);
+        carregando.setTextColor(0xFFB0B0B8);
+        carregando.setGravity(Gravity.CENTER);
+        carregando.setBackgroundColor(0xFF1C1C1F);
+        raiz.addView(carregando, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         setContentView(raiz);
@@ -115,6 +131,7 @@ public class MainActivity extends Activity {
         assinatura = Config.assinatura(this);
         enderecos = Config.enderecos(this);
         indice = 0;
+        falhas.clear();
         abrir();
     }
 
@@ -123,9 +140,11 @@ public class MainActivity extends Activity {
         urlAtual = enderecos.get(indice);
         falhou = false;
         erro.setVisibility(View.GONE);
+        carregando.setText("Conectando a\n" + urlAtual + "\n…");
+        carregando.setVisibility(View.VISIBLE);
         web.loadUrl(urlAtual);
-        // Com outro endereco de reserva, nao espera o limite longo da WebView.
-        if (indice < enderecos.size() - 1) relogio.postDelayed(aoEsgotar, LIMITE_DO_EXTERNO_MS);
+        // Todo endereco tem limite de tempo: com reserva, passa para ela; sem, mostra o erro.
+        relogio.postDelayed(aoEsgotar, indice < enderecos.size() - 1 ? LIMITE_COM_RESERVA_MS : LIMITE_DO_ULTIMO_MS);
     }
 
     private boolean ehExterno(String url) {
@@ -136,6 +155,7 @@ public class MainActivity extends Activity {
     /** O endereco atual nao respondeu: tenta o proximo; sem mais nenhum, mostra o erro. */
     private void tentarOutroOuFalhar(String motivo) {
         relogio.removeCallbacks(aoEsgotar);
+        falhas.add(urlAtual + "  (" + motivo + ")");
         if (ehExterno(urlAtual)) Config.externoFalhou();
         if (indice < enderecos.size() - 1) {
             indice++;
@@ -143,10 +163,12 @@ public class MainActivity extends Activity {
             return;
         }
         falhou = true;
+        web.stopLoading();
         StringBuilder t = new StringBuilder();
-        for (String e : enderecos) t.append(e).append('\n');
-        erroTexto.setText(t.toString() + "\n" + motivo
-                + "\n\nConfira a internet, o Wi-Fi de casa e se o servidor está no ar.");
+        for (String f : falhas) t.append(f).append('\n');
+        erroTexto.setText(t.toString()
+                + "\nConfira a internet, o Wi-Fi de casa e se o servidor está no ar.");
+        carregando.setVisibility(View.GONE);
         erro.setVisibility(View.VISIBLE);
     }
 
@@ -160,13 +182,15 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         // Voltando da tela de endereco: recarrega se mudou.
-        if (!Config.assinatura(this).equals(assinatura)) carregar();
+        if (recomecar || !Config.assinatura(this).equals(assinatura)) carregar();
+        recomecar = false;
         web.onResume();
     }
 
     @Override
     protected void onPause() {
         relogio.removeCallbacks(aoEsgotar);
+        recomecar = carregando.getVisibility() == View.VISIBLE;
         web.onPause();
         super.onPause();
     }
@@ -203,7 +227,22 @@ public class MainActivity extends Activity {
             if (falhou || !url.startsWith(urlAtual)) return;
             relogio.removeCallbacks(aoEsgotar);
             if (ehExterno(urlAtual)) Config.externoFuncionou();
+            carregando.setVisibility(View.GONE);
             erro.setVisibility(View.GONE);
+        }
+
+        // Servidor ou proxy respondeu 5xx (ex.: Funnel sem o servidor atras): conta como falha do endereco.
+        @Override
+        public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse resp) {
+            if (!r.isForMainFrame() || !r.getUrl().toString().startsWith(urlAtual)) return;
+            if (resp.getStatusCode() >= 500) tentarOutroOuFalhar("HTTP " + resp.getStatusCode());
+        }
+
+        // Sem isto a WebView cancela em silencio e fica a tela vazia.
+        @Override
+        public void onReceivedSslError(WebView v, SslErrorHandler h, SslError e) {
+            h.cancel();
+            tentarOutroOuFalhar("certificado recusado");
         }
     }
 }
