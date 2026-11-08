@@ -18,6 +18,8 @@ namespace MhiagosControl
         private readonly CampoDeTexto _externo, _interno, _chave;
         private readonly FlatBtn _btSalvar, _btSinc, _btPagina, _btEsquecer;
         private bool _testando;
+        /// <summary>Um dos enderecos nao respondeu ao salvar (o outro respondeu e basta): fica visivel ao lado do estado.</summary>
+        private string _aviso = "";
 
         /// <summary>A secao mudou de altura.</summary>
         public Action Rearranjar;
@@ -44,7 +46,7 @@ namespace MhiagosControl
             _btSalvar = Botao(T.ServidorSalvar, Salvar);
             _btSinc = Botao(T.ServidorSincronizar, delegate { ServidorCasa.Sincronizar(); });
             _btPagina = Botao(T.ServidorPagina, AbrirPagina);
-            _btEsquecer = Botao(T.ServidorEsquecer, delegate { ServidorCasa.Esquecer(); _externo.Texto = ""; _interno.Texto = ""; _chave.Texto = ""; Preencher(); });
+            _btEsquecer = Botao(T.ServidorEsquecer, delegate { ServidorCasa.Esquecer(); _aviso = ""; _externo.Texto = ""; _interno.Texto = ""; _chave.Texto = ""; Preencher(); });
             _btEsquecer.Danger = true;
             _nota = Rotulo(Ui.FontSmall, Ui.Muted);
             _nota.Text = T.ServidorNota;
@@ -94,6 +96,7 @@ namespace MhiagosControl
             if (_testando) return;
             string e = ServidorCasa.Estado;
             _estado.Text = !ServidorCasa.Configurado ? T.ServidorNaoConfigurado : e.Length > 0 ? e : T.ServidorConfigurado;
+            if (_aviso.Length > 0) _estado.Text += "  |  " + _aviso;
             _btSinc.Enabled = _btPagina.Enabled = _btEsquecer.Enabled = ServidorCasa.Configurado;
         }
 
@@ -109,7 +112,8 @@ namespace MhiagosControl
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string erro;
-                try { erro = ServidorCasa.TestarEnderecos(externo, interno, chave); }
+                bool algum = false;
+                try { erro = ServidorCasa.TestarEnderecos(externo, interno, chave, out algum); }
                 catch (Exception ex) { erro = ex.Message; }
                 MethodInvoker volta = delegate
                 {
@@ -118,7 +122,9 @@ namespace MhiagosControl
                         _testando = false;
                         if (Secao.IsDisposed) return;
                         _btSalvar.Enabled = true;
-                        if (erro != null) { _estado.Text = T.ServidorFalhou(erro); return; }
+                        // Basta um endereco responder: o outro fica como esta e o app tenta os dois no uso.
+                        if (erro != null && !algum) { _estado.Text = T.ServidorFalhou(erro); return; }
+                        _aviso = erro == null ? "" : T.ServidorSalvoComAviso(erro);
                         _chave.Texto = "";
                         ServidorCasa.Configurar(externo, interno, chave);
                         Preencher();

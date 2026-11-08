@@ -231,11 +231,11 @@ public class MainActivity extends Activity {
             erro.setVisibility(View.GONE);
         }
 
-        // Servidor ou proxy respondeu 5xx (ex.: Funnel sem o servidor atras): conta como falha do endereco.
+        // A pagina inicial respondeu erro (5xx do Funnel sem o servidor atras, 4xx do proxy): conta como falha do endereco.
         @Override
         public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse resp) {
             if (!r.isForMainFrame() || !r.getUrl().toString().startsWith(urlAtual)) return;
-            if (resp.getStatusCode() >= 500) tentarOutroOuFalhar("HTTP " + resp.getStatusCode());
+            if (resp.getStatusCode() >= 400) tentarOutroOuFalhar("HTTP " + resp.getStatusCode());
         }
 
         // Sem isto a WebView cancela em silencio e fica a tela vazia.

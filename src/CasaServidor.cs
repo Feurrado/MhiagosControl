@@ -503,10 +503,18 @@ namespace MhiagosControl
         /// </summary>
         public static string TestarEnderecos(string externo, string interno, string chave)
         {
+            bool algum;
+            return TestarEnderecos(externo, interno, chave, out algum);
+        }
+
+        /// <summary>Como acima; algumOk diz se pelo menos um dos enderecos preenchidos respondeu (basta para salvar: o outro e reserva).</summary>
+        public static string TestarEnderecos(string externo, string interno, string chave, out bool algumOk)
+        {
+            algumOk = false;
             List<string> erros = new List<string>();
             string e = (externo ?? "").Trim(), i = (interno ?? "").Trim();
-            if (e.Length > 0) { string r = Testar(e, chave); if (r != null) erros.Add(T.ServidorEnderecoExterno + ": " + r); }
-            if (i.Length > 0) { string r = Testar(i, chave); if (r != null) erros.Add(T.ServidorEnderecoInterno + ": " + r); }
+            if (e.Length > 0) { string r = Testar(e, chave); if (r != null) erros.Add(T.ServidorEnderecoExterno + ": " + r); else algumOk = true; }
+            if (i.Length > 0) { string r = Testar(i, chave); if (r != null) erros.Add(T.ServidorEnderecoInterno + ": " + r); else algumOk = true; }
             return erros.Count == 0 ? null : string.Join(" | ", erros.ToArray());
         }
 
@@ -591,6 +599,11 @@ namespace MhiagosControl
                 using (r)
                 {
                     if (r.StatusCode == HttpStatusCode.Unauthorized) throw new ServidorHttpErro(401, T.ServidorChaveErrada);
+                    // O proxy (Funnel) ou o limite de tentativas respondeu no lugar do servidor: o pedido nao
+                    // foi processado, entao o outro endereco pode tentar (como se nao houvesse resposta).
+                    int codigo = (int)r.StatusCode;
+                    if (codigo == 429 || codigo == 502 || codigo == 503 || codigo == 504)
+                        throw new ServidorSemRespostaErro(false, T.ServidorErroHttp(codigo));
                     throw new ServidorHttpErro((int)r.StatusCode, T.ServidorErroHttp((int)r.StatusCode));
                 }
             }
@@ -620,6 +633,7 @@ namespace MhiagosControl
     {
         public readonly bool CorpoEnviado;
         public ServidorSemRespostaErro(bool corpoEnviado) : base(T.ServidorSemResposta) { CorpoEnviado = corpoEnviado; }
+        public ServidorSemRespostaErro(bool corpoEnviado, string mensagem) : base(mensagem) { CorpoEnviado = corpoEnviado; }
     }
 
     /// <summary>Resposta HTTP de erro do servidor da casa, com o codigo (404 = rota que a versao dele nao tem).</summary>
@@ -648,6 +662,7 @@ namespace MhiagosControl
         public static string ServidorChaveErrada { get { return P("chave de acesso recusada", "access key rejected"); } }
         public static string ServidorErroHttp(int c) { return P("o servidor respondeu " + c, "the server answered " + c); }
         public static string ServidorEnderecoInvalido { get { return P("endereço inválido: use http:// ou https:// com o IP ou nome do servidor", "invalid address: use http:// or https:// with the server's IP or name"); } }
+        public static string ServidorSalvoComAviso(string m) { return P("salvo, mas um endereço não respondeu: " + m, "saved, but one address did not answer: " + m); }
         public static string ServidorFalhou(string m) { return P("Falha ao sincronizar: " + m, "Sync failed: " + m); }
         public static string ServidorSincronizado(DateTime d) { return P("Sincronizado às " + d.ToString("HH:mm"), "Synced at " + d.ToString("HH:mm")); }
     }

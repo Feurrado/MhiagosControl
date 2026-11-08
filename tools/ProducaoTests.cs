@@ -119,6 +119,9 @@ namespace MhiagosControl
                 Verdade(dois != null && dois.Contains(T.ServidorEnderecoExterno) && dois.Contains(T.ServidorEnderecoInterno),
                     "servidor da casa: com dois enderecos ruins o erro diz qual e qual");
                 Verdade(ServidorCasa.TestarEnderecos("", "", "chave") == null, "servidor da casa: sem endereco nao ha o que testar");
+                bool algumOk;
+                ServidorCasa.TestarEnderecos("file:///C:/a", "file:///C:/b", "chave", out algumOk);
+                Verdade(!algumOk, "servidor da casa: nenhum endereco respondeu, nao salva");
             }
             finally { ServidorCasa.Desligado = antes; }
         }
