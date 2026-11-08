@@ -32,9 +32,9 @@ public class MainActivity extends Activity {
     private TextView erroTexto, carregando;
     private final List<String> falhas = new ArrayList<String>();
     /** Quanto esperar um endereco que tem reserva antes de passar para ela. */
-    private static final int LIMITE_COM_RESERVA_MS = 15000;
+    private static final int LIMITE_COM_RESERVA_MS = 4000;
     /** O ultimo endereco da lista tambem tem limite: sem ele a tela ficava vazia para sempre. */
-    private static final int LIMITE_DO_ULTIMO_MS = 25000;
+    private static final int LIMITE_DO_ULTIMO_MS = 15000;
 
     private final Handler relogio = new Handler();
     private List<String> enderecos;
