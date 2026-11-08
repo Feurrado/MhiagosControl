@@ -33,6 +33,10 @@
   ::-webkit-scrollbar-track { background:transparent; }
   ::-webkit-scrollbar-thumb { background:var(--thumb); border-radius:5px; border:2px solid transparent; background-clip:padding-box; }
   html, body { margin:0; background:var(--window); color:var(--text); }
+  /* Nada que desliza de lado (grafico, abas, Ajustes) pode alargar a pagina: no celular isso
+     deixava a pagina rolar de lado por um instante e a barra de abas andava junto. */
+  html, body { overflow-x:clip; }
+  #grafico > .corpo, .aj-detalhe, .aj-coluna { overflow-x:clip; }
   body { font:14px/1.35 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
   button { font:inherit; color:inherit; }
   svg { display:block; }
@@ -205,6 +209,9 @@
   .eixo-dias span { flex:1; text-align:center; white-space:nowrap; overflow:visible; }
   .info-dia { font-size:13px; color:var(--muted); margin-top:10px; min-height:18px; }
   .info-dia b { color:var(--text); font-weight:600; }
+  /* Enquanto busca o dado novo, o antigo fica no lugar, apagado, em vez de virar "Carregando" */
+  .recarregando { opacity:.55; transition:opacity .15s; pointer-events:none; }
+  @media (max-width:760px) { .info-dia { min-height:calc(3 * 1.35em); } }
   @media (max-width:760px) { .destaques { grid-template-columns:1fr 1fr; } .destaques b { font-size:20px; } table.aparelhos .parcela { display:none; } }
   .barras { display:flex; align-items:flex-end; gap:3px; height:150px; padding-top:8px; }
   .barras div { flex:1; background:var(--accent); border-radius:2px 2px 0 0; min-height:1px; }
@@ -245,7 +252,10 @@
 
   /* ---------- ajustes: lista de secoes + detalhe ---------- */
   .aj { display:grid; grid-template-columns:268px minmax(0,1fr); gap:18px; align-items:start; max-width:1100px; }
-  .aj-lista { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; position:sticky; top:16px; }
+  .aj-coluna { position:sticky; top:16px; align-self:start; display:flex; flex-direction:column; gap:10px; }
+  .aj-lista { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .aj-versao { font-size:12px; color:var(--muted); text-align:center; display:flex; flex-direction:column; gap:6px; align-items:center; font-variant-numeric:tabular-nums; }
+  .aj-versao.velha { color:var(--warn); }
   .aj-item { all:unset; box-sizing:border-box; cursor:pointer; display:flex; align-items:center; gap:12px; width:100%; padding:11px 12px; min-height:52px; border-top:1px solid var(--border); }
   .aj-item:first-child { border-top:0; }
   .aj-item:hover { background:var(--hover); }
@@ -262,10 +272,10 @@
   .aj-detalhe { min-width:0; }
   @media (max-width:760px) {
     .aj { grid-template-columns:1fr; }
-    .aj-lista { position:static; }
+    .aj-coluna { position:static; }
     .aj-item.sel { background:none; }
     .aj-seta { display:block; }
-    .aj.det .aj-lista { display:none; }
+    .aj.det .aj-coluna { display:none; }
     .aj:not(.det) .aj-detalhe { display:none; }
     .aj-voltar { display:flex; }
   }
@@ -320,6 +330,9 @@
     .item.ativo::before { top:0; bottom:auto; left:22%; right:22%; width:auto; height:3px; }
     main { padding:calc(14px + env(safe-area-inset-top)) 12px calc(86px + env(safe-area-inset-bottom)); }
     #toast { bottom:calc(76px + env(safe-area-inset-bottom)); max-width:calc(100vw - 24px); }
+    /* A barra de abas numa camada propria do compositor: sem isso o WebView do Android redesenha
+       a barra junto com a pagina enquanto um bloco anima a altura, e ela treme. */
+    nav { transform:translateZ(0); will-change:transform; backface-visibility:hidden; }
     #lerAgora { display:inline-block !important; }
     .b { min-height:44px; padding:8px 16px; }
     .b.peq { min-height:40px; }
@@ -336,6 +349,70 @@
   }
   @media (prefers-reduced-motion: reduce) {
     * { transition:none !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; }
+  }
+
+  /* ---------- movimento no estilo do Android (Material 3) ----------
+     Curvas e tempos do Material: entrada "emphasized decelerate", saida rapida. Tudo some com
+     "reduzir movimento" (bloco prefers-reduced-motion, que usa !important). */
+  :root { --m3-entra:cubic-bezier(.05,.7,.1,1); --m3-padrao:cubic-bezier(.2,0,0,1); }
+  @keyframes m3-fade-through { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
+  @keyframes m3-eixo-frente { from { opacity:0; transform:translateX(32px); } to { opacity:1; transform:none; } }
+  @keyframes m3-eixo-tras { from { opacity:0; transform:translateX(-32px); } to { opacity:1; transform:none; } }
+  @keyframes m3-surge { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+  @keyframes m3-abre { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
+  @keyframes m3-pilula { from { clip-path:inset(0 50% round 16px); } to { clip-path:inset(0 0 round 16px); } }
+  @keyframes m3-onda { from { transform:scale(0); opacity:.22; } to { transform:scale(1); opacity:0; } }
+  @keyframes m3-gira-abre { from { transform:rotate(0); } to { transform:rotate(180deg); } }
+  @keyframes m3-gira-fecha { from { transform:rotate(180deg); } to { transform:rotate(0); } }
+  .m3-aba { animation:m3-fade-through .28s var(--m3-entra) both; }
+  .m3-frente { animation:m3-eixo-frente .3s var(--m3-entra) both; }
+  .m3-tras { animation:m3-eixo-tras .3s var(--m3-entra) both; }
+  .m3-surge { animation:m3-surge .42s var(--m3-entra) both; }
+  .m3-abre { animation:m3-abre .26s var(--m3-entra) both; }
+  .colapsavel.m3-mexeu .colapsa-cab svg { animation:m3-gira-abre .22s var(--m3-padrao) both; }
+  .colapsavel.m3-mexeu:not(.aberto) .colapsa-cab svg { animation-name:m3-gira-fecha; }
+  /* Onda do toque (ripple) */
+  .m3-alvo { position:relative; overflow:hidden; isolation:isolate; }
+  .m3-onda { position:absolute; border-radius:50%; background:currentColor; pointer-events:none; z-index:-1;
+    animation:m3-onda .5s var(--m3-padrao) forwards; }
+  /* Sem o retangulo azul do WebView ao tocar; a onda e a pilula fazem esse papel */
+  html { -webkit-tap-highlight-color:transparent; }
+  /* A onda acompanha o canto de quem a recebe */
+  .colapsa-cab { border-radius:8px; }
+  .colapsavel.aberto .colapsa-cab { border-radius:8px 8px 0 0; }
+  .aj-voltar { border-radius:8px; padding:6px 10px 6px 4px; margin:-2px 0 6px -4px; }
+  /* Faixas que aparecem (sem conexao, atalho) descem no lugar */
+  #semrede:not(.oculto), .aviso { animation:m3-abre .26s var(--m3-entra) both; }
+  /* Snackbar: sobe do rodape */
+  #toast { transform:translate(-50%, 18px); transition:opacity .2s var(--m3-padrao), transform .3s var(--m3-entra); }
+  #toast.vis { transform:translate(-50%, 0); }
+  /* Interruptor: o polegar cresce ao ligar, como o Switch do Material 3 */
+  .tg span, .tg span::after { transition:all .22s var(--m3-padrao); }
+  .tg input:active + span::after { width:16px; height:16px; top:1px; }
+  @media (pointer:coarse) {
+    /* No toque a onda substitui o escurecer/encolher */
+    .b:active:not(:disabled), .tile:active:not(:disabled), .redondo:active:not(:disabled), .liga:active:not(:disabled), .cena:active:not(:disabled),
+    .item:active, .aj-item:active, .colapsa-cab:active, .seg button:active, .chave-diag:active { filter:none; transform:none; }
+  }
+  @media (max-width:760px) {
+    /* Barra de navegacao do Material 3: pilula atras do icone, que se abre a partir do centro */
+    .item, .item.ativo, .item:hover { background:none; }
+    .item.ativo::before { display:none; }
+    .item svg { box-sizing:content-box; padding:4px 20px; border-radius:16px; transition:background-color .2s var(--m3-padrao); }
+    .item.ativo svg { background:var(--accent-soft); animation:m3-pilula .32s var(--m3-entra); }
+    .item span { transition:font-weight .2s; }
+    /* Camada de estado do Material na pilula ao pressionar, no lugar da onda retangular */
+    .item:active svg { background:var(--hover); }
+    .item.ativo:active svg { background:var(--accent-soft); filter:brightness(1.12); }
+    /* Cabecalhos de cartao: o que fica a direita desce de linha em vez de cobrir o nome */
+    .cab { flex-wrap:wrap; row-gap:10px; }
+    .cab .nomes { flex:1 1 160px; }
+    .cab .nome { overflow-wrap:anywhere; }
+    .cab.cab-nav .dir { margin-left:0; width:100%; }
+    /* Topo da aba: subtitulo nao fica espremido pelo seletor de periodo */
+    .topo { flex-wrap:wrap; }
+    .topo > div:first-child { flex:1 1 220px; }
+    .cab.cab-nav .dir .linha { width:100%; justify-content:space-between; flex-wrap:nowrap; }
   }
 </style>
 </head>
@@ -456,6 +533,79 @@ function aviso(t, acao) {
   if (acao) x.append(el("button", { class: "b peq", style: "margin-left:12px", on: { click: () => { x.classList.remove("vis"); acao.fazer(); } } }, acao.texto));
   clearTimeout(aviso.t); aviso.t = setTimeout(() => x.classList.remove("vis"), acao ? 6000 : 3500);
 }
+/** Roda uma animacao de entrada (classe m3-*) de novo no mesmo elemento. */
+function animar(e, classe) {
+  if (!e) return;
+  e.classList.remove("m3-aba", "m3-frente", "m3-tras", "m3-surge", "m3-abre");
+  void e.offsetWidth;          // reinicia a animacao
+  e.classList.add(classe);
+  e.addEventListener("animationend", () => e.classList.remove(classe), { once: true });
+}
+
+const semMovimento = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Abre um bloco crescendo a altura (como o expand do Material). */
+function expandir(e) {
+  if (!e) return;
+  if (semMovimento() || !e.animate) { mostrarInteiro(e); return; }
+  const cs = getComputedStyle(e), h = e.offsetHeight;
+  e.style.overflow = "hidden";
+  e.animate([{ height: "0px", opacity: 0, paddingTop: "0px", paddingBottom: "0px", marginTop: "0px" },
+             { height: h + "px", opacity: 1, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, marginTop: cs.marginTop }],
+    { duration: 300, easing: "cubic-bezier(.05,.7,.1,1)" })
+    .onfinish = () => { e.style.overflow = ""; mostrarInteiro(e); };
+}
+/** Rola a pagina so o necessario para o bloco aberto nao ficar escondido atras da barra de abas. */
+function mostrarInteiro(e) {
+  if (!e.isConnected) return;
+  const r = e.getBoundingClientRect(), barra = matchMedia("(max-width:760px)").matches ? 84 : 0;
+  const baixo = innerHeight - barra - 12;
+  if (r.bottom <= baixo) return;
+  const quanto = Math.min(r.bottom - baixo, r.top - 72);   // sem empurrar o topo do bloco para fora da tela
+  if (quanto > 0) scrollBy({ top: quanto, behavior: semMovimento() ? "auto" : "smooth" });
+}
+/**
+ * Troca o conteudo de uma caixa sem pulo: a altura vai suavemente da antiga para a nova,
+ * em vez de encolher e crescer (o que fazia piscar tudo o que vem abaixo).
+ */
+function trocarConteudo(caixa, ...filhos) {
+  const h0 = caixa.offsetHeight;
+  caixa.style.minHeight = "";
+  caixa.replaceChildren(...filhos);
+  caixa.classList.remove("recarregando");
+  let h1 = caixa.offsetHeight;
+  // Encolher perto do fim da pagina obriga o navegador a puxar a rolagem a cada quadro,
+  // e no Android a barra de abas fixa treme junto. Nesse caso a caixa guarda a altura antiga.
+  const sobra = document.documentElement.scrollHeight - (scrollY + innerHeight);
+  if (h1 < h0 && sobra < h0 - h1) { caixa.style.minHeight = h0 + "px"; h1 = h0; }
+  if (!h0 || Math.abs(h1 - h0) < 3 || semMovimento() || !caixa.animate) return;
+  caixa.style.overflow = "hidden";
+  caixa.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 260, easing: "cubic-bezier(.2,0,0,1)" })
+    .onfinish = () => { caixa.style.overflow = ""; };
+}
+/** Fecha um bloco encolhendo a altura e so depois chama depois(). */
+function recolher(e, depois) {
+  if (!e || semMovimento() || !e.animate) { depois(); return; }
+  e.style.overflow = "hidden";
+  const an = e.animate([{ height: e.offsetHeight + "px", opacity: 1 }, { height: "0px", opacity: 0, paddingTop: "0px", paddingBottom: "0px", marginTop: "0px" }],
+    { duration: 200, easing: "cubic-bezier(.3,0,.8,.15)", fill: "forwards" });
+  an.onfinish = depois;
+}
+
+// Onda do toque (ripple do Android) nos botoes, so com o dedo: no mouse fica o hover de sempre.
+const ALVOS_ONDA = ".b, .tile, .cena, .redondo, .aj-item, .colapsa-cab, .seg button, .liga, .chave-diag, .aj-voltar";
+addEventListener("pointerdown", ev => {
+  if (ev.pointerType === "mouse") return;
+  const alvo = ev.target.closest(ALVOS_ONDA);
+  if (!alvo || alvo.disabled) return;
+  const r = alvo.getBoundingClientRect(), lado = Math.hypot(r.width, r.height) * 2;
+  alvo.classList.add("m3-alvo");
+  const o = document.createElement("span");
+  o.className = "m3-onda";
+  o.style.cssText = "width:" + lado + "px;height:" + lado + "px;left:" + (ev.clientX - r.left - lado / 2) + "px;top:" + (ev.clientY - r.top - lado / 2) + "px";
+  alvo.appendChild(o);
+  setTimeout(() => o.remove(), 550);
+}, { passive: true });
+
 const vibrar = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
 
 const hora = t => new Date(t * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -515,6 +665,7 @@ function trocarAba(a) {
   if (a === "consumo") carregarConsumo();
   if (a === "ajustes") desenharAjustes();
   if (a === "painel") desenharCartoes();
+  if (mudou) animar($("aba-" + a), "m3-aba");
   if (mudou || a === "ajustes") scrollTo(0, 0);
 }
 
@@ -644,6 +795,9 @@ function desenharCartoes() {
       const novo = ehAr(a) ? cartaoAr(a) : ehLavadora(a) ? cartaoLavadora(a) : cartaoGenerico(a);
       if (r) {
         r.el.replaceWith(novo);
+      } else {
+        novo.style.animationDelay = (lista.length * 60) + "ms";
+        animar(novo, "m3-surge");
       }
       r = { sig, el: novo };
       nos.set(a.puid, r);
@@ -666,7 +820,12 @@ function cabecalho(a, ic) {
       el("div", { class: "det" }, [modeloLegivel(a), (a.comodo || "").trim()].filter(Boolean).join("  ·  "))),
     el("div", { class: "dir" },
       el("button", { class: "chave-diag" + (u.diag ? " on" : "") + (falha ? " falha" : ""), title: "Diagnóstico", "data-id": a.puid + "diag",
-        on: { click: () => { u.diag = !u.diag; desenharCartoes(); } } }, icChave()),
+        on: { click: () => {
+          const n = nos.get(a.puid), velho = n && n.el.querySelector(".diag");
+          if (u.diag && velho) { recolher(velho, () => { u.diag = false; desenharCartoes(); }); return; }
+          u.diag = !u.diag; desenharCartoes();
+          const novo = nos.get(a.puid); expandir(novo && novo.el.querySelector(".diag"));
+        } } }, icChave()),
       el("span", { class: "selo" + (a.online ? " ok" : "") }, a.online ? "Conectado" : "Desconectado")));
 }
 
@@ -685,7 +844,7 @@ function cartaoGenerico(a) {
 
 function blocoDiagnostico(a, extras) {
   const falhas = (extras || []).concat((a.diagnostico && a.diagnostico.ativas || []).map(x => x.nome + (x.orientacao ? ": " + x.orientacao : "")));
-  return el("div", { class: "sub-cartao", style: "margin-top:14px" },
+  return el("div", { class: "sub-cartao diag", style: "margin-top:14px" },
     el("div", { class: "tit" }, "Diagnóstico", el("span", { class: "mu", style: "font-weight:400" },
       a.diagnostico && a.diagnostico.conhecidas ? a.diagnostico.conhecidas + " falhas conhecidas pela Hisense" : "")),
     falhas.length ? falhas.map(t => el("div", { class: "aviso perigo" }, t)) : el("div", { class: "mu" }, "Nenhuma falha ativa."));
@@ -856,16 +1015,23 @@ function cartaoAr(a) {
 
 /** Cenas e desligar automaticamente num painel so, fechado por padrao; o resumo mostra o que importa com ele fechado. */
 function painelAuxiliar(a, u, cenas, timer, tm, rt, falho) {
-  const aberto = !!u.aux;
+  const aberto = !!u.aux, mexeu = Date.now() - (painelAuxiliar.mexeu[a.puid] || 0) < 400;
   const resumo = falho ? ["Timer falhou", true] : tm ? ["Desliga às " + hora(tm.quando), false] : rt ? ["Volta ao padrão às " + hora(rt.quando), false]
     : [(pref ? pref.dados.cenas.length : 0) + " cenas", false];
-  return el("div", { class: "sub-cartao colapsavel" + (aberto ? " aberto" : ""), style: "margin-top:18px" },
+  return el("div", { class: "sub-cartao colapsavel" + (aberto ? " aberto" : "") + (mexeu ? " m3-mexeu" : ""), style: "margin-top:18px" },
     el("button", { class: "colapsa-cab", "aria-expanded": String(aberto), "data-id": a.puid + "aux",
-      on: { click: () => { u.aux = !u.aux; desenharCartoes(); } } },
+      on: { click: ev => {
+        const trocar = () => { u.aux = !u.aux; painelAuxiliar.mexeu[a.puid] = Date.now(); desenharCartoes(); };
+        if (aberto) { recolher(ev.currentTarget.parentElement.querySelector(".baixo"), trocar); return; }
+        trocar();
+        const n = nos.get(a.puid);
+        expandir(n && n.el.querySelector(".colapsavel > .baixo"));
+      } } },
       el("span", { class: "tit-c" }, "Cenas e desligar automaticamente"),
       el("span", { class: "res" + (resumo[1] ? " perigo" : "") }, resumo[0]), icSeta()),
     aberto ? el("div", { class: "baixo", style: "margin-top:12px" }, cenas, timer) : null);
 }
+painelAuxiliar.mexeu = {};
 
 function resumoCena(c, a) {
   if (c.desligar) return "Só desliga";
@@ -965,6 +1131,7 @@ const isoDia = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2,
 for (const b of document.querySelectorAll("#periodo button")) b.onclick = () => {
   periodoConsumo = b.dataset.p;
   for (const x of document.querySelectorAll("#periodo button")) x.classList.toggle("on", x === b);
+  for (const id of ["consResumo", "consLav"]) $(id).classList.add("recarregando");
   carregarConsumo();
 };
 
@@ -1016,7 +1183,7 @@ async function carregarConsumo() {
   desenharGrafico();
   carregarLavadoraConsumo();
   try { desenharResumo(await api("consumo?dias=62&meses=2")); }
-  catch (e) { $("consResumo").replaceChildren(el("div", { class: "corpo mu" }, "Erro: " + e.message)); }
+  catch (e) { trocarConteudo($("consResumo"), el("div", { class: "corpo mu" }, "Erro: " + e.message)); }
 }
 
 function desenharResumo(r) {
@@ -1043,7 +1210,7 @@ function desenharResumo(r) {
       el("td", { class: "n" }, x.tipo === "ar" ? num(x.horas, 1) + " h ligado" : x.ciclos + (x.ciclos === 1 ? " ciclo" : " ciclos") + " · " + num(x.agua, 0) + " L"),
       el("td", { class: "parcela" }, el("div", {}, el("i", { style: "width:" + (total > 0 ? x.custo / total * 100 : 0) + "%;background:" + x.cor }))))));
 
-  $("consResumo").replaceChildren(
+  trocarConteudo($("consResumo"),
     el("div", { class: "cab" }, el("div", { class: "ico" }, svg('<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M4 20h16M7 16V11M12 16V6M17 16v-7"/>')),
       el("div", { class: "nomes" }, el("div", { class: "nome" }, j.nome), el("div", { class: "det" }, "ar + lavadora, a R$ " + num(p.tarifa, 2) + "/kWh"))),
     el("div", { class: "corpo" },
@@ -1094,21 +1261,29 @@ async function desenharGrafico() {
   caixa.classList.remove("oculto");
   const d0 = new Date(); d0.setHours(0, 0, 0, 0); d0.setDate(d0.getDate() - diaGrafico);
   const ini = Math.floor(d0.getTime() / 1000), fim = ini + 86400;
-  const titulo = diaGrafico === 0 ? "Hoje" : diaGrafico === 1 ? "Ontem" : d0.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" });
+  const titulo = diaGrafico === 0 ? "Hoje" : diaGrafico === 1 ? "Ontem" : d0.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }).replace(".", "");
   const nav = el("div", { class: "linha" },
-    el("button", { class: "b peq", title: "Dia anterior", on: { click: () => { diaGrafico++; desenharGrafico(); } } }, "◀"),
-    el("span", { style: "min-width:110px;text-align:center" }, titulo),
-    el("button", { class: "b peq", title: "Dia seguinte", disabled: diaGrafico === 0, on: { click: () => { diaGrafico--; desenharGrafico(); } } }, "▶"));
-  const corpo = el("div", { class: "corpo" }, el("div", { class: "mu" }, "Carregando…"));
-  const cab = el("div", { class: "cab" }, el("div", { class: "ico" }, icTermometro()),
+    el("button", { class: "b peq", title: "Dia anterior", on: { click: () => { diaGrafico++; desenharGrafico.dir = "m3-tras"; desenharGrafico(); } } }, "◀"),
+    el("span", { style: "width:96px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums" }, titulo),
+    el("button", { class: "b peq", title: "Dia seguinte", disabled: diaGrafico === 0, on: { click: () => { diaGrafico--; desenharGrafico.dir = "m3-frente"; desenharGrafico(); } } }, "▶"));
+  const vez = desenharGrafico.vez = (desenharGrafico.vez || 0) + 1;   // cliques rapidos: vale so a ultima busca
+  let corpo = caixa.querySelector(":scope > .corpo");
+  const novoCorpo = !corpo;
+  if (novoCorpo) corpo = el("div", { class: "corpo" }, el("div", { class: "mu" }, "Carregando…"));
+  else corpo.classList.add("recarregando");
+  const cab = el("div", { class: "cab cab-nav" }, el("div", { class: "ico" }, icTermometro()),
     el("div", { class: "nomes" }, el("div", { class: "nome" }, (ar.apelido || "Ar") + ": temperatura do dia"), el("div", { class: "det" }, "faixas coloridas: ar ligado, na cor do modo")),
     el("div", { class: "dir" }, nav));
-  caixa.replaceChildren(cab, corpo);
+  if (novoCorpo) caixa.replaceChildren(cab, corpo); else caixa.firstElementChild.replaceWith(cab);
   let am;
   try { am = (await api("historico/ar?puid=" + encodeURIComponent(ar.puid) + "&desde=" + (ini - 1) + "&ate=" + fim)).amostras; }
-  catch (e) { corpo.replaceChildren(el("div", { class: "mu" }, "Erro: " + e.message)); return; }
-  if (!am.length) { corpo.replaceChildren(el("div", { class: "mu" }, "Nenhuma leitura neste dia.")); return; }
-  corpo.replaceChildren(graficoDoDia(am, ini, fim, (corpo.clientWidth || 936) - 36), resumoDoDia(am));
+  catch (e) { if (vez === desenharGrafico.vez) trocarConteudo(corpo, el("div", { class: "mu" }, "Erro: " + e.message)); return; }
+  if (vez !== desenharGrafico.vez) return;
+  const dir = desenharGrafico.dir; desenharGrafico.dir = null;
+  if (!am.length) { trocarConteudo(corpo, el("div", { class: "mu" }, "Nenhuma leitura neste dia.")); return; }
+  const graf = graficoDoDia(am, ini, fim, (corpo.clientWidth || 936) - 36);
+  trocarConteudo(corpo, graf, resumoDoDia(am));
+  if (dir) animar(graf, dir);   // so o grafico desliza; o resumo abaixo troca no lugar
 }
 
 function graficoDoDia(am, ini, fim, largura, opcoes) {
@@ -1207,9 +1382,9 @@ const PROGRAMA_LIMPEZA = 6;   // Limpeza do tambor
 async function carregarLavadoraConsumo() {
   const caixa = $("consLav");
   const lav = estado && estado.lista.find(ehLavadora);
-  if (!lav) { caixa.classList.add("oculto"); return; }
+  if (!lav) { caixa.classList.add("oculto"); caixa.classList.remove("recarregando"); return; }
   let l;
-  try { l = (await api("historico/ciclos?desde=0")).ciclos.filter(c => c.puid === lav.puid); } catch (e) { return; }
+  try { l = (await api("historico/ciclos?desde=0")).ciclos.filter(c => c.puid === lav.puid); } catch (e) { caixa.classList.remove("recarregando"); return; }
   caixa.classList.remove("oculto");
   const por = {};
   for (const c of l.filter(c => c.concluido)) {
@@ -1221,7 +1396,7 @@ async function carregarLavadoraConsumo() {
   l.forEach((c, n) => { if (c.programa === PROGRAMA_LIMPEZA && c.concluido) ult = n; });
   const desde = ult < 0 ? l.length : l.length - 1 - ult;
   const pede = String(lav.estado.DrumCleanFlag) === "1";
-  caixa.replaceChildren(
+  trocarConteudo(caixa,
     el("div", { class: "cab" }, el("div", { class: "ico" }, icLavadora()),
       el("div", { class: "nomes" }, el("div", { class: "nome" }, (lav.apelido || "Lavadora") + ": ciclos"),
         el("div", { class: "det" }, l.length + (l.length === 1 ? " ciclo gravado" : " ciclos gravados") + (ranking.length ? "  ·  mais usado: " + ranking[0].nome : "")))),
@@ -1354,10 +1529,10 @@ function desenharAjustes() {
       el("div", { class: "linha", style: "margin-top:8px" },
         el("button", { class: "b peq", disabled: n === 0, on: { click: () => { lista.splice(n - 1, 0, lista.splice(n, 1)[0]); salvarCenas(); } } }, "◀ Antes"),
         el("button", { class: "b peq", disabled: n === lista.length - 1, on: { click: () => { lista.splice(n + 1, 0, lista.splice(n, 1)[0]); salvarCenas(); } } }, "Depois ▶"),
-        el("button", { class: "b peq perigo", on: { click: () => { lista.splice(n, 1); salvarCenas(); } } }, "Excluir")));
+        el("button", { class: "b peq perigo", on: { click: ev => recolher(ev.currentTarget.closest(".editor-cena"), () => { lista.splice(n, 1); salvarCenas(); }) } }, "Excluir")));
   });
   const cenas = cartaoSimples("Cenas", "até 8, na ordem dos botões", null, editores,
-    el("button", { class: "b pri", disabled: lista.length >= 8, on: { click: () => { lista.push({ nome: "Nova cena", icone: "floco", desligar: false, modo: -1, temp: 24, vento: -1, noturno: -1, duracao: 0 }); salvarCenas(); } } }, "Nova cena"));
+    el("button", { class: "b pri", disabled: lista.length >= 8, on: { click: () => { desenharAjustes.novaCena = true; lista.push({ nome: "Nova cena", icone: "floco", desligar: false, modo: -1, temp: 24, vento: -1, noturno: -1, duracao: 0 }); salvarCenas(); } } }, "Nova cena"));
 
   const conta = cartaoSimples("Servidor", "ajustes salvos " + (pref.atualizado ? "em " + dataHora(pref.atualizado) + " pelo " + ({ web: "painel web", pc: "Mhiagos no PC" }[pref.origem] || pref.origem || "?") : "nunca"), null,
     el("div", { class: "linha" },
@@ -1366,7 +1541,7 @@ function desenharAjustes() {
 
   // Ar-condicionado: bipe dos comandos (preferencia do servidor) e unidade (propriedade do aparelho)
   const ehF = ar && String(valor(ar, "t_temp_type")) === "1";
-  const arCartao = cartaoSimples("Ar-condicionado", ar ? ar.nome : "nenhum ar conectado", null,
+  const arCartao = cartaoSimples("Ar-condicionado", ar ? ar.apelido : "nenhum ar conectado", null,
     chaveLinha("Comandos sem bipe", !!d.semBipe, false, v => gravarPref({ semBipe: v })),
     el("div", { class: "mu", style: "margin:2px 0 10px" }, "Os comandos do painel e das cenas pedem ao ar para não apitar."),
     el("div", { class: "chavinha" }, el("span", {}, "Unidade"),
@@ -1391,7 +1566,39 @@ function desenharAjustes() {
     el("div", { class: "aj-tx" }, el("b", {}, t), el("span", {}, r)), ajSvg("seta", "aj-seta")));
   const voltar = el("button", { class: "aj-voltar", type: "button", on: { click: () => { if (aplicarHash.daLista) history.back(); else irPara("ajustes", true); } } }, ajSvg("voltar"), "Ajustes");
   g.className = "aj" + (ajAberto ? " det" : "");
-  g.replaceChildren(el("div", { class: "aj-lista" }, itens), el("div", { class: "aj-detalhe" }, voltar, atual[3]));
+  // Celular: lista -> detalhe entra pela direita, detalhe -> lista pela esquerda (eixo compartilhado do Material).
+  const trocou = desenharAjustes.aberto !== undefined && desenharAjustes.aberto !== ajAberto;
+  const secaoNova = desenharAjustes.secao !== undefined && desenharAjustes.secao !== ajSecao;
+  desenharAjustes.aberto = ajAberto; desenharAjustes.secao = ajSecao;
+  g.replaceChildren(el("div", { class: "aj-coluna" }, el("div", { class: "aj-lista" }, itens), versaoAjustes()), el("div", { class: "aj-detalhe" }, voltar, atual[3]));
+  if (desenharAjustes.novaCena) {
+    desenharAjustes.novaCena = false;
+    const ed = g.querySelectorAll(".editor-cena");
+    if (ed.length) { expandir(ed[ed.length - 1]); ed[ed.length - 1].scrollIntoView({ block: "nearest", behavior: semMovimento() ? "auto" : "smooth" }); }
+  }
+  if (trocou && matchMedia("(max-width:760px)").matches) animar(ajAberto ? g.lastChild : g.firstChild, ajAberto ? "m3-frente" : "m3-tras");
+  else if (secaoNova && !matchMedia("(max-width:760px)").matches) animar(g.lastChild, "m3-aba");
+}
+
+// Versao no rodape do Ajustes: a marca desta pagina contra a que o servidor entrega agora.
+// Se forem diferentes, o app esta mostrando uma pagina guardada de antes do ultimo deploy.
+const PAGINA = "__PAGINA__";
+let saudeServidor = null;
+async function conferirVersao() {
+  try {
+    const r = await fetch("/api/saude", { cache: "no-store" });
+    if (r.ok) saudeServidor = await r.json();
+  } catch (e) { /* sem servidor: o rodape fica so com a marca da pagina */ }
+  if (abaAtual === "ajustes") { const v = document.querySelector(".aj-versao"); if (v) v.replaceWith(versaoAjustes()); }
+}
+function versaoAjustes() {
+  const s = saudeServidor;
+  const velha = s && s.pagina && s.pagina !== PAGINA;
+  return el("div", { class: "aj-versao" + (velha ? " velha" : "") },
+    el("div", {}, "Servidor " + (s ? s.versao : "?") + " · página " + PAGINA),
+    velha ? el("div", {}, "Há uma versão nova (" + s.pagina + "). ",
+      el("button", { class: "b peq", type: "button", on: { click: () => location.reload() } }, "Atualizar"))
+      : s ? el("div", {}, "Você está na versão mais recente.") : null);
 }
 
 // ---------------- laco ----------------
@@ -1462,7 +1669,8 @@ function atalho() {
 setInterval(() => { if (!document.hidden) tudo(); }, 30000);
 // O relogio do timer e o tempo restante andam sem leitura nova.
 setInterval(() => { if (!document.hidden && abaAtual === "painel") desenharCartoes(); if (!document.hidden && estado) desenharSituacao(); }, 20000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) tudo(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { tudo(); conferirVersao(); } });
+conferirVersao();
 window.addEventListener("resize", () => {
   clearTimeout(desenharGrafico.t);
   desenharGrafico.t = setTimeout(() => {

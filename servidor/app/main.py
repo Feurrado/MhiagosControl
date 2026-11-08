@@ -1,6 +1,7 @@
 """API da Casa na rede local. Toda rota sob /api, menos /api/saude, pede a chave."""
 
 import asyncio
+import hashlib
 import hmac
 import ipaddress
 import json
@@ -18,7 +19,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import avisos, banco, casa, servico
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.5.0"
+VERSAO = "1.6.1"
 CHAVE = os.environ.get("MHIAGOS_CHAVE", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -175,9 +176,27 @@ def validar_props(props, a=None):
                 raise HTTPException(400, "valor invalido para %s" % k)
 
 
+_PAGINA = os.path.join(os.path.dirname(__file__), "static", "index.html")
+
+
+def _pagina():
+    """O HTML com a marca da versao (8 primeiros digitos do sha1 do arquivo) no lugar de __PAGINA__."""
+    with open(_PAGINA, "rb") as f:
+        bruto = f.read()
+    marca = hashlib.sha1(bruto).hexdigest()[:8]
+    return bruto.replace(b"__PAGINA__", marca.encode()), marca
+
+
 @app.get("/")
-def pagina():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
+def pagina(request: Request):
+    # no-cache: o WebView do Android guardava a pagina por heuristica e mostrava a versao anterior
+    # depois de um deploy. Com ETag a revalidacao custa um 304.
+    corpo, marca = _pagina()
+    etag = '"%s"' % marca
+    cab = {"Cache-Control": "no-cache", "ETag": etag}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=cab)
+    return Response(corpo, media_type="text/html; charset=utf-8", headers=cab)
 
 
 # Icone do Mhiagos Control (assets/app-icon.png reduzido) e o que o celular pede para
@@ -198,7 +217,7 @@ def estatico(nome: str):
 
 @app.get("/api/saude")
 def saude():
-    return {"versao": VERSAO, "agora": int(time.time()), **servico.situacao()}
+    return {"versao": VERSAO, "pagina": _pagina()[1], "agora": int(time.time()), **servico.situacao()}
 
 
 # ---------------- conta ----------------
