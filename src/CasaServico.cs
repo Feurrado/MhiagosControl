@@ -820,6 +820,8 @@ namespace MhiagosControl
         public string DesligarPuid = "";
         /// <summary>Servidor da casa (ServidorCasa): endereco, marcas da sincronizacao e agendamentos entregues.</summary>
         public string Servidor = "";
+        /// <summary>Endereco externo (https pela internet): tentado primeiro; o interno (Servidor) e a reserva.</summary>
+        public string ServidorExterno = "";
         public long ServidorArAte, ServidorCiclosAte, ServidorEnviadoAte, ServidorDesligarId, ServidorRetornoId, ServidorPrefVersao;
         /// <summary>Resumo das preferencias compartilhadas na ultima troca com o servidor: diferente, mudaram aqui.</summary>
         public string ServidorPrefHash = "";
@@ -889,6 +891,7 @@ namespace MhiagosControl
                         case "climadia": p.ClimaDia = v != "0"; break;
                         case "climaem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ClimaEmUtc = l; break;
                         case "servidor": p.Servidor = v; break;
+                        case "servidorexterno": p.ServidorExterno = v; break;
                         case "servidorarate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorArAte = l; break;
                         case "servidorciclosate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorCiclosAte = l; break;
                         case "servidorenviadoate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorEnviadoAte = l; break;
@@ -946,6 +949,7 @@ namespace MhiagosControl
             sb.AppendLine("climadia=" + (ClimaDia ? "1" : "0"));
             sb.AppendLine("climaem=" + ClimaEmUtc.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidor=" + (Servidor ?? ""));
+            sb.AppendLine("servidorexterno=" + (ServidorExterno ?? ""));
             sb.AppendLine("servidorarate=" + ServidorArAte.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidorciclosate=" + ServidorCiclosAte.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidorenviadoate=" + ServidorEnviadoAte.ToString(CultureInfo.InvariantCulture));

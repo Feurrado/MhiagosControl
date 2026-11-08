@@ -115,6 +115,10 @@ namespace MhiagosControl
             {
                 Igual(T.ServidorEnderecoInvalido, ServidorCasa.Testar("file:///C:/Windows/win.ini", "chave"),
                     "servidor da casa: endereco file: nem chega a virar pedido");
+                string dois = ServidorCasa.TestarEnderecos("file:///C:/a", "file:///C:/b", "chave");
+                Verdade(dois != null && dois.Contains(T.ServidorEnderecoExterno) && dois.Contains(T.ServidorEnderecoInterno),
+                    "servidor da casa: com dois enderecos ruins o erro diz qual e qual");
+                Verdade(ServidorCasa.TestarEnderecos("", "", "chave") == null, "servidor da casa: sem endereco nao ha o que testar");
             }
             finally { ServidorCasa.Desligado = antes; }
         }
@@ -274,6 +278,11 @@ namespace MhiagosControl
                 gravador.Join();
                 Verdade(erro == null, "cenas: gravar o casa.ini enquanto as cenas mudam em outra thread nao quebra");
                 Verdade(PreferenciasCasa.Carregar().Cenas.Count == p.Cenas.Count, "cenas: o arquivo gravado volta com todas as cenas");
+                p.Servidor = "192.168.1.100:8765"; p.ServidorExterno = "https://home01.exemplo.ts.net";
+                p.Salvar();
+                PreferenciasCasa lidoDoDisco = PreferenciasCasa.Carregar();
+                Verdade(lidoDoDisco.Servidor == p.Servidor && lidoDoDisco.ServidorExterno == p.ServidorExterno,
+                    "servidor: endereco externo e interno voltam do casa.ini");
             }
             finally { PreferenciasCasa.Arquivo = prefAntes; }
         }

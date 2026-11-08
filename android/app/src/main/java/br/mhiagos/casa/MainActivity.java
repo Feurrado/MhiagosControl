@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,13 +19,25 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.util.List;
+
 /** Painel da Casa em tela cheia: uma WebView apontando para o servidor do Mhiagos Control. */
 public class MainActivity extends Activity {
     private WebView web;
     private LinearLayout erro;
     private TextView erroTexto;
-    private String urlAtual;
+    /** Quanto esperar o externo antes de usar o interno (a WebView sozinha esperaria meio minuto). */
+    private static final int LIMITE_DO_EXTERNO_MS = 10000;
+
+    private final Handler relogio = new Handler();
+    private List<String> enderecos;
+    private int indice;
+    private String urlAtual = "";
+    private String assinatura = "";
     private boolean falhou;
+    private final Runnable aoEsgotar = new Runnable() {
+        @Override public void run() { tentarOutroOuFalhar("tempo esgotado"); }
+    };
 
     @Override
     protected void onCreate(Bundle b) {
@@ -97,11 +110,44 @@ public class MainActivity extends Activity {
         return l;
     }
 
+    /** Recomeca pela ordem de enderecos (externo primeiro, salvo se ele acabou de falhar). */
     private void carregar() {
-        urlAtual = Config.url(this);
+        assinatura = Config.assinatura(this);
+        enderecos = Config.enderecos(this);
+        indice = 0;
+        abrir();
+    }
+
+    private void abrir() {
+        relogio.removeCallbacks(aoEsgotar);
+        urlAtual = enderecos.get(indice);
         falhou = false;
         erro.setVisibility(View.GONE);
         web.loadUrl(urlAtual);
+        // Com outro endereco de reserva, nao espera o limite longo da WebView.
+        if (indice < enderecos.size() - 1) relogio.postDelayed(aoEsgotar, LIMITE_DO_EXTERNO_MS);
+    }
+
+    private boolean ehExterno(String url) {
+        String ext = Config.externo(this);
+        return !ext.isEmpty() && ext.equalsIgnoreCase(url);
+    }
+
+    /** O endereco atual nao respondeu: tenta o proximo; sem mais nenhum, mostra o erro. */
+    private void tentarOutroOuFalhar(String motivo) {
+        relogio.removeCallbacks(aoEsgotar);
+        if (ehExterno(urlAtual)) Config.externoFalhou();
+        if (indice < enderecos.size() - 1) {
+            indice++;
+            abrir();
+            return;
+        }
+        falhou = true;
+        StringBuilder t = new StringBuilder();
+        for (String e : enderecos) t.append(e).append('\n');
+        erroTexto.setText(t.toString() + "\n" + motivo
+                + "\n\nConfira a internet, o Wi-Fi de casa e se o servidor está no ar.");
+        erro.setVisibility(View.VISIBLE);
     }
 
     @Override
@@ -114,12 +160,13 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         // Voltando da tela de endereco: recarrega se mudou.
-        if (!Config.url(this).equals(urlAtual)) carregar();
+        if (!Config.assinatura(this).equals(assinatura)) carregar();
         web.onResume();
     }
 
     @Override
     protected void onPause() {
+        relogio.removeCallbacks(aoEsgotar);
         web.onPause();
         super.onPause();
     }
@@ -134,8 +181,11 @@ public class MainActivity extends Activity {
         @Override
         public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
             Uri u = r.getUrl();
-            String base = Uri.parse(urlAtual).getHost();
-            if (base != null && base.equalsIgnoreCase(u.getHost())) return false;
+            // Fica dentro do app o que e de um dos enderecos do painel; o resto abre fora.
+            for (String e : enderecos) {
+                String base = Uri.parse(e).getHost();
+                if (base != null && base.equalsIgnoreCase(u.getHost())) return false;
+            }
             try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception ignorado) {}
             return true;
         }
@@ -143,15 +193,17 @@ public class MainActivity extends Activity {
         @Override
         public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
             if (!r.isForMainFrame()) return;
-            falhou = true;
-            erroTexto.setText(urlAtual + "\n\n" + e.getDescription()
-                    + "\n\nConfira se o celular está no Wi-Fi de casa (ou na VPN) e se o servidor está no ar.");
-            erro.setVisibility(View.VISIBLE);
+            // So vale o erro do endereco que esta sendo tentado (o de um carregamento abandonado, nao).
+            if (!r.getUrl().toString().startsWith(urlAtual)) return;
+            tentarOutroOuFalhar(String.valueOf(e.getDescription()));
         }
 
         @Override
         public void onPageFinished(WebView v, String url) {
-            if (!falhou) erro.setVisibility(View.GONE);
+            if (falhou || !url.startsWith(urlAtual)) return;
+            relogio.removeCallbacks(aoEsgotar);
+            if (ehExterno(urlAtual)) Config.externoFuncionou();
+            erro.setVisibility(View.GONE);
         }
     }
 }
