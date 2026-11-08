@@ -12,6 +12,8 @@ import java.util.List;
  */
 final class Config {
     static final String PADRAO = "http://192.168.1.100:8765";
+    /** Externo de fabrica: reinstalar o APK (chave temporaria da CI) apaga as preferencias e antes deixava o externo vazio. */
+    static final String PADRAO_EXTERNO = "https://home01.tailb515c1.ts.net";
     private static final String PREFS = "casa";
     private static final String CHAVE_INTERNO = "url";       // nome antigo: quem ja tinha o app mantem o endereco
     private static final String CHAVE_EXTERNO = "externo";
@@ -31,7 +33,7 @@ final class Config {
     }
 
     static String externo(Context c) {
-        String u = prefs(c).getString(CHAVE_EXTERNO, "");
+        String u = prefs(c).getString(CHAVE_EXTERNO, PADRAO_EXTERNO); // so vazio se o usuario salvou vazio de proposito
         return u == null ? "" : u.trim();
     }
 

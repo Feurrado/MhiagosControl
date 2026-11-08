@@ -36,7 +36,7 @@ public class SettingsActivity extends Activity {
         dica.setPadding(0, p / 2, 0, p / 2);
         raiz.addView(dica);
 
-        final EditText externo = campo(raiz, "Endereço externo", Config.externo(this), "https://home01.seu-nome.ts.net");
+        final EditText externo = campo(raiz, "Endereço externo", Config.externo(this), Config.PADRAO_EXTERNO);
         final EditText interno = campo(raiz, "Endereço interno", Config.interno(this), "192.168.1.100:8765");
 
         LinearLayout linha = new LinearLayout(this);
@@ -46,7 +46,7 @@ public class SettingsActivity extends Activity {
         Button padrao = new Button(this);
         padrao.setText("Padrão");
         padrao.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { interno.setText(Config.PADRAO); }
+            @Override public void onClick(View v) { interno.setText(Config.PADRAO); externo.setText(Config.PADRAO_EXTERNO); }
         });
         linha.addView(padrao);
 
