@@ -177,7 +177,9 @@ def validar_props(props, a=None):
 
 @app.get("/")
 def pagina():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
+    # no-cache: o WebView do Android guardava a pagina por heuristica e mostrava a versao anterior
+    # depois de um deploy. Com ETag a revalidacao custa um 304.
+    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"), headers={"Cache-Control": "no-cache"})
 
 
 # Icone do Mhiagos Control (assets/app-icon.png reduzido) e o que o celular pede para
