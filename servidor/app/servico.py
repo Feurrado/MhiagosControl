@@ -12,7 +12,7 @@ import secrets
 import threading
 import time
 
-from . import banco, casa, tabelas
+from . import avisos, banco, casa, tabelas
 from .connectlife import ConnectLife, ConnectLifeErro, ar_condicionado, lavadora, endereco_de_login
 
 log = logging.getLogger("servico")
@@ -247,6 +247,10 @@ def _ler():
                 _conferir_ciclo(a, agora)
             elif ar_condicionado(a):
                 _registrar_ar(a, agora)
+        try:
+            avisos.conferir(lista)
+        except Exception:  # aviso no celular nunca derruba a leitura
+            log.exception("conferir avisos")
         _limpar(agora)
         assinatura = json.dumps([[a["puid"], a.get("online"), a["estado"]] for a in lista], sort_keys=True, default=str)
         if assinatura != _assinatura:
@@ -387,6 +391,10 @@ def _evento(puid, tipo, texto, uma_vez=False):
             if r and r["tipo"] == tipo:
                 return
         c.execute("INSERT INTO eventos(t,puid,tipo,texto) VALUES(?,?,?,?)", (int(time.time()), puid, tipo, texto))
+    if tipo in ("ciclo_fim", "lavadora_erro"):
+        a = achar(puid)
+        if a:
+            avisos.evento(a, tipo, texto)
 
 
 _ultima_limpeza = 0

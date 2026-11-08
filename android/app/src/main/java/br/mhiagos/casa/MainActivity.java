@@ -2,9 +2,11 @@ package br.mhiagos.casa;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.net.http.SslError;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.Gravity;
@@ -45,6 +47,10 @@ public class MainActivity extends Activity {
     private String urlAtual = "";
     private String assinatura = "";
     private boolean falhou;
+    /** Atalho do icone (?acao=...): vai so no primeiro carregamento depois do toque. */
+    private String sufixo = "";
+    private boolean escuro;
+    private int corFundo, corTexto;
     /** O app saiu da tela com um carregamento em curso (o limite de tempo foi cancelado): recomeca ao voltar. */
     private boolean recomecar;
     private final Runnable aoEsgotar = new Runnable() {
@@ -54,15 +60,26 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().setStatusBarColor(0xFF17171A);
-        getWindow().setNavigationBarColor(0xFF17171A);
-        getWindow().getDecorView().setSystemUiVisibility(0); // icones claros sobre barra escura
+        // Segue o tema do celular: o tema do app (values e values-night) tambem decide o
+        // prefers-color-scheme da pagina na WebView.
+        escuro = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        corFundo = escuro ? 0xFF1C1C1F : 0xFFF4F5F7;
+        corTexto = escuro ? 0xFFB0B0B8 : 0xFF5F646E;
+        int barra = escuro ? 0xFF17171A : 0xFFEAECF0;
+        getWindow().setStatusBarColor(barra);
+        getWindow().setNavigationBarColor(barra);
+        int flags = 0;
+        if (!escuro) {
+            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;                       // icones escuros sobre barra clara
+            if (Build.VERSION.SDK_INT >= 26) flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        }
+        getWindow().getDecorView().setSystemUiVisibility(flags);
 
         FrameLayout raiz = new FrameLayout(this);
-        raiz.setBackgroundColor(0xFF1C1C1F);
+        raiz.setBackgroundColor(corFundo);
 
         web = new WebView(this);
-        web.setBackgroundColor(0xFF1C1C1F);
+        web.setBackgroundColor(corFundo);
         web.setVerticalScrollBarEnabled(false);
         web.setHorizontalScrollBarEnabled(false);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -80,9 +97,9 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         carregando = new TextView(this);
-        carregando.setTextColor(0xFFB0B0B8);
+        carregando.setTextColor(corTexto);
         carregando.setGravity(Gravity.CENTER);
-        carregando.setBackgroundColor(0xFF1C1C1F);
+        carregando.setBackgroundColor(corFundo);
         raiz.addView(carregando, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -96,17 +113,17 @@ public class MainActivity extends Activity {
         l.setOrientation(LinearLayout.VERTICAL);
         l.setGravity(Gravity.CENTER);
         l.setPadding(p, p, p, p);
-        l.setBackgroundColor(0xFF1C1C1F);
+        l.setBackgroundColor(corFundo);
 
         TextView t = new TextView(this);
         t.setText("Não foi possível abrir o painel");
-        t.setTextColor(Color.WHITE);
+        t.setTextColor(escuro ? Color.WHITE : 0xFF1B1D21);
         t.setTextSize(20);
         t.setGravity(Gravity.CENTER);
         l.addView(t);
 
         erroTexto = new TextView(this);
-        erroTexto.setTextColor(0xFFB0B0B8);
+        erroTexto.setTextColor(corTexto);
         erroTexto.setGravity(Gravity.CENTER);
         erroTexto.setPadding(0, p / 2, 0, p);
         l.addView(erroTexto);
@@ -131,6 +148,10 @@ public class MainActivity extends Activity {
 
     /** Recomeca pela ordem de enderecos (externo primeiro, salvo se ele acabou de falhar). */
     private void carregar() {
+        // casa://atalho?acao=desligar (shortcuts.xml) vira /?acao=desligar na pagina.
+        Uri d = getIntent() != null ? getIntent().getData() : null;
+        sufixo = d != null && "casa".equals(d.getScheme()) && d.getQuery() != null ? "/?" + d.getQuery() : "";
+        setIntent(new Intent(this, MainActivity.class));
         assinatura = Config.assinatura(this);
         enderecos = Config.enderecos(this);
         indice = 0;
@@ -146,7 +167,7 @@ public class MainActivity extends Activity {
         carregando.setText("Conectando a\n" + urlAtual + "\n…");
         carregando.setVisibility(View.VISIBLE);
         if (indice >= enderecos.size() - 1) {
-            web.loadUrl(urlAtual);
+            web.loadUrl(comAtalho(urlAtual));
             relogio.postDelayed(aoEsgotar, LIMITE_DO_ULTIMO_MS);
             return;
         }
@@ -163,7 +184,7 @@ public class MainActivity extends Activity {
                         if (vez != tentativa || falhou) return;
                         if (ok) {
                             relogio.removeCallbacks(aoEsgotar);
-                            web.loadUrl(alvo);
+                            web.loadUrl(comAtalho(alvo));
                             relogio.postDelayed(aoEsgotar, LIMITE_CARGA_MS);
                         } else {
                             tentarOutroOuFalhar("sem resposta");
@@ -216,9 +237,14 @@ public class MainActivity extends Activity {
         erro.setVisibility(View.VISIBLE);
     }
 
+    private String comAtalho(String base) {
+        return sufixo.isEmpty() ? base : base.replaceAll("/+$", "") + sufixo;
+    }
+
     @Override
     protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
+        setIntent(i);
         carregar();
     }
 
