@@ -24,6 +24,14 @@ class Cabecalhos(Base):
             self.assertEqual(r.headers["referrer-policy"], "no-referrer")
         self.assertEqual(self.cliente.get("/api/saude").headers["cache-control"], "no-store")
 
+    def test_marca_da_pagina(self):
+        r = self.cliente.get("/")
+        marca = self.cliente.get("/api/saude").json()["pagina"]
+        self.assertRegex(marca, r"^[0-9a-f]{8}$")
+        self.assertIn('const PAGINA = "%s"' % marca, r.text)
+        self.assertEqual(r.headers["etag"], '"%s"' % marca)
+        self.assertEqual(self.cliente.get("/", headers={"If-None-Match": r.headers["etag"]}).status_code, 304)
+
     def test_corpo_grande_demais(self):
         with mock.patch.object(main, "CORPO_MAXIMO", 100):
             r = self.cliente.post("/api/historico/importar", headers=self.cab, content=b"x" * 500)

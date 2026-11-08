@@ -248,7 +248,10 @@
 
   /* ---------- ajustes: lista de secoes + detalhe ---------- */
   .aj { display:grid; grid-template-columns:268px minmax(0,1fr); gap:18px; align-items:start; max-width:1100px; }
-  .aj-lista { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; position:sticky; top:16px; }
+  .aj-coluna { position:sticky; top:16px; align-self:start; display:flex; flex-direction:column; gap:10px; }
+  .aj-lista { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .aj-versao { font-size:12px; color:var(--muted); text-align:center; display:flex; flex-direction:column; gap:6px; align-items:center; font-variant-numeric:tabular-nums; }
+  .aj-versao.velha { color:var(--warn); }
   .aj-item { all:unset; box-sizing:border-box; cursor:pointer; display:flex; align-items:center; gap:12px; width:100%; padding:11px 12px; min-height:52px; border-top:1px solid var(--border); }
   .aj-item:first-child { border-top:0; }
   .aj-item:hover { background:var(--hover); }
@@ -265,10 +268,10 @@
   .aj-detalhe { min-width:0; }
   @media (max-width:760px) {
     .aj { grid-template-columns:1fr; }
-    .aj-lista { position:static; }
+    .aj-coluna { position:static; }
     .aj-item.sel { background:none; }
     .aj-seta { display:block; }
-    .aj.det .aj-lista { display:none; }
+    .aj.det .aj-coluna { display:none; }
     .aj:not(.det) .aj-detalhe { display:none; }
     .aj-voltar { display:flex; }
   }
@@ -323,6 +326,9 @@
     .item.ativo::before { top:0; bottom:auto; left:22%; right:22%; width:auto; height:3px; }
     main { padding:calc(14px + env(safe-area-inset-top)) 12px calc(86px + env(safe-area-inset-bottom)); }
     #toast { bottom:calc(76px + env(safe-area-inset-bottom)); max-width:calc(100vw - 24px); }
+    /* A barra de abas numa camada propria do compositor: sem isso o WebView do Android redesenha
+       a barra junto com a pagina enquanto um bloco anima a altura, e ela treme. */
+    nav { transform:translateZ(0); will-change:transform; backface-visibility:hidden; }
     #lerAgora { display:inline-block !important; }
     .b { min-height:44px; padding:8px 16px; }
     .b.peq { min-height:40px; }
@@ -1560,7 +1566,7 @@ function desenharAjustes() {
   const trocou = desenharAjustes.aberto !== undefined && desenharAjustes.aberto !== ajAberto;
   const secaoNova = desenharAjustes.secao !== undefined && desenharAjustes.secao !== ajSecao;
   desenharAjustes.aberto = ajAberto; desenharAjustes.secao = ajSecao;
-  g.replaceChildren(el("div", { class: "aj-lista" }, itens), el("div", { class: "aj-detalhe" }, voltar, atual[3]));
+  g.replaceChildren(el("div", { class: "aj-coluna" }, el("div", { class: "aj-lista" }, itens), versaoAjustes()), el("div", { class: "aj-detalhe" }, voltar, atual[3]));
   if (desenharAjustes.novaCena) {
     desenharAjustes.novaCena = false;
     const ed = g.querySelectorAll(".editor-cena");
@@ -1568,6 +1574,27 @@ function desenharAjustes() {
   }
   if (trocou && matchMedia("(max-width:760px)").matches) animar(ajAberto ? g.lastChild : g.firstChild, ajAberto ? "m3-frente" : "m3-tras");
   else if (secaoNova && !matchMedia("(max-width:760px)").matches) animar(g.lastChild, "m3-aba");
+}
+
+// Versao no rodape do Ajustes: a marca desta pagina contra a que o servidor entrega agora.
+// Se forem diferentes, o app esta mostrando uma pagina guardada de antes do ultimo deploy.
+const PAGINA = "__PAGINA__";
+let saudeServidor = null;
+async function conferirVersao() {
+  try {
+    const r = await fetch("/api/saude", { cache: "no-store" });
+    if (r.ok) saudeServidor = await r.json();
+  } catch (e) { /* sem servidor: o rodape fica so com a marca da pagina */ }
+  if (abaAtual === "ajustes") { const v = document.querySelector(".aj-versao"); if (v) v.replaceWith(versaoAjustes()); }
+}
+function versaoAjustes() {
+  const s = saudeServidor;
+  const velha = s && s.pagina && s.pagina !== PAGINA;
+  return el("div", { class: "aj-versao" + (velha ? " velha" : "") },
+    el("div", {}, "Servidor " + (s ? s.versao : "?") + " · página " + PAGINA),
+    velha ? el("div", {}, "Há uma versão nova (" + s.pagina + "). ",
+      el("button", { class: "b peq", type: "button", on: { click: () => location.reload() } }, "Atualizar"))
+      : s ? el("div", {}, "Você está na versão mais recente.") : null);
 }
 
 // ---------------- laco ----------------
@@ -1638,7 +1665,8 @@ function atalho() {
 setInterval(() => { if (!document.hidden) tudo(); }, 30000);
 // O relogio do timer e o tempo restante andam sem leitura nova.
 setInterval(() => { if (!document.hidden && abaAtual === "painel") desenharCartoes(); if (!document.hidden && estado) desenharSituacao(); }, 20000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) tudo(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { tudo(); conferirVersao(); } });
+conferirVersao();
 window.addEventListener("resize", () => {
   clearTimeout(desenharGrafico.t);
   desenharGrafico.t = setTimeout(() => {
