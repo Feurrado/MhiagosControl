@@ -1251,10 +1251,10 @@ async function desenharGrafico() {
   caixa.classList.remove("oculto");
   const d0 = new Date(); d0.setHours(0, 0, 0, 0); d0.setDate(d0.getDate() - diaGrafico);
   const ini = Math.floor(d0.getTime() / 1000), fim = ini + 86400;
-  const titulo = diaGrafico === 0 ? "Hoje" : diaGrafico === 1 ? "Ontem" : d0.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" });
+  const titulo = diaGrafico === 0 ? "Hoje" : diaGrafico === 1 ? "Ontem" : d0.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }).replace(".", "");
   const nav = el("div", { class: "linha" },
     el("button", { class: "b peq", title: "Dia anterior", on: { click: () => { diaGrafico++; desenharGrafico.dir = "m3-tras"; desenharGrafico(); } } }, "◀"),
-    el("span", { style: "min-width:110px;text-align:center" }, titulo),
+    el("span", { style: "width:96px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums" }, titulo),
     el("button", { class: "b peq", title: "Dia seguinte", disabled: diaGrafico === 0, on: { click: () => { diaGrafico--; desenharGrafico.dir = "m3-frente"; desenharGrafico(); } } }, "▶"));
   const vez = desenharGrafico.vez = (desenharGrafico.vez || 0) + 1;   // cliques rapidos: vale so a ultima busca
   let corpo = caixa.querySelector(":scope > .corpo");
