@@ -14,8 +14,8 @@ namespace MhiagosControl
     internal sealed class SecaoDoServidor : IConteudoDeSecao
     {
         public readonly Secao Secao;
-        private readonly Label _estado, _nota, _lEndereco, _lChave;
-        private readonly CampoDeTexto _endereco, _chave;
+        private readonly Label _estado, _nota, _lExterno, _lInterno, _lChave;
+        private readonly CampoDeTexto _externo, _interno, _chave;
         private readonly FlatBtn _btSalvar, _btSinc, _btPagina, _btEsquecer;
         private bool _testando;
 
@@ -27,11 +27,16 @@ namespace MhiagosControl
             Secao = new Secao(T.ServidorSecao);
             Secao.Tag = this;
             _estado = Rotulo(Ui.FontMed, Ui.Text);
-            _lEndereco = Rotulo(Ui.FontSmall, Ui.Text);
-            _lEndereco.Text = T.ServidorEndereco;
-            _endereco = Campo();
-            _endereco.Texto = ServidorCasa.Endereco;
-            _endereco.Placeholder = "192.168.1.100:8765";
+            _lExterno = Rotulo(Ui.FontSmall, Ui.Text);
+            _lExterno.Text = T.ServidorEnderecoExterno;
+            _externo = Campo();
+            _externo.Texto = ServidorCasa.EnderecoExterno;
+            _externo.Placeholder = "https://home01.suarede.ts.net";
+            _lInterno = Rotulo(Ui.FontSmall, Ui.Text);
+            _lInterno.Text = T.ServidorEnderecoInterno;
+            _interno = Campo();
+            _interno.Texto = ServidorCasa.Endereco;
+            _interno.Placeholder = "192.168.1.100:8765";
             _lChave = Rotulo(Ui.FontSmall, Ui.Text);
             _lChave.Text = T.ServidorChave;
             _chave = Campo();
@@ -39,7 +44,7 @@ namespace MhiagosControl
             _btSalvar = Botao(T.ServidorSalvar, Salvar);
             _btSinc = Botao(T.ServidorSincronizar, delegate { ServidorCasa.Sincronizar(); });
             _btPagina = Botao(T.ServidorPagina, AbrirPagina);
-            _btEsquecer = Botao(T.ServidorEsquecer, delegate { ServidorCasa.Esquecer(); _endereco.Texto = ""; _chave.Texto = ""; Preencher(); });
+            _btEsquecer = Botao(T.ServidorEsquecer, delegate { ServidorCasa.Esquecer(); _externo.Texto = ""; _interno.Texto = ""; _chave.Texto = ""; Preencher(); });
             _btEsquecer.Danger = true;
             _nota = Rotulo(Ui.FontSmall, Ui.Muted);
             _nota.Text = T.ServidorNota;
@@ -96,15 +101,15 @@ namespace MhiagosControl
         private void Salvar()
         {
             if (_testando) return;
-            string endereco = _endereco.Texto.Trim(), chave = _chave.Texto.Trim();
-            if (endereco.Length == 0) return;
+            string externo = _externo.Texto.Trim(), interno = _interno.Texto.Trim(), chave = _chave.Texto.Trim();
+            if (externo.Length == 0 && interno.Length == 0) return;
             _testando = true;
             _btSalvar.Enabled = false;
             _estado.Text = T.ServidorTestando;
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string erro;
-                try { erro = ServidorCasa.Testar(endereco, chave); }
+                try { erro = ServidorCasa.TestarEnderecos(externo, interno, chave); }
                 catch (Exception ex) { erro = ex.Message; }
                 MethodInvoker volta = delegate
                 {
@@ -115,7 +120,7 @@ namespace MhiagosControl
                         _btSalvar.Enabled = true;
                         if (erro != null) { _estado.Text = T.ServidorFalhou(erro); return; }
                         _chave.Texto = "";
-                        ServidorCasa.Configurar(endereco, chave);
+                        ServidorCasa.Configurar(externo, interno, chave);
                         Preencher();
                     }
                     catch (Exception ex) { Log.Error("casa: salvar servidor", ex); }
@@ -131,7 +136,7 @@ namespace MhiagosControl
 
         private void AbrirPagina()
         {
-            string e = ServidorCasa.Endereco;
+            string e = ServidorCasa.EnderecoDaPagina;
             if (e.Length == 0) return;
             if (e.IndexOf("://", StringComparison.Ordinal) < 0) e = "http://" + e;
             // So http(s), e sem a elevacao do app: o endereco vem do casa.ini.
@@ -145,10 +150,13 @@ namespace MhiagosControl
             _estado.SetBounds(m, y, iw, Ui.S(22));
             y += Ui.S(28);
             int cw = (iw - Ui.S(12)) / 2;
-            _lEndereco.SetBounds(m, y, cw, Ui.S(18));
-            _lChave.SetBounds(m + cw + Ui.S(12), y, cw, Ui.S(18));
-            _endereco.SetBounds(m, y + Ui.S(20), cw, Ui.S(34));
-            _chave.SetBounds(m + cw + Ui.S(12), y + Ui.S(20), cw, Ui.S(34));
+            _lExterno.SetBounds(m, y, cw, Ui.S(18));
+            _lInterno.SetBounds(m + cw + Ui.S(12), y, cw, Ui.S(18));
+            _externo.SetBounds(m, y + Ui.S(20), cw, Ui.S(34));
+            _interno.SetBounds(m + cw + Ui.S(12), y + Ui.S(20), cw, Ui.S(34));
+            y += Ui.S(62);
+            _lChave.SetBounds(m, y, cw, Ui.S(18));
+            _chave.SetBounds(m, y + Ui.S(20), cw, Ui.S(34));
             y += Ui.S(62);
             int x = m;
             foreach (FlatBtn b in new[] { _btSalvar, _btSinc, _btPagina, _btEsquecer })
