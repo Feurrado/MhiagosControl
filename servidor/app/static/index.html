@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#17171A">
 <link rel="icon" href="/icone.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -293,6 +293,45 @@
     .passo span { display:none; }
     .passo:first-child span, .passo:last-child span, .passo.atual span { display:block; }
   }
+  /* ---------- celular: barra de abas embaixo, area segura, alvos de 44 px ---------- */
+  .colapsavel { padding:0; }
+  .colapsa-cab { all:unset; box-sizing:border-box; width:100%; cursor:pointer; display:flex; align-items:center; gap:10px; padding:12px 16px; min-height:48px; }
+  .colapsa-cab .tit-c { font-weight:600; flex:1; }
+  .colapsa-cab .res { color:var(--muted); font-size:13px; }
+  .colapsa-cab .res.perigo { color:var(--danger); font-weight:600; }
+  .colapsa-cab svg { width:18px; height:18px; color:var(--muted); transition:transform .18s; flex:none; }
+  .colapsavel.aberto .colapsa-cab svg { transform:rotate(180deg); }
+  .colapsa-cab:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; border-radius:8px; }
+  .colapsavel > .baixo { padding:0 16px 16px; }
+  #semrede { margin:0 0 12px; }
+  #ptr { height:0; overflow:hidden; text-align:center; color:var(--muted); font-size:12px; line-height:56px; transition:height .15s; }
+  #ptr.pronto { color:var(--accent-text); }
+  #toast.acao { pointer-events:auto; display:flex; align-items:center; }
+  #toast.vis:not(.acao) { display:block; }
+  .b:active:not(:disabled), .tile:active:not(:disabled), .redondo:active:not(:disabled), .liga:active:not(:disabled), .cena:active:not(:disabled), .item:active, .aj-item:active, .colapsa-cab:active { filter:brightness(.92); transform:scale(.98); }
+  @media (max-width:760px) {
+    body { padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
+    nav { position:fixed; top:auto; bottom:0; left:0; right:0; z-index:20; padding:6px 8px calc(6px + env(safe-area-inset-bottom)); gap:2px;
+      border-top:1px solid var(--border); }
+    .marca { display:none; }
+    .item { flex-direction:column; gap:3px; font-size:11px; min-height:50px; padding:6px 4px; margin:0; }
+    .item.ativo::before { top:0; bottom:auto; left:22%; right:22%; width:auto; height:3px; }
+    main { padding:calc(14px + env(safe-area-inset-top)) 12px calc(86px + env(safe-area-inset-bottom)); }
+    #toast { bottom:calc(76px + env(safe-area-inset-bottom)); max-width:calc(100vw - 24px); }
+    #lerAgora { display:inline-block !important; }
+    .b { min-height:44px; padding:8px 16px; }
+    .b.peq { min-height:40px; }
+    input, select { font-size:16px; min-height:44px; }
+    .redondo { width:44px; height:44px; }
+    .chave-diag { width:44px; height:44px; }
+    .seg button { padding:10px 16px; }
+    .tile.horiz { min-height:48px; }
+    .cena { min-height:52px; }
+    .chavinha { min-height:44px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition:none !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; }
+  }
 </style>
 </head>
 <body>
@@ -300,12 +339,14 @@
   <nav>
     <div class="marca"><img src="/icone.png" alt=""><span>Mhiagos Control</span></div>
     <div class="perfil"><small>SERVIDOR DA CASA</small><b id="servidorNome">192.168.1.100</b></div>
-    <button class="item ativo" data-aba="painel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span>Casa</span></button>
+    <button class="item ativo" data-aba="painel" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span>Casa</span></button>
     <button class="item" data-aba="consumo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 20h16M7 16V11M12 16V6M17 16v-7"/></svg><span>Consumo</span></button>
     <button class="item" data-aba="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.38 5.50 L10.75 2.68 L13.25 2.68 L13.62 5.50 L15.46 6.26 L17.70 4.53 L19.47 6.30 L17.74 8.54 L18.50 10.38 L21.32 10.75 L21.32 13.25 L18.50 13.62 L17.74 15.46 L19.47 17.70 L17.70 19.47 L15.46 17.74 L13.62 18.50 L13.25 21.32 L10.75 21.32 L10.38 18.50 L8.54 17.74 L6.30 19.47 L4.53 17.70 L6.26 15.46 L5.50 13.62 L2.68 13.25 L2.68 10.75 L5.50 10.38 L6.26 8.54 L4.53 6.30 L6.30 4.53 L8.54 6.26 Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6"/></svg><span>Ajustes</span></button>
     <div class="rodape" id="rodape"></div>
   </nav>
   <main>
+    <div id="semrede" class="aviso perigo oculto" role="status"></div>
+    <div id="ptr" aria-hidden="true">Solte para atualizar</div>
     <div id="chave" class="cartao oculto" style="max-width:520px; margin-bottom:14px">
       <div class="cab"><div class="nomes"><div class="nome">Chave de acesso</div></div></div>
       <div class="corpo">
@@ -389,6 +430,7 @@ function el(tag, attrs, ...filhos) {
     else if (k === "class") e.className = v;
     else if (k === "style") e.style.cssText = v;
     else if (k in e) e[k] = v; else e.setAttribute(k, v);
+    if (k === "title" && tag === "button" && !(attrs && attrs["aria-label"])) e.setAttribute("aria-label", v);
   }
   for (const f of filhos.flat(Infinity)) if (f != null && f !== false) e.append(f);
   return e;
@@ -401,11 +443,14 @@ function svg(conteudo, viewBox) {
   return s;
 }
 
-function aviso(t) {
+function aviso(t, acao) {
   const x = $("toast");
   x.textContent = t; x.classList.add("vis");
-  clearTimeout(aviso.t); aviso.t = setTimeout(() => x.classList.remove("vis"), 3500);
+  x.classList.toggle("acao", !!acao);
+  if (acao) x.append(el("button", { class: "b peq", style: "margin-left:12px", on: { click: () => { x.classList.remove("vis"); acao.fazer(); } } }, acao.texto));
+  clearTimeout(aviso.t); aviso.t = setTimeout(() => x.classList.remove("vis"), acao ? 6000 : 3500);
 }
+const vibrar = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
 
 const hora = t => new Date(t * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 const dataHora = t => new Date(t * 1000).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -439,7 +484,7 @@ for (const b of document.querySelectorAll("nav .item")) b.onclick = () => trocar
 function trocarAba(a) {
   if (a === "ajustes" && abaAtual === "ajustes") ajAberto = false;   // tocar na aba de novo volta para a lista
   abaAtual = a;
-  for (const b of document.querySelectorAll("nav .item")) b.classList.toggle("ativo", b.dataset.aba === a);
+  for (const b of document.querySelectorAll("nav .item")) { const on = b.dataset.aba === a; b.classList.toggle("ativo", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); }
   for (const s of ["painel", "consumo", "ajustes"]) $("aba-" + s).classList.toggle("oculto", s !== a);
   if (a === "consumo") carregarConsumo();
   if (a === "ajustes") desenharAjustes();
@@ -482,17 +527,30 @@ async function atualizar() {
   if (!chave) { pedirChave(); return; }
   try {
     estado = await api("aparelhos");
+    marcarConexao(false);
     $("login").classList.toggle("oculto", estado.logado);
     desenharSituacao();
     if (abaAtual === "painel") desenharCartoes();
   } catch (e) {
-    if (e.message !== "chave") $("situacao").textContent = "Sem resposta do servidor: " + e.message;
+    if (e.message !== "chave") { $("situacao").textContent = "Sem resposta do servidor: " + e.message; marcarConexao(true); }
   }
 }
 
+let semConexao = false;
+function marcarConexao(fora) {
+  semConexao = fora;
+  const b = $("semrede");
+  if (fora) b.textContent = "Sem conexão com o servidor" + (estado && estado.ultimaLeitura ? ". Mostrando os dados de " + hora(estado.ultimaLeitura) + "." : ".");
+  b.classList.toggle("oculto", !fora);
+}
+window.addEventListener("offline", () => marcarConexao(true));
+window.addEventListener("online", () => { tudo(); });
+const haQuanto = t => { const s = Math.max(0, Math.round(Date.now() / 1000 - t)); return s < 60 ? "há " + s + " s" : s < 3600 ? "há " + Math.floor(s / 60) + " min" : "às " + hora(t); };
+
 function desenharSituacao() {
+  const velho = estado.logado && estado.ultimaLeitura && Date.now() / 1000 - estado.ultimaLeitura > Math.max(180, (estado.periodo || 60) * 3);
   const t = !estado.logado ? "Sem a conta ConnectLife"
-    : (estado.ultimaLeitura ? "Atualizado às " + hora(estado.ultimaLeitura) : "Lendo…") + "  ·  ConnectLife" + (estado.erro ? "  ·  " + estado.erro : "");
+    : (estado.ultimaLeitura ? "Atualizado " + haQuanto(estado.ultimaLeitura) + (velho ? " (dados antigos)" : "") : "Lendo…") + "  ·  ConnectLife" + (estado.erro ? "  ·  " + estado.erro : "");
   if ($("situacao").textContent !== t) $("situacao").textContent = t;
   const r = estado.logado ? "Lendo a nuvem a cada " + estado.periodo + " s" : "";
   if ($("rodape").textContent !== r) $("rodape").textContent = r;
@@ -501,12 +559,18 @@ function desenharSituacao() {
 const enviadoEm = {};
 
 /** O botao muda na hora e gira ate a leitura da nuvem confirmar (ou 20 s), como no app. */
-async function comando(a, p, opts) {
+const DESFAZIVEL = ["t_power", "t_work_mode", "t_fan_speed"];
+async function comando(a, p, opts, semDesfazer) {
+  vibrar(12);
+  const anterior = {};
+  for (const k of Object.keys(p)) anterior[k] = String(valor(a, k));
+  const desfazivel = !semDesfazer && Object.keys(p).every(k => DESFAZIVEL.includes(k) && anterior[k] !== String(p[k]));
   pendente[a.puid] = Object.assign(pendente[a.puid] || {}, p);
   const quando = enviadoEm[a.puid] = Date.now();
   desenharCartoes();
   try { await api("aparelhos/" + a.puid + "/comando", "POST", Object.assign({ props: p }, opts || {})); }
   catch (e) { aviso("Comando falhou: " + e.message); delete pendente[a.puid]; desenharCartoes(); return; }
+  if (desfazivel) aviso("Comando enviado", { texto: "Desfazer", fazer: () => comando(a, anterior, opts, true) });
   setTimeout(() => { if (enviadoEm[a.puid] === quando && pendente[a.puid]) { delete pendente[a.puid]; desenharCartoes(); } }, 20000);
 }
 
@@ -758,10 +822,23 @@ function cartaoAr(a) {
   const cartao = el("div", { class: "cartao" }, cabecalho(a, icTermometro()),
     el("div", { class: "corpo" },
       el("div", { class: "ar" }, esquerda, direita),
-      el("div", { class: "baixo" }, cenas, timer),
+      painelAuxiliar(a, u, cenas, timer, tm, rt, falho),
       funcoes,
       u.diag ? blocoDiagnostico(a, i.falhas.map(x => x.nome)) : null));
   return cartao;
+}
+
+/** Cenas e desligar automaticamente num painel so, fechado por padrao; o resumo mostra o que importa com ele fechado. */
+function painelAuxiliar(a, u, cenas, timer, tm, rt, falho) {
+  const aberto = !!u.aux;
+  const resumo = falho ? ["Timer falhou", true] : tm ? ["Desliga às " + hora(tm.quando), false] : rt ? ["Volta ao padrão às " + hora(rt.quando), false]
+    : [(pref ? pref.dados.cenas.length : 0) + " cenas", false];
+  return el("div", { class: "sub-cartao colapsavel" + (aberto ? " aberto" : ""), style: "margin-top:18px" },
+    el("button", { class: "colapsa-cab", "aria-expanded": String(aberto), "data-id": a.puid + "aux",
+      on: { click: () => { u.aux = !u.aux; desenharCartoes(); } } },
+      el("span", { class: "tit-c" }, "Cenas e desligar automaticamente"),
+      el("span", { class: "res" + (resumo[1] ? " perigo" : "") }, resumo[0]), icSeta()),
+    aberto ? el("div", { class: "baixo", style: "margin-top:12px" }, cenas, timer) : null);
 }
 
 function resumoCena(c, a) {
@@ -869,7 +946,12 @@ async function baixar(caminho, nome) {
   try {
     const r = await fetch("/api/" + caminho, { headers: { "Authorization": "Bearer " + chave } });
     if (!r.ok) throw new Error("HTTP " + r.status);
-    const url = URL.createObjectURL(await r.blob());
+    const blob = await r.blob();
+    const arq = new File([blob], nome, { type: "text/csv" });
+    if (navigator.canShare && navigator.canShare({ files: [arq] }) && matchMedia("(max-width:760px)").matches) {
+      try { await navigator.share({ files: [arq], title: nome }); return; } catch (e) { if (e.name === "AbortError") return; }
+    }
+    const url = URL.createObjectURL(blob);
     el("a", { href: url, download: nome }).click();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   } catch (e) { aviso("Exportar falhou: " + e.message); }
@@ -1292,12 +1374,42 @@ async function escutar() {
   }
 }
 
-tudo();
+tudo().then(atalho);
 escutar();
+
+/** Atalhos da tela inicial (manifest): /?acao=ligar, desligar, timer60 ou /?aba=consumo. */
+function atalho() {
+  const q = new URLSearchParams(location.search);
+  if (![...q.keys()].length) return;
+  history.replaceState(null, "", "/");
+  if (["painel", "consumo", "ajustes"].includes(q.get("aba"))) trocarAba(q.get("aba"));
+  const ar = estado && estado.lista.find(ehAr), ac = q.get("acao");
+  if (!ar || !ac) return;
+  if (ac === "ligar") comando(ar, { t_power: "1" });
+  else if (ac === "desligar") comando(ar, { t_power: "0" });
+  else if (/^timer\d+$/.test(ac)) definirTimer(ar, parseInt(ac.slice(5)));
+}
+
+// Puxar para atualizar (no topo da pagina, so no toque).
+(function () {
+  let y0 = null, d = 0;
+  const p = $("ptr");
+  document.addEventListener("touchstart", e => { y0 = scrollY === 0 && e.touches.length === 1 ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  document.addEventListener("touchmove", e => {
+    if (y0 == null) return;
+    d = e.touches[0].clientY - y0;
+    if (d > 0 && scrollY === 0) { p.style.height = Math.min(56, d / 2) + "px"; p.classList.toggle("pronto", d > 110); }
+  }, { passive: true });
+  document.addEventListener("touchend", () => {
+    if (y0 == null) return;
+    const ir = d > 110; y0 = null; p.style.height = ""; p.classList.remove("pronto");
+    if (ir) { vibrar(10); $("lerAgora").click(); }
+  });
+})();
 // Rede reserva: se a espera longa cair sem erro, a pagina ainda se atualiza.
 setInterval(() => { if (!document.hidden) tudo(); }, 30000);
 // O relogio do timer e o tempo restante andam sem leitura nova.
-setInterval(() => { if (!document.hidden && abaAtual === "painel") desenharCartoes(); }, 20000);
+setInterval(() => { if (!document.hidden && abaAtual === "painel") desenharCartoes(); if (!document.hidden && estado) desenharSituacao(); }, 20000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) tudo(); });
 window.addEventListener("resize", () => {
   clearTimeout(desenharGrafico.t);
