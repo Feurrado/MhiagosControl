@@ -64,7 +64,7 @@ def ventilador(v, tipo):
         return VENTO_009[v]
     if tipo == "008" and v in VENTO_008:
         return VENTO_008[v]
-    return "Auto" if v == 0 else "Velocidade %d" % v
+    return "Auto" if v == 0 else "Nível %d" % v
 
 
 def funcao(chave, nome_da_nuvem=None):

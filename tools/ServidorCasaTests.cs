@@ -38,6 +38,17 @@ namespace MhiagosControl
                 HistoricoDoAr.Limpar();
                 HistoricoDoAr.Carregar();
                 Igual(4, HistoricoDoAr.Amostras("A", t0.AddMinutes(-1)).Count, "servidor: juncao regravada no arquivo");
+
+                // So no fim (aqui, outro ar): acrescenta ao arquivo em vez de regravar tudo.
+                long antesBytes = new FileInfo(HistoricoDoAr.Arquivo).Length;
+                List<KeyValuePair<string, AmostraAr>> fim = new List<KeyValuePair<string, AmostraAr>>();
+                fim.Add(new KeyValuePair<string, AmostraAr>("B", Amostra(t0.AddMinutes(1), true)));
+                Igual(1, HistoricoDoAr.Mesclar(fim), "servidor: amostra depois da ultima entra");
+                Verdade(new FileInfo(HistoricoDoAr.Arquivo).Length > antesBytes, "servidor: amostra do fim acrescentada ao arquivo");
+                HistoricoDoAr.Limpar();
+                HistoricoDoAr.Carregar();
+                Verdade(HistoricoDoAr.Amostras("B", t0.AddMinutes(-1)).Count == 1 && HistoricoDoAr.Amostras("A", t0.AddMinutes(-1)).Count == 4,
+                    "servidor: acrescimo relido sem perder as outras");
                 Igual(2, HistoricoDoAr.Desde(t0.AddMinutes(6)).Count, "servidor: amostras para enviar desde a data");
 
                 CiclosDaLavadora.Zerar();

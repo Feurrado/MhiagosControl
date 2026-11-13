@@ -1,0 +1,168 @@
+# Casos compartilhados: a mesma entrada tem de dar o mesmo texto no app (C#) e no servidor (Python).
+# Formato: funcao|argumentos separados por virgula|texto esperado (em portugues).
+# Lido por servidor/tests/test_casos.py e por tools/CasosCompartilhadosTests.cs. Ao mudar uma tabela,
+# mude aqui tambem: os dois lados falham ate concordarem.
+programa|-1|Sem programa
+programa|0|Sem programa
+programa|1|Algodão + secagem
+programa|2|Sintético + secagem
+programa|3|Programa 3
+programa|4|Refrescar
+programa|5|Antialérgico
+programa|6|Limpeza do tambor
+programa|7|Algodão
+programa|8|Sintético
+programa|9|Eco 40-60
+programa|10|Lã
+programa|11|Rápido 15'
+programa|12|Misto
+programa|13|Programa 13
+programa|14|Centrifugar
+programa|15|Programa 15
+programa|16|Bebê
+programa|17|Programa 17
+programa|18|Roupa esportiva
+programa|19|Edredom
+programa|20|Enxaguar e centrifugar
+programa|21|Delicadas
+programa|22|Lavar e secar 60'
+programa|23|Programa 23
+programa|24|Camisas
+programa|25|Programa 25
+programa|26|Programa 26
+programa|27|Programa 27
+programa|28|Programa 28
+programa|29|Programa 29
+programa|30|Programa 30
+programa|31|Programa 31
+programa|32|Programa 32
+programa|33|Programa 33
+programa|34|Programa 34
+programa|35|Programa 35
+programa|36|Programa 36
+programa|37|Programa 37
+programa|38|Programa 38
+programa|39|Programa 39
+programa|40|Programa 40
+programa|41|Power 49'
+programa|42|Automático
+programa|43|Programa 43
+programa|44|Roupa de cama
+programa|45|Jeans
+programa|46|Programa 46
+programa|47|Programa 47
+programa|48|Programa 48
+programa|49|Programa 49
+programa|50|Programa 50
+programa|51|Programa 51
+programa|52|Programa 52
+programa|53|Programa 53
+programa|54|Programa 54
+programa|55|Lavagem à mão
+programa|56|Programa 56
+programa|57|Programa 57
+programa|58|Programa 58
+programa|59|Programa 59
+programa|99|Programa 99
+modo|-1|Modo -1
+modo|0|Ventilar
+modo|1|Calor
+modo|2|Frio
+modo|3|Desumidificar
+modo|4|Automático
+modo|5|ECO
+modo|6|Modo 6
+modo|7|Modo 7
+ventilador|0,009|Auto
+ventilador|1,009|Nível 1
+ventilador|2,009|Nível 2
+ventilador|3,009|Nível 3
+ventilador|4,009|Nível 4
+ventilador|5,009|Mínima
+ventilador|6,009|Baixa
+ventilador|7,009|Média
+ventilador|8,009|Alta
+ventilador|9,009|Máxima
+ventilador|10,009|Nível 10
+ventilador|0,008|Auto
+ventilador|1,008|Nível 1
+ventilador|2,008|Baixa
+ventilador|3,008|Média
+ventilador|4,008|Alta
+ventilador|5,008|Nível 5
+ventilador|6,008|Nível 6
+ventilador|7,008|Nível 7
+ventilador|8,008|Nível 8
+ventilador|9,008|Nível 9
+ventilador|10,008|Nível 10
+ventilador|0,007|Auto
+ventilador|1,007|Nível 1
+ventilador|2,007|Nível 2
+ventilador|3,007|Nível 3
+ventilador|4,007|Nível 4
+ventilador|5,007|Nível 5
+ventilador|6,007|Nível 6
+ventilador|7,007|Nível 7
+ventilador|8,007|Nível 8
+ventilador|9,007|Nível 9
+ventilador|10,007|Nível 10
+fase|0|
+fase|1|Pesando a roupa
+fase|2|Pré-lavagem
+fase|3|Lavando
+fase|4|Enxaguando
+fase|5|Amaciando
+fase|6|Antirrugas
+fase|7|Centrifugando
+fase|8|Secando
+fase|9|Arejando
+fase|10|Fim do programa
+fase|11|Aguardando o início programado
+fase|12|
+porta|0|--
+porta|1|destravada
+porta|2|travada
+porta|3|fechada
+porta|4|--
+temperatura|-1|Fria
+temperatura|0|Fria
+temperatura|1|10 °C
+temperatura|2|20 °C
+temperatura|3|30 °C
+temperatura|4|40 °C
+temperatura|5|50 °C
+temperatura|6|60 °C
+temperatura|7|70 °C
+temperatura|8|80 °C
+temperatura|9|90 °C
+centrifugacao|-1|Sem centrifugar
+centrifugacao|0|Sem centrifugar
+centrifugacao|1|100 rpm
+centrifugacao|2|200 rpm
+centrifugacao|3|300 rpm
+centrifugacao|4|400 rpm
+centrifugacao|5|500 rpm
+centrifugacao|6|600 rpm
+centrifugacao|7|700 rpm
+centrifugacao|8|800 rpm
+centrifugacao|9|900 rpm
+centrifugacao|10|1000 rpm
+centrifugacao|11|1100 rpm
+centrifugacao|12|1200 rpm
+centrifugacao|13|1300 rpm
+centrifugacao|14|1400 rpm
+centrifugacao|15|1500 rpm
+centrifugacao|16|1600 rpm
+secagem|0|Sem secagem
+secagem|1|Para passar
+secagem|2|Para vestir
+secagem|3|Para guardar
+secagem|4|Intensa
+secagem|5|5 min
+secagem|30|30 min
+secagem|90|90 min
+sujeira|0|Normal
+sujeira|1|Leve
+sujeira|2|Média
+sujeira|3|Pesada
+sujeira|4|Normal
