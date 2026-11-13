@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -46,6 +46,99 @@ namespace MhiagosControl
         public static bool Configurado
         {
             get { return !Desligado && (Endereco.Length > 0 || EnderecoExterno.Length > 0) && !string.IsNullOrEmpty(Chave); }
+        }
+
+        // ---------------- fonte da Casa ----------------
+
+        /// <summary>Formato de /api/aparelhos que este app entende (docs\CONTRATO-CASA.md).</summary>
+        internal const int ContratoMinimo = 1;
+        /// <summary>Depois de uma falha como fonte, a nuvem direta fica por este tempo.</summary>
+        internal const int FonteReservaSeg = 120;
+        /// <summary>Leitura do servidor mais velha que isto nao serve: ele esta sem falar com a nuvem.</summary>
+        internal const int FonteVelhaSeg = 300;
+        private static DateTime _fonteFalhouEm = DateTime.MinValue;
+
+        /// <summary>
+        /// O PC le e comanda a Casa pelo servidor (uma sessao so na nuvem, uma regra
+        /// so). Falso sem servidor, com servidorfonte=0, ou nos minutos seguintes a
+        /// uma falha dele: ai vale a nuvem direta.
+        /// </summary>
+        public static bool Fonte
+        {
+            get
+            {
+                if (!Configurado || !ServicoCasa.Pref.ServidorFonte) return false;
+                lock (_trava) return (DateTime.UtcNow - _fonteFalhouEm).TotalSeconds >= FonteReservaSeg;
+            }
+        }
+
+        internal static void FonteFalhou(Exception ex)
+        {
+            bool primeira;
+            lock (_trava)
+            {
+                primeira = (DateTime.UtcNow - _fonteFalhouEm).TotalSeconds >= FonteReservaSeg * 2;
+                _fonteFalhouEm = DateTime.UtcNow;
+            }
+            if (primeira) Log.Write("casa: servidor indisponivel como fonte (" + ex.Message + "), usando a nuvem direto");
+        }
+
+        /// <summary>Os aparelhos como o servidor leu. forcar pede a ele uma leitura nova antes.</summary>
+        public static List<Aparelho> Aparelhos(bool forcar)
+        {
+            return AparelhosDe(forcar ? Pedir("POST", "/api/aparelhos/ler", new Dictionary<string, object>())
+                                      : Pedir("GET", "/api/aparelhos", null));
+        }
+
+        /// <summary>A resposta de /api/aparelhos virando a lista do app. Lanca se nao serve como fonte.</summary>
+        internal static List<Aparelho> AparelhosDe(Dictionary<string, object> r)
+        {
+            if (r == null || Long(r, "contrato") < ContratoMinimo) throw new IOException(T.ServidorAntigo);
+            if (!Bool(r, "logado", false)) throw new IOException(T.ServidorSemConta);
+            long agora = Long(r, "agora"), lida = Long(r, "ultimaLeitura");
+            if (lida <= 0 || agora - lida > FonteVelhaSeg) throw new IOException(T.ServidorLeituraVelha);
+            List<object> lista = r.ContainsKey("lista") ? r["lista"] as List<object> : null;
+            if (lista == null) throw new IOException(T.ServidorAntigo);
+            List<Aparelho> l = new List<Aparelho>();
+            foreach (object o in lista)
+            {
+                Dictionary<string, object> d = o as Dictionary<string, object>;
+                if (d == null) continue;
+                Aparelho a = new Aparelho();
+                a.Puid = Json.Texto(d, "puid") ?? "";
+                a.DeviceId = Json.Texto(d, "deviceId") ?? "";
+                a.Apelido = Json.Texto(d, "apelido") ?? "";
+                a.Tipo = Json.Texto(d, "tipo") ?? "";
+                a.TipoNome = Json.Texto(d, "tipoNome") ?? "";
+                a.Modelo = (Json.Texto(d, "modelo") ?? "").Trim();
+                a.CodigoDoModelo = Json.Texto(d, "codigoDoModelo") ?? "";
+                a.Comodo = Json.Texto(d, "comodo") ?? "";
+                a.Online = Bool(d, "online", false);
+                Dictionary<string, object> st = d.ContainsKey("estado") ? d["estado"] as Dictionary<string, object> : null;
+                if (st != null)
+                    foreach (KeyValuePair<string, object> kv in st)
+                        a.Estado[kv.Key] = kv.Value is string ? (string)kv.Value : Json.Escrever(kv.Value);
+                if (a.Puid.Length > 0) l.Add(a);
+            }
+            return l;
+        }
+
+        /// <summary>Manda as propriedades pelo servidor; ele divide em partes e cuida do bipe. Lanca na falha.</summary>
+        public static void Comando(string puid, Dictionary<string, string> props, bool semBipe)
+        {
+            Pedir("POST", "/api/aparelhos/" + Uri.EscapeDataString(puid) + "/comando", CargaDoComando(props, semBipe));
+        }
+
+        internal static Dictionary<string, object> CargaDoComando(Dictionary<string, string> props, bool semBipe)
+        {
+            Dictionary<string, object> p = new Dictionary<string, object>();
+            foreach (KeyValuePair<string, string> kv in props) p[kv.Key] = kv.Value;
+            Dictionary<string, object> carga = new Dictionary<string, object>();
+            carga["props"] = p;
+            carga["semBipe"] = semBipe;
+            // Quem cancela o retorno da cena e o PC, pelo id do agendamento: aqui nunca e "manual".
+            carga["manual"] = false;
+            return carga;
         }
 
         // Depois de uma falha do externo, o interno vai primeiro por este tempo (sem esperar
@@ -658,6 +751,8 @@ namespace MhiagosControl
         public static string ServidorNaoConfigurado { get { return P("Sem servidor: só este PC lê os aparelhos.", "No server: only this PC reads the devices."); } }
         public static string ServidorNota { get { return P("O servidor continua lendo o ar e a lavadora com o PC desligado, guarda o histórico e dispara o timer de desligar e o retorno das cenas. Histórico, cenas, ajustes e timers são trocados com ele a cada minuto, então o que mudar no painel web aparece aqui. O endereço externo é tentado primeiro; se não responder, o app usa o interno. Deixe um dos dois vazio para usar só o outro.", "The server keeps reading the AC and washer with the PC off, stores the history and fires the off timer and scene return. History, scenes, settings and timers are exchanged every minute, so changes made on the web panel show up here. The external address is tried first; if it does not answer, the app uses the internal one. Leave one empty to use only the other."); } }
         public static string ServidorSemConta { get { return P("Servidor no ar, mas sem a conta ConnectLife: entre pela página do servidor.", "Server is up but has no ConnectLife account: sign in on the server page."); } }
+        public static string ServidorAntigo { get { return P("servidor antigo: atualize o servidor da casa", "old server: update the home server"); } }
+        public static string ServidorLeituraVelha { get { return P("o servidor está sem ler a nuvem", "the server is not reading the cloud"); } }
         public static string ServidorSemResposta { get { return P("o servidor não respondeu", "the server did not respond"); } }
         public static string ServidorChaveErrada { get { return P("chave de acesso recusada", "access key rejected"); } }
         public static string ServidorErroHttp(int c) { return P("o servidor respondeu " + c, "the server answered " + c); }

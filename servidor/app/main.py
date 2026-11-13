@@ -19,7 +19,10 @@ from pydantic import BaseModel, Field, model_validator
 from . import avisos, banco, casa, servico
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.6.1"
+VERSAO = "1.7.0"
+# Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
+# como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
+CONTRATO = 1
 CHAVE = os.environ.get("MHIAGOS_CHAVE", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -217,7 +220,7 @@ def estatico(nome: str):
 
 @app.get("/api/saude")
 def saude():
-    return {"versao": VERSAO, "pagina": _pagina()[1], "agora": int(time.time()), **servico.situacao()}
+    return {"versao": VERSAO, "contrato": CONTRATO, "pagina": _pagina()[1], "agora": int(time.time()), **servico.situacao()}
 
 
 # ---------------- conta ----------------
@@ -288,7 +291,8 @@ def _sem_bipe(pedido):
 
 
 def _estado_completo():
-    return {**servico.situacao(), "lista": _leves(servico.aparelhos()), "agendamentos": _agendamentos(),
+    return {"contrato": CONTRATO, "agora": int(time.time()), **servico.situacao(), "lista": _leves(servico.aparelhos()),
+            "agendamentos": _agendamentos(),
             "agendamentosFalhos": servico.falhas_recentes(int(time.time()) - 86400)}
 
 
