@@ -408,7 +408,11 @@ administradores gravam), engine\ com a DLL do HWiNFO quando houver.
 14. PENDENCIAS E DIVIDA CONHECIDA
 =====================================================================
 
-  - Separar a parte elevada (sensores e HID) da interface (hoje tudo e elevado).
+  - Separar a parte elevada da interface. Primeira metade feita (src\Nucleo.cs):
+    "MhiagosControl.exe --nucleo" serve HWiNFO e Libre por named pipe restrito ao
+    usuario, e a interface le por FonteRemota quando nao esta elevada ou com
+    MHIAGOS_NUCLEO=1. Falta: manifesto asInvoker, tarefa de logon do nucleo,
+    instalador e o que mais exige administrador (RTSS, tarefa agendada, specs).
   - O PC passar a usar o servidor como fonte unica da Casa (logica duplicada).
   - HTTPS na rede local (Caddy ou Tailscale) e assinatura de codigo.
   - Medir o custo por ciclo com o Bench.exe elevado; repouso medido: ~2,4% de um
