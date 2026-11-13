@@ -28,6 +28,7 @@ namespace MhiagosControl
             CasosCompartilhados();
             ContratoCasa();
             NucleoSeparado();
+            JanelaWebOrigem();
         }
 
         /// <summary>Fluidez: cache das curvas, quadro do widget, Casa sem refazer o que nao mudou, relogio da janela e fade da troca de pagina.</summary>

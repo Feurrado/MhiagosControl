@@ -16,7 +16,9 @@ $refs = @(
     (Join-Path $fw 'System.Drawing.dll'),
     (Join-Path $fw 'System.Windows.Forms.dll'),
     (Join-Path $fw 'System.Management.dll'),
-    (Join-Path $root 'lib\LibreHardwareMonitorLib.dll')
+    (Join-Path $root 'lib\LibreHardwareMonitorLib.dll'),
+    (Join-Path $root 'lib\Microsoft.Web.WebView2.Core.dll'),
+    (Join-Path $root 'lib\Microsoft.Web.WebView2.WinForms.dll')
 )
 
 # Os testes compilam contra os fontes do aplicativo, e nao contra o executavel:
@@ -44,6 +46,7 @@ $srcs += (Join-Path $root 'tools\ProducaoTests.cs')
 $srcs += (Join-Path $root 'tools\CasosCompartilhadosTests.cs')
 $srcs += (Join-Path $root 'tools\ContratoCasaTests.cs')
 $srcs += (Join-Path $root 'tools\NucleoTests.cs')
+$srcs += (Join-Path $root 'tools\JanelaWebTests.cs')
 $srcs += (Join-Path $root 'tools\Installer.cs')
 
 $arguments = @(
