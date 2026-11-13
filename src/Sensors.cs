@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using LibreHardwareMonitor.Hardware;
@@ -193,6 +193,8 @@ namespace MhiagosControl
         {
             LibreSensorSource libre = _fallback as LibreSensorSource; if (libre != null) libre.Foco = _foco;
             libre = _primary as LibreSensorSource; if (libre != null) libre.Foco = _foco;
+            FonteRemota remota = _fallback as FonteRemota; if (remota != null) remota.Foco = _foco;
+            remota = _primary as FonteRemota; if (remota != null) remota.Foco = _foco;
             if (_primary.Available) _primary.Refresh();
             if (_fallback.Available) _fallback.Refresh();
             if (_auxiliary.Available) _auxiliary.Refresh();

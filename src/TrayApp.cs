@@ -504,6 +504,10 @@ namespace MhiagosControl
                 return;
             }
 
+            // Nucleo: so serve os sensores que exigem administrador, sem bandeja nem janela.
+            // Antes do mutex de instancia unica: ele roda AO LADO da interface.
+            if (TemArgumento(Nucleo.Argumento)) { Nucleo.Rodar(); return; }
+
             bool createdNew;
             using (EventWaitHandle activation = new EventWaitHandle(
                 false, EventResetMode.AutoReset, ActivationName))
@@ -546,7 +550,7 @@ namespace MhiagosControl
 
                 try
                 {
-                    TrayContext contexto = new TrayContext(new Sensors(), new HidPanel(), activation);
+                    TrayContext contexto = new TrayContext(Nucleo.CriarSensores(), new HidPanel(), activation);
                     contexto.IniciarCasa();
                     Application.Run(contexto);
                 }
