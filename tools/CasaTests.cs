@@ -1093,7 +1093,7 @@ namespace MhiagosControl
             Igual(T.CasaFrio, TabelaDoAr.Modo(2, "008"), "2 e Frio");
             Igual(T.CasaSeco, TabelaDoAr.Modo(3, "008"), "3 e Desumidificar");
             Igual(T.CasaEco, TabelaDoAr.Modo(5, "008"), "5 e ECO");
-            Verdade(TabelaDoAr.IconeDoModo(5, "008") != null, "ECO tem icone proprio");
+            Verdade(VisualDoAr.IconeDoModo(5, "008") != null, "ECO tem icone proprio");
 
             Secao("casa: nome do modelo e icone centrado");
             Aparelho janela = new Aparelho();

@@ -123,7 +123,7 @@ namespace MhiagosControl
             Action fechar = delegate
             {
                 if (fModo == int.MinValue || fx1 <= fx0) return;
-                using (SolidBrush faixa = new SolidBrush(Color.FromArgb(Ui.Dark ? 40 : 46, TabelaDoAr.CorDoModo(fModo, _a.Tipo))))
+                using (SolidBrush faixa = new SolidBrush(Color.FromArgb(Ui.Dark ? 40 : 46, VisualDoAr.CorDoModo(fModo, _a.Tipo))))
                     g.FillRectangle(faixa, fx0, area.Y, fx1 - fx0, area.Height);
                 fModo = int.MinValue;
             };
