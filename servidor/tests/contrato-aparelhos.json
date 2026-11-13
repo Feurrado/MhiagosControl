@@ -1,0 +1,45 @@
+{
+ "contrato": 1,
+ "agora": 1794600000,
+ "logado": true,
+ "ultimaLeitura": 1794599990,
+ "erro": null,
+ "aparelhos": 2,
+ "periodo": 30,
+ "lista": [
+  {
+   "puid": "p-ar",
+   "deviceId": "d1",
+   "apelido": "Gil do Frio",
+   "tipo": "008",
+   "tipoNome": "Ar",
+   "modelo": "301",
+   "codigoDoModelo": "301",
+   "comodo": "Quarto",
+   "online": true,
+   "estado": {
+    "t_power": "1",
+    "t_temp": "23",
+    "f_temp_in": "22",
+    "t_work_mode": "2",
+    "t_fan_speed": "2"
+   }
+  },
+  {
+   "puid": "p-lav",
+   "deviceId": "d2",
+   "apelido": "",
+   "tipo": "025",
+   "tipoNome": "Lava e seca",
+   "modelo": "WD",
+   "codigoDoModelo": "1wj110009v0t",
+   "comodo": "",
+   "online": false,
+   "estado": {
+    "Current_program_phase": "0"
+   }
+  }
+ ],
+ "agendamentos": [],
+ "agendamentosFalhos": []
+}

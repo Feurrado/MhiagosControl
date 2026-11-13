@@ -25,6 +25,14 @@ namespace MhiagosControl
         private static Timer _ciclo, _timerDesligar, _timerRetorno;
         private static bool _visivel, _buscando, _simulado, _iniciado;
         private static DateTime _ultimaLeitura = DateTime.MinValue;
+        /// <summary>
+        /// Ultima leitura feita direto na nuvem. Com o servidor como fonte o login do
+        /// PC ficaria sem uso; uma leitura direta a cada HorasEntreDiretas mantem a
+        /// reserva valendo (o refresh token gira e vence se ninguem renova).
+        /// </summary>
+        private static DateTime _ultimaDireta = DateTime.MinValue;
+        internal const int HorasEntreDiretas = 6;
+        private static bool _forcarLeitura;
         private static string _erro;
 
         /// <summary>
@@ -247,7 +255,7 @@ namespace MhiagosControl
             if (nuvem == null) { lock (_trava) _buscando = false; return; }
             try
             {
-                List<Aparelho> lista = nuvem.ListarAparelhos();
+                List<Aparelho> lista = ListarPelaFonte(nuvem);
                 ComMeta(nuvem, lista);
                 lock (_trava)
                 {
@@ -295,6 +303,36 @@ namespace MhiagosControl
                 lock (_trava) _buscando = false;
                 Avisar();
             }
+        }
+
+        /// <summary>
+        /// A lista pelo servidor da casa, quando ele e a fonte; senao (ou se ele
+        /// falhar) direto da nuvem, como sempre foi.
+        /// </summary>
+        private static List<Aparelho> ListarPelaFonte(ConnectLifeNuvem nuvem)
+        {
+            bool forcar, diretaVencida;
+            lock (_trava)
+            {
+                forcar = _forcarLeitura; _forcarLeitura = false;
+                diretaVencida = (DateTime.UtcNow - _ultimaDireta).TotalHours >= HorasEntreDiretas;
+            }
+            if (!diretaVencida && ServidorCasa.Fonte)
+            {
+                try { return ServidorCasa.Aparelhos(forcar); }
+                catch (Exception ex) { ServidorCasa.FonteFalhou(ex); }
+            }
+            List<Aparelho> lista = nuvem.ListarAparelhos();
+            lock (_trava) _ultimaDireta = DateTime.UtcNow;
+            return lista;
+        }
+
+        /// <summary>Um comando pelo servidor da casa, quando ele e a fonte. Falso: mande direto.</summary>
+        private static bool DefinirPeloServidor(string puid, Dictionary<string, string> props, bool semBipe)
+        {
+            if (!ServidorCasa.Fonte) return false;
+            try { ServidorCasa.Comando(puid, props, semBipe); return true; }
+            catch (Exception ex) { ServidorCasa.FonteFalhou(ex); return false; }
         }
 
         private static readonly Dictionary<string, Dictionary<string, MetaPropriedade>> _metas =
@@ -382,7 +420,9 @@ namespace MhiagosControl
                 Exception erro = null;
                 try
                 {
-                    List<Dictionary<string, string>> partes = Partes(props);
+                    // Pelo servidor vai tudo num pedido so: ele divide em partes e cuida do bipe.
+                    List<Dictionary<string, string>> partes = DefinirPeloServidor(puid, props, semBipe)
+                        ? new List<Dictionary<string, string>>() : Partes(props);
                     for (int i = 0; i < partes.Count; i++)
                     {
                         // Um respiro entre partes: o aparelho processa um comando por vez.
@@ -439,12 +479,13 @@ namespace MhiagosControl
                     {
                         Dictionary<string, string> p = new Dictionary<string, string>();
                         p["t_device_info"] = "1";
-                        nuvem.Definir(a.Puid, p);
+                        if (!DefinirPeloServidor(a.Puid, p, false)) nuvem.Definir(a.Puid, p);
                         pediu = true;
                     }
                     catch (Exception ex) { Log.Write("ConnectLife: t_device_info recusado: " + ex.Message); }
                 }
                 if (pediu) Thread.Sleep(3000);
+                lock (_trava) _forcarLeitura = true;   // pelo servidor: pede a ele uma leitura nova
                 LerAgora();
             });
         }
@@ -822,6 +863,8 @@ namespace MhiagosControl
         public string Servidor = "";
         /// <summary>Endereco externo (https pela internet): tentado primeiro; o interno (Servidor) e a reserva.</summary>
         public string ServidorExterno = "";
+        /// <summary>Com o servidor configurado, ler e comandar por ele; a nuvem direta fica de reserva.</summary>
+        public bool ServidorFonte = true;
         public long ServidorArAte, ServidorCiclosAte, ServidorEnviadoAte, ServidorDesligarId, ServidorRetornoId, ServidorPrefVersao;
         /// <summary>Resumo das preferencias compartilhadas na ultima troca com o servidor: diferente, mudaram aqui.</summary>
         public string ServidorPrefHash = "";
@@ -892,6 +935,7 @@ namespace MhiagosControl
                         case "climaem": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ClimaEmUtc = l; break;
                         case "servidor": p.Servidor = v; break;
                         case "servidorexterno": p.ServidorExterno = v; break;
+                        case "servidorfonte": p.ServidorFonte = v != "0"; break;
                         case "servidorarate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorArAte = l; break;
                         case "servidorciclosate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorCiclosAte = l; break;
                         case "servidorenviadoate": if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out l)) p.ServidorEnviadoAte = l; break;
@@ -950,6 +994,7 @@ namespace MhiagosControl
             sb.AppendLine("climaem=" + ClimaEmUtc.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidor=" + (Servidor ?? ""));
             sb.AppendLine("servidorexterno=" + (ServidorExterno ?? ""));
+            sb.AppendLine("servidorfonte=" + (ServidorFonte ? "1" : "0"));
             sb.AppendLine("servidorarate=" + ServidorArAte.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidorciclosate=" + ServidorCiclosAte.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("servidorenviadoate=" + ServidorEnviadoAte.ToString(CultureInfo.InvariantCulture));
