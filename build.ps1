@@ -45,7 +45,9 @@ $refs = @(
     (Join-Path $fw 'System.Drawing.dll'),
     (Join-Path $fw 'System.Windows.Forms.dll'),
     (Join-Path $fw 'System.Management.dll'),
-    (Join-Path $root 'lib\LibreHardwareMonitorLib.dll')
+    (Join-Path $root 'lib\LibreHardwareMonitorLib.dll'),
+    (Join-Path $root 'lib\Microsoft.Web.WebView2.Core.dll'),
+    (Join-Path $root 'lib\Microsoft.Web.WebView2.WinForms.dll')
 )
 $srcs = Get-ChildItem (Join-Path $root 'src') -Filter *.cs | ForEach-Object { $_.FullName }
 

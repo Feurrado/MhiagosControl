@@ -147,6 +147,9 @@ namespace MhiagosControl
         private const int LimiteDoPrimeiroMs = 5000;
         private static DateTime _externoFalhouEm = DateTime.MinValue;
 
+        /// <summary>A chave para a pagina do proprio servidor (JanelaWeb); nunca vai para log nem para outra origem.</summary>
+        internal static string ChaveDaPagina { get { return Chave; } }
+
         private static string Chave
         {
             get
