@@ -487,7 +487,7 @@ namespace MhiagosControl
             _modo.Itens.Add(Item(-1, T.CasaManter, IconesCasa.Manter));
             MetaPropriedade m;
             if (a != null && a.Meta != null && a.Meta.TryGetValue("t_work_mode", out m))
-                foreach (int v in m.Valores) _modo.Itens.Add(Item(v, TabelaDoAr.Modo(v, a.Tipo), TabelaDoAr.IconeDoModo(v, a.Tipo)));
+                foreach (int v in m.Valores) _modo.Itens.Add(Item(v, TabelaDoAr.Modo(v, a.Tipo), VisualDoAr.IconeDoModo(v, a.Tipo)));
             _modo.Selecionado = c.Modo;
             _modo.Visible = _lbModo.Visible = _modo.Itens.Count > 1;
 

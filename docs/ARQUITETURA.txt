@@ -361,7 +361,8 @@ administradores gravam), engine\ com a DLL do HWiNFO quando houver.
                            HwInfo, Rtss, ReadingSnapshot, RuntimeContracts
   Configuracao:            Profiles (Config, Profile), ConfigTiming,
                            ConfigurationBackup, SettingsSession, GameBindingList
-  Interface:               SettingsForm*.cs, PageLayouts, VisaoNova, Ui, Theme,
+  Interface:               SettingsForm*.cs, PageLayouts, VisaoNova, Ui (tokens), UiControles,
+                           UiNavegacao, Theme,
                            Motion, CollapsiblePanel, MenuTema, Mica, SplashForm,
                            FaixaDeAviso, ErroInesperado, Lang
   Metricas e specs:        MetricHistory, WindowNavigator, SpecSheet, SpecMosaic,
@@ -369,6 +370,9 @@ administradores gravam), engine\ com a DLL do HWiNFO quando houver.
   Perifericos:             Peripherals, PeripheralStrip, BatteryHistory,
                            BatteryPage, BatteryWidget, WidgetDeBateria.*
   Casa:                    ConnectLife, Casa*.cs, Clima, ClimaAjustes, Cofre
+                           (sem desenho: CasaServico, CasaPreferencias, CasaAlertas,
+                           CasaDiagnostico, CasaHistorico, CasaArModelo; desenho:
+                           CasaArDesenho, CasaAr, CasaLavadora, CasaPage)
   Sistema:                 Autostart, TaskbarIdentity, AliasDoWindows, Navegador,
                            PawnIo, Reinicio, GravacaoAtomica, Log (e Paths),
                            AssemblyInfo
