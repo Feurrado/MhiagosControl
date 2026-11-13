@@ -1314,12 +1314,18 @@ namespace MhiagosControl
         /// <summary>
         /// Junta amostras de fora (o servidor da casa): entra so a que nao tem
         /// outra do mesmo ar a menos de 25 s, que e o PC e o servidor lendo a
-        /// mesma hora. Devolve quantas entraram; regrava o arquivo em ordem.
+        /// mesma hora. Devolve quantas entraram; o arquivo fica em ordem.
         /// </summary>
         public static int Mesclar(List<KeyValuePair<string, AmostraAr>> fora)
         {
             DateTime corte = DateTime.Now.AddDays(-Dias);
             int n = 0;
+            // O caso de todo minuto e a amostra nova do servidor entrar no FIM da
+            // serie: essa so se acrescenta ao arquivo, como faz o Registrar. Regravar
+            // tudo (centenas de KB, dentro da trava) fica para quando alguma entra no
+            // meio, que e a lacuna de quando o PC esteve desligado.
+            bool noMeio = false;
+            StringBuilder novas = new StringBuilder();
             lock (_trava)
             {
                 foreach (KeyValuePair<string, AmostraAr> kv in fora)
@@ -1329,10 +1335,17 @@ namespace MhiagosControl
                     int i = l.FindLastIndex(x => x.Quando <= kv.Value.Quando);
                     if (i >= 0 && (kv.Value.Quando - l[i].Quando).TotalSeconds < 25) continue;
                     if (i + 1 < l.Count && (l[i + 1].Quando - kv.Value.Quando).TotalSeconds < 25) continue;
+                    if (i + 1 < l.Count) noMeio = true;
+                    else novas.Append(Linha(kv.Key, kv.Value));
                     l.Insert(i + 1, kv.Value);
                     n++;
                 }
-                if (n > 0) Regravar();
+                if (noMeio) Regravar();
+                else if (n > 0)
+                {
+                    try { File.AppendAllText(Arquivo, novas.ToString(), new UTF8Encoding(false)); }
+                    catch (Exception ex) { Log.Error("casa: gravar historico", ex); }
+                }
             }
             return n;
         }

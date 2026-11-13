@@ -41,6 +41,7 @@ $srcs += (Join-Path $root 'tools\RevisaoVisualTests.cs')
 $srcs += (Join-Path $root 'tools\CasaTests.cs')
 $srcs += (Join-Path $root 'tools\ServidorCasaTests.cs')
 $srcs += (Join-Path $root 'tools\ProducaoTests.cs')
+$srcs += (Join-Path $root 'tools\CasosCompartilhadosTests.cs')
 $srcs += (Join-Path $root 'tools\Installer.cs')
 
 $arguments = @(
@@ -53,7 +54,8 @@ $arguments = @(
     ('/resource:' + (Join-Path $root 'assets\g325.png')            + ',MhiagosControl.g325.png'),
     ('/resource:' + (Join-Path $root 'assets\prox.png')            + ',MhiagosControl.prox.png'),
     ('/resource:' + (Join-Path $root 'assets\x11.png')             + ',MhiagosControl.x11.png'),
-    ('/resource:' + (Join-Path $root 'assets\bluetooth.png')       + ',MhiagosControl.bluetooth.png')
+    ('/resource:' + (Join-Path $root 'assets\bluetooth.png')       + ',MhiagosControl.bluetooth.png'),
+    ('/resource:' + (Join-Path $root 'servidor\tests\casos-tabelas.txt') + ',MhiagosControl.casos-tabelas.txt')
 )
 foreach ($r in $refs) { $arguments += ('/reference:' + $r) }
 $arguments += $srcs
