@@ -104,6 +104,8 @@ namespace MhiagosControl
 
         // ---------------- recursos embutidos ----------------
 
+        internal static readonly string[] ImagensDoApp = { "cooler.png", "g325.png", "prox.png", "x11.png", "bluetooth.png", "app.ico" };
+
         /// <summary>O nome do recurso de um caminho da origem do app; nulo se o caminho nao e um arquivo da interface.</summary>
         internal static string Recurso(string url)
         {
@@ -112,6 +114,8 @@ namespace MhiagosControl
             if (!string.Equals(u.GetLeftPart(UriPartial.Authority), OrigemDoApp, StringComparison.OrdinalIgnoreCase)) return null;
             string caminho = u.AbsolutePath.TrimStart('/');
             if (caminho.Length == 0) caminho = "app.html";
+            // Imagens que o executavel ja leva (cooler, aparelhos, icone): servidas pelo nome, sem pastas.
+            if (Array.IndexOf(ImagensDoApp, caminho) >= 0) return "MhiagosControl." + caminho;
             // So nomes simples: sem pastas, sem "..", sem nada que nao seja um arquivo da interface.
             foreach (char c in caminho)
                 if (!(char.IsLetterOrDigit(c) || c == '.' || c == '-' || c == '_')) return null;
@@ -126,6 +130,7 @@ namespace MhiagosControl
             if (recurso.EndsWith(".js", StringComparison.OrdinalIgnoreCase)) return "text/javascript; charset=utf-8";
             if (recurso.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)) return "image/svg+xml";
             if (recurso.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) return "image/png";
+            if (recurso.EndsWith(".ico", StringComparison.OrdinalIgnoreCase)) return "image/x-icon";
             return "application/octet-stream";
         }
 
@@ -280,17 +285,21 @@ namespace MhiagosControl
         private string EscolherArquivo(bool salvar, string tipo, string sugerido)
         {
             if (IsDisposed) return null;
-            bool backup = tipo == "backup";
-            string filtro = backup ? "Mhiagos backup (*.mhiagos-backup)|*.mhiagos-backup" : T.ProfileFilter;
+            bool backup = tipo == "backup", exe = tipo == "exe", txt = tipo == "txt";
+            string filtro = backup ? "Mhiagos backup (*.mhiagos-backup)|*.mhiagos-backup"
+                          : exe ? "Executable (*.exe)|*.exe"
+                          : txt ? "Text (*.txt)|*.txt" : T.ProfileFilter;
             FileDialog d = salvar ? (FileDialog)new SaveFileDialog() : new OpenFileDialog();
             using (d)
             {
                 d.Filter = filtro;
-                d.Title = backup ? (salvar ? T.BackupCreate : T.BackupRestore) : (salvar ? T.ExportProfile : T.ImportProfile);
+                d.Title = backup ? (salvar ? T.BackupCreate : T.BackupRestore)
+                        : exe ? T.GameBrowse : txt ? T.DiagnosticTitle
+                        : (salvar ? T.ExportProfile : T.ImportProfile);
                 if (salvar)
                 {
                     d.AddExtension = true;
-                    d.DefaultExt = backup ? "mhiagos-backup" : "ini";
+                    d.DefaultExt = backup ? "mhiagos-backup" : txt ? "txt" : "ini";
                     d.FileName = sugerido ?? "";
                 }
                 else ((OpenFileDialog)d).CheckFileExists = true;
