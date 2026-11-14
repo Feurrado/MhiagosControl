@@ -790,99 +790,224 @@
 
   // ---------------- Visao geral ----------------
 
-  function mostradores() {
-    var n1 = el("span", "n"), u1 = el("span", "u"), n2 = el("span", "n"), u2 = el("span", "u");
-    var caixa = el("div", "mostradores", null,
-      el("div", "mostrador", null, n1, u1), el("div", "mostrador", null, n2, u2));
-    caixa.atualizar = function () {
-      var p = E ? E.painel : null;
-      function por(n, v) { n.textContent = v === null || v === undefined ? "--" : String(v); n.classList.toggle("sem", v === null || v === undefined); }
-      por(n1, p ? p.p1 : null);
-      por(n2, p ? p.p2 : null);
-      u1.textContent = p && p.fahrenheit ? "°F" : "°C";
-      u2.textContent = p && !p.percent ? "W" : "%";
-    };
-    return caixa;
-  }
-
-  function seloDoPainel() {
-    var s = el("span", "marca");
-    s.atualizar = function () {
-      var p = E ? E.painel : null;
-      if (!p) { s.className = "marca"; s.textContent = "…"; return; }
-      if (p.pausado) { s.className = "marca aviso"; s.textContent = t("Pausado", "Paused"); }
-      else if (p.conectado) { s.className = "marca ok"; s.textContent = t("Conectado", "Connected"); }
-      else { s.className = "marca erro"; s.textContent = t("Painel não encontrado", "Panel not found"); }
-    };
-    return s;
-  }
-
   function nomeDoSensor(id) {
     var s = sensor(id);
     return s ? s.rotulo : id ? t("sensor ausente", "missing sensor") : t("nenhum", "none");
   }
 
-  MONTAR.visao = function (alvo) {
-    var grade = el("div", "grade larga");
-    var m = mostradores(), selo = seloDoPainel();
-    var legenda = el("div", "legenda");
-    var painel = cartaoSimples(t("Painel do cooler", "Cooler panel"), "duplo");
-    painel.appendChild(m);
-    painel.appendChild(legenda);
-    var pe = el("div", "inline");
-    pe.style.marginTop = "12px";
-    pe.appendChild(selo);
-    var pausar = el("button", "b");
-    pausar.type = "button";
-    pausar.addEventListener("click", function () { pedir("pausar").catch(function (e) { faixa(e.message, true); }); });
-    pe.appendChild(pausar);
-    painel.appendChild(pe);
-    grade.appendChild(painel);
+  /// "SÁB 14/11 · 19:05", como Visao.Data.
+  function dataDeAgora() {
+    var d = new Date(), loc = S.pt ? "pt-BR" : "en-US";
+    var dia = d.toLocaleDateString(loc, { weekday: "short" }).replace(".", "").toUpperCase();
+    var dm = S.pt ? ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2)
+                  : ("0" + (d.getMonth() + 1)).slice(-2) + "/" + ("0" + d.getDate()).slice(-2);
+    return dia + " " + dm + " · " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+  }
 
-    var destaque = cartaoSimples(t("Sensores acompanhados", "Tracked sensors"));
-    var linhasDeSensor = [];
-    if (S.metricas.length === 0)
-      destaque.appendChild(el("div", "vazio", t("Escolha sensores na página Métricas.", "Pick sensors on the Metrics page.")));
-    else {
-      var ls = el("div", "linhas");
-      S.metricas.forEach(function (id) {
-        var l = linha(nomeDoSensor(id), "--");
-        l.sensor = id;
-        l.firstChild.className = "k livre";
-        linhasDeSensor.push(l);
-        ls.appendChild(l);
-      });
-      destaque.appendChild(ls);
+  function corDoValor(unidade, v, atencao, perigo) {
+    if (v !== null && perigo !== null && perigo !== undefined && v >= perigo) return "var(--danger)";
+    if (v !== null && atencao !== null && atencao !== undefined && v >= atencao) return "var(--warn)";
+    return unidade === "°C" || unidade === "°F" ? "var(--quente)" : "var(--accent-text)";
+  }
+
+  /// A curva de fundo de um bloco: area sob a linha e a media tracejada, como o MetricCard.
+  function desenharCurva(canvas, pontos, cor) {
+    var r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    var w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+    var g = canvas.getContext("2d");
+    g.clearRect(0, 0, w, h);
+    var vals = (pontos || []).filter(function (v) { return v !== null; });
+    if (vals.length < 2) return null;
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    var soma = 0; vals.forEach(function (v) { soma += v; });
+    var media = soma / vals.length;
+    var topo = h * 0.55, base = h - 2 * dpr;
+    var folga = (max - min) * 0.1 || Math.max(1, Math.abs(max) * 0.05);
+    var lo = min - folga, hi = max + folga, n = pontos.length;
+    function x(k) { return k * (w - 1) / (n - 1); }
+    function y(v) { return base - (v - lo) / (hi - lo) * (base - topo); }
+    var cheio = g.createLinearGradient(0, topo, 0, base);
+    cheio.addColorStop(0, cor + "55"); cheio.addColorStop(1, cor + "11");
+    g.beginPath();
+    var aberto = false, ultimo = 0, primeiro = 0;
+    for (var i = 0; i < n; i++) {
+      if (pontos[i] === null) continue;
+      if (!aberto) { g.moveTo(x(i), base); g.lineTo(x(i), y(pontos[i])); aberto = true; primeiro = i; }
+      else g.lineTo(x(i), y(pontos[i]));
+      ultimo = i;
     }
-    grade.appendChild(destaque);
+    g.lineTo(x(ultimo), base); g.closePath();
+    g.fillStyle = cheio; g.fill();
+    g.beginPath();
+    var solto = true;
+    for (i = 0; i < n; i++) {
+      if (pontos[i] === null) { solto = true; continue; }
+      if (solto) g.moveTo(x(i), y(pontos[i])); else g.lineTo(x(i), y(pontos[i]));
+      solto = false;
+    }
+    g.strokeStyle = cor; g.lineWidth = 1.2 * dpr; g.lineJoin = "round"; g.stroke();
+    g.beginPath();
+    g.setLineDash([4 * dpr, 4 * dpr]);
+    g.moveTo(0, y(media)); g.lineTo(w, y(media));
+    g.strokeStyle = cor + "99"; g.lineWidth = dpr; g.stroke();
+    g.setLineDash([]);
+    return { max: max, media: media };
+  }
 
-    var bat = cartaoSimples(t("Baterias", "Batteries"));
-    var batLista = el("div");
-    bat.appendChild(batLista);
-    grade.appendChild(bat);
+  function mm(f) { return f ? t("máx ", "max ") + numero(f.max) + " · " + t("méd ", "avg ") + numero(f.media) : ""; }
 
-    var casa = cartaoSimples(t("Casa", "Home"));
-    var casaLista = el("div", "linhas");
-    casa.appendChild(casaLista);
-    grade.appendChild(casa);
-    alvo.appendChild(grade);
+  MONTAR.visao = function (alvo) {
+    var vivo = true, serie = {}, previa = previaDoCooler();
+    var dataEl = el("div", "vg-data"), fraseEl = el("div", "vg-frase");
+    alvo.appendChild(el("div", "vg-cab", null, dataEl, fraseEl));
+
+    // Os destaques: temperatura e uso das pecas que aquecem, e a memoria.
+    var tiles = el("div", "vg-tiles");
+    var blocos = [];
+    (S.destaques || []).forEach(function (d) {
+      var canvas = el("canvas"), valor = el("div", "vv"), faixa = el("div", "mm");
+      var c = el("div", "cartao vg-tile", null, canvas, el("div", "tt", d.titulo), valor, faixa);
+      c.title = d.sub;
+      c.addEventListener("click", function () { mostrar("metricas"); });
+      tiles.appendChild(c);
+      blocos.push({ id: d.id, d: d, canvas: canvas, valor: valor, faixa: faixa, cor: "" });
+    });
+    alvo.appendChild(tiles);
+
+    var meio = el("div", "vg-meio"), esq = el("div", "vg-esq");
+    // A casa: convite ou o resumo dos aparelhos.
+    var casaTexto = el("div", "ct");
+    var casa = el("div", "cartao vg-casa", null, el("span", "ic icone", ""), casaTexto,
+      botao(T("VisaoAbrirCasa", t("Abrir Casa ▸", "Open Home ▸")), "link", function () { mostrar("casa"); }));
+    esq.appendChild(casa);
+    var duas = el("div", "vg-duas");
+    var perLista = el("div");
+    var per = el("div", "cartao vg-box", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals"))),
+      botao(T("VisaoBaterias", t("Baterias ▸", "Batteries ▸")), "link", function () { mostrar("baterias"); })), perLista);
+    var evLista = el("div", "vg-ev");
+    var ev = el("div", "cartao vg-box", null, el("div", "cb", null, el("span", "mono", T("VisaoEventos", t("EVENTOS", "EVENTS")))), evLista);
+    duas.appendChild(per); duas.appendChild(ev);
+    esq.appendChild(duas);
+    meio.appendChild(esq);
+
+    // O display do cooler: a previa, o perfil e as curvas dos dois mostradores.
+    var stEl = el("span", "st"), perfilEl = el("div", "val"), painelEl = el("div", "val");
+    var cima = el("div", "cima", null, previa.el, el("div", "info", null,
+      el("div", "cap", T("ActiveProfile", t("PERFIL ATIVO", "ACTIVE PROFILE"))), perfilEl,
+      el("div", "cap", T("PanelLabel", t("Painel", "Panel"))), painelEl,
+      botao(T("VisaoAbrirPaineis", t("Abrir Painéis ▸", "Open Panels ▸")), "link", function () { mostrar("painel"); })));
+    var cooler = el("div", "cartao vg-cooler", null, el("div", "titulo", null, el("span", "", T("VisaoChipCooler", t("Display do cooler", "Cooler display"))), stEl), cima);
+    var mostradores = [1, 2].map(function (n) {
+      var canvas = el("canvas"), tt = el("div", "tt"), valor = el("div", "vv"), faixa = el("div", "mm");
+      var c = el("div", "vg-mostrador", null, canvas, tt, valor, faixa);
+      c.addEventListener("click", function () { mostrar("painel"); });
+      cooler.appendChild(c);
+      return { n: n, canvas: canvas, tt: tt, valor: valor, faixa: faixa, id: "" };
+    });
+    meio.appendChild(cooler);
+    alvo.appendChild(meio);
+
+    // A tira de especificacoes.
+    var tira = el("div", "cartao vg-specs");
+    alvo.appendChild(tira);
+    if (S.sistema) desenharTira(tira, S.sistema);
+    else pedir("visao.sistema").then(function (l) { S.sistema = l || []; if (vivo) desenharTira(tira, S.sistema); }, function () { });
+
+    function desenharTira(onde, linhas) {
+      limpar(onde);
+      linhas.forEach(function (l) { onde.appendChild(el("div", "", null, el("small", "", l[0]), el("b", "", l[1]))); });
+    }
+
+    function pintar() {
+      blocos.forEach(function (b) {
+        b.f = desenharCurva(b.canvas, serie[b.id], corDoValor(b.d.unidade, leitura(b.id), b.d.atencao, b.d.perigo).replace("var(--danger)", "#EB5A4B").replace("var(--warn)", "#F0AF3C").replace("var(--quente)", cor("--quente")).replace("var(--accent-text)", cor("--accent-text")));
+        b.faixa.textContent = mm(b.f);
+      });
+      mostradores.forEach(function (m) {
+        var s = sensor(m.id), c = m.n === 1 ? cor("--quente") : cor("--accent-text");
+        var f = desenharCurva(m.canvas, serie[m.id], c);
+        m.faixa.textContent = mm(f);
+      });
+    }
+
+    var ids = [];
+    function buscar() {
+      var quais = ids.slice();
+      if (!quais.length) return;
+      pedir("metricas", { ids: quais, segundos: 300 }).then(function (r) {
+        if (!vivo) return;
+        for (var k in r.series) if (Object.prototype.hasOwnProperty.call(r.series, k)) serie[k] = r.series[k];
+        pintar();
+      }, function () { });
+    }
+    function conferirIds() {
+      var p = perfil(E ? E.painel.perfil : S.ativo) || perfil(S.ativo);
+      var novos = (S.destaques || []).map(function (d) { return d.id; });
+      mostradores[0].id = p ? p.p1 : ""; mostradores[1].id = p ? p.p2 : "";
+      novos.push(mostradores[0].id, mostradores[1].id);
+      novos = novos.filter(function (x, i) { return x && novos.indexOf(x) === i; });
+      if (novos.join("|") !== ids.join("|")) { ids = novos; buscar(); }
+    }
+    var relogio = setInterval(buscar, (S.passo || 5) * 1000);
+    var redesenhar = function () { pintar(); previa.desenhar(); };
+    window.addEventListener("resize", redesenhar);
 
     return {
       atualizar: function () {
-        m.atualizar(); selo.atualizar();
-        var p = E.painel, perfil = null;
-        S.perfis.forEach(function (x) { if (x.nome === p.perfil) perfil = x; });
-        legenda.textContent = perfil
-          ? nomeDoSensor(perfil.p1) + "  ·  " + nomeDoSensor(perfil.p2)
-          : p.perfil;
-        pausar.textContent = p.pausado ? t("Retomar", "Resume") : t("Pausar", "Pause");
-        linhasDeSensor.forEach(function (l) { l.valor.textContent = comUnidade(l.sensor); });
-        desenharBaterias(batLista, true);
-        limpar(casaLista);
-        if (!E.casa.length) casaLista.appendChild(el("div", "vazio", S.casa.servidor
-          ? t("Nenhum aparelho por enquanto.", "No appliances yet.")
-          : t("A Casa não está configurada.", "Home is not set up.")));
-        E.casa.forEach(function (a) { casaLista.appendChild(linha(a.nome, resumoDoAparelho(a))); });
+        dataEl.textContent = dataDeAgora();
+        fraseEl.textContent = E.frase || "";
+        fraseEl.className = "vg-frase" + (E.alerta ? " alerta" : "");
+        blocos.forEach(function (b) {
+          var v = leitura(b.id);
+          limpar(b.valor);
+          b.valor.style.color = v === null ? "var(--faint)" : corDoValor(b.d.unidade, v, b.d.atencao, b.d.perigo);
+          b.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
+          if (v !== null && b.d.unidade) b.valor.appendChild(el("small", "", b.d.unidade));
+        });
+        var p = E.painel;
+        stEl.textContent = p.conectado ? T("VisaoConectado", t("conectado", "connected")) : T("VisaoDesconectado", t("desconectado", "disconnected"));
+        stEl.className = "st" + (p.conectado ? " ok" : "");
+        perfilEl.textContent = p.perfil;
+        painelEl.textContent = S.sobre && S.sobre.painel ? S.sobre.painel : T("PanelNone", t("nenhum encontrado", "none found"));
+        previa.definir(p.p1, p.p2, !!p.fahrenheit, !!p.percent);
+        conferirIds();
+        mostradores.forEach(function (m, i) {
+          var v = leitura(m.id), s = sensor(m.id);
+          m.tt.textContent = (i === 0 ? t("mostrador de cima", "top display") : t("mostrador de baixo", "bottom display")) + " · " + (s ? s.nome : "");
+          limpar(m.valor);
+          m.valor.style.color = i === 0 ? "var(--quente)" : "var(--accent-text)";
+          m.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
+          if (v !== null && s && s.unidade) m.valor.appendChild(el("small", "", s.unidade));
+        });
+        // periféricos
+        limpar(perLista);
+        if (!E.baterias.length) perLista.appendChild(el("div", "nota", T("VisaoNenhum", t("nenhum conectado", "none connected"))));
+        E.baterias.forEach(function (b) {
+          var tem = b.bateria !== null && b.bateria !== undefined;
+          var pct = el("span", !tem ? "sem" : b.carregando ? "carga" : b.bateria <= 20 ? "baixa" : "", tem ? b.bateria + "%" : "--");
+          perLista.appendChild(el("div", "vg-per", null, el("span", "", b.nome), pct));
+        });
+        // eventos
+        limpar(evLista);
+        if (!E.eventos || !E.eventos.length) evLista.appendChild(el("div", "nota", T("VisaoSemEventos", t("Nada novo desde que o app abriu.", "Nothing new since the app started."))));
+        (E.eventos || []).slice(0, 8).forEach(function (x) { evLista.appendChild(el("div", "", null, el("span", "", x.h), document.createTextNode(x.t))); });
+        // casa
+        limpar(casaTexto);
+        if (!S.casa.servidor || !E.casa.length) {
+          casaTexto.appendChild(el("b", "", T("VisaoConecteCasa", t("Conecte a casa", "Connect your home"))));
+          casaTexto.appendChild(el("small", "", T("CasaResumoSemConta", t("Conecte o ar-condicionado e a lava e seca pela conta ConnectLife.", "Connect your air conditioner and washer with your ConnectLife account."))));
+        } else {
+          var ap = el("div", "ap");
+          E.casa.forEach(function (a) { ap.appendChild(el("span", "", null, el("b", "", a.nome), document.createTextNode(resumoDoAparelho(a)))); });
+          casaTexto.appendChild(ap);
+        }
+      },
+      sair: function () {
+        vivo = false; clearInterval(relogio);
+        window.removeEventListener("resize", redesenhar);
+        previa.sair();
       }
     };
   };
