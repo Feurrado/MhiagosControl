@@ -28,6 +28,7 @@ namespace MhiagosControl
             CasosCompartilhados();
             ContratoCasa();
             NucleoSeparado();
+            NucleoSemAdmin();
             JanelaWebOrigem();
             PonteDoAppNova();
             PonteDoAppAjustes();

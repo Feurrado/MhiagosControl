@@ -138,11 +138,32 @@ namespace MhiagosControl
             if (falha != null)
                 Avisar(T.SensorInitFailed(falha.Message, Log.Path),
                     T.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else if (Nucleo.EmUso && !Nucleo.Rodando)
+                NotificarComAcao(T.AppName, T.NucleoFaltando, AtivarNucleo);
             else if (FaltaPawnIo(HwInfo.Installed, PawnIo.Instalado, _cache))
                 // Edicao publica sem o PawnIO: o mostrador de cima fica vazio e
                 // ninguem dizia por que. O clique abre o Sobre, onde ele instala.
                 NotificarComAcao(T.AppName, T.PawnIoFaltando, delegate { _paginaPedida = "sobre"; PedirConfiguracao(); });
             WarnAboutOriginalTask();
+        }
+
+        /// <summary>
+        /// Cria a tarefa do nucleo com o UAC (uma vez) e o sobe; os sensores voltam
+        /// sozinhos, porque a fonte remota reabre quando o nucleo responde.
+        /// </summary>
+        private void AtivarNucleo()
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                bool ok = Nucleo.Elevar(Nucleo.ArgInstalar, 120000) && Nucleo.Garantir(8000);
+                if (ok) Thread.Sleep(2000);   // a primeira leitura do nucleo
+                Marshal(delegate
+                {
+                    if (IsStopping) return;
+                    if (ok) { ReListSensors(); Notificar(T.AppName, T.NucleoAtivado, ToolTipIcon.Info, "nucleo ativado"); }
+                    else NotificarComAcao(T.AppName, T.NucleoRecusado, AtivarNucleo);
+                });
+            });
         }
 
         /// <summary>
@@ -179,7 +200,9 @@ namespace MhiagosControl
                 if (!Autostart.OriginalAppTaskEnabled()) return;
                 DialogResult r = Avisar(T.OriginalTaskWarning,
                     T.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (r == DialogResult.Yes) Autostart.DisableOriginalAppTask();
+                if (r != DialogResult.Yes) return;
+                if (Nucleo.Elevado()) Autostart.DisableOriginalAppTask();
+                else ThreadPool.QueueUserWorkItem(delegate { Nucleo.Elevar(Nucleo.ArgDesligarOriginal, 60000); });
             }
             catch (Exception ex) { Log.Error("verificacao da tarefa original", ex); }
         }

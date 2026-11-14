@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -175,6 +176,29 @@ namespace MhiagosControl
                 Igual(!Nucleo.Elevado(), Nucleo.UsarRemoto, "nucleo: sem a variavel, so sem elevacao usa o nucleo");
             }
             finally { Environment.SetEnvironmentVariable(Nucleo.Variavel, antes); }
+        }
+
+        /// <summary>A 3.0 sem administrador: o manifesto, a tarefa do nucleo e o inicio pela chave Run.</summary>
+        private static void NucleoSemAdmin()
+        {
+            // O root dos testes e uma pasta temporaria; o codigo fica um nivel acima de bin\.
+            string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".."));
+            string manifesto = File.ReadAllText(Path.Combine(root, "app.manifest"));
+            Verdade(manifesto.Contains("level=\"asInvoker\"") && !manifesto.Contains("level=\"requireAdministrator\""),
+                "sem admin: o app pede so o nivel de quem o abre");
+
+            string exe = @"C:\Program Files\Mhiagos Control\MhiagosControl.exe";
+            Igual("/create /tn \"MhiagosControl Nucleo\" /tr \"\\\"C:\\Program Files\\Mhiagos Control\\MhiagosControl.exe\\\" --nucleo\" /sc onlogon /rl highest /f",
+                Autostart.CriacaoDoNucleo(exe), "sem admin: a tarefa roda so o nucleo, elevado, com o caminho entre aspas");
+            Igual("\"C:\\Program Files\\Mhiagos Control\\MhiagosControl.exe\"", Autostart.LinhaDoRun(exe), "sem admin: a chave Run leva o caminho entre aspas");
+            Verdade(Autostart.TarefaDoNucleo != Autostart.TaskName, "sem admin: a tarefa do nucleo nao e a tarefa antiga");
+            Igual(Autostart.TarefaDoNucleo, MhiagosSetup.Setup.TarefaDoNucleo, "sem admin: instalador e app usam a mesma tarefa");
+
+            string instalador = File.ReadAllText(Path.Combine(root, "tools", "Installer.cs"));
+            Verdade(instalador.Contains("TarefaDoNucleo + \"\\\" /tr") && instalador.Contains("--nucleo") && instalador.Contains("/rl highest"),
+                "sem admin: o instalador cria a tarefa do nucleo");
+            Verdade(!Nucleo.EmUso, "sem admin: os testes nao usam o nucleo de verdade");
+            Verdade(Nucleo.ArgInstalar.StartsWith("--") && Nucleo.ArgDesligarOriginal.StartsWith("--"), "sem admin: argumentos das tarefas elevadas");
         }
     }
 }

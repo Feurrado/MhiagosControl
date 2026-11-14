@@ -215,6 +215,7 @@ namespace MhiagosControl
                     new System.Diagnostics.ProcessStartInfo(
                         System.IO.Path.Combine(Environment.SystemDirectory, "cmd.exe"), "/s /k \"" + linha + "\"");
                 psi.UseShellExecute = true;
+                if (!Nucleo.Elevado()) psi.Verb = "runas";   // o --config-rtss grava na pasta do RTSS
                 System.Diagnostics.Process.Start(psi);
 
                 _rtssEstado.Text = T.RtssInstalling;

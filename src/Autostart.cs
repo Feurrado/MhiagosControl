@@ -8,36 +8,65 @@ using System.Text;
 namespace MhiagosControl
 {
     /// <summary>
-    /// Inicializacao automatica via Tarefa Agendada.
+    /// Inicio com o Windows e a tarefa do nucleo.
     ///
-    /// A chave Run do registro nao serve aqui: o aplicativo exige elevacao
-    /// (driver de kernel para MSR) e o Windows bloqueia entradas elevadas do
-    /// Run. Tarefa agendada com /RL HIGHEST e o mesmo mecanismo que o software
-    /// de fabrica usava, e pelo mesmo motivo.
+    /// Desde a 3.0 o app roda sem administrador: ele entra pela chave Run do
+    /// usuario, como qualquer programa. Quem precisa de administrador e o nucleo
+    /// (os drivers dos sensores), e ele sobe por uma tarefa agendada com
+    /// privilegio mais alto, criada uma vez com o UAC. Ate a 2.x a tarefa
+    /// "MhiagosControl" abria o proprio app elevado; ela e migrada quando ha
+    /// elevacao para isso (instalador ou --instalar-nucleo).
     /// </summary>
     public static class Autostart
     {
+        /// <summary>A tarefa da 2.x, que abria o app inteiro como administrador.</summary>
         public const string TaskName = "MhiagosControl";
+        public const string TarefaDoNucleo = "MhiagosControl Nucleo";
+        internal const string ChaveRun = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        internal const string ValorRun = "MhiagosControl";
 
         private static string ExePath
         {
             get { return Assembly.GetExecutingAssembly().Location; }
         }
 
+        /// <summary>O que vai na chave Run: o executavel entre aspas.</summary>
+        internal static string LinhaDoRun(string exe) { return "\"" + exe + "\""; }
+
+        /// <summary>Os argumentos do schtasks que criam a tarefa do nucleo.</summary>
+        internal static string CriacaoDoNucleo(string exe)
+        {
+            return "/create /tn \"" + TarefaDoNucleo + "\" /tr \"\\\"" + exe + "\\\" " + Nucleo.Argumento +
+                   "\" /sc onlogon /rl highest /f";
+        }
+
+        private static bool TarefaExiste(string nome)
+        {
+            int code;
+            string output = Run("/query /tn \"" + nome + "\"", out code);
+            return code == 0 && output.IndexOf(nome, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string LerRun()
+        {
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(ChaveRun))
+                return k == null ? null : k.GetValue(ValorRun) as string;
+        }
+
+        /// <summary>Liga pela chave Run, ou pela tarefa antiga que ainda nao foi migrada.</summary>
         public static bool IsEnabled()
         {
             try
             {
-                int code;
-                string output = Run("/query /tn \"" + TaskName + "\"", out code);
-                return code == 0 && output.IndexOf(TaskName, StringComparison.OrdinalIgnoreCase) >= 0;
+                if (!string.IsNullOrEmpty(LerRun())) return true;
+                return TarefaExiste(TaskName);
             }
-            catch (Exception ex) { Log.Error("consulta da tarefa agendada", ex); return false; }
+            catch (Exception ex) { Log.Error("consulta do inicio automatico", ex); return false; }
         }
 
         /// <summary>
         /// Mensagem pronta da ultima recusa do Enable, ou null quando a falha
-        /// foi do schtasks e o detalhe esta no log.
+        /// esta no log.
         /// </summary>
         public static string UltimaRecusa { get; private set; }
 
@@ -46,38 +75,103 @@ namespace MhiagosControl
             UltimaRecusa = null;
             try
             {
-                // A tarefa roda o executavel como administrador e sem UAC. Numa
-                // pasta que o usuario comum grava (Downloads, bin\, D:\Apps),
-                // qualquer programa troca o exe ou deixa uma DLL ao lado e ganha
-                // administrador no proximo logon.
-                string pasta = System.IO.Path.GetDirectoryName(ExePath);
-                if (!PastaProtegida(pasta))
-                {
-                    UltimaRecusa = string.Format(T.AutostartUnsafeFolder, pasta);
-                    Log.Write("autostart recusado: pasta gravavel por usuario comum (" + pasta + ")");
-                    return false;
-                }
-
-                int code;
-                Run("/create /tn \"" + TaskName + "\" /tr \"\\\"" + ExePath + "\\\"\" /sc onlogon /rl highest /f", out code);
-                bool ok = (code == 0);
-                Log.Write(ok ? "autostart habilitado" : "falha ao habilitar autostart (codigo " + code + ")");
-                return ok;
+                // Sem elevacao: a chave Run nao da administrador a ninguem, entao a
+                // pasta do executavel nao precisa ser protegida para isto.
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(ChaveRun))
+                    k.SetValue(ValorRun, LinhaDoRun(ExePath));
+                Log.Write("autostart habilitado (chave Run)");
+                return true;
             }
-            catch (Exception ex) { Log.Error("criacao da tarefa agendada", ex); return false; }
+            catch (Exception ex) { Log.Error("inicio automatico pela chave Run", ex); return false; }
         }
 
         public static bool Disable()
         {
             try
             {
-                int code;
-                Run("/delete /tn \"" + TaskName + "\" /f", out code);
-                bool ok = (code == 0);
-                Log.Write(ok ? "autostart desabilitado" : "falha ao desabilitar autostart (codigo " + code + ")");
-                return ok;
+                // A tarefa antiga abriria o app no proximo logon do mesmo jeito. Ela sai
+                // antes da chave Run: a migracao recria a chave quando a acha.
+                if (TarefaExiste(TaskName))
+                {
+                    if (Nucleo.Elevado()) ApagarTarefa(TaskName);
+                    else Nucleo.Elevar(Nucleo.ArgInstalar, 60000);   // a migracao apaga a antiga
+                    if (TarefaExiste(TaskName)) { Log.Write("autostart: a tarefa antiga continua (sem elevacao)"); return false; }
+                }
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(ChaveRun, true))
+                    if (k != null && k.GetValue(ValorRun) != null) k.DeleteValue(ValorRun, false);
+                Log.Write("autostart desabilitado");
+                return true;
             }
-            catch (Exception ex) { Log.Error("remocao da tarefa agendada", ex); return false; }
+            catch (Exception ex) { Log.Error("desligar o inicio automatico", ex); return false; }
+        }
+
+        private static bool ApagarTarefa(string nome)
+        {
+            int code;
+            Run("/delete /tn \"" + nome + "\" /f", out code);
+            return code == 0;
+        }
+
+        // ---------------- tarefa do nucleo ----------------
+
+        public static bool NucleoInstalado()
+        {
+            try { return TarefaExiste(TarefaDoNucleo); }
+            catch (Exception ex) { Log.Error("consulta da tarefa do nucleo", ex); return false; }
+        }
+
+        /// <summary>Dispara a tarefa: funciona sem elevacao, e o Windows nao pergunta (a tarefa ja foi autorizada).</summary>
+        public static bool RodarNucleo()
+        {
+            try
+            {
+                int code;
+                Run("/run /tn \"" + TarefaDoNucleo + "\"", out code);
+                if (code != 0) Log.Write("nucleo: a tarefa nao rodou (codigo " + code + ")");
+                return code == 0;
+            }
+            catch (Exception ex) { Log.Error("rodar a tarefa do nucleo", ex); return false; }
+        }
+
+        /// <summary>
+        /// Cria a tarefa do nucleo. Exige elevacao e uma pasta que so administrador
+        /// grava: a tarefa roda este executavel como administrador e sem UAC.
+        /// </summary>
+        public static bool CriarTarefaDoNucleo(out string erro)
+        {
+            erro = null;
+            string pasta = System.IO.Path.GetDirectoryName(ExePath);
+            if (!PastaProtegida(pasta))
+            {
+                erro = string.Format(T.AutostartUnsafeFolder, pasta);
+                return false;
+            }
+            int code;
+            Run(CriacaoDoNucleo(ExePath), out code);
+            if (code != 0) erro = "schtasks " + code;
+            Log.Write(code == 0 ? "tarefa do nucleo criada" : "falha ao criar a tarefa do nucleo (codigo " + code + ")");
+            return code == 0;
+        }
+
+        /// <summary>A tarefa da 2.x sai; se ela existia, o inicio com o Windows passa para a chave Run.</summary>
+        public static void MigrarTarefaAntiga()
+        {
+            try
+            {
+                if (!TarefaExiste(TaskName)) return;
+                if (ApagarTarefa(TaskName))
+                {
+                    Log.Write("tarefa antiga migrada para a chave Run");
+                    Enable();
+                }
+            }
+            catch (Exception ex) { Log.Error("migrar a tarefa antiga", ex); }
+        }
+
+        public static bool RemoverTarefaDoNucleo()
+        {
+            try { return !TarefaExiste(TarefaDoNucleo) || ApagarTarefa(TarefaDoNucleo); }
+            catch (Exception ex) { Log.Error("remover a tarefa do nucleo", ex); return false; }
         }
 
         private const string OriginalTask = "CPU TEMP Monitor StartupTask";

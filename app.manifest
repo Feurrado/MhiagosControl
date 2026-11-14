@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-  <assemblyIdentity version="2.35.0.0" name="MhiagosControl" />
+  <assemblyIdentity version="3.0.0.0" name="MhiagosControl" />
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Temperatura e potencia da CPU exigem acesso a MSR, que so
-             existe via driver em modo kernel. A LibreHardwareMonitorLib
-             precisa carregar esse driver, e isso demanda elevacao. -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <!-- Desde a 3.0 o app roda sem administrador. Os sensores que exigem
+             driver em modo kernel (MSR, PawnIO, motor do HWiNFO) ficam no
+             nucleo (MhiagosControl.exe --nucleo), que a tarefa agendada
+             "MhiagosControl Nucleo" sobe elevado; o app le dele por um named
+             pipe do proprio usuario. -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>
