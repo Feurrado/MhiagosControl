@@ -114,6 +114,10 @@ namespace MhiagosControl
             Igual("perfis", TrayContext.PaginaAntiga("painel"), "interface nova: Painel CPU abre os perfis da janela classica");
             Igual("casa", TrayContext.PaginaAntiga("casa"), "interface nova: pagina conhecida passa");
             Verdade(TrayContext.PaginaAntiga("..\\x") == null && TrayContext.PaginaAntiga(null) == null, "interface nova: pagina desconhecida abre a de sempre");
+            Igual("painel", TrayContext.PaginaNova("perfis"), "interface nova padrao: perfis da classica abre o Painel CPU");
+            Igual("baterias", TrayContext.PaginaNova("baterias"), "interface nova padrao: o widget abre Baterias");
+            Igual("config", TrayContext.PaginaNova("configuracoes"), "interface nova padrao: configuracoes");
+            Verdade(TrayContext.PaginaNova(null) == null && TrayContext.PaginaNova("x\"><") == null, "interface nova padrao: chave desconhecida abre a de sempre");
 
             // --- a ponte, com configuracao num arquivo temporario ---
             string caixa = Path.Combine(Path.GetTempPath(), "MhiagosControlTeste" + Guid.NewGuid().ToString("N"));

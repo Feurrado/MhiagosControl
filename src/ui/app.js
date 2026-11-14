@@ -38,6 +38,11 @@
       aoEstado();
       return;
     }
+    if (d.ev === "ir") {
+      // A bandeja, um aviso ou o widget pediram uma pagina com a janela ja aberta.
+      if (S && MONTAR[d.p]) mostrar(d.p);
+      return;
+    }
     var p = pendentes[d.id];
     if (!p) return;
     delete pendentes[d.id];
@@ -1034,7 +1039,9 @@
       montarNavegacao();
       var guardada = "";
       try { guardada = sessionStorage.getItem("pagina") || ""; } catch (e) { }
-      mostrar(guardada || "visao");
+      // A pagina pedida por quem abriu a janela vem no fragmento (#baterias, #casa...).
+      var pedida = decodeURIComponent((location.hash || "").replace(/^#/, ""));
+      mostrar(MONTAR[pedida] ? pedida : guardada || "visao");
     }, function (e) {
       $("pagina").appendChild(el("div", "vazio", e.message));
     });
