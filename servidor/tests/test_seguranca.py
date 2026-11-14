@@ -28,9 +28,23 @@ class Cabecalhos(Base):
         r = self.cliente.get("/")
         marca = self.cliente.get("/api/saude").json()["pagina"]
         self.assertRegex(marca, r"^[0-9a-f]{8}$")
-        self.assertIn('const PAGINA = "%s"' % marca, r.text)
+        self.assertIn('<meta name="pagina" content="%s">' % marca, r.text)
+        self.assertIn('<script src="/app.js?v=%s"></script>' % marca, r.text)
         self.assertEqual(r.headers["etag"], '"%s"' % marca)
         self.assertEqual(self.cliente.get("/", headers={"If-None-Match": r.headers["etag"]}).status_code, 304)
+
+    def test_script_fora_da_pagina(self):
+        r = self.cliente.get("/")
+        csp = r.headers["content-security-policy"]
+        self.assertIn("script-src 'self';", csp)
+        self.assertNotIn("script-src 'self' 'unsafe-inline'", csp)
+        self.assertEqual(r.text.count("<script"), 1, "so o script de arquivo; nada embutido")
+        self.assertNotRegex(r.text, r"\son[a-z]+=", "sem tratador de evento embutido no HTML")
+        js = self.cliente.get("/app.js")
+        self.assertEqual(js.status_code, 200)
+        self.assertIn("javascript", js.headers["content-type"])
+        self.assertEqual(js.headers["cache-control"], "no-cache")
+        self.assertIn('meta[name="pagina"]', js.text)
 
     def test_corpo_grande_demais(self):
         with mock.patch.object(main, "CORPO_MAXIMO", 100):

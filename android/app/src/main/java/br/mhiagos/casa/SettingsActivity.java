@@ -36,7 +36,7 @@ public class SettingsActivity extends Activity {
         dica.setPadding(0, p / 2, 0, p / 2);
         raiz.addView(dica);
 
-        final EditText externo = campo(raiz, "Endereço externo", Config.externo(this), Config.PADRAO_EXTERNO);
+        final EditText externo = campo(raiz, "Endereço externo", Config.externo(this), "https://seu-servidor.ts.net");
         final EditText interno = campo(raiz, "Endereço interno", Config.interno(this), "192.168.1.100:8765");
 
         LinearLayout linha = new LinearLayout(this);
