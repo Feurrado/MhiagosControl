@@ -6,7 +6,7 @@
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
         <!-- Desde a 3.0 o app roda sem administrador. Os sensores que exigem
              driver em modo kernel (MSR, PawnIO, motor do HWiNFO) ficam no
-             nucleo (MhiagosControl.exe --nucleo), que a tarefa agendada
+             nucleo (o mesmo exe com o argumento nucleo), que a tarefa agendada
              "MhiagosControl Nucleo" sobe elevado; o app le dele por um named
              pipe do proprio usuario. -->
         <requestedExecutionLevel level="asInvoker" uiAccess="false" />

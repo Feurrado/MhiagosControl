@@ -186,6 +186,18 @@ namespace MhiagosControl
             string manifesto = File.ReadAllText(Path.Combine(root, "app.manifest"));
             Verdade(manifesto.Contains("level=\"asInvoker\"") && !manifesto.Contains("level=\"requireAdministrator\""),
                 "sem admin: o app pede so o nivel de quem o abre");
+            // Dois hifens dentro de um comentario XML invalidam o manifesto, e o Windows
+            // recusa abrir o exe ("configuracao lado a lado incorreta"), como na 3.0.0.
+            int ini = manifesto.IndexOf("<!--", StringComparison.Ordinal);
+            while (ini >= 0)
+            {
+                int fim = manifesto.IndexOf("-->", ini + 4, StringComparison.Ordinal);
+                Verdade(fim > 0, "manifesto: comentario fechado");
+                if (fim < 0) break;
+                string dentro = manifesto.Substring(ini + 4, fim - ini - 4);
+                Verdade(!dentro.Contains("--") && !dentro.EndsWith("-"), "manifesto: comentario sem dois hifens (XML valido)");
+                ini = manifesto.IndexOf("<!--", fim + 3, StringComparison.Ordinal);
+            }
 
             string exe = @"C:\Program Files\Mhiagos Control\MhiagosControl.exe";
             Igual("/create /tn \"MhiagosControl Nucleo\" /tr \"\\\"C:\\Program Files\\Mhiagos Control\\MhiagosControl.exe\\\" --nucleo\" /sc onlogon /rl highest /f",
