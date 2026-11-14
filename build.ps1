@@ -67,6 +67,11 @@ $arguments = @(
     ('/resource:' + (Join-Path $root 'assets\x11.png')             + ',MhiagosControl.x11.png'),
     ('/resource:' + (Join-Path $root 'assets\bluetooth.png')       + ',MhiagosControl.bluetooth.png')
 )
+# As paginas da interface nova (src\ui) vao embutidas no executavel: a janela
+# as serve de dentro dele, numa origem que nao existe na rede.
+Get-ChildItem (Join-Path $root 'src\ui') -File | ForEach-Object {
+    $arguments += ('/resource:' + $_.FullName + ',MhiagosControl.ui.' + $_.Name)
+}
 foreach ($r in $refs) { $arguments += ('/reference:' + $r) }
 $arguments += $srcs
 
