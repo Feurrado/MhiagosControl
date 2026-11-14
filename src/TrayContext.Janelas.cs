@@ -96,7 +96,40 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("fechamento do widget de bateria", ex); }
         }
 
+        /// <summary>
+        /// Abre a janela do app na pagina pedida (_paginaPedida). Desde a 3.0 a
+        /// janela e a interface nova (WebView2); a classica fica so como reserva,
+        /// pedida pela bandeja ou quando o WebView2 Runtime nao existe.
+        /// </summary>
         private void PedirConfiguracao()
+        {
+            if (IsStopping) return;
+            if (IsStarting)
+            {
+                _openWhenReady = true;
+                MostrarSplash();
+                return;
+            }
+            if (!_classicaPedida && JanelaDoApp.WebViewDisponivel()
+                && (_settingsForm == null || _settingsForm.IsDisposed))
+            {
+                string pagina = _paginaPedida;
+                _paginaPedida = null;
+                AbrirJanelaNova(PaginaNova(pagina));
+                return;
+            }
+            _classicaPedida = false;
+            PedirJanelaClassica();
+        }
+
+        private void OnAbrirClassica(object sender, EventArgs e)
+        {
+            _paginaPedida = null;
+            _classicaPedida = true;
+            PedirConfiguracao();
+        }
+
+        private void PedirJanelaClassica()
         {
             if (IsStopping) return;
             FecharJanelaNova();

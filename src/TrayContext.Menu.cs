@@ -23,7 +23,7 @@ namespace MhiagosControl
             RebuildProfileMenu();
 
             menu.Items.Add(MenuTema.Item(T.TrayConfigure, new EventHandler(OnConfig)));
-            menu.Items.Add(MenuTema.Item(T.TrayAppNovo, new EventHandler(OnAppNovo)));
+            menu.Items.Add(MenuTema.Item(T.TrayAppClassica, new EventHandler(OnAbrirClassica)));
 
             _miWidget = MenuTema.Item(T.TrayBatteryWidget, new EventHandler(OnToggleWidget));
             _miWidget.Checked = _cfgWidget.Ativo;

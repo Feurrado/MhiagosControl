@@ -114,6 +114,23 @@ namespace MhiagosControl
             Igual("perfis", TrayContext.PaginaAntiga("painel"), "interface nova: Painel CPU abre os perfis da janela classica");
             Igual("casa", TrayContext.PaginaAntiga("casa"), "interface nova: pagina conhecida passa");
             Verdade(TrayContext.PaginaAntiga("..\\x") == null && TrayContext.PaginaAntiga(null) == null, "interface nova: pagina desconhecida abre a de sempre");
+            Igual("painel", TrayContext.PaginaNova("perfis"), "interface nova padrao: perfis da classica abre o Painel CPU");
+            Igual("baterias", TrayContext.PaginaNova("baterias"), "interface nova padrao: o widget abre Baterias");
+            Igual("config", TrayContext.PaginaNova("configuracoes"), "interface nova padrao: configuracoes");
+            Verdade(TrayContext.PaginaNova(null) == null && TrayContext.PaginaNova("x\"><") == null, "interface nova padrao: chave desconhecida abre a de sempre");
+
+            // --- o desenho da classica: imagens do executavel, textos e barra ---
+            Igual("MhiagosControl.cooler.png", JanelaDoApp.Recurso(JanelaDoApp.OrigemDoApp + "/cooler.png"), "interface classica: a foto do cooler vem do executavel");
+            Igual("MhiagosControl.app.ico", JanelaDoApp.Recurso(JanelaDoApp.OrigemDoApp + "/app.ico"), "interface classica: o icone do app vem do executavel");
+            Igual("image/x-icon", JanelaDoApp.Tipo("MhiagosControl.app.ico"), "interface classica: tipo do icone");
+            using (Stream foto = JanelaDoApp.Abrir("MhiagosControl.cooler.png"))
+                Verdade(foto != null && foto.Length > 1000, "interface classica: a foto do cooler esta embutida");
+            Verdade(JanelaDoApp.Recurso(JanelaDoApp.OrigemDoApp + "/tray.ico") == "MhiagosControl.ui.tray.ico", "interface classica: so as imagens da lista saem do executavel");
+            Dictionary<string, object> textos = PonteDoApp.Textos();
+            Verdade(textos.ContainsKey("NavPanels") && (string)textos["NavPanels"] == T.NavPanels, "interface classica: os textos da barra vem do app");
+            Verdade(textos.ContainsKey("BindGameTo") && ((string)textos["BindGameTo"]).Contains("{0}"), "interface classica: texto com nome vai como molde");
+            Verdade(textos.ContainsKey("KeyboardHelp") && textos.ContainsKey("Disclaimer") && textos.ContainsKey("GameReplace"), "interface classica: textos das outras classes parciais");
+            Igual(8, PonteDoApp.ChavesDaBarra.Length, "interface classica: as oito paginas da barra");
 
             // --- a ponte, com configuracao num arquivo temporario ---
             string caixa = Path.Combine(Path.GetTempPath(), "MhiagosControlTeste" + Guid.NewGuid().ToString("N"));

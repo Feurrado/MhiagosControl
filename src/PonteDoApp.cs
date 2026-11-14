@@ -175,6 +175,7 @@ namespace MhiagosControl
             casa["servidor"] = ServidorCasa.Configurado;
             r["casa"] = casa;
             AcrescentarAjustes(r);
+            AcrescentarClassica(r);
             return r;
         }
 

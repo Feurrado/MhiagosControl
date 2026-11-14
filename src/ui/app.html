@@ -9,14 +9,16 @@
 <body>
 <div class="app">
   <nav id="nav" aria-label="Páginas">
-    <div class="marca"><span class="logo" aria-hidden="true"></span><span>Mhiagos Control</span></div>
-    <div class="perfil"><small id="perfil-rotulo">PERFIL ATIVO</small><b id="perfil-ativo">…</b></div>
+    <div class="topo">
+      <img class="logo" src="app.ico" alt="">
+      <span class="nome-app">Mhiagos Control</span>
+      <button id="recolher" class="hamb icone" type="button" aria-label="Recolher a barra">&#xE700;</button>
+    </div>
+    <div class="perfil"><small id="perfil-rotulo">PERFIL ATIVO</small><span id="perfil-ativo"></span></div>
     <div id="itens" role="tablist"></div>
-    <div class="rodape" id="rodape"></div>
   </nav>
   <main id="main" tabindex="-1">
-    <header><h1 id="titulo"></h1><div id="acoes"></div></header>
-    <div id="faixa" class="faixa" role="status" hidden></div>
+    <div id="faixa" class="faixa" role="status" hidden><span class="msg" id="faixa-msg"></span><span id="faixa-acao"></span><button id="faixa-fechar" class="fechar icone" type="button" aria-label="Fechar">&#xE711;</button></div>
     <section id="pagina"></section>
   </main>
 </div>

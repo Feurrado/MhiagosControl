@@ -43,8 +43,34 @@ namespace MhiagosControl
         private Rectangle _casaArea = Rectangle.Empty;
         private bool _casaVisivel;
 
-        public JanelaDoApp(IAppNovo app)
+        private static int _webView = -1;
+
+        /// <summary>O WebView2 Runtime esta instalado? Sem ele o app abre a janela classica.</summary>
+        public static bool WebViewDisponivel()
         {
+            if (_webView < 0)
+            {
+                try { _webView = string.IsNullOrEmpty(CoreWebView2Environment.GetAvailableBrowserVersionString()) ? 0 : 1; }
+                catch (Exception ex) { Log.Write("interface nova: WebView2 Runtime ausente (" + ex.GetType().Name + ")"); _webView = 0; }
+            }
+            return _webView == 1;
+        }
+
+        private readonly string _paginaInicial;
+
+        /// <summary>Leva a janela ja aberta a uma pagina (aviso da bandeja, widget).</summary>
+        public void MostrarPagina(string pagina)
+        {
+            if (string.IsNullOrEmpty(pagina) || !_pronta) return;
+            Dictionary<string, object> m = new Dictionary<string, object>();
+            m["ev"] = "ir";
+            m["p"] = pagina;
+            Postar(m);
+        }
+
+        public JanelaDoApp(IAppNovo app, string pagina)
+        {
+            _paginaInicial = pagina;
             _ponte = new PonteDoApp(app);
             _ponte.Enviar = EnviarDeFora;
             _ponte.Adiar = delegate(Action acao)
@@ -78,6 +104,8 @@ namespace MhiagosControl
 
         // ---------------- recursos embutidos ----------------
 
+        internal static readonly string[] ImagensDoApp = { "cooler.png", "g325.png", "prox.png", "x11.png", "bluetooth.png", "app.ico" };
+
         /// <summary>O nome do recurso de um caminho da origem do app; nulo se o caminho nao e um arquivo da interface.</summary>
         internal static string Recurso(string url)
         {
@@ -86,6 +114,8 @@ namespace MhiagosControl
             if (!string.Equals(u.GetLeftPart(UriPartial.Authority), OrigemDoApp, StringComparison.OrdinalIgnoreCase)) return null;
             string caminho = u.AbsolutePath.TrimStart('/');
             if (caminho.Length == 0) caminho = "app.html";
+            // Imagens que o executavel ja leva (cooler, aparelhos, icone): servidas pelo nome, sem pastas.
+            if (Array.IndexOf(ImagensDoApp, caminho) >= 0) return "MhiagosControl." + caminho;
             // So nomes simples: sem pastas, sem "..", sem nada que nao seja um arquivo da interface.
             foreach (char c in caminho)
                 if (!(char.IsLetterOrDigit(c) || c == '.' || c == '-' || c == '_')) return null;
@@ -100,6 +130,7 @@ namespace MhiagosControl
             if (recurso.EndsWith(".js", StringComparison.OrdinalIgnoreCase)) return "text/javascript; charset=utf-8";
             if (recurso.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)) return "image/svg+xml";
             if (recurso.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) return "image/png";
+            if (recurso.EndsWith(".ico", StringComparison.OrdinalIgnoreCase)) return "image/x-icon";
             return "application/octet-stream";
         }
 
@@ -178,7 +209,8 @@ namespace MhiagosControl
                     _pronta = true;
                     _relogio.Start();
                 };
-                c.Navigate(OrigemDoApp + "/app.html");
+                // A pagina inicial vai no fragmento; app.js so aceita nomes de pagina conhecidos.
+                c.Navigate(OrigemDoApp + "/app.html" + (string.IsNullOrEmpty(_paginaInicial) ? "" : "#" + Uri.EscapeDataString(_paginaInicial)));
             }
             catch (Exception ex) { Falhou(ex); }
         }
@@ -253,17 +285,21 @@ namespace MhiagosControl
         private string EscolherArquivo(bool salvar, string tipo, string sugerido)
         {
             if (IsDisposed) return null;
-            bool backup = tipo == "backup";
-            string filtro = backup ? "Mhiagos backup (*.mhiagos-backup)|*.mhiagos-backup" : T.ProfileFilter;
+            bool backup = tipo == "backup", exe = tipo == "exe", txt = tipo == "txt";
+            string filtro = backup ? "Mhiagos backup (*.mhiagos-backup)|*.mhiagos-backup"
+                          : exe ? "Executable (*.exe)|*.exe"
+                          : txt ? "Text (*.txt)|*.txt" : T.ProfileFilter;
             FileDialog d = salvar ? (FileDialog)new SaveFileDialog() : new OpenFileDialog();
             using (d)
             {
                 d.Filter = filtro;
-                d.Title = backup ? (salvar ? T.BackupCreate : T.BackupRestore) : (salvar ? T.ExportProfile : T.ImportProfile);
+                d.Title = backup ? (salvar ? T.BackupCreate : T.BackupRestore)
+                        : exe ? T.GameBrowse : txt ? T.DiagnosticTitle
+                        : (salvar ? T.ExportProfile : T.ImportProfile);
                 if (salvar)
                 {
                     d.AddExtension = true;
-                    d.DefaultExt = backup ? "mhiagos-backup" : "ini";
+                    d.DefaultExt = backup ? "mhiagos-backup" : txt ? "txt" : "ini";
                     d.FileName = sugerido ?? "";
                 }
                 else ((OpenFileDialog)d).CheckFileExists = true;
@@ -363,6 +399,6 @@ namespace MhiagosControl
     public static partial class T
     {
         public static string NovoAbrindo { get { return P("Abrindo…", "Opening…"); } }
-        public static string TrayAppNovo { get { return P("Abrir (interface nova)", "Open (new interface)"); } }
+        public static string TrayAppClassica { get { return P("Interface clássica…", "Classic interface…"); } }
     }
 }

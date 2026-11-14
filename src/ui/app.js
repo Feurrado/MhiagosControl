@@ -3,14 +3,20 @@
 // pedidos {id, m, a} e respostas {id, ok, r | erro}; uma vez por segundo chega
 // {ev:"estado", d}. A politica da pagina nao aceita script nem estilo embutido:
 // tudo aqui monta a arvore pelo DOM e mexe em estilo so pelo CSSOM.
+//
+// O desenho segue a janela classica (SettingsForm): a mesma barra lateral, os
+// mesmos cartoes, botoes, interruptores e segmentados, e os mesmos textos (T.*),
+// que vem do app no idioma escolhido pelo pedido "textos".
 (function () {
   "use strict";
 
   var S = null;            // o que "iniciar" devolveu: sensores, perfis, configuracao
   var E = null;            // o retrato de cada segundo
+  var TX = {};             // os textos do app (T.*) no idioma de agora
   var atual = "";          // pagina a vista
   var vista = null;        // {atualizar(), sair()} da pagina a vista
-  var editando = "";       // perfil aberto no Painel CPU
+  var editando = "";       // perfil selecionado no Painel CPU (o _current da classica)
+  var aba = "paineis";     // aba do Painel CPU: paineis ou perfis
   var specs = null;        // especificacoes ja coletadas
   var janela = 600;        // segundos a vista nas Metricas
   var pendentes = {};
@@ -38,6 +44,11 @@
       aoEstado();
       return;
     }
+    if (d.ev === "ir") {
+      // A bandeja, um aviso ou o widget pediram uma pagina com a janela ja aberta.
+      if (S && MONTAR[d.p]) mostrar(d.p);
+      return;
+    }
     var p = pendentes[d.id];
     if (!p) return;
     delete pendentes[d.id];
@@ -47,6 +58,10 @@
   // ---------------- utilitarios ----------------
 
   function t(pt, en) { return !S || S.pt ? pt : en; }
+  /// Um texto do app (T.Nome); o reserva vale so enquanto os textos nao chegam.
+  function T(k, reserva) { var v = TX[k]; return typeof v === "string" && v ? v : (reserva || ""); }
+  /// Um texto com um nome dentro (T.BindGameTo(x)): o app manda o molde com {0}.
+  function Tm(k, x) { return T(k).split("{0}").join(x); }
   function $(id) { return document.getElementById(id); }
 
   function el(tag, classe, texto) {
@@ -59,42 +74,61 @@
 
   function limpar(e) { while (e.firstChild) e.removeChild(e.firstChild); }
 
-  function icone(d) {
+  function glifo(cp, classe) { return el("span", "icone" + (classe ? " " + classe : ""), cp); }
+
+  function svg(partes, caixa) {
     var ns = "http://www.w3.org/2000/svg";
     var s = document.createElementNS(ns, "svg");
-    s.setAttribute("viewBox", "0 0 24 24");
+    s.setAttribute("viewBox", caixa || "0 0 16 16");
     s.setAttribute("aria-hidden", "true");
-    d.split("|").forEach(function (parte) {
-      var p = document.createElementNS(ns, "path");
-      p.setAttribute("d", parte);
-      s.appendChild(p);
+    partes.forEach(function (p) {
+      var e = document.createElementNS(ns, p[0]);
+      for (var k in p[1]) if (Object.prototype.hasOwnProperty.call(p[1], k)) e.setAttribute(k, p[1][k]);
+      s.appendChild(e);
     });
     return s;
   }
 
   var faixaTimer = 0;
-  function faixa(texto, erro) {
+  /// A faixa de aviso no alto do conteudo (FaixaDeAviso), com acao opcional.
+  function faixa(texto, erro, acaoTexto, acao) {
     var f = $("faixa");
     clearTimeout(faixaTimer);
     if (!texto) { f.hidden = true; return; }
-    f.textContent = texto;
+    $("faixa-msg").textContent = texto;
+    var lugar = $("faixa-acao");
+    limpar(lugar);
+    if (acaoTexto && acao) lugar.appendChild(botao(acaoTexto, "b p", function () { f.hidden = true; acao(); }));
     f.className = erro ? "faixa erro" : "faixa";
     f.hidden = false;
-    faixaTimer = setTimeout(function () { f.hidden = true; }, erro ? 8000 : 3000);
+    faixaTimer = setTimeout(function () { f.hidden = true; }, erro ? 10000 : 5000);
+  }
+
+  function aplicarTema() {
+    document.documentElement.setAttribute("data-tema", S.escuro ? "escuro" : "claro");
+    document.documentElement.lang = S.pt ? "pt-BR" : "en";
+  }
+
+  function buscarTextos() {
+    return pedir("textos").then(function (r) { TX = r || {}; }, function () { });
   }
 
   /// Um pedido que muda a configuracao: a resposta e o "iniciar" novo.
   function mudar(m, a, feito) {
     return pedir(m, a).then(function (r) {
       if (r === null || r === undefined) return false;   // desistiu do dialogo
-      if (typeof r === "string") { faixa(r); return true; }
+      if (typeof r === "string") { faixa(r); return r; }
       var idiomaAntes = S.pt;
       S = r;
       if (r.editar) editando = r.editar;
-      if (idiomaAntes !== S.pt) montarNavegacao();
-      faixa(r.aviso || feito || "");
-      mostrar(atual, true);
-      return true;
+      aplicarTema();
+      var depois = function () {
+        faixa(r.aviso || feito || "");
+        mostrar(atual, true);
+      };
+      if (idiomaAntes !== S.pt) return buscarTextos().then(function () { montarNavegacao(); depois(); return r; });
+      depois();
+      return r;
     }, function (e) {
       faixa(e.message, true);
       return false;
@@ -104,6 +138,11 @@
   function sensor(id) {
     if (!S || !id) return null;
     for (var i = 0; i < S.sensores.length; i++) if (S.sensores[i].id === id) return S.sensores[i];
+    return null;
+  }
+
+  function perfil(nome) {
+    for (var i = 0; S && i < S.perfis.length; i++) if (S.perfis[i].nome === nome) return S.perfis[i];
     return null;
   }
 
@@ -125,8 +164,28 @@
     return numero(v) + (s && s.unidade ? " " + s.unidade : "");
   }
 
+  // ---------------- componentes da classica ----------------
+
+  function botao(texto, classe, aoClicar) {
+    var b = el("button", classe || "b", texto);
+    b.type = "button";
+    if (aoClicar) b.addEventListener("click", aoClicar);
+    return b;
+  }
+
+  /// Card: titulo a 14 px, linha embaixo dele e o corpo.
   function cartao(titulo, classe) {
     var c = el("div", "cartao" + (classe ? " " + classe : ""));
+    if (titulo) c.appendChild(el("div", "titulo", titulo));
+    var corpo = el("div", "corpo");
+    c.appendChild(corpo);
+    c.corpo = corpo;
+    return c;
+  }
+
+  /// O cartao das paginas que ainda nao passaram para o desenho da classica.
+  function cartaoSimples(titulo, classe) {
+    var c = el("div", "cartao simples" + (classe ? " " + classe : ""));
     if (titulo) c.appendChild(el("h2", "", titulo));
     return c;
   }
@@ -138,6 +197,7 @@
     return l;
   }
 
+  /// Toggle: trilho de 38 x 20 com o botao branco.
   function troca(ligado, aoMudar) {
     var b = el("button", "troca");
     b.type = "button";
@@ -146,9 +206,20 @@
     b.addEventListener("click", function () {
       var novo = b.getAttribute("aria-checked") !== "true";
       b.setAttribute("aria-checked", novo ? "true" : "false");
-      aoMudar(novo, b);
+      if (aoMudar) aoMudar(novo, b);
     });
+    b.definir = function (v) { b.setAttribute("aria-checked", v ? "true" : "false"); };
     return b;
+  }
+
+  /// O interruptor com rotulo ao lado, como o Toggle.Label da classica.
+  function trocaComRotulo(texto, ligado, aoMudar) {
+    var tg = troca(ligado, aoMudar);
+    var r = el("span", "troca-rotulo", texto);
+    r.addEventListener("click", function () { if (!tg.disabled) tg.click(); });
+    var caixa = el("span", "troca-caixa", null, tg, r);
+    caixa.troca = tg;
+    return caixa;
   }
 
   function chave(titulo, nota, controle) {
@@ -157,6 +228,7 @@
     return el("div", "chave", null, texto, controle);
   }
 
+  /// Segmented: pilula com os segmentos de mesma largura.
   function segmentos(opcoes, valor, aoMudar) {
     var s = el("div", "seg");
     s.setAttribute("role", "group");
@@ -166,6 +238,7 @@
       b.type = "button";
       b.setAttribute("aria-pressed", o[0] === valor ? "true" : "false");
       b.addEventListener("click", function () {
+        if (s.valor === o[0]) return;
         s.valor = o[0];
         Array.prototype.forEach.call(s.children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
         if (aoMudar) aoMudar(o[0]);
@@ -175,12 +248,62 @@
     return s;
   }
 
-  function campo(rotulo, controle) {
-    var c = el("label", "campo", null, el("span", "", rotulo), controle);
+  /// NumberBox: menos, o numero e mais; muda ao sair do campo, no Enter ou nos botoes.
+  function caixaNumero(valor, min, max, aoMudar) {
+    var c = el("div", "num");
+    var menos = botao("−", "", null), mais = botao("+", "", null);
+    var i = el("input");
+    i.type = "text"; i.inputMode = "numeric"; i.value = String(valor);
+    i.setAttribute("aria-valuemin", String(min)); i.setAttribute("aria-valuemax", String(max));
+    c.appendChild(menos); c.appendChild(i); c.appendChild(mais);
+    c.valor = valor;
+    function por(v) {
+      v = Math.round(Number(v));
+      if (isNaN(v)) v = c.valor;
+      v = Math.max(min, Math.min(max, v));
+      i.value = String(v);
+      if (v === c.valor) return;
+      c.valor = v;
+      if (aoMudar) aoMudar(v);
+    }
+    menos.addEventListener("click", function () { por(c.valor - 1); });
+    mais.addEventListener("click", function () { por(c.valor + 1); });
+    i.addEventListener("change", function () { por(i.value); });
+    i.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") por(i.value);
+      else if (e.key === "ArrowUp") { e.preventDefault(); por(c.valor + 1); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); por(c.valor - 1); }
+    });
+    c.ligar = function (v) { c.classList.toggle("desligado", !v); i.disabled = !v; menos.disabled = !v; mais.disabled = !v; };
     return c;
   }
 
-  /// Uma lista com os sensores agrupados por categoria.
+  function campo(rotulo, controle) {
+    return el("label", "campo", null, el("span", "", rotulo), controle);
+  }
+
+  /// LinhaDeOpcao: glifo a esquerda, titulo e descricao, controles a direita.
+  function opcao(cp, titulo, descricao, controles) {
+    var desc = typeof descricao === "string" ? el("small", "", descricao) : descricao;
+    var oc = el("div", "oc");
+    (controles || []).forEach(function (c) { if (c) oc.appendChild(c); });
+    var l = el("div", "opcao", null, el("span", "og icone", cp), el("div", "ot", null, el("b", "", titulo), desc), oc);
+    l.desc = desc;
+    return l;
+  }
+
+  /// O interruptor das linhas de configuracao: "Ligado"/"Desligado" a esquerda.
+  function interruptor(ligado, aoMudar) {
+    var estado = el("span", "estado");
+    function rotular(v) { estado.textContent = v ? T("StateOn", t("Ligado", "On")) : T("StateOff", t("Desligado", "Off")); }
+    var tg = troca(ligado, function (v, b) { rotular(v); aoMudar(v, b, rotular); });
+    rotular(ligado);
+    return [estado, tg];
+  }
+
+  function grupo(titulo) { return el("div", "grupo", titulo); }
+
+  /// Uma lista com os sensores agrupados por categoria (Metricas).
   function seletorDeSensor(valor, vazio) {
     var s = el("select");
     if (vazio !== null) {
@@ -190,7 +313,7 @@
     }
     var grupos = {}, ordem = [];
     S.sensores.forEach(function (x) {
-      var c = x.categoria || t("Outros", "Other");
+      var c = x.grupo || x.categoria || t("Outros", "Other");
       if (!grupos[c]) { grupos[c] = []; ordem.push(c); }
       grupos[c].push(x);
     });
@@ -205,7 +328,6 @@
       s.appendChild(g);
     });
     s.value = valor || "";
-    // O perfil pode apontar para um sensor que nao esta na lista de agora (programa fechado, fonte fora).
     if (valor && s.value !== valor) {
       var falta = el("option", "", t("(sensor ausente)", "(missing sensor)"));
       falta.value = valor;
@@ -215,33 +337,248 @@
     return s;
   }
 
-  // ---------------- navegacao ----------------
+  // ---------------- dialogos ----------------
 
-  var PAGINAS = [
-    ["visao", "Visão geral", "Overview", "M3 12 12 4l9 8|M5 10v10h14V10"],
-    ["painel", "Painel CPU", "CPU panel", "M4 6h16v9H4z|M9 19h6|M12 15v4"],
-    ["metricas", "Métricas", "Metrics", "M4 19V5|M4 19h16|M7 15l4-5 3 3 5-7"],
-    ["specs", "Especificações", "Specifications", "M7 3h10v18H7z|M10 7h4|M10 11h4|M10 15h4"],
-    ["baterias", "Baterias", "Batteries", "M3 8h15v8H3z|M21 10.5v3|M6 11v2"],
-    ["casa", "Casa", "Home", "M4 11 12 4l8 7v9H4z|M10 20v-6h4v6"],
-    ["config", "Configurações", "Settings", "M4 7h10|M18 7h2|M14 5v4|M4 17h2|M10 17h10|M6 15v4"],
-    ["sobre", "Sobre", "About", "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z|M12 11v6|M12 7.5v.5"]
-  ];
+  /// Uma janela por cima da pagina, no lugar das caixas de dialogo da classica.
+  /// Esc cancela; Enter aciona o botao principal.
+  function dialogo(titulo, classe, corpo, botoes) {
+    return new Promise(function (resolver) {
+      var antes = document.activeElement;
+      var fundo = el("div", "fundo");
+      var caixa = el("div", "dialogo" + (classe ? " " + classe : ""));
+      caixa.setAttribute("role", "dialog");
+      caixa.setAttribute("aria-modal", "true");
+      if (titulo) caixa.appendChild(el("h2", "", titulo));
+      if (corpo) caixa.appendChild(corpo);
+      var pe = el("div", "pe");
+      var principal = null;
+      function fechar(v) {
+        document.removeEventListener("keydown", tecla, true);
+        if (fundo.parentNode) fundo.parentNode.removeChild(fundo);
+        if (antes && antes.focus) try { antes.focus(); } catch (e) { }
+        resolver(v);
+      }
+      botoes.forEach(function (b) {
+        var x = botao(b[0], b[2] || "b", function () { fechar(typeof b[1] === "function" ? b[1]() : b[1]); });
+        if (b[2] && b[2].indexOf(" p") >= 0) principal = x;
+        pe.appendChild(x);
+      });
+      caixa.appendChild(pe);
+      fundo.appendChild(caixa);
+      fundo.addEventListener("mousedown", function (e) { if (e.target === fundo) fechar(null); });
+      function tecla(e) {
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); fechar(null); }
+        else if (e.key === "Enter" && principal && !principal.disabled && e.target.tagName !== "BUTTON" && e.target.tagName !== "TEXTAREA") {
+          e.preventDefault(); e.stopPropagation(); principal.click();
+        }
+      }
+      document.addEventListener("keydown", tecla, true);
+      caixa.fechar = fechar;
+      caixa.principal = principal;
+      document.body.appendChild(fundo);
+      var foco = caixa.querySelector("input") || principal || caixa.querySelector("button");
+      if (foco) foco.focus();
+      if (caixa.aoAbrir) caixa.aoAbrir();
+      dialogo.ultima = caixa;
+    });
+  }
+
+  function perguntarNome(titulo, valor) {
+    var i = el("input");
+    i.type = "text"; i.maxLength = 40; i.value = valor || "";
+    var p = dialogo(titulo, "", i, [[T("Cancel", "Cancelar"), null], [T("Ok", "OK"), function () { return i.value.trim() || null; }, "b p"]]);
+    i.select();
+    return p;
+  }
+
+  function confirmar(texto, sim, classe) {
+    return dialogo(null, "", el("p", "", texto), [[T("Cancel", "Cancelar"), false], [sim, true, classe || "b p"]]);
+  }
+
+  /// TextReviewDialog: o texto para conferir antes de seguir.
+  function revisar(titulo, texto, acao) {
+    var pre = el("pre", "", texto);
+    return dialogo(titulo, "texto", pre, [[T("Cancel", "Cancelar"), false], [acao, true, "b p"]]);
+  }
+
+  /// SensorDialog: busca e lista agrupada por categoria; duplo clique usa.
+  function escolherSensor(titulo, atualId) {
+    var escolhido = atualId || "";
+    var busca = el("input");
+    busca.type = "search";
+    busca.placeholder = T("SearchSensor", t("Buscar sensor...", "Search sensor..."));
+    var lista = el("div", "lista-sensores");
+    lista.setAttribute("role", "listbox");
+    var c = cartao(null);
+    c.corpo.appendChild(busca);
+    c.corpo.appendChild(lista);
+    var linhas = [];
+    function desenhar() {
+      limpar(lista);
+      linhas = [];
+      var q = busca.value.trim().toLowerCase();
+      var grupos = {}, ordem = [];
+      S.sensores.forEach(function (x) {
+        var txt = (x.rotulo + " " + x.nome + " " + x.hardware + " " + (x.grupo || "")).toLowerCase();
+        if (q && txt.indexOf(q) < 0) return;
+        var g = x.grupo || x.categoria || t("Outros", "Other");
+        if (!grupos[g]) { grupos[g] = []; ordem.push(g); }
+        grupos[g].push(x);
+      });
+      ordem.forEach(function (g) {
+        lista.appendChild(el("div", "cat", g));
+        grupos[g].forEach(function (x) {
+          var r = el("div", "sn" + (x.id === escolhido ? " sel" : ""), null, el("span", "", x.rotulo), el("span", "", comUnidade(x.id)));
+          r.setAttribute("role", "option");
+          r.title = x.hardware;
+          r.addEventListener("click", function () { escolhido = x.id; marcar(); });
+          r.addEventListener("dblclick", function () { escolhido = x.id; if (dialogo.ultima && dialogo.ultima.principal) dialogo.ultima.principal.click(); });
+          r.idSensor = x.id;
+          linhas.push(r);
+          lista.appendChild(r);
+        });
+      });
+      if (!linhas.length) lista.appendChild(el("div", "vazio", t("Nenhum sensor encontrado.", "No sensor found.")));
+    }
+    function marcar() {
+      linhas.forEach(function (r) { r.classList.toggle("sel", r.idSensor === escolhido); });
+      var sel = null;
+      linhas.forEach(function (r) { if (r.idSensor === escolhido) sel = r; });
+      if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: "nearest" });
+    }
+    busca.addEventListener("input", desenhar);
+    busca.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      var i = -1;
+      linhas.forEach(function (r, k) { if (r.idSensor === escolhido) i = k; });
+      i = Math.max(0, Math.min(linhas.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+      if (linhas[i]) { escolhido = linhas[i].idSensor; marcar(); }
+    });
+    desenhar();
+    var p = dialogo(titulo, "largo", c, [[T("Cancel", "Cancelar"), null], [T("Use", "Usar"), function () { return escolhido || null; }, "b p"]]);
+    marcar();
+    return p;
+  }
+
+  // ---------------- navegacao (NavBar) ----------------
+
+  var LEQUE = [["rect", { x: "1.5", y: "1.5", width: "13", height: "13", rx: "3" }],
+    ["circle", { cx: "8", cy: "8", r: "1.2" }],
+    ["path", { d: "M8 6.8C7.4 4.8 8 3.4 9.6 3.6c1.4.3 1 2-1.6 3.2" }],
+    ["path", { d: "M9.2 8c2-.6 3.4 0 3.2 1.6-.3 1.4-2 1-3.2-1.6" }],
+    ["path", { d: "M8 9.2c.6 2 0 3.4-1.6 3.2-1.4-.3-1-2 1.6-3.2" }],
+    ["path", { d: "M6.8 8c-2 .6-3.4 0-3.2-1.6.3-1.4 2-1 3.2 1.6" }]];
+  var PILHA = [["rect", { x: "1", y: "4.5", width: "12.5", height: "7", rx: "1.6" }],
+    ["path", { d: "M15 7v2" }], ["rect", { x: "3", y: "6.5", width: "3.4", height: "3", rx: ".5", fill: "currentColor", stroke: "none" }]];
+
+  /// As chaves da classica (cfg.NavOrder) e a pagina de cada uma.
+  var BARRA = {
+    visao: ["visao", "NavOverview", "Visão geral", "Overview", ""],
+    paineis: ["painel", "NavPanels", "Painel CPU", "CPU Panel", LEQUE],
+    metricas: ["metricas", "NavMetrics", "Métricas", "Metrics", ""],
+    specs: ["specs", "NavSpecs", "Especificações", "Specifications", ""],
+    config: ["config", "NavSettings", "Configurações", "Settings", ""],
+    baterias: ["baterias", "NavBatteries", "Baterias", "Batteries", PILHA],
+    casa: ["casa", "NavCasa", "Casa", "Home", ""],
+    sobre: ["sobre", "NavAbout", "Sobre", "About", ""]
+  };
+  var PADRAO = ["visao", "paineis", "metricas", "specs", "config", "baterias", "casa", "sobre"];
+
+  function ordemDaBarra() {
+    var r = [];
+    ((S.barra && S.barra.ordem) || "").split(",").forEach(function (k) {
+      k = k.trim();
+      if (BARRA[k] && r.indexOf(k) < 0) r.push(k);
+    });
+    PADRAO.forEach(function (k) { if (r.indexOf(k) < 0) r.push(k); });
+    return r;
+  }
 
   function montarNavegacao() {
     var itens = $("itens");
     limpar(itens);
-    PAGINAS.forEach(function (p) {
-      var b = el("button", "item", null, icone(p[3]), el("span", "", t(p[1], p[2])));
+    ordemDaBarra().forEach(function (k) {
+      var d = BARRA[k];
+      var g = el("span", "gl");
+      if (typeof d[4] === "string") { g.className = "gl icone"; g.textContent = d[4]; }
+      else g.appendChild(svg(d[4]));
+      var texto = T(d[1], t(d[2], d[3]));
+      var b = el("button", "item", null, g, el("span", "tx", texto));
       b.type = "button";
+      b.title = texto;
       b.setAttribute("role", "tab");
-      b.dataset.pagina = p[0];
-      b.addEventListener("click", function () { mostrar(p[0]); });
+      b.dataset.pagina = d[0];
+      b.dataset.chave = k;
+      b.addEventListener("click", function () { if (!arrasto.houve) mostrar(d[0]); });
+      b.addEventListener("pointerdown", function (e) { comecarArrasto(e, b); });
       itens.appendChild(b);
     });
-    $("perfil-rotulo").textContent = t("PERFIL ATIVO", "ACTIVE PROFILE");
-    $("rodape").textContent = "v" + S.versao;
-    document.documentElement.lang = S.pt ? "pt-BR" : "en";
+    $("perfil-rotulo").textContent = T("ActiveProfile", t("PERFIL ATIVO", "ACTIVE PROFILE"));
+    $("nav").classList.toggle("recolhida", !!(S.barra && S.barra.recolhida));
+    $("recolher").setAttribute("aria-label", t("Recolher a barra (Ctrl+B)", "Collapse the sidebar (Ctrl+B)"));
+    marcarNavegacao();
+  }
+
+  function marcarNavegacao() {
+    Array.prototype.forEach.call($("itens").children, function (b) {
+      b.setAttribute("aria-selected", b.dataset.pagina === atual ? "true" : "false");
+    });
+    $("perfil-ativo").textContent = S.ativo;
+  }
+
+  function recolher() {
+    var nav = $("nav");
+    var v = !nav.classList.contains("recolhida");
+    nav.classList.toggle("recolhida", v);
+    if (S.barra) S.barra.recolhida = v;
+    pedir("barra", { recolhida: v }).catch(function () { });
+  }
+
+  /// Arrastar um item muda a ordem da barra, como na classica.
+  var arrasto = { b: null, y0: 0, ativo: false, houve: false, destino: -1 };
+  function comecarArrasto(e, b) {
+    if (e.button !== 0) return;
+    arrasto = { b: b, y0: e.clientY, ativo: false, houve: false, destino: -1 };
+    document.addEventListener("pointermove", moverArrasto);
+    document.addEventListener("pointerup", soltarArrasto);
+  }
+  function moverArrasto(e) {
+    if (!arrasto.b) return;
+    if (!arrasto.ativo && Math.abs(e.clientY - arrasto.y0) < 6) return;
+    arrasto.ativo = true;
+    arrasto.b.classList.add("arrastando");
+    var itens = Array.prototype.slice.call($("itens").children);
+    var destino = itens.length;
+    for (var i = 0; i < itens.length; i++) {
+      var r = itens[i].getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { destino = i; break; }
+    }
+    arrasto.destino = destino;
+    itens.forEach(function (x, k) {
+      x.classList.toggle("alvo-antes", k === destino);
+      x.classList.toggle("alvo-depois", destino === itens.length && k === itens.length - 1);
+    });
+  }
+  function soltarArrasto() {
+    document.removeEventListener("pointermove", moverArrasto);
+    document.removeEventListener("pointerup", soltarArrasto);
+    var a = arrasto;
+    if (!a.b) return;
+    var itens = Array.prototype.slice.call($("itens").children);
+    itens.forEach(function (x) { x.classList.remove("arrastando", "alvo-antes", "alvo-depois"); });
+    if (!a.ativo) { arrasto.b = null; return; }
+    arrasto.houve = true;
+    setTimeout(function () { arrasto.houve = false; }, 0);
+    var ordem = itens.map(function (x) { return x.dataset.chave; });
+    var de = ordem.indexOf(a.b.dataset.chave);
+    var para = a.destino > de ? a.destino - 1 : a.destino;
+    if (para === de || para < 0) return;
+    ordem.splice(de, 1);
+    ordem.splice(para, 0, a.b.dataset.chave);
+    S.barra.ordem = ordem.join(",");
+    montarNavegacao();
+    pedir("barra", { ordem: S.barra.ordem }).catch(function (e) { faixa(e.message, true); });
   }
 
   var MONTAR = {};
@@ -253,23 +590,18 @@
     var mudou = pagina !== atual;
     atual = pagina;
     try { sessionStorage.setItem("pagina", pagina); } catch (e) { }
-    var def = null;
-    PAGINAS.forEach(function (p) { if (p[0] === pagina) def = p; });
-    Array.prototype.forEach.call($("itens").children, function (b) {
-      b.setAttribute("aria-selected", b.dataset.pagina === pagina ? "true" : "false");
-    });
-    $("titulo").textContent = t(def[1], def[2]);
-    limpar($("acoes"));
+    marcarNavegacao();
     var alvo = $("pagina");
     var rolagem = mesma ? alvo.scrollTop : 0;
     limpar(alvo);
-    alvo.className = pagina === "casa" ? "casa" : (mudou && !mesma ? "entra" : "");
-    if (mudou) faixa("");
+    alvo.className = pagina === "casa" ? "casa" : "";
+    if (mudou && !mesma) faixa("");
     if (pagina !== "casa") avisar("casa.area", { visivel: false, x: 0, y: 0, w: 0, h: 0 });
-    vista = MONTAR[pagina](alvo) || {};
+    var dentro = pagina === "casa" ? alvo : el("div", "largura");
+    if (dentro !== alvo) alvo.appendChild(dentro);
+    vista = MONTAR[pagina](dentro) || {};
     alvo.scrollTop = rolagem;
     if (E && vista.atualizar) vista.atualizar();
-    $("perfil-ativo").textContent = S.ativo;
   }
 
   function aoEstado() {
@@ -281,6 +613,179 @@
       if (atual === "painel") { mostrar("painel", true); return; }
     }
     if (vista && vista.atualizar) vista.atualizar();
+  }
+
+  // ---------------- previa do cooler (PanelPreview) ----------------
+
+  var DIGITOS = [
+    [1, 1, 1, 1, 1, 1, 0], [0, 1, 1, 0, 0, 0, 0], [1, 1, 0, 1, 1, 0, 1], [1, 1, 1, 1, 0, 0, 1], [0, 1, 1, 0, 0, 1, 1],
+    [1, 0, 1, 1, 0, 1, 1], [1, 0, 1, 1, 1, 1, 1], [1, 1, 1, 0, 0, 0, 0], [1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 0, 1, 1]
+  ];
+  var SEG_ON = "rgb(240,245,252)", SEG_OFF = "rgba(105,116,132,0.165)", SEG_BRILHO = "rgba(240,245,252,0.133)";
+  var cooler = new Image();
+  var fundoDoCooler = "rgb(16,17,20)";
+  var previas = [];
+  cooler.addEventListener("load", function () {
+    try {
+      var c = document.createElement("canvas");
+      c.width = 4; c.height = 4;
+      var g = c.getContext("2d");
+      g.drawImage(cooler, -2, -2);
+      var p = g.getImageData(0, 0, 1, 1).data;
+      fundoDoCooler = "rgb(" + p[0] + "," + p[1] + "," + p[2] + ")";
+    } catch (e) { }
+    previas.forEach(function (p) { p.desenhar(); });
+  });
+  cooler.src = "cooler.png";
+
+  function horizontal(x1, x2, y, t, gap) {
+    var h = t / 2; x1 += gap; x2 -= gap;
+    return [[x1 + h, y - h], [x2 - h, y - h], [x2, y], [x2 - h, y + h], [x1 + h, y + h], [x1, y]];
+  }
+  function vertical(x, y1, y2, t, gap) {
+    var h = t / 2; y1 += gap; y2 -= gap;
+    return [[x - h, y1 + h], [x, y1], [x + h, y1 + h], [x + h, y2 - h], [x, y2], [x - h, y2 - h]];
+  }
+  function poligono(g, pts) {
+    g.beginPath();
+    g.moveTo(pts[0][0], pts[0][1]);
+    for (var i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
+    g.closePath();
+  }
+  function digito(g, x, y, w, h, t, gap, d, aceso) {
+    var seg = DIGITOS[Math.min(Math.max(d, 0), 9)], meio = y + h / 2;
+    for (var i = 0; i < 7; i++) {
+      var on = aceso && seg[i], p;
+      switch (i) {
+        case 0: p = horizontal(x, x + w, y, t, gap); break;
+        case 1: p = vertical(x + w, y, meio, t, gap); break;
+        case 2: p = vertical(x + w, meio, y + h, t, gap); break;
+        case 3: p = horizontal(x, x + w, y + h, t, gap); break;
+        case 4: p = vertical(x, meio, y + h, t, gap); break;
+        case 5: p = vertical(x, y, meio, t, gap); break;
+        default: p = horizontal(x, x + w, meio, t, gap); break;
+      }
+      poligono(g, p);
+      if (on) { g.strokeStyle = SEG_BRILHO; g.lineWidth = t * 1.6; g.lineJoin = "round"; g.stroke(); }
+      g.fillStyle = on ? SEG_ON : SEG_OFF;
+      g.fill();
+    }
+  }
+  function arredondado(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+  function mostradorDoCooler(g, ax, ay, aw, ah, valor, cima, baixo, cimaAceso, seloAcima) {
+    var vazio = valor === null || valor === undefined;
+    var excede = !vazio && (valor > 999 || valor < 0);
+    var mostrado = vazio ? 0 : Math.min(Math.max(valor, 0), 999);
+    var dh = ah * 0.68, esp = Math.max(1.6, dh / 14), gap = esp * 0.4, topo = ay + (ah - dh) / 2;
+    var fonte = Math.max(5.5, dh * 0.30) * 4 / 3;
+    g.font = "bold " + fonte + "px 'Segoe UI', sans-serif";
+    g.textBaseline = "top";
+    var uw = Math.max(g.measureText(cima).width, g.measureText(baixo).width) + fonte * 0.35 + 3;
+    var cel = (aw - uw) / 3, dw = cel * 0.54, esq = ax + (cel - dw) / 2;
+    var c = Math.floor(mostrado / 100), d = Math.floor(mostrado / 10) % 10, u = mostrado % 10;
+    digito(g, esq, topo, dw, dh, esp, gap, c, !vazio && c > 0);
+    digito(g, esq + cel, topo, dw, dh, esp, gap, d, !vazio && mostrado >= 10);
+    digito(g, esq + cel * 2, topo, dw, dh, esp, gap, u, !vazio);
+    var x = ax + aw - uw + 1 + fonte * 0.17;
+    g.fillStyle = !vazio && cimaAceso ? SEG_ON : SEG_OFF;
+    g.fillText(cima, x, topo - 1 + fonte * 0.12);
+    g.fillStyle = !vazio && !cimaAceso ? SEG_ON : SEG_OFF;
+    g.textBaseline = "bottom";
+    g.fillText(baixo, x, topo + dh + 1 - fonte * 0.12);
+    var selo = null, cor = null;
+    if (vazio) { selo = T("BadgeNoReading", t("sem leitura", "no reading")); cor = "rgb(165,170,180)"; }
+    else if (excede) { selo = T("BadgeOver999", t("excede 999", "over 999")); cor = "#F0AF3C"; }
+    if (!selo) return;
+    var rx = Math.round(ax - 5), ry = Math.round(ay - 4), rw = Math.round(aw + 10), rh = Math.round(ah + 8);
+    g.strokeStyle = cor; g.lineWidth = 1.4;
+    arredondado(g, rx, ry, rw, rh, 6); g.stroke();
+    g.font = "600 11px 'Segoe UI Variable Small','Segoe UI',sans-serif";
+    g.textBaseline = "top";
+    var tw = g.measureText(selo).width, th = 15;
+    var ty = seloAcima ? ry - th - 7 : ry + rh + 5;
+    g.fillStyle = "rgba(15,16,20,0.88)";
+    arredondado(g, ax + 4, ty, tw + 10, th + 2, 4); g.fill();
+    g.fillStyle = cor;
+    g.fillText(selo, ax + 9, ty + 2);
+  }
+
+  /// A previa do display: a foto do cooler com os dois mostradores de 7 segmentos.
+  function previaDoCooler() {
+    var caixa = el("div", "previa");
+    var canvas = el("canvas");
+    caixa.appendChild(canvas);
+    var estado = { v1: null, v2: null, f: false, p: true };
+    var p = {
+      el: caixa,
+      definir: function (v1, v2, fahrenheit, percent) {
+        if (estado.v1 === v1 && estado.v2 === v2 && estado.f === fahrenheit && estado.p === percent && canvas.width) return;
+        estado = { v1: v1, v2: v2, f: fahrenheit, p: percent };
+        p.desenhar();
+      },
+      desenhar: function () {
+        var r = caixa.getBoundingClientRect();
+        var dpr = window.devicePixelRatio || 1;
+        var W = Math.max(1, Math.round(r.width)), H = Math.max(1, Math.round(r.height));
+        if (W < 40 || H < 30) return;
+        if (canvas.width !== W * dpr) canvas.width = W * dpr;
+        if (canvas.height !== H * dpr) canvas.height = H * dpr;
+        var g = canvas.getContext("2d");
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        g.fillStyle = fundoDoCooler;
+        g.fillRect(0, 0, W, H);
+        var placa;
+        if (cooler.complete && cooler.naturalWidth > 0) {
+          var razao = cooler.naturalWidth / cooler.naturalHeight;
+          var h = H, w = Math.round(h * razao);
+          if (w > W) { w = W; h = Math.round(w / razao); }
+          var ix = Math.floor((W - w) / 2), iy = Math.floor((H - h) / 2);
+          g.imageSmoothingQuality = "high";
+          g.drawImage(cooler, ix, iy, w, h);
+          placa = [ix + w * 0.075, iy + h * 0.190, w * (0.765 - 0.075), h * (0.815 - 0.190)];
+        } else placa = [W * 0.1, H * 0.1, W * 0.8, H * 0.8];
+        var dw = placa[2] * 0.62, dh = dw * 0.43, vg = dh * 0.18, total = dh * 2 + vg;
+        var x = placa[0] + (placa[2] - dw) / 2, y = placa[1] + (placa[3] - total) / 2;
+        mostradorDoCooler(g, x, y, dw, dh, estado.v1, "°C", "°F", !estado.f, true);
+        mostradorDoCooler(g, x, y + dh + vg, dw, dh, estado.v2, "%", "W", estado.p, false);
+      }
+    };
+    previas.push(p);
+    var obs = window.ResizeObserver ? new ResizeObserver(function () { p.desenhar(); }) : null;
+    if (obs) obs.observe(caixa);
+    p.sair = function () {
+      if (obs) obs.disconnect();
+      var i = previas.indexOf(p);
+      if (i >= 0) previas.splice(i, 1);
+    };
+    return p;
+  }
+
+  // ---------------- o valor que vai ao mostrador (Scaling) ----------------
+
+  function sugerido(tipo) {
+    return tipo === "Clock" || tipo === "Fan" || tipo === "Frequency" ? 10 : tipo === "Throughput" ? 1000 : 1;
+  }
+  function divisorEfetivo(configurado, s) {
+    if (configurado > 0) return configurado;
+    if (s && s.tipo === "Throughput" && s.unidade && s.unidade.toLowerCase() !== "b/s") return 1;
+    return s ? sugerido(s.tipo) : 1;
+  }
+  function valorDoPainel(id, divisor, fahrenheit) {
+    var s = sensor(id), v = leitura(id);
+    if (!s || v === null) return null;
+    if (fahrenheit && s.tipo === "Temperature") v = v * 9 / 5 + 32;
+    var d = divisorEfetivo(divisor, s);
+    if (d > 1) v /= d;
+    v = Math.round(v);
+    return Math.max(0, Math.min(999, v));
+  }
+  function previaDoPerfil(pv, p) {
+    if (!p) { pv.definir(null, null, false, true); return; }
+    pv.definir(valorDoPainel(p.p1, p.div1, p.fahrenheit), valorDoPainel(p.p2, p.div2, false), !!p.fahrenheit, !!p.percent);
   }
 
   // ---------------- Visao geral ----------------
@@ -301,13 +806,13 @@
   }
 
   function seloDoPainel() {
-    var s = el("span", "selo");
+    var s = el("span", "marca");
     s.atualizar = function () {
       var p = E ? E.painel : null;
-      if (!p) { s.className = "selo"; s.textContent = "…"; return; }
-      if (p.pausado) { s.className = "selo aviso"; s.textContent = t("Pausado", "Paused"); }
-      else if (p.conectado) { s.className = "selo ok"; s.textContent = t("Conectado", "Connected"); }
-      else { s.className = "selo erro"; s.textContent = t("Painel não encontrado", "Panel not found"); }
+      if (!p) { s.className = "marca"; s.textContent = "…"; return; }
+      if (p.pausado) { s.className = "marca aviso"; s.textContent = t("Pausado", "Paused"); }
+      else if (p.conectado) { s.className = "marca ok"; s.textContent = t("Conectado", "Connected"); }
+      else { s.className = "marca erro"; s.textContent = t("Painel não encontrado", "Panel not found"); }
     };
     return s;
   }
@@ -321,7 +826,7 @@
     var grade = el("div", "grade larga");
     var m = mostradores(), selo = seloDoPainel();
     var legenda = el("div", "legenda");
-    var painel = cartao(t("Painel do cooler", "Cooler panel"), "duplo");
+    var painel = cartaoSimples(t("Painel do cooler", "Cooler panel"), "duplo");
     painel.appendChild(m);
     painel.appendChild(legenda);
     var pe = el("div", "inline");
@@ -334,7 +839,7 @@
     painel.appendChild(pe);
     grade.appendChild(painel);
 
-    var destaque = cartao(t("Sensores acompanhados", "Tracked sensors"));
+    var destaque = cartaoSimples(t("Sensores acompanhados", "Tracked sensors"));
     var linhasDeSensor = [];
     if (S.metricas.length === 0)
       destaque.appendChild(el("div", "vazio", t("Escolha sensores na página Métricas.", "Pick sensors on the Metrics page.")));
@@ -351,12 +856,12 @@
     }
     grade.appendChild(destaque);
 
-    var bat = cartao(t("Baterias", "Batteries"));
+    var bat = cartaoSimples(t("Baterias", "Batteries"));
     var batLista = el("div");
     bat.appendChild(batLista);
     grade.appendChild(bat);
 
-    var casa = cartao(t("Casa", "Home"));
+    var casa = cartaoSimples(t("Casa", "Home"));
     var casaLista = el("div", "linhas");
     casa.appendChild(casaLista);
     grade.appendChild(casa);
@@ -422,12 +927,6 @@
     });
   }
 
-  function botao(texto, classe, aoClicar) {
-    var b = el("button", classe || "b", texto);
-    b.type = "button";
-    b.addEventListener("click", aoClicar);
-    return b;
-  }
 
   /// Um botao que pede confirmacao no segundo clique (a pagina nao usa caixas de dialogo).
   function botaoPerigoso(texto, confirmar, aoConfirmar) {
@@ -448,14 +947,14 @@
 
   MONTAR.baterias = function (alvo) {
     var grade = el("div", "grade larga");
-    var c = cartao(t("Periféricos", "Peripherals"), "duplo");
+    var c = cartaoSimples(t("Periféricos", "Peripherals"), "duplo");
     var lista = el("div");
     c.appendChild(lista);
     grade.appendChild(c);
 
     if (S.widget) {
       var w = S.widget;
-      var wc = cartao(t("Widget na área de trabalho", "Desktop widget"));
+      var wc = cartaoSimples(t("Widget na área de trabalho", "Desktop widget"));
       function mudarWidget(a) { mudar("widget", a); }
       wc.appendChild(chave(t("Mostrar o widget", "Show the widget"), null, troca(w.ativo, function (v) { mudarWidget({ ativo: v }); })));
       wc.appendChild(chave(t("Mostrar a Casa no widget", "Show Home on the widget"), null, troca(w.casa, function (v) { mudarWidget({ casa: v }); })));
@@ -483,192 +982,6 @@
     return b;
   }
 
-  // ---------------- Painel CPU e perfis ----------------
-
-  MONTAR.painel = function (alvo) {
-    var perfil = null;
-    S.perfis.forEach(function (p) { if (p.nome === editando) perfil = p; });
-    if (!perfil) S.perfis.forEach(function (p) { if (p.nome === S.ativo) perfil = p; });
-    if (!perfil) perfil = S.perfis[0];
-    editando = perfil ? perfil.nome : "";
-
-    var chips = el("div", "chips");
-    S.perfis.forEach(function (p) {
-      var c = el("button", "chip");
-      c.type = "button";
-      if (p.nome === S.ativo) {
-        var ponto = el("span", "ponto");
-        ponto.title = t("ativo", "active");
-        c.appendChild(ponto);
-      }
-      c.appendChild(document.createTextNode(p.nome + (p.nome === S.padrao ? " ★" : "")));
-      c.setAttribute("aria-pressed", p.nome === editando ? "true" : "false");
-      c.addEventListener("click", function () { editando = p.nome; mostrar("painel", true); });
-      chips.appendChild(c);
-    });
-    alvo.appendChild(chips);
-    if (!perfil) return {};
-
-    var grade = el("div", "grade larga");
-    var previa = cartao(t("No mostrador agora", "On the display now"));
-    var m = mostradores(), selo = seloDoPainel();
-    previa.appendChild(m);
-    var ativoAgora = el("div", "legenda");
-    previa.appendChild(ativoAgora);
-    var pe = el("div", "inline");
-    pe.style.marginTop = "12px";
-    pe.appendChild(selo);
-    if (perfil.nome !== S.ativo) {
-      var ativar = el("button", "b p", t("Ativar este perfil", "Activate this profile"));
-      ativar.type = "button";
-      ativar.addEventListener("click", function () { mudar("perfil.ativar", { nome: perfil.nome }); });
-      pe.appendChild(ativar);
-    }
-    previa.appendChild(pe);
-    grade.appendChild(previa);
-
-    var edicao = cartao(t("Perfil", "Profile") + " " + perfil.nome, "duplo");
-    var s1 = seletorDeSensor(perfil.p1, t("(nenhum)", "(none)"));
-    var s2 = seletorDeSensor(perfil.p2, t("(nenhum)", "(none)"));
-    var v1 = el("span", "legenda"), v2 = el("span", "legenda");
-    var divisores = [[0, t("Automático", "Automatic")], [1, "÷ 1"], [10, "÷ 10"], [100, "÷ 100"], [1000, "÷ 1000"]];
-    function seletorDeDivisor(valor) {
-      var s = el("select");
-      divisores.forEach(function (d) { var o = el("option", "", d[1]); o.value = String(d[0]); s.appendChild(o); });
-      s.value = String(valor);
-      return s;
-    }
-    var d1 = seletorDeDivisor(perfil.div1), d2 = seletorDeDivisor(perfil.div2);
-    var grau = segmentos([[false, "°C"], [true, "°F"]], !!perfil.fahrenheit);
-    var pct = segmentos([[true, "%"], [false, "W"]], !!perfil.percent);
-    var rodizio = !!perfil.rodizio;
-
-    var duas = el("div", "duas");
-    var esq = el("div"), dir = el("div");
-    esq.appendChild(campo(t("Mostrador de cima", "Top display"), s1));
-    esq.appendChild(v1);
-    esq.appendChild(campo(t("Indicador de cima", "Top indicator"), grau));
-    esq.appendChild(campo(t("Divisor de cima", "Top divisor"), d1));
-    dir.appendChild(campo(t("Mostrador de baixo", "Bottom display"), s2));
-    dir.appendChild(v2);
-    dir.appendChild(campo(t("Indicador de baixo", "Bottom indicator"), pct));
-    dir.appendChild(campo(t("Divisor de baixo", "Bottom divisor"), d2));
-    v1.style.margin = "-8px 0 14px"; v2.style.margin = "-8px 0 14px";
-    v1.style.display = "block"; v2.style.display = "block";
-    duas.appendChild(esq); duas.appendChild(dir);
-    edicao.appendChild(duas);
-    edicao.appendChild(chave(t("Entra no rodízio", "Part of the rotation"),
-      t("O rodízio troca entre os perfis marcados; o tempo fica em Configurações.",
-        "The rotation switches between the marked profiles; the time is under Settings."),
-      troca(rodizio, function (v) { rodizio = v; })));
-    var salvar = el("button", "b p", t("Salvar", "Save"));
-    salvar.type = "button";
-    salvar.addEventListener("click", function () {
-      salvar.disabled = true;
-      mudar("perfil.salvar", {
-        nome: perfil.nome, p1: s1.value, p2: s2.value, fahrenheit: grau.valor, percent: pct.valor,
-        div1: Number(d1.value), div2: Number(d2.value), rodizio: rodizio
-      }, t("Perfil salvo.", "Profile saved.")).then(function () { salvar.disabled = false; });
-    });
-    var acoes = el("div", "inline");
-    acoes.style.marginTop = "14px";
-    acoes.appendChild(salvar);
-    edicao.appendChild(acoes);
-    grade.appendChild(edicao);
-
-    var gestao = cartao(t("Perfis", "Profiles"));
-    var nome = el("input");
-    nome.type = "text"; nome.maxLength = 24;
-    nome.placeholder = t("Nome", "Name");
-    nome.setAttribute("aria-label", t("Nome do perfil", "Profile name"));
-    function comNome(fazer) {
-      var n = nome.value.trim();
-      if (!n) { faixa(t("Escreva o nome primeiro.", "Type the name first."), true); nome.focus(); return; }
-      fazer(n);
-    }
-    var criar = botao(t("Novo", "New"), "b p", function () {
-      comNome(function (n) {
-        editando = n;
-        mudar("perfil.criar", { nome: n }, t("Perfil criado a partir do ativo.", "Profile created from the active one."));
-      });
-    });
-    nome.addEventListener("keydown", function (e) { if (e.key === "Enter") criar.click(); });
-    gestao.appendChild(el("div", "inline", null, nome, criar));
-    var linhaDeAcoes = el("div", "inline quebra");
-    linhaDeAcoes.style.marginTop = "10px";
-    linhaDeAcoes.appendChild(botao(t("Duplicar", "Duplicate"), "b", function () {
-      comNome(function (n) { editando = n; mudar("perfil.duplicar", { nome: perfil.nome, novo: n }, t("Perfil duplicado.", "Profile duplicated.")); });
-    }));
-    linhaDeAcoes.appendChild(botao(t("Renomear", "Rename"), "b", function () {
-      comNome(function (n) { editando = n; mudar("perfil.renomear", { nome: perfil.nome, novo: n }, t("Perfil renomeado.", "Profile renamed.")); });
-    }));
-    gestao.appendChild(linhaDeAcoes);
-    gestao.appendChild(el("p", "vazio", t("Duplicar e renomear usam o nome escrito acima e valem para o perfil aberto (" + perfil.nome + ").",
-      "Duplicate and rename use the name typed above and apply to the open profile (" + perfil.nome + ").")));
-    var linha2 = el("div", "inline quebra");
-    if (perfil.nome !== S.padrao)
-      linha2.appendChild(botao(t("Tornar padrão", "Make default"), "b", function () {
-        mudar("perfil.padrao", { nome: perfil.nome }, t("Perfil padrão definido.", "Default profile set."));
-      }));
-    linha2.appendChild(botao(t("Exportar", "Export"), "b", function () { mudar("perfil.exportar", { nome: perfil.nome }); }));
-    linha2.appendChild(botao(t("Importar", "Import"), "b", function () { mudar("perfil.importar"); }));
-    if (S.perfis.length > 1)
-      linha2.appendChild(botaoPerigoso(t("Excluir", "Delete"), t("Confirmar exclusão", "Confirm delete"), function () {
-        editando = "";
-        mudar("perfil.excluir", { nome: perfil.nome }, t("Perfil excluído.", "Profile deleted."));
-      }));
-    gestao.appendChild(linha2);
-    gestao.appendChild(el("p", "vazio", t("O padrão (★) é o perfil que volta quando um jogo fecha.",
-      "The default (★) is the profile that comes back when a game closes.")));
-    grade.appendChild(gestao);
-
-    var jogos = cartao(t("Perfil por jogo", "Per-game profile"), "duplo");
-    jogos.appendChild(chave(t("Trocar de perfil ao abrir um jogo", "Switch profile when a game starts"),
-      S.jogos.rtss ? t("O jogo é reconhecido pelo RTSS.", "The game is recognized through RTSS.")
-                   : t("Precisa do RTSS, que não foi encontrado. Instale em Configurações.", "Needs RTSS, which was not found. Install it under Settings."),
-      troca(S.jogos.ligado, function (v) { mudar("jogos.ligar", { ligado: v }); })));
-    var agora = el("div", "chave");
-    var agoraTexto = el("div");
-    var vincular = botao("", "b", function () { mudar("jogo.vincular", { perfil: perfil.nome }, t("Jogo vinculado.", "Game bound.")); });
-    agora.appendChild(agoraTexto); agora.appendChild(vincular);
-    jogos.appendChild(agora);
-    var listaDeJogos = el("div", "linhas");
-    S.jogos.vinculos.forEach(function (v) {
-      var x = el("button", "x", "✕");
-      x.type = "button";
-      x.setAttribute("aria-label", t("Desvincular ", "Unbind ") + v.nome);
-      x.addEventListener("click", function () { mudar("jogo.desvincular", { chave: v.chave }); });
-      var l = el("div", "linha", null, el("span", "k", v.nome), el("span", "v", v.perfil), x);
-      listaDeJogos.appendChild(l);
-    });
-    if (!S.jogos.vinculos.length) listaDeJogos.appendChild(el("div", "vazio", t("Nenhum jogo vinculado.", "No bound game.")));
-    jogos.appendChild(listaDeJogos);
-    grade.appendChild(jogos);
-    var ultimoJogo = "-";
-    function atualizarJogo() {
-      var j = E ? E.jogo : null;
-      var marca = j ? j.chave + "|" + (j.perfil || "") : "";
-      if (marca === ultimoJogo) return;
-      ultimoJogo = marca;
-      limpar(agoraTexto);
-      agoraTexto.appendChild(el("span", "", j ? t("Jogo agora: ", "Game now: ") + j.nome : t("Nenhum jogo aberto agora.", "No game running now.")));
-      if (j) agoraTexto.appendChild(el("small", "", j.perfil ? t("vinculado a ", "bound to ") + j.perfil : t("sem vínculo", "not bound")));
-      vincular.textContent = t("Vincular a ", "Bind to ") + perfil.nome;
-      vincular.disabled = !j || !S.jogos.ligado || j.perfil === perfil.nome;
-    }
-
-    alvo.appendChild(grade);
-
-    return {
-      atualizar: function () {
-        m.atualizar(); selo.atualizar();
-        atualizarJogo();
-        ativoAgora.textContent = t("Perfil ativo: ", "Active profile: ") + E.painel.perfil;
-        v1.textContent = s1.value ? t("Agora: ", "Now: ") + comUnidade(s1.value) : "";
-        v2.textContent = s2.value ? t("Agora: ", "Now: ") + comUnidade(s2.value) : "";
-      }
-    };
-  };
 
   // ---------------- Metricas ----------------
 
@@ -726,7 +1039,7 @@
     var cartoes = [];
     S.metricas.forEach(function (id) {
       var s = sensor(id);
-      var c = el("div", "cartao");
+      var c = el("div", "cartao simples");
       var fechar = el("button", "x", "✕");
       fechar.type = "button";
       fechar.setAttribute("aria-label", t("Deixar de acompanhar", "Stop tracking"));
@@ -791,7 +1104,7 @@
     function desenhar() {
       limpar(grade);
       specs.forEach(function (g) {
-        var c = cartao(g.titulo);
+        var c = cartaoSimples(g.titulo);
         if (g.destaque) {
           var d = el("div", "valor", g.destaque);
           d.style.fontSize = "17px"; d.style.marginBottom = "8px"; d.style.userSelect = "text";
@@ -813,23 +1126,488 @@
     var de = el("button", "b", t("Ler de novo", "Read again"));
     de.type = "button";
     de.addEventListener("click", coletar);
-    $("acoes").appendChild(de);
+    var barraDeSpecs = el("div", "barra-de-acoes", null, de);
+    alvo.insertBefore(barraDeSpecs, grade);
     if (specs) desenhar(); else coletar();
     return { sair: function () { vivo = false; } };
   };
 
+
+  // ---------------- Painel CPU: Paineis e Perfis ----------------
+
+  function perfilEditado() {
+    var p = perfil(editando) || perfil(S.ativo) || S.perfis[0] || null;
+    editando = p ? p.nome : "";
+    return p;
+  }
+
+  /// Grava o perfil com as mudancas por cima do que ele ja tem (a classica grava na hora).
+  function salvarPerfil(p, mudancas) {
+    var a = { nome: p.nome, p1: p.p1, p2: p.p2, fahrenheit: !!p.fahrenheit, percent: !!p.percent, div1: p.div1, div2: p.div2, rodizio: !!p.rodizio };
+    for (var k in mudancas) if (Object.prototype.hasOwnProperty.call(mudancas, k)) a[k] = mudancas[k];
+    return mudar("perfil.salvar", a);
+  }
+
+  /// Trocar o sensor de um painel; no de baixo a unidade acompanha (W para potencia, % para carga).
+  function trocarSensor(p, n) {
+    escolherSensor(T(n === 1 ? "PickSensor1" : "PickSensor2", t("Sensor do painel " + n, "Panel " + n + " sensor")), n === 1 ? p.p1 : p.p2)
+      .then(function (id) {
+        if (!id) return;
+        var m = {};
+        m[n === 1 ? "p1" : "p2"] = id;
+        if (n === 2) {
+          var s = sensor(id);
+          if (s && s.tipo === "Power") m.percent = false;
+          else if (s && (s.tipo === "Load" || s.tipo === "Level")) m.percent = true;
+        }
+        salvarPerfil(p, m);
+      });
+  }
+
+  function nomeCurto(id) {
+    var s = sensor(id);
+    return s ? s.nome : id ? t("sensor ausente", "missing sensor") : "—";
+  }
+
+  function textoDoSensor(id, fahrenheit) {
+    var s = sensor(id), v = leitura(id);
+    if (v === null) return null;
+    if (fahrenheit && s && s.tipo === "Temperature") return numero(v * 9 / 5 + 32) + " °F";
+    return comUnidade(id);
+  }
+
+  /// SensorSlot: nome, "categoria · fonte", a leitura em destaque e Trocar.
+  function slotDeSensor(p, n) {
+    var id = n === 1 ? p.p1 : p.p2;
+    var s = sensor(id);
+    var valor = el("span", "sv");
+    var st = el("div", "st");
+    if (s) {
+      st.appendChild(el("b", "", s.nome));
+      st.appendChild(el("small", "", [s.grupo || s.categoria, s.fonte].filter(function (x) { return x; }).join("  ·  ")));
+    } else st.appendChild(el("span", "nota", id ? t("sensor ausente", "missing sensor") : T("NoSensorChosen", t("nenhum sensor escolhido", "no sensor chosen"))));
+    var slot = el("div", "slot", null, st, valor, botao(T("Change", t("Trocar", "Change")), "b", function () { trocarSensor(p, n); }));
+    slot.atualizar = function () {
+      var txt = s ? textoDoSensor(id, n === 1 && p.fahrenheit) : null;
+      valor.textContent = txt || (s ? T("NoReading", t("sem leitura", "no reading")) : "");
+      valor.className = txt ? "sv" : "sv sem";
+    };
+    return slot;
+  }
+
+  function cartaoDoPainel(p, n) {
+    var c = cartao(T(n === 1 ? "Panel1" : "Panel2", n === 1 ? t("Painel 1  ·  cima", "Panel 1  ·  top") : t("Painel 2  ·  baixo", "Panel 2  ·  bottom")));
+    var slot = slotDeSensor(p, n);
+    c.corpo.appendChild(slot);
+    c.corpo.appendChild(el("div", "rotulo", T("Scale", t("Escala", "Scale"))));
+    var escala = el("div", "escala");
+    var div = n === 1 ? p.div1 : p.div2;
+    [[0, "Auto"], [1, "÷1"], [10, "÷10"], [100, "÷100"], [1000, "÷1000"]].forEach(function (d) {
+      var b = botao(d[1], "b pequeno" + (d[0] === div ? " sel" : ""), function () {
+        if (d[0] === div) return;
+        var m = {}; m[n === 1 ? "div1" : "div2"] = d[0];
+        salvarPerfil(p, m);
+      });
+      b.setAttribute("aria-pressed", d[0] === div ? "true" : "false");
+      escala.appendChild(b);
+    });
+    c.corpo.appendChild(escala);
+    c.corpo.appendChild(el("div", "rotulo", T("Unit", t("Unidade", "Unit"))));
+    var unidade = n === 1
+      ? segmentos([[false, "°C"], [true, "°F"]], !!p.fahrenheit, function (v) { salvarPerfil(p, { fahrenheit: v }); })
+      : segmentos([[true, "%"], [false, "W"]], !!p.percent, function (v) { salvarPerfil(p, { percent: v }); });
+    unidade.style.width = "140px";
+    unidade.style.height = "30px";
+    c.corpo.appendChild(unidade);
+    var nota = el("div", "nota", T("UnitAlwaysOn", t("O cooler acende sempre um dos dois, não há como apagar.", "The cooler always lights one of the two, it cannot be blanked.")));
+    nota.style.marginTop = "4px";
+    c.corpo.appendChild(nota);
+    c.vaga = slot;
+    return c;
+  }
+
+  function abaPaineis(alvo, p) {
+    var c1 = cartaoDoPainel(p, 1), c2 = cartaoDoPainel(p, 2);
+    alvo.appendChild(el("div", "dois", null, c1, c2));
+    var pc = cartao(T("Preview", t("Prévia", "Preview")), "grande");
+    var pv = previaDoCooler();
+    pc.corpo.appendChild(pv.el);
+    alvo.appendChild(pc);
+    return {
+      atualizar: function () { c1.vaga.atualizar(); c2.vaga.atualizar(); previaDoPerfil(pv, p); },
+      sair: pv.sair
+    };
+  }
+
+  function rotuloDoBotaoDePainel(p, n) {
+    var id = n === 1 ? p.p1 : p.p2;
+    var un = n === 1 ? (p.fahrenheit ? "°F" : "°C") : (p.percent ? "%" : "W");
+    return t("Painel ", "Panel ") + n + "  ·  " + nomeCurto(id) + "  (" + un + ")";
+  }
+
+  function abaPerfis(alvo, p) {
+    var esquerda = el("div", "coluna"), direita = el("div", "coluna");
+    alvo.appendChild(el("div", "lado", null, esquerda, direita));
+
+    // Perfis salvos
+    var salvos = cartao(T("SavedProfiles", t("Perfis salvos", "Saved profiles")), "estica");
+    var lista = el("div", "perfis");
+    lista.setAttribute("role", "listbox");
+    S.perfis.forEach(function (x) {
+      var nome = el("b", "", null, el("span", "", x.nome));
+      if (x.nome === S.padrao) nome.appendChild(el("span", "selo", T("DefaultBadge", t("PADRÃO", "DEFAULT"))));
+      if (x.nome === S.ativo) nome.appendChild(el("span", "selo cheio", T("ActiveBadge", t("ATIVO", "ACTIVE"))));
+      var r = el("div", "pf" + (x.nome === p.nome ? " sel" : ""), null, nome, el("small", "", nomeCurto(x.p1) + "  ·  " + nomeCurto(x.p2)));
+      r.setAttribute("role", "option");
+      r.setAttribute("aria-selected", x.nome === p.nome ? "true" : "false");
+      r.tabIndex = x.nome === p.nome ? 0 : -1;
+      r.addEventListener("click", function () { if (editando !== x.nome) { editando = x.nome; mostrar("painel", true); } });
+      r.addEventListener("dblclick", function () { if (x.nome !== S.ativo) mudar("perfil.ativar", { nome: x.nome }); });
+      lista.appendChild(r);
+    });
+    lista.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      var i = 0;
+      S.perfis.forEach(function (x, k) { if (x.nome === p.nome) i = k; });
+      var j = Math.max(0, Math.min(S.perfis.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+      if (j !== i) { editando = S.perfis[j].nome; mostrar("painel", true); var s = $("pagina").querySelector(".pf.sel"); if (s) s.focus(); }
+    });
+    salvos.corpo.appendChild(lista);
+    var acoes = el("div", "grade3");
+    acoes.appendChild(botao(T("New", t("Novo", "New")), "b", function () {
+      perguntarNome(T("NewProfileName", t("Nome do novo perfil:", "Name of the new profile:")), t("Perfil ", "Profile ") + (S.perfis.length + 1)).then(function (n) {
+        if (!n) return;
+        if (perfil(n)) { faixa(T("NameTaken"), true); return; }
+        editando = n;
+        mudar("perfil.criar", { nome: n });
+      });
+    }));
+    acoes.appendChild(botao(T("Rename", t("Renomear", "Rename")), "b", function () {
+      perguntarNome(T("NewName", t("Novo nome:", "New name:")), p.nome).then(function (n) {
+        if (!n || n === p.nome) return;
+        if (perfil(n)) { faixa(T("NameTaken"), true); return; }
+        editando = n;
+        mudar("perfil.renomear", { nome: p.nome, novo: n });
+      });
+    }));
+    acoes.appendChild(botao(T("Duplicate", t("Duplicar", "Duplicate")), "b", function () {
+      perguntarNome(T("CopyName", t("Nome da cópia:", "Name of the copy:")), p.nome + T("CopySuffix", t(" (cópia)", " (copy)"))).then(function (n) {
+        if (!n) return;
+        if (perfil(n)) { faixa(T("NameTaken"), true); return; }
+        editando = n;
+        mudar("perfil.duplicar", { nome: p.nome, novo: n });
+      });
+    }));
+    acoes.appendChild(botao(T("Export", t("Exportar", "Export")), "b", function () { mudar("perfil.exportar", { nome: p.nome }); }));
+    acoes.appendChild(botao(T("Import", t("Importar", "Import")), "b", function () { mudar("perfil.importar"); }));
+    acoes.appendChild(botao(T("Delete", t("Excluir", "Delete")), "b perigo", function () {
+      if (S.perfis.length <= 1) { faixa(T("KeepOneProfile"), true); return; }
+      confirmar(t("Excluir o perfil " + p.nome + "?", "Delete the profile " + p.nome + "?"), T("Delete", t("Excluir", "Delete")), "b perigo").then(function (sim) {
+        if (!sim) return;
+        editando = "";
+        mudar("perfil.excluir", { nome: p.nome });
+      });
+    }));
+    salvos.corpo.appendChild(acoes);
+    esquerda.appendChild(salvos);
+
+    // Rodizio
+    var rod = cartao(T("Rotation", t("Rodízio", "Rotation")));
+    var segundos = S.rodizio && S.rodizio.segundos > 0 ? S.rodizio.segundos : 20;
+    var num = caixaNumero(segundos, 2, S.maximo || 999, function (v) { mudar("rodizio", { nome: p.nome, ligado: !!p.rodizio, segundos: v }); });
+    var tg = trocaComRotulo(T("IncludeInRotation", t("Incluir o perfil selecionado no rodízio", "Include the selected profile in the rotation")), !!p.rodizio,
+      function (v) { mudar("rodizio", { nome: p.nome, ligado: v, segundos: num.valor }); });
+    num.ligar(!!p.rodizio);
+    tg.style.marginBottom = "12px";
+    rod.corpo.appendChild(tg);
+    var linhaNum = el("div", "inline", null, num, el("span", "nota", S.rodizio ? S.rodizio.nota : ""));
+    linhaNum.style.gap = "12px";
+    rod.corpo.appendChild(linhaNum);
+    esquerda.appendChild(rod);
+
+    // Previa do perfil selecionado
+    var prev = cartao(T("ProfilePreview", t("Prévia do perfil selecionado", "Preview of the selected profile")));
+    var pv = previaDoCooler();
+    var col = el("div", "botoes-col");
+    col.appendChild(botao(rotuloDoBotaoDePainel(p, 1), "b", function () { trocarSensor(p, 1); }));
+    col.appendChild(botao(rotuloDoBotaoDePainel(p, 2), "b", function () { trocarSensor(p, 2); }));
+    var padrao = botao(p.nome === S.padrao ? T("AlreadyDefault", t("Perfil padrão", "Default profile")) : T("SetAsDefault", t("Definir como padrão", "Set as default")), "b",
+      function () { mudar("perfil.padrao", { nome: p.nome }); });
+    padrao.disabled = p.nome === S.padrao;
+    col.appendChild(padrao);
+    var aplicar = botao(p.nome === S.ativo ? T("AlreadyActive", t("Perfil ativo", "Active profile")) : T("ApplyProfile", t("Aplicar perfil", "Apply profile")),
+      p.nome === S.ativo ? "b" : "b p", function () { mudar("perfil.ativar", { nome: p.nome }); });
+    aplicar.disabled = p.nome === S.ativo;
+    col.appendChild(aplicar);
+    prev.corpo.appendChild(el("div", "previa-lado", null, pv.el, col));
+    direita.appendChild(prev);
+
+    // Perfil por jogo
+    var jogos = cartao(T("GameProfilesCard", t("Perfil por jogo", "Profile per game")), "estica");
+    var tgJogo = trocaComRotulo(T("GameProfilesOn"), !!S.jogos.ligado, function (v) { mudar("jogos.ligar", { ligado: v }); });
+    tgJogo.troca.disabled = !S.jogos.rtss;
+    tgJogo.style.marginBottom = "10px";
+    jogos.corpo.appendChild(tgJogo);
+    var legenda = el("div", "nota", T("CurrentGame", t("Jogo detectado agora", "Game detected now")));
+    legenda.style.marginLeft = "4px";
+    jogos.corpo.appendChild(legenda);
+    var nomeJogo = el("b"), subJogo = el("small");
+    jogos.corpo.appendChild(el("div", "jogo", null, el("div", "ji icone", ""), el("div", "", null, nomeJogo, subJogo)));
+    var vincular = botao("", "b p", function () { mudar("jogo.vincular", { perfil: p.nome }); });
+    var desvincular = botao(T("UnbindGame", t("Desvincular", "Unbind")), "b", function () {
+      var j = E && E.jogo;
+      if (j) mudar("jogo.desvincular", { chave: j.chave });
+    });
+    jogos.corpo.appendChild(el("div", "par", null, vincular, desvincular));
+    var n1 = el("div", "nota", T("GameProfilesNote"));
+    n1.style.marginBottom = "10px";
+    jogos.corpo.appendChild(n1);
+    var procurar = botao(T("GameBrowse", t("Adicionar executável…", "Add executable…")), "b", function () {
+      mudar("jogo.adicionar", { perfil: p.nome }).then(function (r) {
+        if (!r || !r.pergunta) return;
+        confirmar(r.pergunta, t("Substituir", "Replace")).then(function (sim) {
+          if (sim) mudar("jogo.substituir", { sim: true });
+          else pedir("jogo.substituir", { sim: false }).catch(function () { });
+        });
+      });
+    });
+    procurar.style.width = "240px";
+    procurar.style.alignSelf = "flex-start";
+    procurar.style.marginBottom = "8px";
+    jogos.corpo.appendChild(procurar);
+    jogos.corpo.appendChild(el("div", "nota", T("GameFileNote")));
+    var titulo = el("div", "rotulo", T("GameBindings", t("Vínculos", "Bindings")));
+    titulo.style.margin = "20px 0 4px 4px";
+    jogos.corpo.appendChild(titulo);
+    var vinculos = el("div", "vinculos");
+    S.jogos.vinculos.forEach(function (v) {
+      var x = botao("", "x icone", function () { mudar("jogo.desvincular", { chave: v.chave }); });
+      x.setAttribute("aria-label", t("Desvincular ", "Unbind ") + v.nome);
+      vinculos.appendChild(el("div", "vinculo", null, el("div", "ji icone", ""),
+        el("div", "vt", null, el("b", "", v.nome), el("small", "", v.perfil)), x));
+    });
+    if (!S.jogos.vinculos.length) vinculos.appendChild(el("div", "nota", T("NoGameBindings")));
+    jogos.corpo.appendChild(vinculos);
+    direita.appendChild(jogos);
+
+    var ultimo = "-";
+    function atualizarJogo() {
+      var j = E ? E.jogo : null;
+      var marca = j ? j.chave + "|" + (j.perfil || "") + "|" + j.nome : "";
+      if (marca === ultimo) return;
+      ultimo = marca;
+      var rtss = S.rtss ? S.rtss.presente : S.jogos.rtss;
+      nomeJogo.textContent = !rtss ? T("RtssMissing", t("RTSS não encontrado", "RTSS not found")) : j ? j.nome : T("NoGameToBind");
+      nomeJogo.style.color = rtss ? "" : "var(--warn)";
+      subJogo.textContent = !j ? (S.jogosContagem || "") : j.perfil ? Tm("BoundProfile", j.perfil) : Tm("SelectedProfile", p.nome);
+      subJogo.className = j && j.perfil ? "ok" : "";
+      vincular.textContent = Tm("BindGameTo", p.nome);
+      vincular.disabled = !S.jogos.ligado || !j;
+      desvincular.disabled = !S.jogos.ligado || !j || !j.perfil;
+    }
+
+    return {
+      atualizar: function () { previaDoPerfil(pv, p); atualizarJogo(); },
+      sair: pv.sair
+    };
+  }
+
+  MONTAR.painel = function (alvo) {
+    try { aba = sessionStorage.getItem("aba") || aba; } catch (e) { }
+    var abas = el("div", "abas", null, segmentos([["paineis", T("PanelsTab", t("Painéis", "Panels"))], ["perfis", T("NavProfiles", t("Perfis", "Profiles"))]], aba, function (v) {
+      aba = v;
+      try { sessionStorage.setItem("aba", v); } catch (e) { }
+      mostrar("painel", true);
+    }));
+    alvo.appendChild(abas);
+    var p = perfilEditado();
+    if (!p) return {};
+    return aba === "perfis" ? abaPerfis(alvo, p) : abaPaineis(alvo, p);
+  };
+
+  // ---------------- Configuracoes ----------------
+
+  MONTAR.config = function (alvo) {
+    alvo.appendChild(grupo(T("SettingsGeneral", t("Geral", "General"))));
+
+    var idioma = segmentos([["pt", "Português (BR)"], ["en", "English (US)"]], S.pt ? "pt" : "en", function (v) { mudar("idioma", { lingua: v }); });
+    idioma.style.width = "300px";
+    alvo.appendChild(opcao("", T("Language_", t("Idioma", "Language")), T("LanguageNote"), [idioma]));
+
+    alvo.appendChild(opcao("", T("StartWithWindows"), T("StartWithWindowsNote"), interruptor(S.config.inicio, function (v, b, rotular) {
+      pedir("inicio", { ligado: v }).then(function (r) {
+        S.config.inicio = !!r;
+        b.definir(!!r); rotular(!!r);
+      }, function (e) {
+        b.definir(S.config.inicio); rotular(S.config.inicio);
+        faixa(e.message, true);
+      });
+    })));
+
+    alvo.appendChild(opcao("", T("VisaoNovaOpcao"), T("VisaoNovaNota"), interruptor(!S.visaoNova, function (v) {
+      mudar("visao.classica", { ligado: v });
+    })));
+
+    alvo.appendChild(grupo(T("PanelLabel", t("Painel", "Panel"))));
+    alvo.appendChild(opcao("", T("ShowAllSensors"), T("ShowAllShort"), interruptor(S.todos, function (v) {
+      mudar("sensores.todos", { ligado: v });
+    })));
+
+    var ocioso = S.config.ocioso;
+    var num = caixaNumero(ocioso > 0 ? ocioso : 15, 1, S.maximo || 999, function (v) {
+      mudar("config.salvar", { ocioso: v, rodizio: S.config.rodizio });
+    });
+    num.ligar(ocioso > 0);
+    var notaOcioso = el("span", "nota", ocioso > 0 ? T("MinutesIdle") : T("Off", t("desligado", "off")));
+    notaOcioso.style.minWidth = "84px";
+    var tgOcioso = troca(ocioso > 0, function (v) {
+      mudar("config.salvar", { ocioso: v ? num.valor : 0, rodizio: S.config.rodizio });
+    });
+    var linhaOcioso = opcao("", T("BlankWhenIdle"), T("BlankWhenIdleShort"), [num, notaOcioso, tgOcioso]);
+    linhaOcioso.desc.title = T("BlankWhenIdleNote");
+    alvo.appendChild(linhaOcioso);
+
+    alvo.appendChild(grupo(T("SettingsFps", "FPS")));
+    var rtss = S.rtss || { presente: S.jogos.rtss, winget: false };
+    var estadoRtss = el("small", rtss.presente ? "ok" : "aviso", rtss.presente ? T("RtssActive") : T("RtssAbsent"));
+    var instalar = botao(T("InstallRtss"), "b", function () { mudar("rtss.instalar"); });
+    instalar.disabled = rtss.presente || !rtss.winget;
+    var linhaRtss = opcao("", "RivaTuner Statistics Server", estadoRtss, [instalar,
+      botao(T("RtssPage"), "b", function () { pedir("rtss.site").catch(function () { }); }),
+      botao(T("Recheck"), "b", function () {
+        pedir("iniciar").then(function (r) { S = r; mostrar(atual, true); }, function (e) { faixa(e.message, true); });
+      })]);
+    linhaRtss.querySelector(".ot b").title = T("RtssNote");
+    alvo.appendChild(linhaRtss);
+
+    alvo.appendChild(grupo(T("SettingsData", t("Dados", "Data"))));
+    var onde = el("small", "", S.pasta || "");
+    onde.style.userSelect = "text";
+    alvo.appendChild(opcao("", T("DataFolderTitle"), onde, [botao(T("OpenFolder"), "b", function () { pedir("pasta").catch(function () { }); })]));
+
+    var linhaBackup = opcao("", T("BackupTitle"), T("BackupShort"), [
+      botao(T("BackupCreate"), "b", function () { mudar("backup.exportar"); }),
+      botao(T("BackupRestore"), "b", function () {
+        pedir("backup.ler").then(function (r) {
+          if (!r) return;
+          var resumo = r.nota + "\n\n" +
+            T("SavedProfiles", t("Perfis salvos", "Saved profiles")) + ": " + r.perfis + "\n" +
+            T("GameBindings", t("Vínculos", "Bindings")) + ": " + r.jogos + "\n" +
+            T("NavMetrics", t("Métricas", "Metrics")) + ": " + r.metricas + "\n" +
+            T("ActiveProfile", t("PERFIL ATIVO", "ACTIVE PROFILE")) + ": " + r.ativo + "\n" +
+            t("Sensores não encontrados: ", "Sensors not found: ") + r.faltando + "\n\n" +
+            t("Sensores ausentes não serão substituídos automaticamente.", "Missing sensors will not be replaced automatically.");
+          revisar(T("RestorePreview", t("Revisar restauração", "Review restore")), resumo, T("RestoreApply", t("Restaurar", "Restore"))).then(function (sim) {
+            if (sim) mudar("backup.aplicar");
+          });
+        }, function (e) { faixa(e.message, true); });
+      })]);
+    linhaBackup.desc.title = T("BackupNote");
+    alvo.appendChild(linhaBackup);
+
+    var linhaDiag = opcao("", T("DiagnosticTitle"), T("DiagnosticShort"), [botao(T("DiagnosticOpen"), "b", function () {
+      pedir("diagnostico").then(function (texto) {
+        return revisar(T("DiagnosticTitle"), texto, T("SaveFile", t("Salvar arquivo…", "Save file…"))).then(function (sim) {
+          if (!sim) return;
+          return pedir("diagnostico.salvar").then(function (r) { if (r) faixa(r); });
+        });
+      }).catch(function (e) { faixa(e.message, true); });
+    })]);
+    linhaDiag.desc.title = T("DiagnosticNote");
+    alvo.appendChild(linhaDiag);
+
+    alvo.appendChild(el("div", "atalhos", T("KeyboardHelp")));
+    return {};
+  };
+
+  // ---------------- Sobre ----------------
+
+  MONTAR.sobre = function (alvo) {
+    var so = S.sobre || {};
+    var id = el("div", "cartao");
+    var img = el("img");
+    img.src = "app.ico";
+    img.alt = "";
+    var h1 = el("h1", "", null, el("span", "", "Mhiagos Control"), el("span", "chip", so.versao || ("v" + S.versao)));
+    var github = botao(T("OpenOnGitHub", "GitHub"), "b p", function () { pedir("github").catch(function () { }); });
+    var autor = el("span", "nota", so.autor || "");
+    var bt = el("div", "botoes", null, github, autor);
+    var it = el("div", "it", null, h1, el("p", "", T("AboutTagline")), bt);
+    var ident = el("div", "identidade", null, img, it);
+    id.appendChild(ident);
+    alvo.appendChild(id);
+
+    function bloco(rotulo, valor, ponto, apoio, aviso) {
+      var b = el("b", aviso ? "aviso" : "");
+      if (ponto) b.appendChild(el("span", "ponto " + ponto));
+      b.appendChild(el("span", "", valor));
+      var x = el("div", "bloco", null, el("small", "", rotulo), b);
+      if (apoio) x.appendChild(el("p", "", apoio));
+      return x;
+    }
+    var achou = !!so.painel;
+    var blocos = el("div", "blocos");
+    blocos.appendChild(bloco(T("PanelLabel", t("Painel", "Panel")), achou ? so.painel : T("PanelNone"), achou ? "verde" : "cinza",
+      !achou ? "" : so.testado ? T("PanelTested") : T("PanelUntested")));
+    blocos.appendChild(bloco(T("SensorSources"), so.fontes || "", so.alerta ? "aviso" : "verde", so.fontesApoio || "", so.alerta));
+    blocos.appendChild(bloco(T("Libraries"), "MIT  ·  MPL 2.0", null, so.bibliotecas || ""));
+    alvo.appendChild(blocos);
+    if (!so.hw) {
+      var motor = el("div", "motor" + (so.pawnio ? "" : " aviso"), so.avisoMotor || "");
+      if (!so.pawnio) motor.addEventListener("click", function () { mudar("pawnio.instalar"); });
+      alvo.appendChild(motor);
+    }
+    var isencao = cartao(T("DisclaimerTitle"));
+    isencao.corpo.appendChild(el("div", "isencao", so.isencao || ""));
+    alvo.appendChild(isencao);
+    return {};
+  };
+
   // ---------------- Casa ----------------
 
+  /// O servidor da Casa (endereco externo, interno e chave), com teste ao salvar.
+  function formularioDoServidor(aoSalvar) {
+    var externo = el("input"), interno = el("input"), chaveDoServidor = el("input");
+    externo.type = interno.type = "text"; chaveDoServidor.type = "password";
+    externo.value = S.casa.externo || ""; interno.value = S.casa.interno || "";
+    externo.placeholder = "https://home01.suarede.ts.net"; interno.placeholder = "192.168.1.100:8765";
+    chaveDoServidor.placeholder = S.casa.servidor ? t("vazio mantém a guardada", "empty keeps the stored one") : "";
+    chaveDoServidor.autocomplete = "off";
+    var f = el("div", "", null,
+      campo(t("Endereço externo", "External address"), externo), campo(t("Endereço interno", "Internal address"), interno),
+      campo(t("Chave de acesso", "Access key"), chaveDoServidor),
+      el("div", "nota", t("Basta um endereço responder; o outro fica de reserva.", "One responding address is enough; the other is a fallback.")));
+    f.salvar = function () {
+      faixa(t("Testando o servidor…", "Testing the server…"));
+      return mudar("casa.servidor", { externo: externo.value, interno: interno.value, chave: chaveDoServidor.value }).then(function (r) {
+        if (aoSalvar) aoSalvar(r);
+        return r;
+      });
+    };
+    return f;
+  }
+
   MONTAR.casa = function (alvo) {
+    if (!S.casa.servidor) {
+      var largura = el("div", "largura");
+      largura.style.padding = "16px";
+      var c = cartao(t("Conectar a Casa", "Connect Home"));
+      c.style.maxWidth = "560px";
+      var f = formularioDoServidor();
+      c.corpo.appendChild(f);
+      var b = botao(t("Salvar e testar", "Save and test"), "b p", function () { b.disabled = true; f.salvar().then(function () { b.disabled = false; }); });
+      b.style.alignSelf = "flex-start";
+      b.style.marginTop = "12px";
+      c.corpo.appendChild(b);
+      largura.appendChild(c);
+      alvo.className = "";
+      alvo.appendChild(largura);
+      return {};
+    }
     var area = el("div");
     area.id = "casa-area";
     alvo.appendChild(area);
-    if (!S.casa.servidor) {
-      area.appendChild(el("div", "", null,
-        el("p", "", t("O servidor da Casa não está configurado neste computador.", "The Home server is not set up on this computer.")),
-        botao(t("Configurar o servidor", "Set up the server"), "b p", function () { mostrar("config"); })));
-      return {};
-    }
     area.appendChild(el("span", "", t("Abrindo a Casa…", "Opening Home…")));
     function medir() {
       var r = area.getBoundingClientRect();
@@ -848,179 +1626,6 @@
     };
   };
 
-  // ---------------- Configuracoes ----------------
-
-  function campoNumero(valor, min, max) {
-    var i = el("input");
-    i.type = "number"; i.min = String(min); i.max = String(max); i.step = "1";
-    i.value = String(valor);
-    return i;
-  }
-
-  MONTAR.config = function (alvo) {
-    var grade = el("div", "grade larga");
-    var geral = cartao(t("Geral", "General"));
-    geral.appendChild(chave(t("Iniciar com o Windows", "Start with Windows"), null,
-      troca(S.config.inicio, function (v, b) {
-        pedir("inicio", { ligado: v }).then(function (r) {
-          S.config.inicio = !!r;
-          b.setAttribute("aria-checked", r ? "true" : "false");
-        }, function (e) {
-          b.setAttribute("aria-checked", S.config.inicio ? "true" : "false");
-          faixa(e.message, true);
-        });
-      })));
-    var pausa = troca(false, function () { pedir("pausar").catch(function (e) { faixa(e.message, true); }); });
-    geral.appendChild(chave(t("Pausar o mostrador", "Pause the display"),
-      t("O app para de enviar e o painel apaga os dígitos.", "The app stops sending and the panel blanks its digits."), pausa));
-    grade.appendChild(geral);
-
-    var painel = cartao(t("Mostrador", "Display"));
-    var maximo = S.maximo || 999;
-    var ocioso = campoNumero(S.config.ocioso, 0, maximo), rodizio = campoNumero(S.config.rodizio, 0, maximo);
-    painel.appendChild(chave(t("Apagar com o PC ocioso", "Blank when the PC is idle"),
-      t("Minutos sem uso até apagar; 0 nunca apaga.", "Idle minutes before blanking; 0 never blanks."), ocioso));
-    painel.appendChild(chave(t("Rodízio de perfis", "Profile rotation"),
-      t("Segundos em cada perfil marcado, a partir de 2; 0 desliga.", "Seconds on each marked profile, from 2 up; 0 turns it off."), rodizio));
-    var salvar = el("button", "b p", t("Salvar", "Save"));
-    salvar.type = "button";
-    salvar.addEventListener("click", function () {
-      var o = Number(ocioso.value), r = Number(rodizio.value);
-      if (ocioso.value === "" || rodizio.value === "" || !(o >= 0 && o <= maximo) || !(r === 0 || (r >= 2 && r <= maximo))) {
-        faixa(t("Use de 0 a " + maximo + " minutos, e 0 ou de 2 a " + maximo + " segundos.",
-          "Use 0 to " + maximo + " minutes, and 0 or 2 to " + maximo + " seconds."), true);
-        return;
-      }
-      mudar("config.salvar", { ocioso: Math.round(o), rodizio: Math.round(r) }, t("Configurações salvas.", "Settings saved."));
-    });
-    var acoes = el("div", "inline");
-    acoes.style.marginTop = "12px";
-    acoes.appendChild(salvar);
-    painel.appendChild(acoes);
-    grade.appendChild(painel);
-
-    geral.appendChild(campo(t("Idioma", "Language"), segmentos([["pt", "Português"], ["en", "English"]], S.pt ? "pt" : "en",
-      function (v) { mudar("idioma", { lingua: v }); })));
-    painel.insertBefore(chave(t("Mostrar todos os sensores", "Show all sensors"),
-      t("Inclui os que o app esconde por serem repetidos ou pouco úteis.", "Includes the ones the app hides as duplicates or rarely useful."),
-      troca(S.todos, function (v) { mudar("sensores.todos", { ligado: v }); })), acoes);
-
-    var dados = cartao(t("Dados e cópia de segurança", "Data and backup"));
-    var resumo = el("div");
-    var dl = el("div", "inline quebra");
-    dl.appendChild(botao(t("Criar cópia", "Create backup"), "b", function () { mudar("backup.exportar"); }));
-    dl.appendChild(botao(t("Restaurar cópia", "Restore backup"), "b", function () {
-      pedir("backup.ler").then(function (r) {
-        limpar(resumo);
-        if (!r) return;
-        var ls = el("div", "linhas");
-        ls.appendChild(linha(t("Perfis", "Profiles"), String(r.perfis)));
-        ls.appendChild(linha(t("Jogos vinculados", "Bound games"), String(r.jogos)));
-        ls.appendChild(linha(t("Métricas", "Metrics"), String(r.metricas)));
-        ls.appendChild(linha(t("Perfil ativo", "Active profile"), r.ativo));
-        ls.appendChild(linha(t("Sensores não encontrados", "Sensors not found"), String(r.faltando)));
-        resumo.appendChild(el("p", "vazio", r.nota));
-        resumo.appendChild(ls);
-        var ap = botao(t("Aplicar esta cópia", "Apply this backup"), "b p", function () {
-          ap.disabled = true;
-          mudar("backup.aplicar", {}, t("Cópia restaurada. A configuração anterior foi guardada ao lado.", "Backup restored. The previous settings were kept alongside.")).then(function () { limpar(resumo); });
-        });
-        var cancelar = botao(t("Cancelar", "Cancel"), "b", function () { limpar(resumo); });
-        var acoesDoResumo = el("div", "inline", null, ap, cancelar);
-        acoesDoResumo.style.marginTop = "12px";
-        resumo.appendChild(acoesDoResumo);
-      }, function (e) { faixa(e.message, true); });
-    }));
-    dl.appendChild(botao(t("Abrir a pasta de dados", "Open data folder"), "b", function () { pedir("pasta"); }));
-    dados.appendChild(dl);
-    resumo.style.marginTop = "12px";
-    dados.appendChild(resumo);
-    grade.appendChild(dados);
-
-    var fps = cartao(t("FPS e jogos (RTSS)", "FPS and games (RTSS)"));
-    fps.appendChild(el("p", "vazio", S.jogos.rtss
-      ? t("O RivaTuner Statistics Server está instalado: FPS e perfil por jogo funcionam.", "RivaTuner Statistics Server is installed: FPS and per-game profiles work.")
-      : t("O RivaTuner Statistics Server não foi encontrado. Ele dá o FPS e reconhece o jogo aberto.", "RivaTuner Statistics Server was not found. It provides FPS and recognizes the running game.")));
-    var rl = el("div", "inline quebra");
-    if (!S.jogos.rtss) rl.appendChild(botao(t("Instalar pelo winget", "Install with winget"), "b p", function () { mudar("rtss.instalar"); }));
-    rl.appendChild(botao(t("Página do RTSS", "RTSS page"), "b", function () { pedir("rtss.site"); }));
-    fps.appendChild(rl);
-    grade.appendChild(fps);
-
-    var srv = cartao(t("Servidor da Casa", "Home server"), "duplo");
-    var externo = el("input"), interno = el("input"), chaveDoServidor = el("input");
-    externo.type = interno.type = "text"; chaveDoServidor.type = "password";
-    externo.value = S.casa.externo || ""; interno.value = S.casa.interno || "";
-    externo.placeholder = "https://home01.suarede.ts.net"; interno.placeholder = "192.168.1.100:8765";
-    chaveDoServidor.placeholder = S.casa.servidor ? t("vazio mantém a guardada", "empty keeps the stored one") : "";
-    chaveDoServidor.autocomplete = "off";
-    var duasDoServidor = el("div", "duas", null,
-      campo(t("Endereço externo", "External address"), externo), campo(t("Endereço interno", "Internal address"), interno));
-    srv.appendChild(duasDoServidor);
-    srv.appendChild(campo(t("Chave de acesso", "Access key"), chaveDoServidor));
-    var testar = botao(t("Salvar e testar", "Save and test"), "b p", function () {
-      testar.disabled = true;
-      faixa(t("Testando o servidor…", "Testing the server…"));
-      mudar("casa.servidor", { externo: externo.value, interno: interno.value, chave: chaveDoServidor.value })
-        .then(function () { testar.disabled = false; chaveDoServidor.value = ""; });
-    });
-    srv.appendChild(testar);
-    srv.appendChild(el("p", "vazio", t(
-      "Basta um endereço responder; o outro fica de reserva. A conta ConnectLife direta (sem servidor) continua na janela clássica.",
-      "One responding address is enough; the other is a fallback. The direct ConnectLife account (without a server) stays in the classic window.")));
-    srv.appendChild(botaoClassica("casa"));
-    grade.appendChild(srv);
-    alvo.appendChild(grade);
-
-    return { atualizar: function () { pausa.setAttribute("aria-checked", E.painel.pausado ? "true" : "false"); } };
-  };
-
-  // ---------------- Sobre ----------------
-
-  MONTAR.sobre = function (alvo) {
-    var c = cartao("Mhiagos Control", "sobre");
-    c.appendChild(el("p", "", t("Versão ", "Version ") + S.versao));
-    c.appendChild(el("p", "", t(
-      "Driver alternativo para o painel de 3 dígitos dos air coolers Rise Mode Temp 6, 6 Pro e 8.",
-      "Alternative driver for the 3-digit panel of the Rise Mode Temp 6, 6 Pro and 8 air coolers.")));
-    var a = el("a", "", "github.com/Feurrado/MhiagosControl");
-    a.href = "https://github.com/Feurrado/MhiagosControl";
-    c.appendChild(el("p", "", null, a));
-    c.appendChild(el("p", "", t(
-      "Sensores por LibreHardwareMonitor. Interface em Microsoft Edge WebView2.",
-      "Sensors by LibreHardwareMonitor. Interface on Microsoft Edge WebView2.")));
-    var grade = el("div", "grade larga");
-    grade.appendChild(c);
-    var motor = cartao(t("Leitura de sensores", "Sensor reading"));
-    var ml = el("div", "linhas");
-    ml.appendChild(linha("PawnIO", S.motor.pawnio ? t("instalado", "installed") : t("ausente", "missing")));
-    ml.appendChild(linha(t("Motor do HWiNFO", "HWiNFO engine"), S.motor.hwinfo ? t("presente", "present") : t("ausente", "absent")));
-    motor.appendChild(ml);
-    if (!S.motor.pawnio) {
-      motor.appendChild(el("p", "vazio", t("Sem o PawnIO, temperatura e potência da CPU podem não aparecer.", "Without PawnIO, CPU temperature and power may be missing.")));
-      motor.appendChild(botao(t("Instalar o PawnIO", "Install PawnIO"), "b p", function () { mudar("pawnio.instalar"); }));
-    }
-    grade.appendChild(motor);
-    var diag = cartao(t("Diagnóstico", "Diagnostics"), "duplo");
-    var texto = el("pre", "relatorio");
-    texto.hidden = true;
-    var copiar = botao(t("Copiar", "Copy"), "b", function () {
-      var feito = function () { faixa(t("Relatório copiado.", "Report copied.")); };
-      if (navigator.clipboard) navigator.clipboard.writeText(texto.textContent).then(feito, function () { faixa(t("Não deu para copiar; selecione o texto.", "Could not copy; select the text."), true); });
-    });
-    copiar.hidden = true;
-    diag.appendChild(el("p", "vazio", t("Um resumo sem nomes de sensores, jogos, perfis nem caminhos, para pedir ajuda.",
-      "A summary without sensor, game or profile names or paths, for asking for help.")));
-    diag.appendChild(el("div", "inline", null, botao(t("Gerar relatório", "Build report"), "b", function () {
-      pedir("diagnostico").then(function (r) { texto.textContent = r; texto.hidden = false; copiar.hidden = false; },
-        function (e) { faixa(e.message, true); });
-    }), copiar));
-    diag.appendChild(texto);
-    grade.appendChild(diag);
-    alvo.appendChild(grade);
-    return {};
-  };
-
   // ---------------- partida ----------------
 
   function partir() {
@@ -1029,21 +1634,40 @@
       return;
     }
     ponte.addEventListener("message", aoReceber);
-    pedir("iniciar").then(function (r) {
-      S = r;
+    $("recolher").addEventListener("click", recolher);
+    $("faixa-fechar").addEventListener("click", function () { faixa(""); });
+    Promise.all([pedir("iniciar"), buscarTextos()]).then(function (r) {
+      S = r[0];
+      aplicarTema();
       montarNavegacao();
       var guardada = "";
       try { guardada = sessionStorage.getItem("pagina") || ""; } catch (e) { }
-      mostrar(guardada || "visao");
+      // A pagina pedida por quem abriu a janela vem no fragmento (#baterias, #casa...).
+      var pedida = decodeURIComponent((location.hash || "").replace(/^#/, ""));
+      mostrar(MONTAR[pedida] ? pedida : guardada || "visao");
     }, function (e) {
       $("pagina").appendChild(el("div", "vazio", e.message));
     });
   }
 
+  /// Os atalhos da classica: Ctrl+B recolhe, Ctrl+1..8 e Alt+1..9 vao a pagina
+  /// daquela posicao na barra, Ctrl+Tab percorre as paginas.
   document.addEventListener("keydown", function (e) {
-    if (!e.ctrlKey || e.altKey || !S) return;
-    var n = Number(e.key);
-    if (n >= 1 && n <= PAGINAS.length) { e.preventDefault(); mostrar(PAGINAS[n - 1][0]); }
+    if (!S || document.querySelector(".fundo")) return;
+    var itens = Array.prototype.slice.call($("itens").children);
+    if (e.ctrlKey && !e.altKey && (e.key === "b" || e.key === "B")) { e.preventDefault(); recolher(); return; }
+    if (e.ctrlKey && e.key === "Tab") {
+      e.preventDefault();
+      var i = 0;
+      itens.forEach(function (b, k) { if (b.dataset.pagina === atual) i = k; });
+      i = (i + (e.shiftKey ? itens.length - 1 : 1)) % itens.length;
+      mostrar(itens[i].dataset.pagina);
+      return;
+    }
+    if ((e.ctrlKey && !e.altKey) || (e.altKey && !e.ctrlKey)) {
+      var n = Number(e.key);
+      if (n >= 1 && n <= itens.length) { e.preventDefault(); mostrar(itens[n - 1].dataset.pagina); }
+    }
   });
 
   partir();

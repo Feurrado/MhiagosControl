@@ -12,24 +12,20 @@ namespace MhiagosControl
     public partial class TrayContext : IAppNovo
     {
         private JanelaDoApp _janelaNova;
+        /// <summary>A proxima abertura vai para a janela classica (item da bandeja ou botao da nova).</summary>
+        private bool _classicaPedida;
 
-        private void OnAppNovo(object sender, EventArgs e)
-        {
-            try { AbrirJanelaNova(); }
-            catch (Exception ex) { Log.Error("interface nova: abrir", ex); }
-        }
-
-        private void AbrirJanelaNova()
+        private void AbrirJanelaNova(string pagina)
         {
             if (IsStopping) return;
-            if (IsStarting) { MostrarSplash(); return; }
+            if (IsStarting) { _openWhenReady = true; MostrarSplash(); return; }
             // As duas janelas nao editam a configuracao ao mesmo tempo: a antiga
             // trabalha num rascunho e gravaria por cima do que a nova mudou.
             if (_settingsForm != null && !_settingsForm.IsDisposed) { TrazerParaFrente(_settingsForm); return; }
             if (_janelaNova != null && !_janelaNova.IsDisposed)
             {
-                if (_janelaNova.WindowState == FormWindowState.Minimized) _janelaNova.WindowState = FormWindowState.Normal;
-                _janelaNova.Activate();
+                if (pagina != null) _janelaNova.MostrarPagina(pagina);
+                TrazerParaFrente(_janelaNova);
                 return;
             }
 
@@ -39,7 +35,7 @@ namespace MhiagosControl
             ReListSensors();
             _snapshotWanted = true;
 
-            JanelaDoApp j = new JanelaDoApp(this);
+            JanelaDoApp j = new JanelaDoApp(this, pagina);
             _janelaNova = j;
             j.FormClosed += delegate
             {
@@ -50,6 +46,7 @@ namespace MhiagosControl
                 _janelaAberta = false;
                 Publicar();
             };
+            j.Shown += delegate { TrazerParaFrente(j); };
             j.Show();
         }
 
@@ -87,7 +84,23 @@ namespace MhiagosControl
             // e modal: abrir aqui fecharia a janela nova no meio do proprio evento.
             // Fica para a proxima volta da fila de mensagens.
             string chave = PaginaAntiga(pagina);
-            Marshal(delegate { _paginaPedida = chave; PedirConfiguracao(); });
+            Marshal(delegate { _paginaPedida = chave; _classicaPedida = true; PedirConfiguracao(); });
+        }
+
+        /// <summary>
+        /// A pagina da interface nova para uma chave da janela classica (avisos,
+        /// widget e Casa pedem paginas pelo nome antigo). Nulo abre a de sempre.
+        /// </summary>
+        internal static string PaginaNova(string chave)
+        {
+            switch (chave)
+            {
+                case "perfis": case "painel": case "paineis": return "painel";
+                case "configuracoes": case "config": return "config";
+                case "especificacoes": case "specs": return "specs";
+                case "visao": case "metricas": case "baterias": case "casa": case "sobre": return chave;
+                default: return null;
+            }
         }
 
         /// <summary>So chaves conhecidas da janela antiga; qualquer outra coisa abre a pagina de sempre.</summary>

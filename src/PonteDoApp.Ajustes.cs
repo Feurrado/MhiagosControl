@@ -61,7 +61,7 @@ namespace MhiagosControl
                 case "pasta": AbrirPasta(); return Feito(id, true);
                 case "diagnostico": return Feito(id, Diagnostico());
                 case "casa.servidor": Servidor(id, Texto(a, "externo"), Texto(a, "interno"), Texto(a, "chave")); return null;
-                default: return Falha(id, "pedido desconhecido");
+                default: return Classica(id, m, a);
             }
         }
 
