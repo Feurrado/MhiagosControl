@@ -308,6 +308,8 @@ namespace MhiagosControl
             foreach (string id in Ids(a))
             {
                 if (series.Count >= MaximoDeMetricas) break;
+                // Um sensor que ainda nao era seguido (os mostradores da Visao geral) comeca a ser.
+                MetricHistory.SeguirTambem(new string[] { id });
                 int n = MetricHistory.Janela(id, segundos, ref destino);
                 List<object> pontos = new List<object>(n);
                 for (int i = 0; i < n && destino != null && i < destino.Length; i++)
@@ -414,6 +416,7 @@ namespace MhiagosControl
             d["casa"] = casa;
             d["ativo"] = _app.Cfg.Active.Name;
             d["jogo"] = JogoAgora();
+            AcrescentarVisao(d);
 
             Dictionary<string, object> evento = D();
             evento["ev"] = "estado"; evento["d"] = d;

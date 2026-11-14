@@ -169,6 +169,7 @@ namespace MhiagosControl
                     Igual(4, ((List<object>)ini["sensores"]).Count, "ponte: sensor nulo ou sem id fica fora");
                     Igual(2, ((List<object>)ini["perfis"]).Count, "ponte: dois perfis");
                     Igual("Padrão", Json.Texto(ini, "ativo"), "ponte: perfil ativo");
+                    Verdade(ini.ContainsKey("destaques") && ini["destaques"] is List<object>, "ponte: iniciar leva os destaques da Visao geral");
                     Dictionary<string, object> volta = Json.Ler(Json.Escrever(r)) as Dictionary<string, object>;
                     Verdade(volta != null && PonteOk(volta), "ponte: a resposta vira JSON valido");
                 }
@@ -278,6 +279,8 @@ namespace MhiagosControl
                         "ponte: estado do painel");
                     Verdade(v.ContainsKey("cpu:temp") && !v.ContainsKey("quebrado"), "ponte: leitura que nao e numero fica fora");
                     Igual("GPU", Json.Texto(d, "ativo"), "ponte: o retrato diz o perfil ativo");
+                    Verdade(!string.IsNullOrEmpty(Json.Texto(d, "frase")) && d.ContainsKey("alerta") && d["eventos"] is List<object>,
+                        "ponte: o retrato leva a frase e os eventos da Visao geral");
                 }
                 Verdade(Json.Ler(Json.Escrever(ev)) != null, "ponte: o retrato vira JSON valido");
 

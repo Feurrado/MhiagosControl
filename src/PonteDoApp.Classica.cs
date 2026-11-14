@@ -35,6 +35,7 @@ namespace MhiagosControl
                 case "jogo.substituir": return Resultado(id, ConfirmarJogo(Bool(a, "sim", false)));
                 case "diagnostico.salvar": SalvarDiagnostico(id); return null;
                 case "github": Navegador.Abrir(Repositorio); return Feito(id, true);
+                case "visao.sistema": Sistema(id); return null;
                 default: return Falha(id, "pedido desconhecido");
             }
         }
@@ -126,6 +127,99 @@ namespace MhiagosControl
             rot["nota"] = girando >= 2 && c.RotateSeconds > 0 ? T.RotationOn(girando) : T.RotationOff;
             r["rodizio"] = rot;
             r["jogosContagem"] = T.GamesBoundCount(c.GameKeys.Count);
+            r["destaques"] = Destaques(lista);
+        }
+
+        // ---------------- Visao geral ----------------
+
+        /// <summary>
+        /// As leituras em destaque da Visao geral: as mesmas da classica (escolha
+        /// automatica, nao o conjunto das Metricas), com titulo, procedencia e as
+        /// faixas de atencao e perigo para a cor do valor.
+        /// </summary>
+        private static List<object> Destaques(List<SensorEntry> lista)
+        {
+            List<object> saida = new List<object>();
+            List<string> ids = new List<string>();
+            int indice = 0;
+            foreach (SensorEntry e in MetricPicker.Destaques(lista))
+            {
+                Dictionary<string, object> d = D();
+                d["id"] = e.Id;
+                d["titulo"] = T.DashboardMetricMono(indice, MetricPicker.RotuloCurto(e));
+                d["sub"] = SystemInfo.Limpar(e.Hardware) ?? "";
+                d["unidade"] = e.EffectiveUnit ?? "";
+                float? atencao, perigo;
+                MetricPicker.Faixas(e.EffectiveUnit, e.Id, out atencao, out perigo);
+                d["atencao"] = atencao.HasValue ? (object)(double)atencao.Value : null;
+                d["perigo"] = perigo.HasValue ? (object)(double)perigo.Value : null;
+                saida.Add(d);
+                ids.Add(e.Id);
+                indice++;
+            }
+            // O historico precisa seguir o que foi posto na tela, como na classica.
+            MetricHistory.SeguirTambem(ids);
+            return saida;
+        }
+
+        /// <summary>A frase do cabecalho, o aviso (se houver) e os ultimos eventos, que mudam a cada segundo.</summary>
+        private static void AcrescentarVisao(Dictionary<string, object> d)
+        {
+            EventosDaVisao.Iniciar();
+            string alerta = Visao.Alerta();
+            d["alerta"] = alerta != null;
+            d["frase"] = alerta ?? T.VisaoTudoEmOrdem(Visao.NomeDoUsuario);
+            List<object> eventos = new List<object>();
+            foreach (EventosDaVisao.Evento e in EventosDaVisao.Recentes(12))
+            {
+                Dictionary<string, object> x = D();
+                x["h"] = e.Hora.ToString("HH:mm"); x["t"] = e.Texto ?? "";
+                eventos.Add(x);
+            }
+            d["eventos"] = eventos;
+        }
+
+        /// <summary>A tira de especificacoes: coletada fora da thread da interface, como as Especificacoes.</summary>
+        private void Sistema(object id)
+        {
+            List<SensorEntry> copia = new List<SensorEntry>(_app.Sensores());
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                Dictionary<string, object> resposta;
+                try
+                {
+                    SystemInfo info = SystemInfo.From(copia);
+                    List<object> linhas = new List<object>();
+                    AcrescentarLinha(linhas, T.SpecCpu, Junta(info.Cpu, info.CpuNucleos));
+                    AcrescentarLinha(linhas, T.SpecGpu, Junta(info.Gpu, info.GpuMemoria));
+                    AcrescentarLinha(linhas, T.SpecRam, info.Ram);
+                    AcrescentarLinha(linhas, T.SpecBoard, info.Placa);
+                    AcrescentarLinha(linhas, T.SpecOs, info.Sistema);
+                    resposta = Feito(id, linhas);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("interface nova: sistema", ex);
+                    resposta = Falha(id, T.CasaFalhaInesperada);
+                }
+                Action<Dictionary<string, object>> enviar = Enviar;
+                if (enviar != null) enviar(resposta);
+            });
+        }
+
+        private static void AcrescentarLinha(List<object> linhas, string rotulo, string valor)
+        {
+            if (string.IsNullOrEmpty(valor)) return;
+            List<object> par = new List<object>();
+            par.Add(rotulo); par.Add(valor);
+            linhas.Add(par);
+        }
+
+        private static string Junta(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a)) return b;
+            if (string.IsNullOrEmpty(b)) return a;
+            return a + "  ·  " + b;
         }
 
         // ---------------- barra lateral ----------------
