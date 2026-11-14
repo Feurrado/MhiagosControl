@@ -229,8 +229,7 @@ namespace MhiagosControl
 
         private static string Winget(string exe, string pacote)
         {
-            return "\"" + exe + "\" install --id " + pacote +
-                   " -e --source winget --accept-source-agreements";
+            return Instalador.Comando(exe, pacote);
         }
 
         private static void AbrirNoNavegador(string url)

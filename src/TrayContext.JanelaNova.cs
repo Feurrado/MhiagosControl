@@ -101,6 +101,28 @@ namespace MhiagosControl
             }
         }
 
+        void IAppNovo.TodosOsSensores(bool todos)
+        {
+            lock (_sensorLock) _sensors.ShowAll = todos;
+            ReListSensors();
+        }
+
+        void IAppNovo.IdiomaMudou()
+        {
+            // O menu da bandeja e montado com os textos do idioma: refaz.
+            ContextMenuStrip antigo = _icon.ContextMenuStrip;
+            BuildMenu();
+            if (_miPause != null) _miPause.Text = _paused ? T.TrayResume : T.TrayPause;
+            if (_miAutostart != null) _miAutostart.Checked = Autostart.IsEnabled();
+            if (antigo != null && antigo != _icon.ContextMenuStrip) antigo.Dispose();
+            Publicar();
+        }
+
+        ConfigDoWidget IAppNovo.Widget { get { return _cfgWidget; } }
+        void IAppNovo.LigarWidget(bool ligar) { ((IControleDoWidget)this).LigarWidget(ligar); }
+        void IAppNovo.WidgetMudou() { ((IControleDoWidget)this).WidgetMudou(); }
+        void IAppNovo.WidgetAoCanto() { ((IControleDoWidget)this).WidgetAoCanto(); }
+
         bool IAppNovo.InicioComWindows { get { return Autostart.IsEnabled(); } }
 
         bool IAppNovo.DefinirInicioComWindows(bool ligado)
