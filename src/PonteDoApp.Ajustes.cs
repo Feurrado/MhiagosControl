@@ -516,6 +516,9 @@ namespace MhiagosControl
                 ProcessStartInfo psi = new ProcessStartInfo(
                     System.IO.Path.Combine(Environment.SystemDirectory, "cmd.exe"), "/s /k \"" + linha + "\"");
                 psi.UseShellExecute = true;
+                // Sem administrador, a janela inteira sobe elevada: o --config-rtss do fim
+                // grava na pasta do RTSS. O Windows pergunta uma vez, antes de tudo.
+                if (!Nucleo.Elevado()) psi.Verb = "runas";
                 Process.Start(psi);
                 return null;
             }

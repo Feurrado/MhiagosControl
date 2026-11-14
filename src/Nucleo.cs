@@ -26,7 +26,7 @@ namespace MhiagosControl
     /// caminho, comando ou biblioteca: so nomes de fonte conhecidos e ids de
     /// sensor, que sao comparados e nunca executados.
     /// </summary>
-    internal static class Nucleo
+    internal static partial class Nucleo
     {
         public const string Argumento = "--nucleo";
         /// <summary>Com MHIAGOS_NUCLEO=1 o app usa o nucleo mesmo estando elevado (para testar a separacao).</summary>
@@ -34,7 +34,7 @@ namespace MhiagosControl
         public const int Versao = 1;
         public const string FonteHwInfo = "hwinfo";
         public const string FonteLibre = "libre";
-        private const string MutexDoNucleo = "Local\\MhiagosControl_Nucleo";
+        internal const string MutexDoNucleo = "Local\\MhiagosControl_Nucleo";
 
         /// <summary>
         /// Nome do pipe: um por usuario. Dois usuarios na mesma maquina (troca
@@ -75,6 +75,8 @@ namespace MhiagosControl
         public static Sensors CriarSensores()
         {
             if (!UsarRemoto) return new Sensors();
+            EmUso = true;
+            Garantir(4000);
             Log.Write("sensores pelo nucleo (" + NomeDoPipe + ")");
             NucleoCliente cliente = new NucleoCliente(NomeDoPipe);
             return new Sensors(new FonteRemota(cliente, FonteHwInfo, "HWiNFO"),

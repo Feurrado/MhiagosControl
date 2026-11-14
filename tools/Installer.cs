@@ -33,8 +33,13 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "2.35.0";
+        public const string Versao = "3.0.0";
+        /// <summary>A tarefa da 2.x, que abria o app inteiro como administrador. So e apagada.</summary>
         public const string TaskName = "MhiagosControl";
+        /// <summary>A tarefa que sobe o nucleo (sensores) elevado no logon; o app a dispara se ele cair.</summary>
+        public const string TarefaDoNucleo = "MhiagosControl Nucleo";
+        private const string ChaveRun = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string ValorRun = "MhiagosControl";
         public const string ProcName = "MhiagosControl";
         private const string UninstallKey =
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MhiagosControl";
@@ -142,8 +147,8 @@ namespace MhiagosSetup
             bool nossa = !Directory.Exists(destino) || atualizando ||
                          Directory.GetFileSystemEntries(destino).Length == 0;
             Directory.CreateDirectory(destino);
-            // O aplicativo roda como administrador, e a tarefa de inicio
-            // automatico o abre sem UAC. Fora de Program Files a pasta herdaria
+            // O nucleo roda como administrador, e a tarefa dele o abre sem
+            // UAC. Fora de Program Files a pasta herdaria
             // escrita para usuarios comuns, e qualquer programa trocaria o exe
             // ou as DLLs. So mexe em pasta que e nossa: escolher D:\Jogos como
             // destino nao pode trancar o resto do disco.
@@ -200,21 +205,19 @@ namespace MhiagosSetup
             Registrar(destino, exe, desinst);
 
             int rc;
-            if (autostart)
-            {
-                diz("Configurando o início automático");
-                // Mesma tarefa que o proprio aplicativo cria e remove pelo menu.
-                // Recria-la aqui tambem conserta o caso de ela ter ficado
-                // apontando para um caminho antigo.
-                Schtasks("/create /tn \"" + TaskName + "\" /tr \"\\\"" + exe +
-                         "\\\"\" /sc onlogon /rl highest /f", out rc);
-                if (rc != 0) diz("  aviso: a tarefa agendada não foi criada (código " + rc + ")");
-            }
-            else if (TemAutostart())
-            {
-                diz("Removendo o início automático");
-                Schtasks("/delete /tn \"" + TaskName + "\" /f", out rc);
-            }
+            // Desde a 3.0 so o nucleo roda como administrador, por esta tarefa. Ela
+            // existe sempre, com ou sem inicio automatico: o app a dispara quando
+            // e aberto e o nucleo nao esta de pe.
+            diz("Configurando o núcleo dos sensores");
+            Schtasks("/create /tn \"" + TarefaDoNucleo + "\" /tr \"\\\"" + exe + "\\\" --nucleo\" /sc onlogon /rl highest /f", out rc);
+            if (rc != 0) diz("  aviso: a tarefa do núcleo não foi criada (código " + rc + ")");
+            // A tarefa da 2.x abria o app elevado; o app agora entra pela chave Run.
+            if (TarefaExiste(TaskName)) Schtasks("/delete /tn \"" + TaskName + "\" /f", out rc);
+            diz(autostart ? "Configurando o início automático" : "Sem início automático");
+            DefinirRun(autostart ? "\"" + exe + "\"" : null);
+
+            diz("Iniciando o núcleo");
+            Schtasks("/run /tn \"" + TarefaDoNucleo + "\"", out rc);
 
             diz("");
             diz((atualizando ? "Atualizado em " : "Instalado em ") + destino);
@@ -265,9 +268,11 @@ namespace MhiagosSetup
             diz("Encerrando o aplicativo...");
             Encerrar();
 
-            diz("Removendo o início automático");
+            diz("Removendo o início automático e o núcleo");
             int rc;
             Schtasks("/delete /tn \"" + TaskName + "\" /f", out rc);
+            Schtasks("/delete /tn \"" + TarefaDoNucleo + "\" /f", out rc);
+            DefinirRun(null);
 
             diz("Removendo atalhos");
             Apagar(Path.Combine(
@@ -347,6 +352,14 @@ namespace MhiagosSetup
             // historico das metricas e das baterias. Matar direto perdia ate
             // cinco minutos de curva a cada atualizacao. Versoes antigas nao
             // tem o evento, e ai so resta o Kill.
+            // O nucleo tem o proprio evento de saida (ele fecha os drivers com calma).
+            try
+            {
+                using (System.Threading.EventWaitHandle nucleo =
+                    System.Threading.EventWaitHandle.OpenExisting("Local\\MhiagosControl_Nucleo_Sair"))
+                    nucleo.Set();
+            }
+            catch { }
             try
             {
                 using (System.Threading.EventWaitHandle saida =
@@ -630,12 +643,40 @@ namespace MhiagosSetup
             catch { return false; }
         }
 
-        /// <summary>A tarefa de inicio automatico existe? Codigo 0 do schtasks.</summary>
+        /// <summary>Inicio automatico ligado: pela chave Run (3.x) ou pela tarefa antiga (2.x).</summary>
         public static bool TemAutostart()
         {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(ChaveRun))
+                    if (k != null && !string.IsNullOrEmpty(k.GetValue(ValorRun) as string)) return true;
+            }
+            catch { }
+            return TarefaExiste(TaskName);
+        }
+
+        private static bool TarefaExiste(string nome)
+        {
             int rc;
-            Schtasks("/query /tn \"" + TaskName + "\"", out rc);
+            Schtasks("/query /tn \"" + nome + "\"", out rc);
             return rc == 0;
+        }
+
+        /// <summary>
+        /// Grava ou apaga o inicio automatico na chave Run de quem instala. O
+        /// instalador roda elevado, mas na mesma conta: o HKCU e o da pessoa.
+        /// </summary>
+        private static void DefinirRun(string linha)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.CreateSubKey(ChaveRun))
+                {
+                    if (linha != null) k.SetValue(ValorRun, linha);
+                    else if (k.GetValue(ValorRun) != null) k.DeleteValue(ValorRun, false);
+                }
+            }
+            catch { }
         }
     }
 
@@ -856,10 +897,12 @@ namespace MhiagosSetup
                 {
                     try
                     {
+                        // Pelo Explorer, para o app abrir SEM a elevacao do instalador:
+                        // desde a 3.0 ele roda como usuario comum e le os sensores do nucleo.
                         ProcessStartInfo psi = new ProcessStartInfo(
-                            Path.Combine(_dir.Text.Trim(), "MhiagosControl.exe"));
-                        psi.UseShellExecute = true;
-                        psi.WorkingDirectory = _dir.Text.Trim();
+                            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"),
+                            "\"" + Path.Combine(_dir.Text.Trim(), "MhiagosControl.exe") + "\"");
+                        psi.UseShellExecute = false;
                         Process.Start(psi);
                     }
                     catch (Exception ex) { Diz("Não deu para abrir o aplicativo: " + ex.Message); }

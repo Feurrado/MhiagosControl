@@ -507,6 +507,9 @@ namespace MhiagosControl
             // Nucleo: so serve os sensores que exigem administrador, sem bandeja nem janela.
             // Antes do mutex de instancia unica: ele roda AO LADO da interface.
             if (TemArgumento(Nucleo.Argumento)) { Nucleo.Rodar(); return; }
+            // Tarefas curtas que precisam de administrador: o app as chama elevadas (o Windows pergunta).
+            if (TemArgumento(Nucleo.ArgInstalar)) { Environment.ExitCode = Nucleo.Instalar(); return; }
+            if (TemArgumento(Nucleo.ArgDesligarOriginal)) { Environment.ExitCode = Autostart.DisableOriginalAppTask() ? 0 : 1; return; }
 
             bool createdNew;
             using (EventWaitHandle activation = new EventWaitHandle(
