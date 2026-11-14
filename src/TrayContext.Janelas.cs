@@ -99,6 +99,7 @@ namespace MhiagosControl
         private void PedirConfiguracao()
         {
             if (IsStopping) return;
+            FecharJanelaNova();
 
             // A lista so existe depois de a thread de inicializacao publicar as
             // fontes. Abrir antes montava uma janela incompleta e concorria com

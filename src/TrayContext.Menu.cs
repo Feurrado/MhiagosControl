@@ -23,7 +23,7 @@ namespace MhiagosControl
             RebuildProfileMenu();
 
             menu.Items.Add(MenuTema.Item(T.TrayConfigure, new EventHandler(OnConfig)));
-            menu.Items.Add(MenuTema.Item(T.TrayCasaNova, new EventHandler(OnCasaNova)));
+            menu.Items.Add(MenuTema.Item(T.TrayAppNovo, new EventHandler(OnAppNovo)));
 
             _miWidget = MenuTema.Item(T.TrayBatteryWidget, new EventHandler(OnToggleWidget));
             _miWidget.Checked = _cfgWidget.Ativo;
@@ -42,12 +42,6 @@ namespace MhiagosControl
             menu.Items.Add(MenuTema.Item(T.TrayExit, new EventHandler(OnExit)));
 
             _icon.ContextMenuStrip = menu;
-        }
-
-        private void OnCasaNova(object sender, EventArgs e)
-        {
-            try { JanelaWeb.Abrir(); }
-            catch (Exception ex) { Log.Error("interface nova: abrir", ex); }
         }
 
         private void RebuildProfileMenu()

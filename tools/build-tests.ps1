@@ -47,6 +47,7 @@ $srcs += (Join-Path $root 'tools\CasosCompartilhadosTests.cs')
 $srcs += (Join-Path $root 'tools\ContratoCasaTests.cs')
 $srcs += (Join-Path $root 'tools\NucleoTests.cs')
 $srcs += (Join-Path $root 'tools\JanelaWebTests.cs')
+$srcs += (Join-Path $root 'tools\PonteDoAppTests.cs')
 $srcs += (Join-Path $root 'tools\Installer.cs')
 
 $arguments = @(
@@ -63,6 +64,11 @@ $arguments = @(
     ('/resource:' + (Join-Path $root 'servidor\tests\casos-tabelas.txt') + ',MhiagosControl.casos-tabelas.txt'),
     ('/resource:' + (Join-Path $root 'servidor\tests\contrato-aparelhos.json') + ',MhiagosControl.contrato-aparelhos.json')
 )
+# As paginas da interface nova (src\ui) vao embutidas no executavel: a janela
+# as serve de dentro dele, numa origem que nao existe na rede.
+Get-ChildItem (Join-Path $root 'src\ui') -File | ForEach-Object {
+    $arguments += ('/resource:' + $_.FullName + ',MhiagosControl.ui.' + $_.Name)
+}
 foreach ($r in $refs) { $arguments += ('/reference:' + $r) }
 $arguments += $srcs
 
