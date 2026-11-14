@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Uso pessoal: o painel roda em http:// na rede local (sem HTTPS), e o endereco
-     e configuravel no app, entao o texto puro fica liberado. -->
+<!-- Texto puro (http) so na rede de casa: o painel interno roda sem HTTPS em
+     192.168.1.100:8765. Todo o resto, inclusive o endereco externo, exige HTTPS.
+     Se o servidor mudar de IP, acrescente o novo endereco aqui. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.1.100</domain>
+        <domain includeSubdomains="false">home01</domain>
+        <domain includeSubdomains="true">home01.local</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
 </network-security-config>

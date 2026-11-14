@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import avisos, banco, casa, servico
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.7.0"
+VERSAO = "1.8.0"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
@@ -40,11 +40,12 @@ async def _vida(_app):
 app = FastAPI(title="Mhiagos Casa", version=VERSAO, docs_url=None, redoc_url=None, openapi_url=None, lifespan=_vida)
 
 # A pagina so carrega o que vem daqui (sem CDN): bloqueia script de fora, moldura em outro
-# site (clique enganado) e vazamento do endereco no Referer. Script e estilo sao embutidos
-# no index.html, por isso o 'unsafe-inline'.
+# site (clique enganado) e vazamento do endereco no Referer. O script vem de /app.js: script
+# embutido (um texto injetado na pagina) nao roda. O estilo ainda e embutido no index.html e em
+# atributos montados pelo script, por isso o 'unsafe-inline' so em style-src.
 CABECALHOS = {
     "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
-                               "script-src 'self' 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; "
+                               "script-src 'self'; connect-src 'self'; manifest-src 'self'; "
                                "worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -180,13 +181,16 @@ def validar_props(props, a=None):
 
 
 _PAGINA = os.path.join(os.path.dirname(__file__), "static", "index.html")
+_SCRIPT = os.path.join(os.path.dirname(__file__), "static", "app.js")
 
 
 def _pagina():
-    """O HTML com a marca da versao (8 primeiros digitos do sha1 do arquivo) no lugar de __PAGINA__."""
+    """O HTML com a marca da versao no lugar de __PAGINA__: 8 digitos do sha1 da pagina e do script juntos."""
     with open(_PAGINA, "rb") as f:
         bruto = f.read()
-    marca = hashlib.sha1(bruto).hexdigest()[:8]
+    with open(_SCRIPT, "rb") as f:
+        script = f.read()
+    marca = hashlib.sha1(bruto + b"\0" + script).hexdigest()[:8]
     return bruto.replace(b"__PAGINA__", marca.encode()), marca
 
 
@@ -207,7 +211,10 @@ def pagina(request: Request):
 ESTATICOS = {
     "icone.png": "image/png", "icone-180.png": "image/png", "icone-192.png": "image/png", "icone-512.png": "image/png",
     "manifest.webmanifest": "application/manifest+json", "sw.js": "text/javascript",
+    "app.js": "text/javascript; charset=utf-8",
 }
+# Revalidados a cada abertura: o script tem de andar junto com a pagina que o chama.
+SEM_CACHE = ("sw.js", "app.js")
 
 
 @app.get("/{nome}")
@@ -215,7 +222,7 @@ def estatico(nome: str):
     if nome not in ESTATICOS:
         raise HTTPException(404, "nao encontrado")
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", nome), media_type=ESTATICOS[nome],
-                        headers={"Cache-Control": "no-cache"} if nome == "sw.js" else None)
+                        headers={"Cache-Control": "no-cache"} if nome in SEM_CACHE else None)
 
 
 @app.get("/api/saude")
