@@ -179,8 +179,10 @@ namespace MhiagosControl
         }
 
         /// <summary>A 3.0 sem administrador: o manifesto, a tarefa do nucleo e o inicio pela chave Run.</summary>
-        private static void NucleoSemAdmin(string root)
+        private static void NucleoSemAdmin()
         {
+            // O root dos testes e uma pasta temporaria; o codigo fica um nivel acima de bin\.
+            string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".."));
             string manifesto = File.ReadAllText(Path.Combine(root, "app.manifest"));
             Verdade(manifesto.Contains("level=\"asInvoker\"") && !manifesto.Contains("level=\"requireAdministrator\""),
                 "sem admin: o app pede so o nivel de quem o abre");
