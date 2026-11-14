@@ -20,6 +20,15 @@ namespace MhiagosControl
         void AbrirAntiga(string pagina);
         bool InicioComWindows { get; }
         bool DefinirInicioComWindows(bool ligado);
+        /// <summary>Mostrar todos os sensores mudou: a lista e refeita.</summary>
+        void TodosOsSensores(bool todos);
+        /// <summary>O idioma mudou: o menu da bandeja e refeito.</summary>
+        void IdiomaMudou();
+        /// <summary>Nulo quando o widget nao existe (testes).</summary>
+        ConfigDoWidget Widget { get; }
+        void LigarWidget(bool ligar);
+        void WidgetMudou();
+        void WidgetAoCanto();
     }
 
     /// <summary>
@@ -31,7 +40,7 @@ namespace MhiagosControl
     /// Tudo o que chega da pagina e dado: nomes sao validados, ids de sensor so
     /// valem se existem na lista, e nada vira caminho ou comando.
     /// </summary>
-    internal sealed class PonteDoApp
+    internal sealed partial class PonteDoApp
     {
         private readonly IAppNovo _app;
         /// <summary>Entrega uma resposta que ficou pronta fora da thread da interface (as especificacoes).</summary>
@@ -105,7 +114,7 @@ namespace MhiagosControl
                         return Feito(id, _app.InicioComWindows);
                     case "abrir": _app.AbrirAntiga(Texto(a, "pagina")); return Feito(id, true);
                     case "specs": Specs(id); return null;
-                    default: return Falha(id, "pedido desconhecido");
+                    default: return Ajuste(id, m, a);
                 }
             }
             catch (Exception ex)
@@ -165,6 +174,7 @@ namespace MhiagosControl
             Dictionary<string, object> casa = D();
             casa["servidor"] = ServidorCasa.Configurado;
             r["casa"] = casa;
+            AcrescentarAjustes(r);
             return r;
         }
 
@@ -402,6 +412,7 @@ namespace MhiagosControl
             }
             d["casa"] = casa;
             d["ativo"] = _app.Cfg.Active.Name;
+            d["jogo"] = JogoAgora();
 
             Dictionary<string, object> evento = D();
             evento["ev"] = "estado"; evento["d"] = d;

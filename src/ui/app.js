@@ -86,8 +86,13 @@
   /// Um pedido que muda a configuracao: a resposta e o "iniciar" novo.
   function mudar(m, a, feito) {
     return pedir(m, a).then(function (r) {
+      if (r === null || r === undefined) return false;   // desistiu do dialogo
+      if (typeof r === "string") { faixa(r); return true; }
+      var idiomaAntes = S.pt;
       S = r;
-      if (feito) faixa(feito);
+      if (r.editar) editando = r.editar;
+      if (idiomaAntes !== S.pt) montarNavegacao();
+      faixa(r.aviso || feito || "");
       mostrar(atual, true);
       return true;
     }, function (e) {
@@ -417,16 +422,57 @@
     });
   }
 
+  function botao(texto, classe, aoClicar) {
+    var b = el("button", classe || "b", texto);
+    b.type = "button";
+    b.addEventListener("click", aoClicar);
+    return b;
+  }
+
+  /// Um botao que pede confirmacao no segundo clique (a pagina nao usa caixas de dialogo).
+  function botaoPerigoso(texto, confirmar, aoConfirmar) {
+    var armado = false, relogio = 0;
+    var b = botao(texto, "b", function () {
+      if (!armado) {
+        armado = true;
+        b.textContent = confirmar;
+        b.classList.add("perigo");
+        relogio = setTimeout(function () { armado = false; b.textContent = texto; b.classList.remove("perigo"); }, 4000);
+        return;
+      }
+      clearTimeout(relogio);
+      aoConfirmar();
+    });
+    return b;
+  }
+
   MONTAR.baterias = function (alvo) {
-    var c = cartao(t("Periféricos", "Peripherals"));
+    var grade = el("div", "grade larga");
+    var c = cartao(t("Periféricos", "Peripherals"), "duplo");
     var lista = el("div");
     c.appendChild(lista);
-    alvo.appendChild(c);
-    var nota = el("p", "vazio", t(
-      "O widget da área de trabalho e os avisos de bateria são ajustados na janela clássica.",
-      "The desktop widget and battery alerts are set up in the classic window."));
-    alvo.appendChild(nota);
-    alvo.appendChild(botaoClassica("baterias"));
+    grade.appendChild(c);
+
+    if (S.widget) {
+      var w = S.widget;
+      var wc = cartao(t("Widget na área de trabalho", "Desktop widget"));
+      function mudarWidget(a) { mudar("widget", a); }
+      wc.appendChild(chave(t("Mostrar o widget", "Show the widget"), null, troca(w.ativo, function (v) { mudarWidget({ ativo: v }); })));
+      wc.appendChild(chave(t("Mostrar a Casa no widget", "Show Home on the widget"), null, troca(w.casa, function (v) { mudarWidget({ casa: v }); })));
+      wc.appendChild(chave(t("Sempre na frente", "Always on top"), null, troca(w.frente, function (v) { mudarWidget({ frente: v }); })));
+      wc.appendChild(chave(t("Travar a posição", "Lock position"), null, troca(w.travado, function (v) { mudarWidget({ travado: v }); })));
+      wc.appendChild(campo(t("Arranjo", "Layout"), segmentos([["aneis", t("Anéis", "Rings")], ["lista", t("Lista", "List")]], w.layout,
+        function (v) { mudarWidget({ layout: v }); })));
+      wc.appendChild(campo(t("Vidro", "Glass"), segmentos([["nitido", t("Nítido", "Sharp")], ["claro", t("Claro", "Clear")], ["fosco", t("Fosco", "Frosted")]], w.vidro,
+        function (v) { mudarWidget({ vidro: v }); })));
+      wc.appendChild(campo(t("Tom", "Tint"), segmentos([["auto", t("Automático", "Automatic")], ["escura", t("Escuro", "Dark")], ["clara", t("Claro", "Light")]], w.cor,
+        function (v) { mudarWidget({ cor: v }); })));
+      wc.appendChild(botao(t("Voltar ao canto", "Back to the corner"), "b", function () {
+        pedir("widget.canto").catch(function (e) { faixa(e.message, true); });
+      }));
+      grade.appendChild(wc);
+    }
+    alvo.appendChild(grade);
     return { atualizar: function () { desenharBaterias(lista, false); } };
   };
 
@@ -455,7 +501,7 @@
         ponto.title = t("ativo", "active");
         c.appendChild(ponto);
       }
-      c.appendChild(document.createTextNode(p.nome));
+      c.appendChild(document.createTextNode(p.nome + (p.nome === S.padrao ? " ★" : "")));
       c.setAttribute("aria-pressed", p.nome === editando ? "true" : "false");
       c.addEventListener("click", function () { editando = p.nome; mostrar("painel", true); });
       chips.appendChild(c);
@@ -530,32 +576,93 @@
     edicao.appendChild(acoes);
     grade.appendChild(edicao);
 
-    var novo = cartao(t("Novo perfil", "New profile"));
+    var gestao = cartao(t("Perfis", "Profiles"));
     var nome = el("input");
     nome.type = "text"; nome.maxLength = 24;
     nome.placeholder = t("Nome", "Name");
-    var criar = el("button", "b", t("Criar", "Create"));
-    criar.type = "button";
-    function criarPerfil() {
+    nome.setAttribute("aria-label", t("Nome do perfil", "Profile name"));
+    function comNome(fazer) {
       var n = nome.value.trim();
-      if (!n) return;
-      editando = n;
-      mudar("perfil.criar", { nome: n }, t("Perfil criado a partir do ativo.", "Profile created from the active one."));
+      if (!n) { faixa(t("Escreva o nome primeiro.", "Type the name first."), true); nome.focus(); return; }
+      fazer(n);
     }
-    criar.addEventListener("click", criarPerfil);
-    nome.addEventListener("keydown", function (e) { if (e.key === "Enter") criarPerfil(); });
-    novo.appendChild(el("div", "inline", null, nome, criar));
-    var nota = el("p", "vazio", t(
-      "Renomear, excluir, importar, exportar e o perfil por jogo ficam na janela clássica.",
-      "Rename, delete, import, export and per-game profiles live in the classic window."));
-    novo.appendChild(nota);
-    novo.appendChild(botaoClassica("painel"));
-    grade.appendChild(novo);
+    var criar = botao(t("Novo", "New"), "b p", function () {
+      comNome(function (n) {
+        editando = n;
+        mudar("perfil.criar", { nome: n }, t("Perfil criado a partir do ativo.", "Profile created from the active one."));
+      });
+    });
+    nome.addEventListener("keydown", function (e) { if (e.key === "Enter") criar.click(); });
+    gestao.appendChild(el("div", "inline", null, nome, criar));
+    var linhaDeAcoes = el("div", "inline quebra");
+    linhaDeAcoes.style.marginTop = "10px";
+    linhaDeAcoes.appendChild(botao(t("Duplicar", "Duplicate"), "b", function () {
+      comNome(function (n) { editando = n; mudar("perfil.duplicar", { nome: perfil.nome, novo: n }, t("Perfil duplicado.", "Profile duplicated.")); });
+    }));
+    linhaDeAcoes.appendChild(botao(t("Renomear", "Rename"), "b", function () {
+      comNome(function (n) { editando = n; mudar("perfil.renomear", { nome: perfil.nome, novo: n }, t("Perfil renomeado.", "Profile renamed.")); });
+    }));
+    gestao.appendChild(linhaDeAcoes);
+    gestao.appendChild(el("p", "vazio", t("Duplicar e renomear usam o nome escrito acima e valem para o perfil aberto (" + perfil.nome + ").",
+      "Duplicate and rename use the name typed above and apply to the open profile (" + perfil.nome + ").")));
+    var linha2 = el("div", "inline quebra");
+    if (perfil.nome !== S.padrao)
+      linha2.appendChild(botao(t("Tornar padrão", "Make default"), "b", function () {
+        mudar("perfil.padrao", { nome: perfil.nome }, t("Perfil padrão definido.", "Default profile set."));
+      }));
+    linha2.appendChild(botao(t("Exportar", "Export"), "b", function () { mudar("perfil.exportar", { nome: perfil.nome }); }));
+    linha2.appendChild(botao(t("Importar", "Import"), "b", function () { mudar("perfil.importar"); }));
+    if (S.perfis.length > 1)
+      linha2.appendChild(botaoPerigoso(t("Excluir", "Delete"), t("Confirmar exclusão", "Confirm delete"), function () {
+        editando = "";
+        mudar("perfil.excluir", { nome: perfil.nome }, t("Perfil excluído.", "Profile deleted."));
+      }));
+    gestao.appendChild(linha2);
+    gestao.appendChild(el("p", "vazio", t("O padrão (★) é o perfil que volta quando um jogo fecha.",
+      "The default (★) is the profile that comes back when a game closes.")));
+    grade.appendChild(gestao);
+
+    var jogos = cartao(t("Perfil por jogo", "Per-game profile"), "duplo");
+    jogos.appendChild(chave(t("Trocar de perfil ao abrir um jogo", "Switch profile when a game starts"),
+      S.jogos.rtss ? t("O jogo é reconhecido pelo RTSS.", "The game is recognized through RTSS.")
+                   : t("Precisa do RTSS, que não foi encontrado. Instale em Configurações.", "Needs RTSS, which was not found. Install it under Settings."),
+      troca(S.jogos.ligado, function (v) { mudar("jogos.ligar", { ligado: v }); })));
+    var agora = el("div", "chave");
+    var agoraTexto = el("div");
+    var vincular = botao("", "b", function () { mudar("jogo.vincular", { perfil: perfil.nome }, t("Jogo vinculado.", "Game bound.")); });
+    agora.appendChild(agoraTexto); agora.appendChild(vincular);
+    jogos.appendChild(agora);
+    var listaDeJogos = el("div", "linhas");
+    S.jogos.vinculos.forEach(function (v) {
+      var x = el("button", "x", "✕");
+      x.type = "button";
+      x.setAttribute("aria-label", t("Desvincular ", "Unbind ") + v.nome);
+      x.addEventListener("click", function () { mudar("jogo.desvincular", { chave: v.chave }); });
+      var l = el("div", "linha", null, el("span", "k", v.nome), el("span", "v", v.perfil), x);
+      listaDeJogos.appendChild(l);
+    });
+    if (!S.jogos.vinculos.length) listaDeJogos.appendChild(el("div", "vazio", t("Nenhum jogo vinculado.", "No bound game.")));
+    jogos.appendChild(listaDeJogos);
+    grade.appendChild(jogos);
+    var ultimoJogo = "-";
+    function atualizarJogo() {
+      var j = E ? E.jogo : null;
+      var marca = j ? j.chave + "|" + (j.perfil || "") : "";
+      if (marca === ultimoJogo) return;
+      ultimoJogo = marca;
+      limpar(agoraTexto);
+      agoraTexto.appendChild(el("span", "", j ? t("Jogo agora: ", "Game now: ") + j.nome : t("Nenhum jogo aberto agora.", "No game running now.")));
+      if (j) agoraTexto.appendChild(el("small", "", j.perfil ? t("vinculado a ", "bound to ") + j.perfil : t("sem vínculo", "not bound")));
+      vincular.textContent = t("Vincular a ", "Bind to ") + perfil.nome;
+      vincular.disabled = !j || !S.jogos.ligado || j.perfil === perfil.nome;
+    }
+
     alvo.appendChild(grade);
 
     return {
       atualizar: function () {
         m.atualizar(); selo.atualizar();
+        atualizarJogo();
         ativoAgora.textContent = t("Perfil ativo: ", "Active profile: ") + E.painel.perfil;
         v1.textContent = s1.value ? t("Agora: ", "Now: ") + comUnidade(s1.value) : "";
         v2.textContent = s2.value ? t("Agora: ", "Now: ") + comUnidade(s2.value) : "";
@@ -720,7 +827,7 @@
     if (!S.casa.servidor) {
       area.appendChild(el("div", "", null,
         el("p", "", t("O servidor da Casa não está configurado neste computador.", "The Home server is not set up on this computer.")),
-        botaoClassica("casa")));
+        botao(t("Configurar o servidor", "Set up the server"), "b p", function () { mostrar("config"); })));
       return {};
     }
     area.appendChild(el("span", "", t("Abrindo a Casa…", "Opening Home…")));
@@ -792,12 +899,77 @@
     painel.appendChild(acoes);
     grade.appendChild(painel);
 
-    var resto = cartao(t("Janela clássica", "Classic window"));
-    resto.appendChild(el("p", "vazio", t(
-      "Idioma, tema, ordem do menu, widget de baterias, RTSS, cópia de segurança e a conta da Casa ainda são ajustados na janela clássica.",
-      "Language, theme, menu order, battery widget, RTSS, backup and the Home account are still set up in the classic window.")));
-    resto.appendChild(botaoClassica("config"));
-    grade.appendChild(resto);
+    geral.appendChild(campo(t("Idioma", "Language"), segmentos([["pt", "Português"], ["en", "English"]], S.pt ? "pt" : "en",
+      function (v) { mudar("idioma", { lingua: v }); })));
+    painel.insertBefore(chave(t("Mostrar todos os sensores", "Show all sensors"),
+      t("Inclui os que o app esconde por serem repetidos ou pouco úteis.", "Includes the ones the app hides as duplicates or rarely useful."),
+      troca(S.todos, function (v) { mudar("sensores.todos", { ligado: v }); })), acoes);
+
+    var dados = cartao(t("Dados e cópia de segurança", "Data and backup"));
+    var resumo = el("div");
+    var dl = el("div", "inline quebra");
+    dl.appendChild(botao(t("Criar cópia", "Create backup"), "b", function () { mudar("backup.exportar"); }));
+    dl.appendChild(botao(t("Restaurar cópia", "Restore backup"), "b", function () {
+      pedir("backup.ler").then(function (r) {
+        limpar(resumo);
+        if (!r) return;
+        var ls = el("div", "linhas");
+        ls.appendChild(linha(t("Perfis", "Profiles"), String(r.perfis)));
+        ls.appendChild(linha(t("Jogos vinculados", "Bound games"), String(r.jogos)));
+        ls.appendChild(linha(t("Métricas", "Metrics"), String(r.metricas)));
+        ls.appendChild(linha(t("Perfil ativo", "Active profile"), r.ativo));
+        ls.appendChild(linha(t("Sensores não encontrados", "Sensors not found"), String(r.faltando)));
+        resumo.appendChild(el("p", "vazio", r.nota));
+        resumo.appendChild(ls);
+        var ap = botao(t("Aplicar esta cópia", "Apply this backup"), "b p", function () {
+          ap.disabled = true;
+          mudar("backup.aplicar", {}, t("Cópia restaurada. A configuração anterior foi guardada ao lado.", "Backup restored. The previous settings were kept alongside.")).then(function () { limpar(resumo); });
+        });
+        var cancelar = botao(t("Cancelar", "Cancel"), "b", function () { limpar(resumo); });
+        var acoesDoResumo = el("div", "inline", null, ap, cancelar);
+        acoesDoResumo.style.marginTop = "12px";
+        resumo.appendChild(acoesDoResumo);
+      }, function (e) { faixa(e.message, true); });
+    }));
+    dl.appendChild(botao(t("Abrir a pasta de dados", "Open data folder"), "b", function () { pedir("pasta"); }));
+    dados.appendChild(dl);
+    resumo.style.marginTop = "12px";
+    dados.appendChild(resumo);
+    grade.appendChild(dados);
+
+    var fps = cartao(t("FPS e jogos (RTSS)", "FPS and games (RTSS)"));
+    fps.appendChild(el("p", "vazio", S.jogos.rtss
+      ? t("O RivaTuner Statistics Server está instalado: FPS e perfil por jogo funcionam.", "RivaTuner Statistics Server is installed: FPS and per-game profiles work.")
+      : t("O RivaTuner Statistics Server não foi encontrado. Ele dá o FPS e reconhece o jogo aberto.", "RivaTuner Statistics Server was not found. It provides FPS and recognizes the running game.")));
+    var rl = el("div", "inline quebra");
+    if (!S.jogos.rtss) rl.appendChild(botao(t("Instalar pelo winget", "Install with winget"), "b p", function () { mudar("rtss.instalar"); }));
+    rl.appendChild(botao(t("Página do RTSS", "RTSS page"), "b", function () { pedir("rtss.site"); }));
+    fps.appendChild(rl);
+    grade.appendChild(fps);
+
+    var srv = cartao(t("Servidor da Casa", "Home server"), "duplo");
+    var externo = el("input"), interno = el("input"), chaveDoServidor = el("input");
+    externo.type = interno.type = "text"; chaveDoServidor.type = "password";
+    externo.value = S.casa.externo || ""; interno.value = S.casa.interno || "";
+    externo.placeholder = "https://home01.suarede.ts.net"; interno.placeholder = "192.168.1.100:8765";
+    chaveDoServidor.placeholder = S.casa.servidor ? t("vazio mantém a guardada", "empty keeps the stored one") : "";
+    chaveDoServidor.autocomplete = "off";
+    var duasDoServidor = el("div", "duas", null,
+      campo(t("Endereço externo", "External address"), externo), campo(t("Endereço interno", "Internal address"), interno));
+    srv.appendChild(duasDoServidor);
+    srv.appendChild(campo(t("Chave de acesso", "Access key"), chaveDoServidor));
+    var testar = botao(t("Salvar e testar", "Save and test"), "b p", function () {
+      testar.disabled = true;
+      faixa(t("Testando o servidor…", "Testing the server…"));
+      mudar("casa.servidor", { externo: externo.value, interno: interno.value, chave: chaveDoServidor.value })
+        .then(function () { testar.disabled = false; chaveDoServidor.value = ""; });
+    });
+    srv.appendChild(testar);
+    srv.appendChild(el("p", "vazio", t(
+      "Basta um endereço responder; o outro fica de reserva. A conta ConnectLife direta (sem servidor) continua na janela clássica.",
+      "One responding address is enough; the other is a fallback. The direct ConnectLife account (without a server) stays in the classic window.")));
+    srv.appendChild(botaoClassica("casa"));
+    grade.appendChild(srv);
     alvo.appendChild(grade);
 
     return { atualizar: function () { pausa.setAttribute("aria-checked", E.painel.pausado ? "true" : "false"); } };
@@ -817,11 +989,35 @@
     c.appendChild(el("p", "", t(
       "Sensores por LibreHardwareMonitor. Interface em Microsoft Edge WebView2.",
       "Sensors by LibreHardwareMonitor. Interface on Microsoft Edge WebView2.")));
-    alvo.appendChild(c);
-    var d = el("div", "inline");
-    d.style.marginTop = "16px";
-    d.appendChild(botaoClassica("sobre"));
-    alvo.appendChild(d);
+    var grade = el("div", "grade larga");
+    grade.appendChild(c);
+    var motor = cartao(t("Leitura de sensores", "Sensor reading"));
+    var ml = el("div", "linhas");
+    ml.appendChild(linha("PawnIO", S.motor.pawnio ? t("instalado", "installed") : t("ausente", "missing")));
+    ml.appendChild(linha(t("Motor do HWiNFO", "HWiNFO engine"), S.motor.hwinfo ? t("presente", "present") : t("ausente", "absent")));
+    motor.appendChild(ml);
+    if (!S.motor.pawnio) {
+      motor.appendChild(el("p", "vazio", t("Sem o PawnIO, temperatura e potência da CPU podem não aparecer.", "Without PawnIO, CPU temperature and power may be missing.")));
+      motor.appendChild(botao(t("Instalar o PawnIO", "Install PawnIO"), "b p", function () { mudar("pawnio.instalar"); }));
+    }
+    grade.appendChild(motor);
+    var diag = cartao(t("Diagnóstico", "Diagnostics"), "duplo");
+    var texto = el("pre", "relatorio");
+    texto.hidden = true;
+    var copiar = botao(t("Copiar", "Copy"), "b", function () {
+      var feito = function () { faixa(t("Relatório copiado.", "Report copied.")); };
+      if (navigator.clipboard) navigator.clipboard.writeText(texto.textContent).then(feito, function () { faixa(t("Não deu para copiar; selecione o texto.", "Could not copy; select the text."), true); });
+    });
+    copiar.hidden = true;
+    diag.appendChild(el("p", "vazio", t("Um resumo sem nomes de sensores, jogos, perfis nem caminhos, para pedir ajuda.",
+      "A summary without sensor, game or profile names or paths, for asking for help.")));
+    diag.appendChild(el("div", "inline", null, botao(t("Gerar relatório", "Build report"), "b", function () {
+      pedir("diagnostico").then(function (r) { texto.textContent = r; texto.hidden = false; copiar.hidden = false; },
+        function (e) { faixa(e.message, true); });
+    }), copiar));
+    diag.appendChild(texto);
+    grade.appendChild(diag);
+    alvo.appendChild(grade);
     return {};
   };
 

@@ -47,6 +47,12 @@ namespace MhiagosControl
         {
             _ponte = new PonteDoApp(app);
             _ponte.Enviar = EnviarDeFora;
+            _ponte.Adiar = delegate(Action acao)
+            {
+                if (IsDisposed || !IsHandleCreated) return;
+                BeginInvoke(acao);
+            };
+            _ponte.Arquivo = EscolherArquivo;
             Text = T.AppName;
             Icon = Assets.AppIcon;
             StartPosition = FormStartPosition.CenterScreen;
@@ -243,6 +249,28 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("interface nova: estado", ex); }
         }
 
+        /// <summary>O dialogo de arquivo do Windows, dono desta janela. Nulo se a pessoa desistiu.</summary>
+        private string EscolherArquivo(bool salvar, string tipo, string sugerido)
+        {
+            if (IsDisposed) return null;
+            bool backup = tipo == "backup";
+            string filtro = backup ? "Mhiagos backup (*.mhiagos-backup)|*.mhiagos-backup" : T.ProfileFilter;
+            FileDialog d = salvar ? (FileDialog)new SaveFileDialog() : new OpenFileDialog();
+            using (d)
+            {
+                d.Filter = filtro;
+                d.Title = backup ? (salvar ? T.BackupCreate : T.BackupRestore) : (salvar ? T.ExportProfile : T.ImportProfile);
+                if (salvar)
+                {
+                    d.AddExtension = true;
+                    d.DefaultExt = backup ? "mhiagos-backup" : "ini";
+                    d.FileName = sugerido ?? "";
+                }
+                else ((OpenFileDialog)d).CheckFileExists = true;
+                return d.ShowDialog(this) == DialogResult.OK ? d.FileName : null;
+            }
+        }
+
         // ---------------- a Casa por cima da area de conteudo ----------------
 
         private static int Int(Dictionary<string, object> d, string k)
@@ -324,6 +352,8 @@ namespace MhiagosControl
             _relogio.Stop();
             _relogio.Dispose();
             _ponte.Enviar = null;
+            _ponte.Adiar = null;
+            _ponte.Arquivo = null;
             try { if (_casa != null) _casa.Dispose(); } catch { }
             try { if (_app != null) _app.Dispose(); } catch { }
             base.OnFormClosed(e);

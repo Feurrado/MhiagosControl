@@ -32,6 +32,14 @@ namespace MhiagosControl
             public void AlternarPausa() { Pausa = !Pausa; Pausas++; }
             public void Aplicar() { Aplicacoes++; }
             public void AbrirAntiga(string pagina) { Aberta = pagina; }
+            public bool Todos; public int Relistas, Idiomas, WidgetMudancas, Cantos;
+            public ConfigDoWidget W = new ConfigDoWidget();
+            public void TodosOsSensores(bool todos) { Todos = todos; Relistas++; }
+            public void IdiomaMudou() { Idiomas++; }
+            public ConfigDoWidget Widget { get { return W; } }
+            public void LigarWidget(bool ligar) { W.Ativo = ligar; }
+            public void WidgetMudou() { WidgetMudancas++; }
+            public void WidgetAoCanto() { Cantos++; }
             public bool InicioComWindows { get { return Inicio; } }
             public bool DefinirInicioComWindows(bool ligado)
             {
@@ -279,6 +287,151 @@ namespace MhiagosControl
             }
             finally
             {
+                try { Directory.Delete(caixa, true); } catch { }
+            }
+        }
+
+        private static void PonteDoAppAjustes()
+        {
+            string caixa = Path.Combine(Path.GetTempPath(), "MhiagosControlTeste" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(caixa);
+            string arquivo = Path.Combine(caixa, "config.ini");
+            string idiomaAntes = T.Language;
+            try
+            {
+                Config semente = new Config();
+                semente.Profiles.Add(Perfil("Padrão", "cpu:temp", "cpu:load", true, false, 0, 10));
+                semente.Profiles.Add(Perfil("GPU", "gpu:temp", "gpu:pow", false, false, 0, 0));
+                semente.ActiveName = "GPU";
+                semente.DefaultProfileName = "GPU";
+                semente.MapearJogo("cs2.exe", "GPU");
+                Verdade(semente.SaveTo(arquivo), "ajustes: configuracao de teste gravada");
+
+                AppFalso app = new AppFalso();
+                app.Config = Config.LoadFrom(arquivo, false);
+                app.Lista.Add(Sensor("cpu:temp", "CPU", SensorType.Temperature, "Temperatura", 54f));
+                app.Lista.Add(Sensor("cpu:load", "CPU", SensorType.Load, "Uso", 12f));
+                app.Lista.Add(Sensor("gpu:temp", "GPU", SensorType.Temperature, "Temperatura", 61f));
+                app.Lista.Add(Sensor("gpu:pow", "GPU", SensorType.Power, "Potência", 130f));
+                PonteDoApp ponte = new PonteDoApp(app);
+                List<Dictionary<string, object>> enviadas = new List<Dictionary<string, object>>();
+                ponte.Enviar = delegate(Dictionary<string, object> m) { enviadas.Add(m); };
+
+                Dictionary<string, object> ini = ponte.Iniciar();
+                Dictionary<string, object> jogos = ini["jogos"] as Dictionary<string, object>;
+                Verdade(jogos != null && ((List<object>)jogos["vinculos"]).Count == 1, "ajustes: o vinculo do jogo vai para a pagina");
+                Dictionary<string, object> casa = ini["casa"] as Dictionary<string, object>;
+                Verdade(casa != null && casa.ContainsKey("externo") && !casa.ContainsKey("chave"), "ajustes: a chave do servidor nunca vai para a pagina");
+                Verdade(ini.ContainsKey("widget") && ini.ContainsKey("motor") && ini.ContainsKey("todos"), "ajustes: widget, motor e sensores no iniciar");
+
+                // renomear o ativo, o padrao e o do jogo leva os tres junto
+                Dictionary<string, object> r = PedirNaPonte(ponte, "{\"id\":1,\"m\":\"perfil.renomear\",\"a\":{\"nome\":\"GPU\",\"novo\":\"Placa\"}}");
+                Config lido = Config.LoadFrom(arquivo, false);
+                Verdade(PonteOk(r) && lido.ActiveName == "Placa" && lido.DefaultProfileName == "Placa" && lido.PerfilDoJogo("cs2.exe") == "Placa",
+                    "ajustes: renomear leva ativo, padrao e jogo junto");
+                r = PedirNaPonte(ponte, "{\"id\":2,\"m\":\"perfil.renomear\",\"a\":{\"nome\":\"Placa\",\"novo\":\"padrão\"}}");
+                Verdade(!PonteOk(r) && PonteErro(r) == T.NovoNomeRepetido, "ajustes: renomear para nome existente e recusado");
+                r = PedirNaPonte(ponte, "{\"id\":3,\"m\":\"perfil.renomear\",\"a\":{\"nome\":\"Placa\",\"novo\":\"PLACA\"}}");
+                Verdade(PonteOk(r) && PerfilDe(app.Config, "PLACA") != null && app.Config.ActiveName == "PLACA", "ajustes: so mudar maiusculas e permitido");
+                r = PedirNaPonte(ponte, "{\"id\":4,\"m\":\"perfil.renomear\",\"a\":{\"nome\":\"PLACA\",\"novo\":\"a|b\"}}");
+                Verdade(!PonteOk(r) && PerfilDe(app.Config, "PLACA") != null, "ajustes: nome invalido nao renomeia");
+
+                // duplicar, padrao, excluir
+                r = PedirNaPonte(ponte, "{\"id\":5,\"m\":\"perfil.duplicar\",\"a\":{\"nome\":\"Padrão\",\"novo\":\"Cópia\"}}");
+                Profile copia = PerfilDe(app.Config, "Cópia");
+                Verdade(PonteOk(r) && copia != null && copia.Panel1Id == "cpu:temp" && copia.Divisor2 == 10, "ajustes: duplicar copia o perfil");
+                r = PedirNaPonte(ponte, "{\"id\":6,\"m\":\"perfil.padrao\",\"a\":{\"nome\":\"Cópia\"}}");
+                Verdade(PonteOk(r) && Config.LoadFrom(arquivo, false).DefaultProfileName == "Cópia", "ajustes: perfil padrao gravado");
+                r = PedirNaPonte(ponte, "{\"id\":7,\"m\":\"perfil.excluir\",\"a\":{\"nome\":\"PLACA\"}}");
+                lido = Config.LoadFrom(arquivo, false);
+                Verdade(PonteOk(r) && PerfilDe(lido, "PLACA") == null && lido.NameExists(lido.ActiveName) && lido.PerfilDoJogo("cs2.exe") == null,
+                    "ajustes: excluir o ativo troca o ativo e solta o jogo");
+                PedirNaPonte(ponte, "{\"id\":8,\"m\":\"perfil.excluir\",\"a\":{\"nome\":\"Cópia\"}}");
+                Verdade(lido.NameExists(Config.LoadFrom(arquivo, false).DefaultProfileName), "ajustes: excluir o padrao escolhe outro padrao");
+                r = PedirNaPonte(ponte, "{\"id\":9,\"m\":\"perfil.excluir\",\"a\":{\"nome\":\"Padrão\"}}");
+                Verdade(!PonteOk(r) && PonteErro(r) == T.KeepOneProfile && app.Config.Profiles.Count == 1, "ajustes: o ultimo perfil fica");
+
+                // jogos
+                r = PedirNaPonte(ponte, "{\"id\":10,\"m\":\"jogos.ligar\",\"a\":{\"ligado\":true}}");
+                Verdade(PonteOk(r) && Config.LoadFrom(arquivo, false).GameProfiles, "ajustes: perfil por jogo ligado");
+                r = PedirNaPonte(ponte, "{\"id\":11,\"m\":\"jogo.vincular\",\"a\":{\"perfil\":\"Padrão\"}}");
+                Verdade(Rtss.JogoAtual != null || (!PonteOk(r) && PonteErro(r) == T.NoGameToBind), "ajustes: sem jogo aberto nao ha o que vincular");
+                app.Config.MapearJogo("x.exe", "Padrão");
+                r = PedirNaPonte(ponte, "{\"id\":12,\"m\":\"jogo.desvincular\",\"a\":{\"chave\":\"x.exe\"}}");
+                Verdade(PonteOk(r) && app.Config.PerfilDoJogo("x.exe") == null, "ajustes: desvincular solta o jogo");
+                r = PedirNaPonte(ponte, "{\"id\":13,\"m\":\"jogo.desvincular\",\"a\":{\"chave\":\"nunca.exe\"}}");
+                Verdade(!PonteOk(r), "ajustes: desvincular jogo sem vinculo e recusado");
+
+                // sensores, idioma, widget
+                r = PedirNaPonte(ponte, "{\"id\":14,\"m\":\"sensores.todos\",\"a\":{\"ligado\":true}}");
+                Verdade(PonteOk(r) && app.Todos && app.Relistas == 1 && Config.LoadFrom(arquivo, false).ShowAllSensors, "ajustes: todos os sensores grava e relista");
+                T.Language = T.PtBr;
+                r = PedirNaPonte(ponte, "{\"id\":15,\"m\":\"idioma\",\"a\":{\"lingua\":\"en\"}}");
+                Verdade(PonteOk(r) && T.Language == T.EnUs && app.Idiomas == 1 && Config.LoadFrom(arquivo, false).Language == T.EnUs,
+                    "ajustes: idioma grava, vale e refaz o menu");
+                r = PedirNaPonte(ponte, "{\"id\":16,\"m\":\"idioma\",\"a\":{\"lingua\":\"xx\"}}");
+                Verdade(!PonteOk(r) && T.Language == T.EnUs, "ajustes: idioma desconhecido e recusado");
+                T.Language = T.PtBr;
+                r = PedirNaPonte(ponte, "{\"id\":17,\"m\":\"widget\",\"a\":{\"ativo\":true,\"layout\":\"lista\",\"vidro\":\"fosco\",\"cor\":\"escura\",\"frente\":true}}");
+                Verdade(PonteOk(r) && app.W.Ativo && app.W.Layout == LayoutDoWidget.Lista && app.W.Fosco && !app.W.Nitido &&
+                        app.W.Cor == CorDoVidro.Escura && app.W.NaFrente && app.WidgetMudancas == 1, "ajustes: widget");
+                r = PedirNaPonte(ponte, "{\"id\":18,\"m\":\"widget\",\"a\":{\"layout\":\"pizza\"}}");
+                Verdade(!PonteOk(r) && app.W.Layout == LayoutDoWidget.Lista && app.WidgetMudancas == 1, "ajustes: opcao de widget invalida e recusada");
+
+                // arquivos: o dialogo devolve um caminho, ou nulo quando a pessoa desiste
+                string escolhido = null;
+                ponte.Arquivo = delegate(bool salvar, string tipo, string sugerido) { return escolhido; };
+                Verdade(PedirNaPonte(ponte, "{\"id\":19,\"m\":\"perfil.exportar\",\"a\":{\"nome\":\"Padrão\"}}") == null, "ajustes: exportar responde depois");
+                Verdade(enviadas.Count == 1 && PonteOk(enviadas[0]) && enviadas[0]["r"] == null, "ajustes: desistir do dialogo nao e erro");
+                escolhido = Path.Combine(caixa, "perfil.ini");
+                PedirNaPonte(ponte, "{\"id\":20,\"m\":\"perfil.exportar\",\"a\":{\"nome\":\"Padrão\"}}");
+                Verdade(PonteOk(enviadas[1]) && File.Exists(escolhido), "ajustes: perfil exportado");
+                PedirNaPonte(ponte, "{\"id\":21,\"m\":\"perfil.importar\"}");
+                Dictionary<string, object> imp = PonteOk(enviadas[2]) ? enviadas[2]["r"] as Dictionary<string, object> : null;
+                Verdade(imp != null && app.Config.Profiles.Count == 2 && Json.Texto(imp, "editar") != "Padrão" && imp.ContainsKey("aviso"),
+                    "ajustes: perfil importado com nome unico");
+                escolhido = arquivo;   // a propria configuracao: a exportacao recusa
+                PedirNaPonte(ponte, "{\"id\":22,\"m\":\"perfil.exportar\",\"a\":{\"nome\":\"Padrão\"}}");
+                Verdade(!PonteOk(enviadas[3]), "ajustes: exportar por cima da configuracao e recusado");
+
+                escolhido = Path.Combine(caixa, "copia.mhiagos-backup");
+                PedirNaPonte(ponte, "{\"id\":23,\"m\":\"backup.exportar\"}");
+                Verdade(PonteOk(enviadas[4]) && File.Exists(escolhido), "ajustes: copia de seguranca criada");
+                int perfisDaCopia = app.Config.Profiles.Count;
+                PedirNaPonte(ponte, "{\"id\":24,\"m\":\"perfil.duplicar\",\"a\":{\"nome\":\"Padrão\",\"novo\":\"Depois\"}}");
+                Verdade(PerfilDe(app.Config, "Depois") != null, "ajustes: mudanca depois da copia");
+                r = PedirNaPonte(ponte, "{\"id\":25,\"m\":\"backup.aplicar\"}");
+                Verdade(!PonteOk(r), "ajustes: aplicar sem ler a copia e recusado");
+                PedirNaPonte(ponte, "{\"id\":26,\"m\":\"backup.ler\"}");
+                Dictionary<string, object> resumo = PonteOk(enviadas[5]) ? enviadas[5]["r"] as Dictionary<string, object> : null;
+                Verdade(resumo != null && Json.Texto(resumo, "perfis") == perfisDaCopia.ToString(), "ajustes: resumo da copia");
+                r = PedirNaPonte(ponte, "{\"id\":27,\"m\":\"backup.aplicar\"}");
+                Verdade(PonteOk(r) && PerfilDe(app.Config, "Depois") == null && PerfilDe(Config.LoadFrom(arquivo, false), "Depois") == null,
+                    "ajustes: a copia restaurada vale e foi gravada");
+                Verdade(Directory.GetFiles(caixa, "config.ini.before-restore-*").Length == 1, "ajustes: a configuracao de antes ficou guardada ao lado");
+
+                Verdade(Json.Texto(PedirNaPonte(ponte, "{\"id\":28,\"m\":\"diagnostico\"}"), "r").Contains(AppInfo.Versao), "ajustes: diagnostico");
+                Verdade(Instalador.Comando("w.exe", "a.b").Contains("install --id a.b -e"), "ajustes: comando do winget");
+
+                T.Language = T.PtBr;   // a copia restaurada trouxe o ingles gravado antes
+                // gravacao que falha nao deixa rastro
+                AppFalso semDisco = new AppFalso();
+                semDisco.Config = new Config();
+                semDisco.Config.Profiles.Add(Perfil("A", "", "", true, false, 0, 0));
+                semDisco.Config.Profiles.Add(Perfil("B", "", "", true, false, 0, 0));
+                semDisco.Config.ActiveName = "A";
+                PonteDoApp ponte2 = new PonteDoApp(semDisco);
+                Verdade(!PonteOk(PedirNaPonte(ponte2, "{\"id\":1,\"m\":\"perfil.excluir\",\"a\":{\"nome\":\"A\"}}")) &&
+                        semDisco.Config.Profiles.Count == 2 && semDisco.Config.ActiveName == "A", "ajustes: excluir que nao gravou volta atras");
+                Verdade(!PonteOk(PedirNaPonte(ponte2, "{\"id\":2,\"m\":\"perfil.renomear\",\"a\":{\"nome\":\"A\",\"novo\":\"C\"}}")) &&
+                        PerfilDe(semDisco.Config, "A") != null && semDisco.Config.ActiveName == "A", "ajustes: renomear que nao gravou volta atras");
+                Verdade(!PonteOk(PedirNaPonte(ponte2, "{\"id\":3,\"m\":\"idioma\",\"a\":{\"lingua\":\"en\"}}")) && T.Language == T.PtBr,
+                    "ajustes: idioma que nao gravou nao vale");
+                Igual(0, semDisco.Aplicacoes + semDisco.Idiomas, "ajustes: o que nao gravou nao e aplicado");
+            }
+            finally
+            {
+                T.Language = idiomaAntes;
                 try { Directory.Delete(caixa, true); } catch { }
             }
         }
