@@ -1327,6 +1327,14 @@
       botao(T("VisaoAbrirCasa", t("Abrir Casa ▸", "Open Home ▸")), "link", function () { mostrar("casa"); }));
     cartaoAr.addEventListener("dblclick", function (e) { if (e.target === cartaoAr) mostrar("casa"); });
 
+    // A sugestao de conforto do servidor (clima e ASHRAE 55), com Aplicar quando ha o que mandar ao ar.
+    var sugTitulo = el("b"), sugTexto = el("small");
+    var sugAplicar = botao(t("Aplicar", "Apply"), "b", function () {
+      sugAplicar.disabled = true;
+      pedir("casa.sugestao", {}).then(function (v) { sugAplicar.disabled = false; if (v) definir(v); }, function () { sugAplicar.disabled = false; });
+    });
+    var cartaoSug = el("div", "cartao vg-casa vg-sug", null, el("span", "ic icone", "\uE706"), el("div", "ct", null, sugTitulo, sugTexto), sugAplicar);
+
     function definir(v) {
       v = v || { convite: { titulo: T("VisaoConecteCasa", t("Conecte a casa", "Connect your home")), texto: "" } };
       var chave = JSON.stringify(v);
@@ -1335,6 +1343,13 @@
       limpar(raiz);
       ar = v.ar ? JSON.parse(JSON.stringify(v.ar)) : null;
       if (ar) { desenharAr(); raiz.appendChild(cartaoAr); }
+      if (ar && ar.sug) {
+        sugTitulo.textContent = ar.sug.titulo;
+        sugTexto.textContent = ar.sug.texto;
+        sugTexto.title = ar.sug.texto;
+        sugAplicar.style.display = ar.sug.aplicavel ? "" : "none";
+        raiz.appendChild(cartaoSug);
+      }
       if (v.lav) { desenharLav(v.lav); raiz.appendChild(cartaoLav); }
       if (v.convite || (!ar && !v.lav)) {
         var c = v.convite || {};
