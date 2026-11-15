@@ -16,10 +16,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, model_validator
 
-from . import avisos, banco, casa, clima, servico, sistema
+from . import automatico, avisos, banco, casa, clima, servico, sistema
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.13.0"
+VERSAO = "1.14.0"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
@@ -34,6 +34,7 @@ async def _vida(_app):
         raise RuntimeError("MHIAGOS_CHAVE ausente ou curta (minimo 16 caracteres)")
     banco.con()
     servico.iniciar()
+    automatico.iniciar(_sugestao_do_ar)
     yield
 
 
@@ -467,7 +468,7 @@ def _sugestao_do_ar():
         dentro = (dentro - 32) * 5 / 9
     ligado = bool(d.get("ligado"))
     s = clima.sugestao(dentro, c["agora"]["temp"], c["agora"]["umidade"], c.get("mediaRecente"), c.get("maxHoje"),
-                       datetime.now().hour, ligado)
+                       datetime.now().hour, ligado, d.get("umidade"))
     return ar, s, c
 
 
@@ -489,6 +490,18 @@ def aplicar_sugestao():
     servico.enviar(ar["puid"], props, _sem_bipe(None))
     servico.cancelar(ar["puid"], "retorno")
     return {"ok": True, "sugestao": s}
+
+
+@app.get("/api/auto", dependencies=[Depends(autorizado)])
+def auto_situacao():
+    """O modo automatico do ar: a configuracao (que mora nas preferencias), a pausa e as ultimas acoes."""
+    return automatico.situacao()
+
+
+@app.post("/api/auto/retomar", dependencies=[Depends(autorizado)])
+def auto_retomar():
+    automatico.retomar()
+    return automatico.situacao()
 
 
 @app.get("/api/exportar/ar.csv", dependencies=[Depends(autorizado)])

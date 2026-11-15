@@ -40,6 +40,8 @@ namespace MhiagosControl
         private CoreWebView2Environment _ambiente;
         private bool _pronta, _casaIniciada;
         private string _casaOrigem = "", _casaEndereco = "";
+        /// <summary>A aba da pagina da Casa a abrir (o cartao do tempo da Visao geral pede "clima").</summary>
+        private string _casaAba = "";
         private Rectangle _casaArea = Rectangle.Empty;
         private bool _casaVisivel, _casaAVista;
         private readonly Timer _casaRecolhe;
@@ -361,6 +363,8 @@ namespace MhiagosControl
         {
             if (a == null) return;
             _casaVisivel = Json.Texto(a, "visivel") == "true";
+            string aba = Json.Texto(a, "aba");
+            if (aba == "painel" || aba == "clima" || aba == "consumo" || aba == "ajustes") _casaAba = aba;
             // A mesma escala do resto do app (DPI do sistema), que e a que o WebView2 usa para o pixel CSS.
             double escala = Ui.S(9600) / 9600.0;
             _casaArea = new Rectangle((int)Math.Round(Int(a, "x") * escala), (int)Math.Round(Int(a, "y") * escala),
@@ -392,6 +396,11 @@ namespace MhiagosControl
             _casa.Bounds = _casaArea;
             _casa.Visible = _casaIniciada;
             _casa.BringToFront();
+            if (_casaIniciada && _casaAba.Length > 0)
+            {
+                RoteiroDaCasa("window.irPara&&irPara(" + Json.Escrever(_casaAba) + ");");
+                _casaAba = "";
+            }
             if (_casaIniciada && !_casaAVista)
             {
                 _casaAVista = true;
@@ -453,6 +462,8 @@ namespace MhiagosControl
                 };
                 _casaIniciada = true;
                 string alvo = _casaEndereco.IndexOf("://", StringComparison.Ordinal) < 0 ? "http://" + _casaEndereco : _casaEndereco;
+                // A primeira abertura ja vai direto a aba pedida (o roteiro abaixo ainda nao acharia a pagina).
+                if (_casaAba.Length > 0) { alvo += "#" + _casaAba; _casaAba = ""; }
                 c.Navigate(alvo);
                 PosicionarCasa();
             }

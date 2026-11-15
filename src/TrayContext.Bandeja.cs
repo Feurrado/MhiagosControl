@@ -63,6 +63,7 @@ namespace MhiagosControl
                 Clima.Iniciar();
                 // A casa no widget de bateria: o clique num item dela abre a pagina Casa, fora do clique (a janela e modal).
                 CasaNoWidget.AbrirCasa = delegate { Marshal(delegate { _paginaPedida = "casa"; PedirConfiguracao(); }); };
+                CasaNoWidget.AbrirClima = delegate { Marshal(delegate { _paginaPedida = "casa:clima"; PedirConfiguracao(); }); };
             }
             catch (Exception ex) { Log.Error("iniciar a pagina Casa", ex); }
         }

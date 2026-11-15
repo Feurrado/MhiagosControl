@@ -99,6 +99,7 @@ namespace MhiagosControl
                 case "configuracoes": case "config": return "config";
                 case "especificacoes": case "specs": return "specs";
                 case "visao": case "metricas": case "baterias": case "casa": case "sobre": return chave;
+                case "casa:clima": return chave;   // a pagina Casa ja na aba Clima (o tempo no widget)
                 default: return null;
             }
         }

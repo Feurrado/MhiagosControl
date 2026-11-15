@@ -20,6 +20,9 @@ namespace MhiagosControl
         private static DateTime _em = DateTime.MinValue;
         private static bool _buscando;
 
+        /// <summary>O tempo mudou (o widget da area de trabalho redesenha). Vem de outra thread.</summary>
+        public static event EventHandler Mudou;
+
         /// <summary>{titulo, texto, aplicavel} ou nulo. Dispara a busca se a ultima estiver velha.</summary>
         public static Dictionary<string, object> Atual()
         {
@@ -62,13 +65,18 @@ namespace MhiagosControl
             Dictionary<string, object> c = null;
             try { c = ServidorCasa.Clima(); }
             catch (Exception ex) { Log.Write("casa: clima indisponivel: " + ex.Message); }
+            Dictionary<string, object> tempo = MontarTempo(c);
+            bool mudou;
             lock (_trava)
             {
                 _buscando = false;
                 _em = DateTime.UtcNow;
                 _atual = Montar(r);
-                _tempo = MontarTempo(c);
+                mudou = Json.Escrever(tempo) != Json.Escrever(_tempo);
+                _tempo = tempo;
             }
+            EventHandler h = Mudou;
+            if (mudou && h != null) h(null, EventArgs.Empty);
         }
 
         internal static Dictionary<string, object> Montar(Dictionary<string, object> r)
@@ -87,7 +95,7 @@ namespace MhiagosControl
             return x;
         }
 
-        /// <summary>O essencial do /api/clima para o cartao: agora, maxima e minima de hoje, as 5 proximas horas e o AQI.</summary>
+        /// <summary>O essencial do /api/clima para o cartao: agora, maxima e minima de hoje, as 5 proximas horas, 5 dias e o AQI.</summary>
         internal static Dictionary<string, object> MontarTempo(Dictionary<string, object> r)
         {
             Dictionary<string, object> c = Obj(r, "clima"), loc = Obj(r, "local"), ag = Obj(c, "agora");
@@ -121,6 +129,24 @@ namespace MhiagosControl
                     if (horas.Count == 5) break;
                 }
             x["horas"] = horas;
+            List<object> prox = new List<object>();
+            if (dias != null)
+                foreach (object o2 in dias)
+                {
+                    Dictionary<string, object> d = o2 as Dictionary<string, object>;
+                    string dia = Json.Texto(d, "dia");
+                    double mx, mn;
+                    if (dia == null || !Num(d, "max", out mx) || !Num(d, "min", out mn)) continue;
+                    Dictionary<string, object> y = new Dictionary<string, object>();
+                    y["dia"] = dia;
+                    y["icone"] = Json.Texto(d, "icone") ?? "nuvem";
+                    y["max"] = (long)Math.Round(mx);
+                    y["min"] = (long)Math.Round(mn);
+                    y["prob"] = Num(d, "prob", out v) ? (object)(long)Math.Round(v) : null;
+                    prox.Add(y);
+                    if (prox.Count == 5) break;
+                }
+            x["dias"] = prox;
             Dictionary<string, object> ar = Obj(r, "ar");
             string cor = Json.Texto(ar, "cor");
             x["aqi"] = Num(ar, "aqi", out v) ? (object)(long)Math.Round(v) : null;

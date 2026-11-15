@@ -226,6 +226,8 @@ PREF_PADRAO = {
     "alertaFalha": True, "alertaDesconectado": True, "alertaQuente": True, "alertaLavadoraFim": True,
     "limiteQuente": 28, "potenciaFrio": 1100, "potenciaEco": 1100, "potenciaSeco": 600, "potenciaVentilar": 60,
     "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "ntfyTopico": "", "local": None, "locais": [], "inicio": {"ordem": [], "ocultos": []}, "cenas": CENAS_PADRAO,
+    # Modo automatico do ar (app/automatico.py): desligado por padrao.
+    "auto": {"ligado": False, "podeLigar": False, "podeDesligar": True, "pausaMin": 120, "inicio": 0, "fim": 24},
 }
 
 
@@ -238,6 +240,21 @@ _INTEIRAS = {"limiteQuente": (16, 45), "potenciaFrio": (0, 10000), "potenciaEco"
              "potenciaSeco": (0, 10000), "potenciaVentilar": (0, 10000), "retornoModo": (-1, 10),
              "retornoTemp": (16, 32), "retornoVento": (-3, 20)}
 _CENA_INTEIRAS = {"modo": (-1, 10), "temp": (-1, 40), "vento": (-3, 20), "noturno": (-1, 1), "duracao": (0, 24 * 60)}
+
+
+def _validar_auto(v):
+    if not isinstance(v, dict):
+        raise PreferenciaInvalida("auto: objeto")
+    r = dict(PREF_PADRAO["auto"])
+    for k in ("ligado", "podeLigar", "podeDesligar"):
+        if k in v:
+            if not isinstance(v[k], bool):
+                raise PreferenciaInvalida("auto.%s: verdadeiro ou falso" % k)
+            r[k] = v[k]
+    for k, faixa in (("pausaMin", (15, 24 * 60)), ("inicio", (0, 23)), ("fim", (1, 24))):
+        if k in v:
+            r[k] = _inteiro("auto." + k, v[k], faixa)
+    return r
 
 
 def _inteiro(nome, v, faixa):
@@ -327,6 +344,8 @@ def validar_preferencias(dados):
             limpo[k] = [_validar_local(x) for x in v if x is not None]
         elif k == "cenas":
             limpo[k] = _validar_cenas(v)
+        elif k == "auto":
+            limpo[k] = _validar_auto(v)
         elif k == "ntfyTopico":
             if not isinstance(v, str) or (v and not re.match(r"^[A-Za-z0-9_-]{8,64}$", v)):
                 raise PreferenciaInvalida("ntfyTopico: vazio ou de 8 a 64 letras, numeros, - e _")

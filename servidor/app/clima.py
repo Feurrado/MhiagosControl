@@ -243,7 +243,7 @@ def cidades(q):
             if "latitude" in c and "longitude" in c]
 
 
-def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado):
+def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umidade_dentro=None):
     """Conforto adaptativo (ASHRAE 55): T_neutra = 0,31 x media externa recente + 17,8.
 
     Devolve {acao, titulo, texto, cena?}. 'cena' e o que o botao Aplicar manda ao ar
@@ -252,6 +252,9 @@ def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado):
     """
     if dentro is None or fora is None:
         return None
+    # A umidade que pesa no conforto e a de dentro, quando o ar a mede; sem ela, a de fora.
+    if umidade_dentro is not None:
+        umidade = umidade_dentro
     media = media_recente if media_recente is not None else fora
     neutra = round(0.31 * media + 17.8, 1)
     quente_depois = max_hoje is not None and max_hoje >= 30

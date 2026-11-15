@@ -1020,6 +1020,7 @@ namespace MhiagosControl
             };
             ServicoCasa.Mudou += _casaMudou;
             Clima.Mudou += _casaMudou;
+            SugestaoCasa.Mudou += _casaMudou;
 
             _preferencias = new AvisosDoSistema(this);
         }
@@ -1067,6 +1068,7 @@ namespace MhiagosControl
                 _camada.Dispose();
                 ServicoCasa.Mudou -= _casaMudou;
                 Clima.Mudou -= _casaMudou;
+                SugestaoCasa.Mudou -= _casaMudou;
                 _casa.Dispose();
                 LiberarQuadro();
                 _dica.Dispose();
