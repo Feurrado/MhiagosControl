@@ -1470,7 +1470,7 @@ function blocoAuto(d) {
   })();
   return el("div", {},
     chaveLinha("Modo automático", a.ligado, false, v => mudar({ ligado: v })),
-    el("div", { class: "mu", style: "margin:2px 0 10px" }, "A cada 5 minutos o servidor olha a temperatura de dentro e de fora, a umidade (a de dentro, quando o ar mede), a média dos últimos dias e a máxima de hoje, e põe o ar no modo e na temperatura de conforto. Mudanças pequenas não viram comando, e entre duas mudanças ele espera pelo menos 30 minutos."),
+    el("div", { class: "mu", style: "margin:2px 0 10px" }, "A cada 5 minutos o servidor olha a temperatura de dentro e de fora, a umidade (a de dentro, quando o ar mede), a média dos últimos dias e a máxima de hoje, e põe o ar no modo e na temperatura de conforto. Mudanças pequenas não viram comando, e entre duas mudanças ele espera pelo menos 15 minutos."),
     chaveLinha("Pode ligar o ar sozinho", a.podeLigar, !a.ligado, v => mudar({ podeLigar: v })),
     chaveLinha("Pode desligar quando abrir a janela resolve", a.podeDesligar, !a.ligado, v => mudar({ podeDesligar: v })),
     el("div", { class: "form", style: "margin-top:10px" },
