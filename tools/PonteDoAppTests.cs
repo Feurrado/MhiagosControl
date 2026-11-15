@@ -178,6 +178,11 @@ namespace MhiagosControl
                 r = PedirNaPonte(ponte, "{\"id\":2,\"m\":\"baterias\"}");
                 Verdade(PonteOk(r) && r.ContainsKey("r") && r["r"] is List<object>, "ponte: baterias devolve uma lista");
 
+                // metricas.acao: a pagina da grade (so leitura)
+                r = PedirNaPonte(ponte, "{\"id\":4,\"m\":\"metricas.acao\",\"a\":{\"acao\":\"pagina\"}}");
+                Dictionary<string, object> pm = PonteOk(r) && r.ContainsKey("r") ? r["r"] as Dictionary<string, object> : null;
+                Verdade(pm != null && pm["itens"] is List<object> && pm["conjuntos"] is List<object> && pm["perfis"] is List<object>, "ponte: metricas.acao pagina traz itens, conjuntos e perfis");
+
                 // perfil.salvar
                 r = PedirNaPonte(ponte, "{\"id\":1,\"m\":\"perfil.salvar\",\"a\":{\"nome\":\"GPU\",\"p1\":\"cpu:temp\",\"p2\":\"\",\"fahrenheit\":true,\"percent\":true,\"div1\":10,\"div2\":0,\"rodizio\":true}}");
                 Verdade(PonteOk(r), "ponte: perfil salvo");

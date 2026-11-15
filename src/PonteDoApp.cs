@@ -46,7 +46,7 @@ namespace MhiagosControl
         /// <summary>Entrega uma resposta que ficou pronta fora da thread da interface (as especificacoes).</summary>
         public Action<Dictionary<string, object>> Enviar;
         internal static readonly Regex NomeDePerfil = new Regex(@"^[\p{L}\p{N}][\p{L}\p{N} _\-\.]{0,23}$");
-        internal const int MaximoDeMetricas = 12;
+        internal const int MaximoDeMetricas = 40;
 
         public PonteDoApp(IAppNovo app) { _app = app; }
 
@@ -303,6 +303,9 @@ namespace MhiagosControl
         private Dictionary<string, object> Metricas(Dictionary<string, object> a)
         {
             int segundos = MetricHistory.JanelaValida(Int(a, "segundos", MetricHistory.JanelaPadrao));
+            // "atras" e quantos baldes antes de agora termina o trecho; zero e ao vivo.
+            long atras = Int(a, "atras", 0);
+            long fimBalde = atras > 0 ? Math.Max(0L, MetricHistory.UltimoBalde - atras) : 0;
             Dictionary<string, object> series = D();
             float[] destino = null;
             foreach (string id in Ids(a))
@@ -310,7 +313,7 @@ namespace MhiagosControl
                 if (series.Count >= MaximoDeMetricas) break;
                 // Um sensor que ainda nao era seguido (os mostradores da Visao geral) comeca a ser.
                 MetricHistory.SeguirTambem(new string[] { id });
-                int n = MetricHistory.Janela(id, segundos, ref destino);
+                int n = MetricHistory.Janela(id, segundos, fimBalde, ref destino);
                 List<object> pontos = new List<object>(n);
                 for (int i = 0; i < n && destino != null && i < destino.Length; i++)
                 {
