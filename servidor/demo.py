@@ -19,7 +19,7 @@ os.environ["MHIAGOS_DADOS"] = tempfile.mkdtemp(prefix="mhiagos-demo-")
 
 import uvicorn  # noqa: E402
 
-from app import banco, casa, clima, main, servico  # noqa: E402
+from app import banco, casa, clima, clima_exemplo, main, servico  # noqa: E402
 
 
 class NuvemDemo:
@@ -75,12 +75,7 @@ def semear_historico():
 
 
 def clima_falso(lat, lon, agora=None):
-    h = time.localtime()
-    horas = [{"hora": "%02d:00" % ((h.tm_hour + i) % 24), "temp": 24 - i * 0.6, "icone": "sol" if i < 3 else "chuva", "texto": ""} for i in range(1, 7)]
-    dias = [{"dia": time.strftime("%Y-%m-%d", time.localtime(time.time() + i * 86400)), "max": 29 - i, "min": 18 + (i % 2),
-             "icone": "sol-nuvem" if i % 2 else "sol", "texto": ""} for i in range(5)]
-    return {"agora": {"temp": 22.0, "umidade": 64, "texto": "Parcialmente nublado", "icone": "sol-nuvem"}, "horas": horas, "dias": dias,
-            "mediaRecente": 23.5, "maxHoje": 29, "velho": False, "atualizado": int(time.time())}
+    return dict(clima._normalizar(clima_exemplo.exemplo()), velho=False, atualizado=int(time.time()))
 
 
 if __name__ == "__main__":

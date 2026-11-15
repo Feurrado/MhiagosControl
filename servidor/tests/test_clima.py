@@ -5,7 +5,9 @@ from unittest import mock
 
 from comum import Base, NuvemFalsa  # noqa: F401  (primeiro: prepara o ambiente)
 
-from app import banco, casa, clima, servico  # noqa: E402
+from datetime import datetime  # noqa: E402
+
+from app import banco, casa, clima, clima_exemplo, servico  # noqa: E402
 
 JSON_OM = {
     "current": {"time": "2026-11-15T15:00", "temperature_2m": 24.4, "relative_humidity_2m": 61, "weather_code": 2},
@@ -66,6 +68,48 @@ class Normalizacao(unittest.TestCase):
         self.assertEqual(clima.descricao(0)[1], "sol")
         self.assertEqual(clima.descricao(63)[1], "chuva")
         self.assertEqual(clima.descricao(None)[1], "nuvem")
+
+
+class Completo(unittest.TestCase):
+    def setUp(self):
+        self.r = clima._normalizar(clima_exemplo.exemplo(datetime(2026, 11, 15, 15, 40)))
+
+    def test_quantidades(self):
+        self.assertEqual(len(self.r["passado"]), 7)
+        self.assertEqual(len(self.r["dias"]), 10)
+        self.assertEqual(self.r["dias"][0]["dia"], "2026-11-15")
+        self.assertEqual(self.r["passado"][-1]["dia"], "2026-11-14")
+        self.assertEqual(len([x for x in self.r["horas"] if "tipo" not in x]), 24)
+
+    def test_nascer_e_por_do_sol_na_faixa_em_ordem(self):
+        eventos = [x for x in self.r["horas"] if "tipo" in x]
+        self.assertEqual([(x["tipo"], x["hora"]) for x in eventos], [("por", "18:02"), ("nascer", "05:14")])
+        ts = [x["t"] for x in self.r["horas"]]
+        self.assertEqual(ts, sorted(ts))
+        self.assertEqual(self.r["horas"][0]["hora"], "16:00")
+
+    def test_detalhes_de_agora(self):
+        a = self.r["agora"]
+        for k in ("sensacao", "vento", "rajada", "direcao", "pressao", "nuvens", "uv"):
+            self.assertIsNotNone(a[k], k)
+        self.assertTrue(a["dia"])
+        self.assertEqual(self.r["dias"][0]["nascer"], "05:14")
+
+    def test_noite_troca_o_icone(self):
+        self.assertEqual(clima.descricao(0, False), ("Céu limpo", "lua"))
+        self.assertEqual(clima.descricao(2, False)[1], "lua-nuvem")
+        self.assertEqual(clima.descricao(3, False)[1], "nuvem")
+        noite = [x for x in self.r["horas"] if x.get("hora") == "23:00"][0]
+        self.assertNotIn(noite["icone"], ("sol", "sol-nuvem"))
+
+    def test_destaques(self):
+        r = dict(self.r, agora=dict(self.r["agora"], chuva=0), maxHoje=40)
+        r["horas"] = [{"hora": "17:00", "prob": 70}]
+        d = clima._destaques(r)
+        self.assertIn("17:00", d[0])
+        self.assertIn("acima", d[1])
+        r["agora"]["chuva"] = 1.2
+        self.assertTrue(clima._destaques(r)[0].startswith("Chovendo agora"))
 
 
 class Rotas(Base):

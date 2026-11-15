@@ -1033,17 +1033,42 @@ async function carregarSistema(caixa) {
 
 // ---------------- clima e sugestao ----------------
 
+// Icones do tempo em traco, com cor por parte como no app Tempo: sol amarelo, lua clara, gota azul, raio amarelo.
+const NUV_ALTA = '<g class="n"><path d="M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 8.1 3.45 3.45 0 0 0 7 15z"/></g>';
 const ICONES_CLIMA = {
-  sol: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
-  "sol-nuvem": '<circle cx="8.5" cy="8.5" r="3"/><path d="M8.5 3v1M3 8.5h1M4.6 4.6l.7.7M12.4 4.6l-.7.7"/><path d="M9 20h8a3.2 3.2 0 0 0 .4-6.4A4.6 4.6 0 0 0 9 14.6 2.7 2.7 0 0 0 9 20z"/>',
-  nuvem: '<path d="M7 19h10a4 4 0 0 0 .5-8A5.5 5.5 0 0 0 7 12.5 3.3 3.3 0 0 0 7 19z"/>',
-  chuva: '<path d="M7 15h10a4 4 0 0 0 .5-8A5.5 5.5 0 0 0 7 8.5 3.3 3.3 0 0 0 7 15z"/><path d="M9 18l-1 2.5M13 18l-1 2.5M17 18l-1 2.5"/>'
+  sol: '<g class="s"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12H5M19 12h2.2M5.5 5.5 7 7M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5"/></g>',
+  lua: '<g class="l"><path d="M19.5 14.6A7.6 7.6 0 0 1 9.4 4.5a7.6 7.6 0 1 0 10.1 10.1z"/></g>',
+  "sol-nuvem": '<g class="s"><circle cx="8.5" cy="8" r="3"/><path d="M8.5 2.2v1.2M2.7 8h1.2M4.4 3.9l.9.9M12.6 3.9l-.9.9M4.4 12.1l.9-.9"/></g><g class="n"><path d="M10.5 20.5h7a3.5 3.5 0 0 0 .5-6.96 4.8 4.8 0 0 0-9.1 1.06 2.95 2.95 0 0 0 1.6 5.9z"/></g>',
+  "lua-nuvem": '<g class="l"><path d="M12.3 9.2A4.6 4.6 0 0 1 6.3 3.2a4.6 4.6 0 1 0 6 6z"/></g><g class="n"><path d="M10.5 20.5h7a3.5 3.5 0 0 0 .5-6.96 4.8 4.8 0 0 0-9.1 1.06 2.95 2.95 0 0 0 1.6 5.9z"/></g>',
+  nuvem: '<g class="n"><path d="M7 18.5h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 11.6 3.45 3.45 0 0 0 7 18.5z"/></g>',
+  neblina: NUV_ALTA + '<g class="n"><path d="M4 18h16M6 21h12"/></g>',
+  garoa: NUV_ALTA + '<g class="g"><path d="M8.5 18.2v1M12 19v1M15.5 18.2v1"/></g>',
+  chuva: NUV_ALTA + '<g class="g"><path d="M8.2 17.5l-1 2.6M12.2 17.5l-1 2.6M16.2 17.5l-1 2.6"/></g>',
+  "chuva-forte": NUV_ALTA + '<g class="g"><path d="M7 17.5l-1.4 3.6M10.4 17.5 9 21.1M13.8 17.5l-1.4 3.6M17.2 17.5l-1.4 3.6"/></g>',
+  tempestade: NUV_ALTA + '<g class="r"><path d="M12.8 15.5 10.6 19h3l-2.2 3.5"/></g>',
+  neve: NUV_ALTA + '<g class="g"><path d="M8 18.5h.01M12 19.5h.01M16 18.5h.01M10 21.5h.01M14 21.5h.01"/></g>',
+  nascer: '<g class="s"><path d="M7 17a5 5 0 0 1 10 0M12 3v5M9.6 5.4 12 3l2.4 2.4"/></g><path d="M3 17h18M6 20.5h12"/>',
+  por: '<g class="s"><path d="M7 17a5 5 0 0 1 10 0M12 3v5M9.6 5.6 12 8l2.4-2.4"/></g><path d="M3 17h18M6 20.5h12"/>'
 };
-function icClima(n) {
-  const s = ajSvg("seta"); s.removeAttribute("class"); s.innerHTML = ICONES_CLIMA[n] || ICONES_CLIMA.nuvem; return s;
-}
-const DIA_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+// Icones pequenos dos cabecalhos das secoes (monocromaticos).
+const ICONES_SEC = {
+  relogio: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  calendario: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/>',
+  termometro: '<path d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 9v7"/>',
+  gota: '<path d="M12 3.5s6 6.6 6 10.6a6 6 0 0 1-12 0c0-4 6-10.6 6-10.6z"/>',
+  vento: '<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/>',
+  uv: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
+  chuva: '<path d="M7 14h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 7.1 3.45 3.45 0 0 0 7 14z"/><path d="M8.2 17l-1 2.6M12.2 17l-1 2.6M16.2 17l-1 2.6"/>',
+  pressao: '<circle cx="12" cy="12" r="8.5"/><path d="M12 12l4-4M7.5 15.5h.01M16.5 15.5h.01M12 5.5v1.5"/>',
+  sol: '<path d="M4 17a8 8 0 0 1 16 0M2.5 17h19"/><path d="M12 6V3"/>',
+  nuvens: '<path d="M7 18.5h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 11.6 3.45 3.45 0 0 0 7 18.5z"/>',
+  local: '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'
+};
+function icClima(n, cls) { const s = svg(ICONES_CLIMA[n] || ICONES_CLIMA.nuvem); s.setAttribute("class", "tic" + (cls ? " " + cls : "")); return s; }
+function icSec(n) { const s = svg(ICONES_SEC[n]); s.setAttribute("class", "tsi"); return s; }
+const SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const diaDe = iso => { const [a, m, d] = iso.split("-").map(Number); return new Date(a, m - 1, d); };
+let climaAba = "futuro";
 
 let climaDados = null, climaEm = 0;
 
@@ -1064,6 +1089,175 @@ async function aplicarSugestao(botao) {
   botao.disabled = false;
 }
 
+/** Cor de uma temperatura, do azul (frio) ao vermelho (quente), para as barras de minima e maxima. */
+function corTemp(t) {
+  const P = [[0, [91, 141, 239]], [12, [79, 195, 247]], [18, [110, 214, 160]], [23, [247, 209, 84]], [28, [245, 163, 66]], [34, [239, 107, 74]]];
+  if (t <= P[0][0]) return "rgb(" + P[0][1] + ")";
+  for (let i = 1; i < P.length; i++) if (t <= P[i][0]) {
+    const [t0, c0] = P[i - 1], [t1, c1] = P[i], f = (t - t0) / (t1 - t0);
+    return "rgb(" + c0.map((v, k) => Math.round(v + (c1[k] - v) * f)).join(",") + ")";
+  }
+  return "rgb(" + P[P.length - 1][1] + ")";
+}
+
+/** A barra de minima a maxima do dia, na escala da lista inteira (como no iPhone); hoje leva um ponto na temperatura atual. */
+function barraTemp(min, max, lo, hi, atual) {
+  const pct = v => ((v - lo) / Math.max(1, hi - lo)) * 100;
+  const seg = el("i");
+  seg.style.left = pct(min) + "%";
+  seg.style.width = Math.max(3, pct(max) - pct(min)) + "%";
+  seg.style.background = "linear-gradient(90deg," + corTemp(min) + "," + corTemp(max) + ")";
+  const trilho = el("div", { class: "tbar" }, seg);
+  if (atual != null) { const p = el("b"); p.style.left = pct(Math.max(min, Math.min(max, atual))) + "%"; trilho.appendChild(p); }
+  return trilho;
+}
+
+function nomeDoDia(iso) {
+  const dif = Math.round((diaDe(iso) - diaDe(isoDia(new Date()))) / 864e5);
+  if (dif === 0) return "Hoje";
+  if (dif === -1) return "Ontem";
+  return SEMANA[diaDe(iso).getDay()] + (dif < 0 ? " " + diaDe(iso).getDate() : "");
+}
+
+const graus = v => v == null ? "--" : num(v, 0) + "°";
+const minutos = hm => { const [h, m] = (hm || "0:0").split(":").map(Number); return h * 60 + m; };
+
+function secao(icone, titulo, ...corpo) {
+  return el("div", { class: "tsec" }, el("div", { class: "tsec-tit" }, icSec(icone), titulo), ...corpo);
+}
+
+/** Um quadradinho de detalhe: titulo, valor grande, algo visual opcional e uma frase. */
+function tile(icone, titulo, valor, extra, frase) {
+  return el("div", { class: "tsec ttile" }, el("div", { class: "tsec-tit" }, icSec(icone), titulo),
+    el("div", { class: "tval" }, valor), extra || null, frase ? el("div", { class: "tfrase" }, frase) : null);
+}
+
+function rotuloUV(v) { return v == null ? "" : v < 3 ? "Baixo" : v < 6 ? "Moderado" : v < 8 ? "Alto" : v < 11 ? "Muito alto" : "Extremo"; }
+function direcao(g) { return g == null ? "" : ["N", "NE", "L", "SE", "S", "SO", "O", "NO"][Math.round(g / 45) % 8]; }
+function orvalho(t, ur) {
+  if (t == null || !ur) return null;
+  const a = 17.27, b = 237.7, al = Math.log(ur / 100) + a * t / (b + t);
+  return b * al / (a - al);
+}
+
+function detalhesDoTempo(c) {
+  const ag = c.agora, hoje = c.dias[0] || {}, amanha = c.dias[1];
+  const sens = ag.sensacao, dif = sens != null && ag.temp != null ? sens - ag.temp : 0;
+  const po = orvalho(ag.temp, ag.umidade);
+
+  const seta = svg('<path d="M12 3l4 9h-3v9h-2v-9H8z"/>');
+  seta.setAttribute("class", "tseta");
+  seta.style.transform = "rotate(" + (((ag.direcao || 0) + 180) % 360) + "deg)";   // a seta aponta para onde o vento vai
+
+  const uvMax = hoje.uvMax, uv = ag.uv != null ? ag.uv : 0;
+  const uvBar = el("div", { class: "tuv" }, el("b"));
+  uvBar.firstChild.style.left = Math.min(100, uv / 11 * 100) + "%";
+
+  // Arco do sol: posicao entre o nascer e o por de hoje.
+  const agoraMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const n0 = minutos(hoje.nascer), p0 = minutos(hoje.por);
+  const f = agoraMin > p0 ? 0 : Math.max(0, Math.min(1, (agoraMin - n0) / Math.max(1, p0 - n0)));
+  const ang = Math.PI * (1 - f), cx = 50 + 40 * Math.cos(ang), cy = 44 - 36 * Math.sin(ang);
+  const arco = svg('<path class="tarco" d="M10 44a40 36 0 0 1 80 0"/><path class="tarco-feito" d="M10 44a40 36 0 0 1 ' + (cx - 10).toFixed(1) + ' ' + (cy - 44).toFixed(1) + '"/>' +
+    '<line x1="2" y1="44" x2="98" y2="44" class="thor"/>' + (f > 0 && f < 1 ? '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4.5" class="tsolp"/>' : ''), "0 0 100 50");
+  arco.setAttribute("class", "tarco-svg");
+
+  const pressao = ag.pressao;
+  return el("div", { class: "tdet" },
+    tile("termometro", "Sensação", graus(sens), null,
+      Math.abs(dif) < 1.5 ? "Parecida com a temperatura real." : dif > 0 ? "A umidade faz parecer mais quente." : "O vento faz parecer mais frio."),
+    tile("gota", "Umidade", ag.umidade != null ? num(ag.umidade, 0) + "%" : "--", null, po != null ? "Ponto de orvalho em " + num(po, 0) + "° agora." : ""),
+    tile("vento", "Vento", el("span", {}, num(ag.vento, 0), el("small", {}, " km/h")), el("div", { class: "tvento" }, seta, el("span", {}, direcao(ag.direcao))),
+      ag.rajada != null ? "Rajadas de até " + num(ag.rajada, 0) + " km/h." : ""),
+    tile("uv", "Índice UV", el("span", {}, num(uv, 0), el("small", {}, " " + rotuloUV(uv))), uvBar,
+      uvMax != null ? "Máximo de hoje: " + num(uvMax, 0) + " (" + rotuloUV(uvMax).toLowerCase() + ")." : ""),
+    tile("chuva", "Chuva", el("span", {}, num(hoje.chuvaMm || 0, 1), el("small", {}, " mm")), null,
+      "Hoje" + (hoje.prob != null ? ", " + num(hoje.prob, 0) + "% de chance" : "") + "." + (amanha && amanha.chuvaMm ? " Amanhã " + num(amanha.chuvaMm, 1) + " mm." : "")),
+    tile("pressao", "Pressão", el("span", {}, pressao != null ? String(Math.round(pressao)) : "--", el("small", {}, " hPa")), null,
+      pressao == null ? "" : pressao < 1005 ? "Baixa: tempo instável." : pressao > 1020 ? "Alta: tempo firme." : "Normal."),
+    tile("sol", agoraMin >= n0 && agoraMin <= p0 ? "Pôr do sol" : "Nascer do sol", agoraMin >= n0 && agoraMin <= p0 ? hoje.por || "--" : (agoraMin > p0 && c.dias[1] ? c.dias[1].nascer : hoje.nascer) || "--", arco,
+      agoraMin >= n0 && agoraMin <= p0 ? "Nasceu às " + hoje.nascer + "." : "Pôr do sol às " + (hoje.por || "--") + "."),
+    tile("nuvens", "Nuvens", ag.nuvens != null ? num(ag.nuvens, 0) + "%" : "--", null,
+      ag.nuvens == null ? "" : ag.nuvens < 20 ? "Céu aberto." : ag.nuvens < 60 ? "Algumas nuvens." : ag.nuvens < 90 ? "Bastante nublado." : "Céu encoberto."));
+}
+
+function listaDeDias(c) {
+  const todos = c.dias.concat(c.passado || []);
+  const lo = Math.min(...todos.map(x => x.min).filter(v => v != null)), hi = Math.max(...todos.map(x => x.max).filter(v => v != null));
+  const futuro = climaAba === "futuro";
+  const lista = futuro ? c.dias : (c.passado || []).slice().reverse();
+  const linhas = lista.map((x, i) => el("div", { class: "tdia" },
+    el("span", { class: "tnome" }, nomeDoDia(x.dia)),
+    el("span", { class: "tic-col" }, icClima(x.icone),
+      futuro ? (x.prob >= 20 ? el("small", { class: "azul" }, num(x.prob, 0) + "%") : null)
+        : (x.chuvaMm > 0.1 ? el("small", { class: "azul" }, num(x.chuvaMm, x.chuvaMm < 10 ? 1 : 0) + " mm") : null)),
+    el("span", { class: "tmin" }, graus(x.min)),
+    barraTemp(x.min, x.max, lo, hi, futuro && i === 0 ? c.agora.temp : null),
+    el("span", { class: "tmax" }, graus(x.max))));
+  const seg = el("div", { class: "seg tseg" },
+    el("button", { class: futuro ? "on" : "", on: { click: () => { climaAba = "futuro"; desenharClima(); } } }, (c.dias.length) + " dias"),
+    el("button", { class: futuro ? "" : "on", on: { click: () => { climaAba = "passado"; desenharClima(); } } }, "Últimos " + (c.passado || []).length));
+  let resumo = null;
+  if (!futuro && c.passado && c.passado.length) {
+    const mx = c.passado.map(x => x.max).filter(v => v != null), chuva = c.passado.reduce((t, x) => t + (x.chuvaMm || 0), 0);
+    const dias = c.passado.filter(x => (x.chuvaMm || 0) > 0.1).length;
+    resumo = el("div", { class: "tresumo" }, "Máxima média de " + num(mx.reduce((a, b) => a + b, 0) / mx.length, 0) + "°, " +
+      num(chuva, 0) + " mm de chuva em " + dias + (dias === 1 ? " dia." : " dias."));
+  }
+  return secao("calendario", futuro ? "Previsão" : "Histórico", seg, resumo, el("div", { class: "tdias" }, linhas));
+}
+
+function faixaPorHora(c) {
+  const ag = c.agora;
+  const itens = [el("div", { class: "th-h agora" }, el("small", {}, "Agora"), icClima(ag.icone), el("span", { class: "azul" }, ""), el("b", {}, graus(ag.temp)))]
+    .concat(c.horas.map(h => h.tipo
+      ? el("div", { class: "th-h evento" }, el("small", {}, h.hora), icClima(h.tipo), el("span"), el("b", {}, h.tipo === "nascer" ? "Nascer" : "Pôr do sol"))
+      : el("div", { class: "th-h" }, el("small", {}, h.hora), icClima(h.icone), el("span", { class: "azul" }, h.prob >= 20 ? num(h.prob, 0) + "%" : ""), el("b", {}, graus(h.temp)))));
+  const frase = (c.destaques || []).join(" ");
+  return secao("relogio", "Próximas 24 horas", frase ? el("div", { class: "tresumo" }, frase) : null, el("div", { class: "thoras" }, itens));
+}
+
+/** Maximas e minimas dos ultimos dias e dos proximos numa faixa so, com o hoje marcado. */
+function graficoDoTempo(c) {
+  const dias = (c.passado || []).concat(c.dias).filter(x => x.max != null && x.min != null);
+  if (dias.length < 3) return null;
+  const W = 680, H = 150, ml = 26, mr = 10, mt = 16, mb = 26;
+  const lo = Math.floor(Math.min(...dias.map(x => x.min)) - 1), hi = Math.ceil(Math.max(...dias.map(x => x.max)) + 1);
+  const X = i => ml + i * (W - ml - mr) / (dias.length - 1), Y = v => mt + (hi - v) / Math.max(1, hi - lo) * (H - mt - mb);
+  const linha = k => dias.map((x, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(x[k]).toFixed(1)).join("");
+  const faixa = linha("max") + dias.slice().reverse().map((x, j) => "L" + X(dias.length - 1 - j).toFixed(1) + " " + Y(x.min).toFixed(1)).join("") + "Z";
+  const iHoje = dias.findIndex(x => x.dia === (c.dias[0] || {}).dia);
+  let g = '<path d="' + faixa + '" class="tg-faixa"/>';
+  for (let v = Math.ceil(lo / 5) * 5; v <= hi; v += 5) g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="tg-grade"/><text x="' + (ml - 6) + '" y="' + (Y(v) + 4).toFixed(1) + '" class="tg-eixo" text-anchor="end">' + v + '°</text>';
+  if (iHoje > 0) g += '<rect x="' + ml + '" y="' + mt + '" width="' + (X(iHoje) - ml).toFixed(1) + '" height="' + (H - mt - mb) + '" class="tg-passado"/><line x1="' + X(iHoje).toFixed(1) + '" x2="' + X(iHoje).toFixed(1) + '" y1="' + mt + '" y2="' + (H - mb) + '" class="tg-hoje"/>';
+  g += '<path d="' + linha("max") + '" class="tg-max"/><path d="' + linha("min") + '" class="tg-min"/>';
+  dias.forEach((x, i) => {
+    g += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(x.max).toFixed(1) + '" r="2.6" class="tg-pmax"/><circle cx="' + X(i).toFixed(1) + '" cy="' + Y(x.min).toFixed(1) + '" r="2.6" class="tg-pmin"/>';
+    if (i % 2 === (iHoje % 2 + 2) % 2 || i === iHoje) g += '<text x="' + X(i).toFixed(1) + '" y="' + (H - 8) + '" class="tg-eixo" text-anchor="middle">' + (i === iHoje ? "Hoje" : SEMANA[diaDe(x.dia).getDay()] + " " + diaDe(x.dia).getDate()) + '</text>';
+  });
+  const s = svg(g, "0 0 " + W + " " + H);
+  s.setAttribute("class", "tgraf");
+  s.setAttribute("role", "img");
+  s.setAttribute("aria-label", "Máximas e mínimas dos últimos " + (c.passado || []).length + " dias e dos próximos " + c.dias.length);
+  return secao("termometro", "Temperatura: últimos " + (c.passado || []).length + " dias e próximos " + c.dias.length,
+    el("div", { class: "tg-legenda" }, el("span", { class: "tg-lmax" }, "máxima"), el("span", { class: "tg-lmin" }, "mínima"), el("span", { class: "tg-lpas" }, "medido")), s);
+}
+
+function heroiDoTempo(c, local) {
+  const ag = c.agora, hoje = c.dias[0] || {};
+  const ceu = ({ sol: "limpo", "sol-nuvem": "limpo", lua: "noite", "lua-nuvem": "noite", tempestade: "tempestade",
+    garoa: "chuva", chuva: "chuva", "chuva-forte": "chuva" })[ag.icone] || "nublado";
+  const atual = c.atualizado ? Math.max(0, Math.round((Date.now() / 1000 - c.atualizado) / 60)) : null;
+  return el("div", { class: "theroi ceu-" + ceu + (ag.dia === false ? " escuro" : "") },
+    el("div", { class: "th-topo" }, el("span", { class: "th-local" }, icSec("local"), local.nome.split(",")[0]),
+      el("span", { class: "th-at" }, c.velho ? "dados antigos" : atual == null ? "" : atual < 2 ? "agora mesmo" : "há " + atual + " min")),
+    el("div", { class: "th-meio" },
+      el("div", {}, el("div", { class: "th-temp" }, num(ag.temp, 0) + "°"),
+        el("div", { class: "th-cond" }, ag.texto),
+        el("div", { class: "th-mm" }, "Máx " + graus(hoje.max) + "  Mín " + graus(hoje.min) + (ag.sensacao != null ? "  ·  Sensação " + graus(ag.sensacao) : ""))),
+      icClima(ag.icone, "th-ic")));
+}
+
 function desenharClima() {
   const caixa = $("clima");
   if (!caixa) return;
@@ -1072,25 +1266,26 @@ function desenharClima() {
   if (!d || d.erro || !d.c.local || !d.c.clima) {
     const msg = !d ? "Carregando…" : d.erro ? "Clima indisponível: " + d.erro : !d.c.local ? "Escolha a cidade nos Ajustes para ver a previsão e a sugestão para o ar."
       : "A Open-Meteo não respondeu agora.";
+    caixa.classList.remove("tempo");
     trocarConteudo(caixa, el("div", { class: "cab" }, el("div", { class: "ico" }, icClima("sol-nuvem")),
       el("div", { class: "nomes" }, el("div", { class: "nome" }, "Clima"), el("div", { class: "det" }, msg))),
       ...(d && !d.erro && !d.c.local ? [el("div", { class: "corpo" }, el("button", { class: "b", on: { click: () => irPara("ajustes-clima") } }, "Escolher cidade"))] : []));
     caixa.classList.toggle("oculto", !d);
     return;
   }
-  const c = d.c.clima, ag = c.agora, s = d.s;
+  const c = d.c.clima, s = d.s;
   const sug = s ? el("div", { class: "sugestao" },
     el("div", {}, el("b", {}, s.titulo), el("span", {}, s.texto)),
     s.cena ? el("button", { class: "b pri", on: { click: e => aplicarSugestao(e.currentTarget) } }, "Aplicar") : null) : null;
-  trocarConteudo(caixa,
-    el("div", { class: "cab" }, el("div", { class: "ico" }, icClima(ag.icone)),
-      el("div", { class: "nomes" }, el("div", { class: "nome" }, d.c.local.nome), el("div", { class: "det" }, ag.texto + (c.velho ? " · dados antigos" : "")))),
-    el("div", { class: "corpo" },
-      el("div", { class: "clima-agora" }, el("b", {}, num(ag.temp, 0) + " °C"), el("span", {}, ag.umidade != null ? "umidade " + num(ag.umidade, 0) + "%" : "")),
-      sug,
-      el("div", { class: "clima-horas" }, c.horas.map(h => el("div", {}, el("small", {}, h.hora), icClima(h.icone), el("b", {}, num(h.temp, 0) + "°")))),
-      el("div", { class: "clima-dias" }, c.dias.map((x, i) => el("div", {}, el("small", {}, i === 0 ? "hoje" : DIA_SEMANA[diaDe(x.dia).getDay()]), icClima(x.icone),
-        el("b", {}, num(x.max, 0) + "°"), el("span", {}, num(x.min, 0) + "°"))))));
+  // Guarda a rolagem da faixa por hora: o redesenho a cada 5 min nao pode jogar de volta ao inicio.
+  const rolagem = caixa.querySelector(".thoras") ? caixa.querySelector(".thoras").scrollLeft : 0;
+  caixa.classList.add("tempo");
+  trocarConteudo(caixa, heroiDoTempo(c, d.c.local),
+    el("div", { class: "corpo tcorpo" }, sug, faixaPorHora(c), graficoDoTempo(c),
+      el("div", { class: "tgrade" }, listaDeDias(c), detalhesDoTempo(c)),
+      el("div", { class: "tfonte" }, d.c.local.nome + " · dados da Open-Meteo")));
+  const h = caixa.querySelector(".thoras");
+  if (h) h.scrollLeft = rolagem;
   caixa.classList.remove("oculto");
 }
 
