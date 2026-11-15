@@ -28,6 +28,8 @@ services:
       - "192.168.1.100:8765:8765"
     volumes:
       - dados:/data
+      # So leitura: o card Saude do servidor mostra a idade do ultimo backup (backup.sh grava aqui).
+      - /opt/mhiagos-casa/backups:/backups:ro
     # Endurecimento: nada grava fora de /data e /tmp, nenhuma capacidade extra do kernel,
     # sem ganhar privilegio por setuid, e limites para um vazamento nao derrubar o servidor.
     read_only: true
