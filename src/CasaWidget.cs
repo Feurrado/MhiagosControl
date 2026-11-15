@@ -448,38 +448,10 @@ namespace MhiagosControl
             Botao(g, _rLiga, "\uE7E8", peq, ligado, on, 2, escuro);
 
             RectangleF lValor = new RectangleF(z.X, z.Y + d + 7f * s, z.Width, PintorDoWidget.LinhaDoValor * s);
-            // O alvo grande e, ao lado e menor, a temperatura do escritorio agora (a ambiente lida pelo ar).
+            // so o alvo, centrado (o clima de fora tem widget proprio)
             string alvoTxt = t > 0 ? t + "°" : "--";
-            string amb = Ambiente();
-            float wAlvo, wAmb, gap = 5f * s;
-            using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap))
-            {
-                wAlvo = g.MeasureString(alvoTxt, f.Pct, PointF.Empty, sf).Width;
-                wAmb = g.MeasureString(amb, f.Nota, PointF.Empty, sf).Width;
-            }
-            float x0 = z.X + (z.Width - wAlvo - gap - wAmb) / 2f;
-            if (x0 < z.X) x0 = z.X;
             NumeroDoAr(g, alvoTxt, f.Pct, Ui.Misturar(PintorDoWidget.Secundario(escuro), PintorDoWidget.Primario(escuro), lig), escuro,
-                new RectangleF(x0, lValor.Y, wAlvo + 2f * s, lValor.Height), StringAlignment.Near);
-            // na mesma linha de base do alvo (centrado na altura da linha): sobe ou desce pela diferenca de subida das fontes
-            float hAlvo = f.Pct.GetHeight(g), hAmb = f.Nota.GetHeight(g);
-            float baseAlvo = lValor.Y + (lValor.Height - hAlvo) / 2f + SubidaF(g, f.Pct);
-            float yAmb = baseAlvo - SubidaF(g, f.Nota);
-            PintorDoWidget.Texto(g, amb, f.Nota, PintorDoWidget.Secundario(escuro), escuro,
-                new RectangleF(x0 + wAlvo + gap, yAmb, Math.Max(0f, z.Right - (x0 + wAlvo + gap)), hAmb), StringAlignment.Near, StringAlignment.Near);
-        }
-
-        private static float SubidaF(Graphics g, Font f)
-        {
-            FontFamily fam = f.FontFamily;
-            return f.SizeInPoints * g.DpiY / 72f * fam.GetCellAscent(f.Style) / fam.GetEmHeight(f.Style);
-        }
-
-        /// <summary>A temperatura la fora, curta ("28,4°"); sem cidade ou sem leitura, "--".</summary>
-        internal string Ambiente()
-        {
-            // A temperatura la fora (Open-Meteo), e nao a do escritorio: "28,4°", ou "--".
-            return Clima.Curto();
+                lValor, StringAlignment.Center);
         }
 
         /// <summary>A lavadora como um item de anel: o arco e o progresso do ciclo, o tempo restante embaixo.</summary>
