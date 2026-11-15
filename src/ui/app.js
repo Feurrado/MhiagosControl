@@ -546,8 +546,22 @@
     var nav = $("nav");
     var v = !nav.classList.contains("recolhida");
     nav.classList.toggle("recolhida", v);
+    acompanharLargura();
     if (S.barra) S.barra.recolhida = v;
     pedir("barra", { recolhida: v }).catch(function () { });
+  }
+
+  /// Enquanto a barra desliza, a pagina ao lado muda de largura a cada
+  /// quadro: graficos e a area da Casa sao refeitos junto (como na classica,
+  /// que repinta as paginas no deslize), em vez de esticar e saltar no fim.
+  var largura = 0;
+  function acompanharLargura() {
+    cancelAnimationFrame(largura);
+    var fim = performance.now() + (semMovimento() ? 0 : 300);
+    (function quadro() {
+      window.dispatchEvent(new Event("resize"));
+      if (performance.now() < fim) largura = requestAnimationFrame(quadro);
+    })();
   }
 
   /// Arrastar um item muda a ordem da barra, como na classica.

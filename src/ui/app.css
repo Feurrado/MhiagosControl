@@ -45,16 +45,18 @@ nav.recolhida { width:56px; }
 .topo { position:relative; height:62px; flex:none; }
 .logo { position:absolute; left:18px; top:18px; width:34px; height:34px; transition:left 250ms cubic-bezier(.4,0,.2,1), width 250ms cubic-bezier(.4,0,.2,1), height 250ms cubic-bezier(.4,0,.2,1); }
 .nome-app { position:absolute; left:60px; top:26px; right:46px; font-weight:600; font-size:13.33px; white-space:nowrap; overflow:hidden; }
-.hamb { position:absolute; right:12px; top:20px; width:30px; height:30px; border:0; border-radius:4px; background:transparent; color:var(--muted); font-size:14.67px; display:flex; align-items:center; justify-content:center; padding:0; }
+.hamb { position:absolute; left:178px; top:20px; transition:left 250ms cubic-bezier(.4,0,.2,1), top 250ms cubic-bezier(.4,0,.2,1), background-color 83ms linear, color 83ms linear; width:30px; height:30px; border:0; border-radius:4px; background:transparent; color:var(--muted); font-size:14.67px; display:flex; align-items:center; justify-content:center; padding:0; }
 .hamb:hover { background:var(--hover); color:var(--text); }
 .perfil { height:54px; flex:none; padding:0 18px; white-space:nowrap; overflow:hidden; }
 .perfil small { display:block; font:12px/14px var(--f-peq); color:var(--faint); margin-bottom:2px; }
 .perfil span { display:block; font-size:13.33px; line-height:18px; overflow:hidden; text-overflow:ellipsis; }
 nav.recolhida .logo { left:13px; width:30px; height:30px; }
-.nome-app, .perfil, .item .tx { transition:opacity 250ms cubic-bezier(.4,0,.2,1), visibility 250ms cubic-bezier(.4,0,.2,1); }
-.perfil { transition:opacity 250ms cubic-bezier(.4,0,.2,1), visibility 250ms cubic-bezier(.4,0,.2,1), height 250ms cubic-bezier(.4,0,.2,1); }
+.nome-app, .perfil, .item .tx { transition:opacity 167ms cubic-bezier(.4,0,.2,1) 83ms, visibility 0s linear 0s; }
+nav.recolhida .nome-app, nav.recolhida .item .tx { transition:opacity 120ms linear, visibility 0s linear 120ms; }
+.perfil { transition:opacity 167ms cubic-bezier(.4,0,.2,1) 83ms, visibility 0s linear 0s, height 250ms cubic-bezier(.4,0,.2,1); }
+nav.recolhida .perfil { transition:opacity 120ms linear, visibility 0s linear 120ms, height 250ms cubic-bezier(.4,0,.2,1); }
 nav.recolhida .nome-app, nav.recolhida .perfil { visibility:hidden; opacity:0; }
-nav.recolhida .hamb { right:auto; left:13px; top:60px; }
+nav.recolhida .hamb { left:13px; top:60px; }
 nav.recolhida .perfil { height:42px; }
 #itens { transition:padding 250ms cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; gap:2px; padding:0 8px 8px; overflow-y:auto; overflow-x:hidden; flex:1; }
 nav.recolhida #itens { padding:0 6px 6px; }
@@ -519,7 +521,7 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 /* ---------------- movimento (Motion.cs) ----------------
    Hover e pressionado em 83 ms como os controles da classica; com as
    animacoes do Windows desligadas, nada se move. */
-.item, .link, .mi, .seg button, .bat-mais, .vg-tile, .vg-mostrador, .faixa .fechar, .hamb, .menu .mi, .lista-sensores .sn, .mc, .mc-bt, .num button, .pf, .sp-bloco, .x, .opcao { transition:background-color 83ms linear, color 83ms linear, border-color 83ms linear, box-shadow 83ms linear; }
+.item, .link, .mi, .seg button, .bat-mais, .vg-tile, .vg-mostrador, .faixa .fechar, .menu .mi, .lista-sensores .sn, .mc, .mc-bt, .num button, .pf, .sp-bloco, .x, .opcao { transition:background-color 83ms linear, color 83ms linear, border-color 83ms linear, box-shadow 83ms linear; }
 .b { transition:background-color 83ms linear, border-color 83ms linear, color 83ms linear; }
 .menu { animation:menu-entra 83ms linear; }
 @keyframes menu-entra { from { opacity:0; } to { opacity:1; } }
