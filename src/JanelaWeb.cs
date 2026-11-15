@@ -71,7 +71,7 @@ namespace MhiagosControl
         /// </summary>
         internal static string ScriptEmbutido(string origem)
         {
-            string css = "html, body { background: var(--window) !important; } .app { flex-direction: column !important; min-height: 0 !important; } nav { width: auto !important; height: auto !important; position: static !important; flex-direction: row !important; align-items: center !important; flex-wrap: wrap !important; background: transparent !important; border: 0 !important; padding: 0 0 12px !important; gap: 6px !important; } nav .marca, nav .perfil, nav .rodape { display: none !important; } nav .item { flex: none !important; flex-direction: row !important; justify-content: center !important; gap: 0 !important; margin: 0 !important; padding: 0 16px !important; height: 30px !important; min-width: 82px !important; font-size: 13.33px !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; box-sizing: border-box !important; } nav .item svg { display: none !important; } nav .item:hover { background: var(--hover) !important; } nav .item.ativo { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; font-weight: 600 !important; } nav .item.ativo::before { display: none !important; } main { padding: 0 0 24px !important; } .topo h1 { display: none !important; }";
+            string css = "html, body { background: var(--window) !important; } .app { flex-direction: column !important; min-height: 0 !important; } nav { width: auto !important; height: auto !important; position: static !important; flex-direction: row !important; align-items: center !important; flex-wrap: wrap !important; background: transparent !important; border: 0 !important; padding: 16px 16px 12px !important; gap: 6px !important; } nav .marca, nav .perfil, nav .rodape { display: none !important; } nav .item { flex: none !important; flex-direction: row !important; justify-content: center !important; gap: 0 !important; margin: 0 !important; padding: 0 16px !important; height: 30px !important; min-width: 82px !important; font-size: 13.33px !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; box-sizing: border-box !important; } nav .item svg { display: none !important; } nav .item:hover { background: var(--hover) !important; } nav .item.ativo { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; font-weight: 600 !important; } nav .item.ativo::before { display: none !important; } main { padding: 0 16px 24px !important; } .topo h1 { display: none !important; }";
             return "(function(){try{if(location.origin!==" + Json.Escrever(origem) + ")return;" +
                    "var s=new CSSStyleSheet();s.replaceSync(" + Json.Escrever(css) + ");" +
                    "document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);}catch(e){}})();";
@@ -161,6 +161,14 @@ namespace MhiagosControl
                 c.Navigate(alvo);
             }
             catch (Exception ex) { Falhou(ex); }
+        }
+
+        /// <summary>Barra de titulo escura no tema escuro e com Mica, como a janela classica; o handle recriado perde os atributos.</summary>
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Theme.BarraDeTitulo(this);
+            Mica.Aplicar(this);
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)

@@ -580,10 +580,10 @@
     var alvo = $("pagina");
     var rolagem = mesma ? alvo.scrollTop : 0;
     limpar(alvo);
-    alvo.className = pagina === "casa" ? "casa" : "";
+    alvo.className = pagina === "casa" ? "casa" : pagina === "visao" ? "visao" : "";
     if (mudou && !mesma) faixa("");
     if (pagina !== "casa") avisar("casa.area", { visivel: false, x: 0, y: 0, w: 0, h: 0 });
-    var dentro = pagina === "casa" ? alvo : el("div", "largura");
+    var dentro = pagina === "casa" || pagina === "visao" ? alvo : el("div", "largura");
     if (dentro !== alvo) alvo.appendChild(dentro);
     vista = MONTAR[pagina](dentro) || {};
     alvo.scrollTop = rolagem;
@@ -844,7 +844,11 @@
 
   function mm(f) { return f ? t("máx ", "max ") + numero(f.max) + " · " + t("méd ", "avg ") + numero(f.media) : ""; }
 
-  MONTAR.visao = function (alvo) {
+  MONTAR.visao = function (pagina) {
+    // Como na classica: largura maxima de 1100, centrada, e no meio da
+    // altura quando sobra espaco.
+    var alvo = el("div", "vg");
+    pagina.appendChild(alvo);
     var vivo = true, serie = {}, previa = previaDoCooler();
     var dataEl = el("div", "vg-data"), fraseEl = el("div", "vg-frase");
     alvo.appendChild(el("div", "vg-cab", null, dataEl, fraseEl));
@@ -861,13 +865,20 @@
       blocos.push({ id: d.id, d: d, canvas: canvas, valor: valor, faixa: faixa, cor: "" });
     });
     alvo.appendChild(tiles);
+    // Os destaques numa fileira so; com mais de 3 e pouca largura, em duas.
+    function arranjarTiles() {
+      var n = blocos.length;
+      if (!n) { tiles.style.display = "none"; return; }
+      var w = tiles.clientWidth || alvo.clientWidth;
+      var porFila = n;
+      if (n > 3 && (w - 12 * (n - 1)) / n < 150) porFila = Math.ceil(n / 2);
+      tiles.style.gridTemplateColumns = "repeat(" + porFila + ", minmax(0, 1fr))";
+    }
 
     var meio = el("div", "vg-meio"), esq = el("div", "vg-esq");
-    // A casa: convite ou o resumo dos aparelhos.
-    var casaTexto = el("div", "ct");
-    var casa = el("div", "cartao vg-casa", null, el("span", "ic icone", ""), casaTexto,
-      botao(T("VisaoAbrirCasa", t("Abrir Casa ▸", "Open Home ▸")), "link", function () { mostrar("casa"); }));
-    esq.appendChild(casa);
+    // A casa: o cartao do ar, o da lavadora durante um ciclo, ou o convite.
+    var casa = cartoesDaCasa();
+    esq.appendChild(casa.el);
     var duas = el("div", "vg-duas");
     var perLista = el("div");
     var per = el("div", "cartao vg-box", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals"))),
@@ -909,13 +920,24 @@
     function pintar() {
       blocos.forEach(function (b) {
         b.f = desenharCurva(b.canvas, serie[b.id], corDoValor(b.d.unidade, leitura(b.id), b.d.atencao, b.d.perigo).replace("var(--danger)", "#EB5A4B").replace("var(--warn)", "#F0AF3C").replace("var(--quente)", cor("--quente")).replace("var(--accent-text)", cor("--accent-text")));
-        b.faixa.textContent = mm(b.f);
+        caber(b);
       });
       mostradores.forEach(function (m) {
         var s = sensor(m.id), c = m.n === 1 ? cor("--quente") : cor("--accent-text");
         var f = desenharCurva(m.canvas, serie[m.id], c);
         m.faixa.textContent = mm(f);
       });
+    }
+
+    // Como no cartao compacto da classica: "max · med" a direita do valor;
+    // sem espaco, so o "max"; sem espaco nem para isso, nada.
+    function caber(b) {
+      var f = b.f, formas = f ? [mm(f), t("máx ", "max ") + numero(f.max)] : [];
+      for (var i = 0; i < formas.length; i++) {
+        b.faixa.textContent = formas[i];
+        if (b.valor.offsetLeft + b.valor.offsetWidth + 10 <= b.faixa.offsetLeft) return;
+      }
+      b.faixa.textContent = "";
     }
 
     var ids = [];
@@ -937,7 +959,7 @@
       if (novos.join("|") !== ids.join("|")) { ids = novos; buscar(); }
     }
     var relogio = setInterval(buscar, (S.passo || 5) * 1000);
-    var redesenhar = function () { pintar(); previa.desenhar(); };
+    var redesenhar = function () { arranjarTiles(); pintar(); previa.desenhar(); };
     window.addEventListener("resize", redesenhar);
 
     return {
@@ -951,6 +973,7 @@
           b.valor.style.color = v === null ? "var(--faint)" : corDoValor(b.d.unidade, v, b.d.atencao, b.d.perigo);
           b.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
           if (v !== null && b.d.unidade) b.valor.appendChild(el("small", "", b.d.unidade));
+          caber(b);
         });
         var p = E.painel;
         stEl.textContent = p.conectado ? T("VisaoConectado", t("conectado", "connected")) : T("VisaoDesconectado", t("desconectado", "disconnected"));
@@ -980,30 +1003,119 @@
         if (!E.eventos || !E.eventos.length) evLista.appendChild(el("div", "nota", T("VisaoSemEventos", t("Nada novo desde que o app abriu.", "Nothing new since the app started."))));
         (E.eventos || []).slice(0, 8).forEach(function (x) { evLista.appendChild(el("div", "", null, el("span", "", x.h), document.createTextNode(x.t))); });
         // casa
-        limpar(casaTexto);
-        if (!S.casa.servidor || !E.casa.length) {
-          casaTexto.appendChild(el("b", "", T("VisaoConecteCasa", t("Conecte a casa", "Connect your home"))));
-          casaTexto.appendChild(el("small", "", T("CasaResumoSemConta", t("Conecte o ar-condicionado e a lava e seca pela conta ConnectLife.", "Connect your air conditioner and washer with your ConnectLife account."))));
-        } else {
-          var ap = el("div", "ap");
-          E.casa.forEach(function (a) { ap.appendChild(el("span", "", null, el("b", "", a.nome), document.createTextNode(resumoDoAparelho(a)))); });
-          casaTexto.appendChild(ap);
-        }
+        casa.definir(E.vcasa);
+        arranjarTiles();
       },
       sair: function () {
         vivo = false; clearInterval(relogio);
         window.removeEventListener("resize", redesenhar);
         previa.sair();
+        casa.sair();
       }
     };
   };
 
-  function resumoDoAparelho(a) {
-    if (!a.online) return t("fora do ar", "offline");
-    if (a.tipo !== "ar") return t("online", "online");
-    if (!a.ligado) return t("desligado", "off") + (a.ambiente !== null ? " · " + numero(a.ambiente) + " °C" : "");
-    return (a.modo || t("ligado", "on")) + (a.alvo !== null ? " · " + numero(a.alvo) + " °C" : "") +
-      (a.ambiente !== null ? " (" + t("ambiente", "room") + " " + numero(a.ambiente) + " °C)" : "");
+  /// A casa na Visao geral, igual a classica: o ar com - e + (espera 700 ms
+  /// antes de enviar) e a pilula de liga/desliga; a lavadora so durante um
+  /// ciclo, com o tempo, o fim e as etapas; o convite quando nao ha nada.
+  function cartoesDaCasa() {
+    var raiz = el("div", "vg-casa-pilha");
+    var ultimo = null, alvoLocal = null, espera = 0, ar = null;
+
+    // O ar.
+    var arNome = el("b"), arFora = el("small"), arNum = el("span", "alvo");
+    var menos = botao("\uE738", "redondo icone", function () { passo(-1); });
+    var mais = botao("\uE710", "redondo icone", function () { passo(1); });
+    menos.setAttribute("aria-label", t("Diminuir", "Lower"));
+    mais.setAttribute("aria-label", t("Aumentar", "Raise"));
+    var pilula = botao("", "pilula", function () {
+      if (!ar || !ar.online) return;
+      var novo = !ar.ligado;
+      ar.ligado = novo; ar.ajusta = novo && ar.alvo !== null;
+      desenharAr();
+      enviar("t_power", novo ? 1 : 0);
+    });
+    var cartaoAr = el("div", "cartao vg-ar", null, el("span", "ic icone", "\uE9CA"),
+      el("div", "ct", null, arNome, arFora), el("div", "ctl", null, menos, arNum, mais), pilula);
+
+    function passo(d) {
+      if (!ar || !ar.ajusta) return;
+      var base = alvoLocal !== null ? alvoLocal : ar.alvo;
+      if (base === null) return;
+      alvoLocal = Math.max(ar.min, Math.min(ar.max, base + d));
+      desenharAr();
+      clearTimeout(espera);
+      espera = setTimeout(function () {
+        var v = alvoLocal; alvoLocal = null;
+        if (ar) ar.alvo = v;
+        enviar("t_temp", v);
+      }, 700);
+    }
+    function enviar(chave, valor) {
+      if (!ar) return;
+      pedir("casa.ar", { puid: ar.puid, chave: chave, valor: valor }).then(function (v) { if (v) definir(v); }, function () { });
+    }
+    function desenharAr() {
+      arNome.textContent = ar.nome;
+      limpar(arFora);
+      arFora.appendChild(document.createTextNode((ar.fora || "") + " "));
+      if (ar.clima) arFora.appendChild(el("span", "quente", ar.clima));
+      if (ar.origem) arFora.appendChild(document.createTextNode(" · " + ar.origem));
+      var v = alvoLocal !== null ? alvoLocal : ar.alvo;
+      limpar(arNum);
+      arNum.appendChild(document.createTextNode(v === null || v === undefined ? "--" : String(v)));
+      arNum.appendChild(el("small", "", "°"));
+      arNum.classList.toggle("apagado", !ar.ajusta);
+      var podeMenos = ar.ajusta && v !== null && v > ar.min, podeMais = ar.ajusta && v !== null && v < ar.max;
+      menos.disabled = !podeMenos; mais.disabled = !podeMais;
+      pilula.textContent = ar.liga || "";
+      pilula.disabled = !ar.online;
+      pilula.className = "pilula" + (!ar.online ? " fora" : ar.ligado ? " on" : "");
+    }
+
+    // A lavadora.
+    var lavNome = el("b"), lavLinha = el("small"), lavTempo = el("span", "tempo"), lavFim = el("small", "fim");
+    var trilho = el("div", "trilho", null, el("i")), etapas = el("div", "etapas");
+    var cartaoLav = el("div", "cartao vg-lav", null,
+      el("div", "topo", null, el("span", "ic maquina", null, el("i")), el("div", "ct", null, lavNome, lavLinha),
+        el("div", "rel", null, lavTempo, lavFim)), trilho, etapas);
+    function desenharLav(l) {
+      lavNome.textContent = l.nome;
+      lavLinha.textContent = l.erro ? l.erro : l.linha;
+      lavLinha.classList.toggle("erro", !!l.erro);
+      lavTempo.textContent = l.tempo;
+      lavFim.textContent = l.fim;
+      trilho.firstChild.style.width = Math.round((l.prog || 0) * 1000) / 10 + "%";
+      trilho.classList.toggle("pausada", !!l.pausada);
+      limpar(etapas);
+      (l.etapas || []).forEach(function (e, i) {
+        etapas.appendChild(el("span", i < l.atual ? "feita" : i === l.atual ? "agora" : "", e));
+      });
+    }
+
+    // O convite.
+    var cvTitulo = el("b"), cvTexto = el("small");
+    var convite = el("div", "cartao vg-casa", null, el("span", "ic icone", "\uE80F"), el("div", "ct", null, cvTitulo, cvTexto),
+      botao(T("VisaoAbrirCasa", t("Abrir Casa ▸", "Open Home ▸")), "link", function () { mostrar("casa"); }));
+    cartaoAr.addEventListener("dblclick", function (e) { if (e.target === cartaoAr) mostrar("casa"); });
+
+    function definir(v) {
+      v = v || { convite: { titulo: T("VisaoConecteCasa", t("Conecte a casa", "Connect your home")), texto: "" } };
+      var chave = JSON.stringify(v);
+      if (chave === ultimo) return;
+      ultimo = chave;
+      limpar(raiz);
+      ar = v.ar ? JSON.parse(JSON.stringify(v.ar)) : null;
+      if (ar) { desenharAr(); raiz.appendChild(cartaoAr); }
+      if (v.lav) { desenharLav(v.lav); raiz.appendChild(cartaoLav); }
+      if (v.convite || (!ar && !v.lav)) {
+        var c = v.convite || {};
+        cvTitulo.textContent = c.titulo || T("NavCasa", t("Casa", "Home"));
+        cvTexto.textContent = c.texto || "";
+        raiz.appendChild(convite);
+      }
+    }
+    return { el: raiz, definir: function (v) { if (alvoLocal === null) definir(v); }, sair: function () { clearTimeout(espera); } };
   }
 
   // ---------------- Baterias ----------------

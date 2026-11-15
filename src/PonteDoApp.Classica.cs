@@ -37,6 +37,7 @@ namespace MhiagosControl
                 case "github": Navegador.Abrir(Repositorio); return Feito(id, true);
                 case "visao.sistema": Sistema(id); return null;
                 case "metricas.acao": return AcaoDeMetricas(id, a);
+                case "casa.ar": return ComandoDoAr(id, a);
                 case "specs.copiar":
                     {
                         string texto = SpecSheet.EmTexto();
@@ -188,6 +189,8 @@ namespace MhiagosControl
                 eventos.Add(x);
             }
             d["eventos"] = eventos;
+            try { d["vcasa"] = VisaoDaCasa(); }
+            catch (Exception ex) { Log.Error("interface nova: casa na visao", ex); d["vcasa"] = null; }
         }
 
         /// <summary>A tira de especificacoes: coletada fora da thread da interface, como as Especificacoes.</summary>
