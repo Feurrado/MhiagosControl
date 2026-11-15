@@ -80,29 +80,45 @@ namespace MhiagosControl
             " @keyframes mhg-entra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }" +
             " @keyframes mhg-esmaece { from { opacity: 0; } to { opacity: 1; } }" +
             " .mhg-pag { animation: mhg-esmaece .12s linear both; } .mhg-item { animation: mhg-entra .2s cubic-bezier(.05,.7,.1,1) both; }" +
+            " html.mhg-oculto .app, html.mhg-oculto main { opacity: 0 !important; }" +
             " @media (prefers-reduced-motion: reduce) { .mhg-pag, .mhg-item { animation: none !important; } }";
 
         /// <summary>
-        /// A aba Casa entra como as outras paginas da janela: a camada da Casa so
-        /// fica visivel quando a pessoa abre a aba (visibilitychange), e ai a
-        /// pagina esmaece e os cartoes a vista sobem 20 ms um do outro (no maximo
-        /// 160 ms de espera).
+        /// A aba Casa entra como as outras paginas da janela. A janela nao esconde a
+        /// camada da Casa na hora: tira da area, chama mhgOcultar (apaga o conteudo) e
+        /// so esconde de vez depois que esse quadro apagado foi desenhado. Assim, ao
+        /// voltar, o WebView nao mostra o quadro antigo cheio antes da animacao (era o
+        /// "piscar"). mhgMostrar esmaece a pagina e sobe os cartoes a vista 20 ms um do
+        /// outro (no maximo 160 ms); cartao que a pagina troca durante a entrada (a
+        /// Casa redesenha ao voltar a ficar visivel) entra no mesmo ponto da animacao
+        /// do que ele substituiu, em vez de aparecer pronto no meio dos outros.
         /// </summary>
-        private const string EntradaAoMostrar =
+        private const string Entrada =
             "var an=function(e,c,d){e.classList.remove(c);void e.offsetWidth;e.style.animationDelay=d||'';e.classList.add(c);" +
             "e.addEventListener('animationend',function f(v){if(v.target!==e)return;e.classList.remove(c);e.style.animationDelay='';e.removeEventListener('animationend',f);});};" +
-            "document.addEventListener('visibilitychange',function(){try{if(document.visibilityState!=='visible')return;" +
-            "if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;var m=document.querySelector('main');if(!m)return;an(m,'mhg-pag');" +
-            "var h=innerHeight,l=[];m.querySelectorAll('.cartao').forEach(function(c){if(c.parentElement&&c.parentElement.closest('.cartao'))return;" +
+            "var topo=function(m){var h=innerHeight,l=[];m.querySelectorAll('.cartao').forEach(function(c){if(c.parentElement&&c.parentElement.closest('.cartao'))return;" +
             "var r=c.getBoundingClientRect();if(r.width===0||r.bottom<0||r.top>h)return;l.push({c:c,y:r.top,x:r.left});});" +
-            "l.sort(function(a,b){return a.y-b.y||a.x-b.x;});l.forEach(function(o,n){an(o.c,'mhg-item',Math.min(n*20,160)+'ms');});}catch(e){}});";
+            "l.sort(function(a,b){return a.y-b.y||a.x-b.x;});return l;};" +
+            "var obs=null,fim=function(){if(obs){obs.disconnect();obs=null;}};" +
+            "window.mhgOcultar=function(){fim();document.documentElement.classList.add('mhg-oculto');};" +
+            "window.mhgMostrar=function(){try{var d=document.documentElement,oculto=d.classList.contains('mhg-oculto');d.classList.remove('mhg-oculto');fim();" +
+            "var m=document.querySelector('main');if(!oculto||!m||matchMedia('(prefers-reduced-motion: reduce)').matches)return;" +
+            "an(document.querySelector('.app')||m,'mhg-pag');var t0=performance.now(),feito=new WeakSet();" +
+            "topo(m).forEach(function(o,n){feito.add(o.c);an(o.c,'mhg-item',Math.min(n*20,160)+'ms');});" +
+            "obs=new MutationObserver(function(){var p=performance.now()-t0;if(p>360){fim();return;}" +
+            "topo(m).forEach(function(o,n){if(feito.has(o.c))return;feito.add(o.c);an(o.c,'mhg-item',Math.round(Math.min(n*20,160)-p)+'ms');});});" +
+            "obs.observe(m,{childList:true,subtree:true});setTimeout(fim,400);}catch(e){}};";
+
+        /// <summary>Chamados pela janela ao tirar e ao trazer de volta a camada da Casa.</summary>
+        internal const string ScriptOcultar = "window.mhgOcultar&&mhgOcultar();";
+        internal const string ScriptMostrar = "window.mhgMostrar&&mhgMostrar();";
 
         internal static string ScriptEmbutido(string origem)
         {
             string css = "html, body { background: var(--window) !important; } .app { flex-direction: column !important; min-height: 0 !important; } nav { width: auto !important; height: auto !important; position: static !important; flex-direction: row !important; align-items: center !important; flex-wrap: wrap !important; background: transparent !important; border: 0 !important; padding: 16px 16px 12px !important; gap: 6px !important; } nav .marca, nav .perfil, nav .rodape { display: none !important; } nav .item { flex: none !important; flex-direction: row !important; justify-content: center !important; gap: 0 !important; margin: 0 !important; padding: 0 16px !important; height: 30px !important; min-width: 82px !important; font-size: 13.33px !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; box-sizing: border-box !important; } nav .item svg { display: none !important; } nav .item:hover { background: var(--hover) !important; } nav .item.ativo { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; font-weight: 600 !important; } nav .item.ativo::before { display: none !important; } main { padding: 0 16px 24px !important; } .topo h1 { display: none !important; }";
             return "(function(){try{if(location.origin!==" + Json.Escrever(origem) + ")return;" +
                    "var s=new CSSStyleSheet();s.replaceSync(" + Json.Escrever(css + Movimento) + ");" +
-                   "document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);" + EntradaAoMostrar + "}catch(e){}})();";
+                   "document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);" + Entrada + "}catch(e){}})();";
         }
 
         private JanelaWeb()
