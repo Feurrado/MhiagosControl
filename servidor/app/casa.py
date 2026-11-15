@@ -225,7 +225,7 @@ CENAS_PADRAO = [
 PREF_PADRAO = {
     "alertaFalha": True, "alertaDesconectado": True, "alertaQuente": True, "alertaLavadoraFim": True,
     "limiteQuente": 28, "potenciaFrio": 1100, "potenciaEco": 1100, "potenciaSeco": 600, "potenciaVentilar": 60,
-    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "ntfyTopico": "", "local": None, "cenas": CENAS_PADRAO,
+    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "ntfyTopico": "", "local": None, "inicio": {"ordem": [], "ocultos": []}, "cenas": CENAS_PADRAO,
 }
 
 
@@ -270,6 +270,19 @@ def _validar_cenas(v):
     return r
 
 
+def _validar_inicio(v):
+    """Arranjo da tela Casa: ids na ordem escolhida e ids ocultos ("clima" ou o puid de um aparelho)."""
+    if not isinstance(v, dict):
+        raise PreferenciaInvalida("inicio: {ordem, ocultos}")
+    r = {}
+    for campo in ("ordem", "ocultos"):
+        l = v.get(campo, [])
+        if not isinstance(l, list) or len(l) > 32 or any(not isinstance(x, str) or not 1 <= len(x) <= 64 for x in l):
+            raise PreferenciaInvalida("inicio.%s: lista de ate 32 ids" % campo)
+        r[campo] = list(dict.fromkeys(l))
+    return r
+
+
 def _validar_local(v):
     """Cidade do clima: nulo (sem clima) ou {nome, lat, lon} com coordenadas de verdade."""
     if v is None:
@@ -304,6 +317,8 @@ def validar_preferencias(dados):
             if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v < 100:
                 raise PreferenciaInvalida("tarifa: numero de 0 a 100")
             limpo[k] = round(float(v), 4)
+        elif k == "inicio":
+            limpo[k] = _validar_inicio(v)
         elif k == "local":
             limpo[k] = _validar_local(v)
         elif k == "cenas":

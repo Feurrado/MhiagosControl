@@ -113,3 +113,7 @@ http da rede local ele vira um atalho que abre no navegador.
   `X-Forwarded-For` só quando o par é privado/Tailscale, manda HSTS quando o proxy
   diz que veio em HTTPS, recusa corpo sem `Content-Length` (411) e limita o corpo a
   256 KB (32 MB só em `/api/historico/importar`). Use uma chave longa (`openssl rand -hex 24`).
+
+## Modo demo
+
+`python demo.py` (dentro de `servidor/`) sobe o painel em http://127.0.0.1:8770 com um ar simulado, clima e 14 dias de histórico sintéticos, sem nuvem nem rede. A chave é `demo-chave-0123456789` (cole na primeira tela). Nada é gravado fora de uma pasta temporária.

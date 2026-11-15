@@ -320,13 +320,50 @@ const U = puid => ui[puid] || (ui[puid] = { diag: false, consumo: false });
  * Redesenha so o cartao cujo conteudo mudou. Antes a pagina inteira era
  * refeita a cada 4 s: piscava e fechava o que estava aberto.
  */
+/** Arranjo salvo da Casa: ids na ordem escolhida (os novos vao ao fim) e ids ocultos. */
+function arranjo() {
+  const i = (pref && pref.dados.inicio) || { ordem: [], ocultos: [] };
+  return { ordem: i.ordem || [], ocultos: i.ocultos || [] };
+}
+function aparelhosNaOrdem() {
+  const { ordem, ocultos } = arranjo();
+  return aparelhosNaOrdemTodos(ordem).filter(a => !ocultos.includes(a.puid));
+}
+
+let editandoInicio = false;
+function desenharEdicaoInicio() {
+  const caixa = $("editaInicio");
+  caixa.classList.toggle("oculto", !editandoInicio || !estado || !pref);
+  $("personalizar").classList.toggle("pri", editandoInicio);
+  if (!editandoInicio || !estado || !pref) return;
+  const { ordem, ocultos } = arranjo();
+  const todos = [{ id: "clima", nome: "Clima e sugestão" }].concat(
+    aparelhosNaOrdemTodos(ordem).map(a => ({ id: a.puid, nome: a.apelido })));
+  const gravar = (o, h) => gravarPref({ inicio: { ordem: o, ocultos: h } });
+  const ids = todos.map(x => x.id);
+  trocarConteudo(caixa, el("div", { class: "cab" }, el("div", { class: "nomes" }, el("div", { class: "nome" }, "Personalizar a Casa"),
+    el("div", { class: "det" }, "mude a ordem e esconda o que não usa; vale para todos os aparelhos"))),
+    el("div", { class: "corpo" }, todos.map((x, n) => el("div", { class: "ordem" + (ocultos.includes(x.id) ? " fora" : "") },
+      el("span", {}, x.nome),
+      x.id === "clima" ? null : el("button", { class: "b", disabled: n <= 1, "aria-label": "Subir", on: { click: () => { const l = ids.filter(i => i !== "clima"); const k = l.indexOf(x.id); [l[k - 1], l[k]] = [l[k], l[k - 1]]; gravar(l, ocultos); } } }, "▲"),
+      x.id === "clima" ? null : el("button", { class: "b", disabled: n === todos.length - 1, "aria-label": "Descer", on: { click: () => { const l = ids.filter(i => i !== "clima"); const k = l.indexOf(x.id); [l[k + 1], l[k]] = [l[k], l[k + 1]]; gravar(l, ocultos); } } }, "▼"),
+      el("button", { class: "b", on: { click: () => gravar(ordem.length ? ordem : ids.filter(i => i !== "clima"), ocultos.includes(x.id) ? ocultos.filter(i => i !== x.id) : ocultos.concat(x.id)) } }, ocultos.includes(x.id) ? "Mostrar" : "Ocultar"))),
+      el("div", { class: "linha", style: "margin-top:10px" }, el("button", { class: "b", on: { click: () => gravar([], []) } }, "Restaurar o padrão"))));
+}
+function aparelhosNaOrdemTodos(ordem) {
+  const pos = id => { const n = ordem.indexOf(id); return n < 0 ? 999 : n; };
+  return estado.lista.map((a, n) => [a, n]).sort((x, y) => pos(x[0].puid) - pos(y[0].puid) || x[1] - y[1]).map(x => x[0]);
+}
+$("personalizar").onclick = () => { editandoInicio = !editandoInicio; desenharEdicaoInicio(); };
+
 function desenharCartoes() {
   if (!estado) return;
+  desenharEdicaoInicio();
   conferirPendentes();
   const c = $("cartoes");
   const foco = document.activeElement && c.contains(document.activeElement) ? document.activeElement.dataset.id : null;
   const lista = [];
-  for (const a of estado.lista) {
+  for (const a of aparelhosNaOrdem()) {
     const ags = (estado.agendamentos || []).filter(x => x.puid === a.puid);
     const falhos = (estado.agendamentosFalhos || []).filter(x => x.puid === a.puid);
     const sig = JSON.stringify([a, pendente[a.puid] || null, pref && pref.versao, U(a.puid), ags, falhos, ciclosDe(a.puid).length,
@@ -1030,13 +1067,14 @@ async function aplicarSugestao(botao) {
 function desenharClima() {
   const caixa = $("clima");
   if (!caixa) return;
+  if (arranjo().ocultos.includes("clima")) { caixa.classList.add("oculto"); return; }
   const d = climaDados;
   if (!d || d.erro || !d.c.local || !d.c.clima) {
     const msg = !d ? "Carregando…" : d.erro ? "Clima indisponível: " + d.erro : !d.c.local ? "Escolha a cidade nos Ajustes para ver a previsão e a sugestão para o ar."
       : "A Open-Meteo não respondeu agora.";
     trocarConteudo(caixa, el("div", { class: "cab" }, el("div", { class: "ico" }, icClima("sol-nuvem")),
       el("div", { class: "nomes" }, el("div", { class: "nome" }, "Clima"), el("div", { class: "det" }, msg))),
-      d && !d.erro && !d.c.local ? el("div", { class: "corpo" }, el("button", { class: "b", on: { click: () => irPara("ajustes-clima") } }, "Escolher cidade")) : null);
+      ...(d && !d.erro && !d.c.local ? [el("div", { class: "corpo" }, el("button", { class: "b", on: { click: () => irPara("ajustes-clima") } }, "Escolher cidade"))] : []));
     caixa.classList.toggle("oculto", !d);
     return;
   }
@@ -1086,12 +1124,12 @@ async function carregarPref() {
     const mudou = !pref || p.versao !== pref.versao;
     pref = p;
     if (!mudou) return;
-    if (abaAtual === "ajustes") desenharAjustes(); else desenharCartoes();
+    if (abaAtual === "ajustes") desenharAjustes(); else { desenharCartoes(); desenharClima(); }
   } catch (e) {}
 }
 
 async function gravarPref(dados) {
-  try { pref = await api("preferencias", "PUT", { dados, origem: "web" }); aviso("Salvo"); if (abaAtual === "ajustes") desenharAjustes(); else desenharCartoes(); }
+  try { pref = await api("preferencias", "PUT", { dados, origem: "web" }); aviso("Salvo"); if (abaAtual === "ajustes") desenharAjustes(); else { desenharCartoes(); desenharClima(); } }
   catch (e) { aviso("Não salvou: " + e.message); }
 }
 
