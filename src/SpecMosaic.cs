@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -182,6 +182,49 @@ namespace MhiagosControl
             string n = m.Groups[1].Value.Replace(',', '.');
             if (!double.TryParse(n, NumberStyles.Float, CultureInfo.InvariantCulture, out v)) return 0;
             return m.Groups[2].Value.ToUpperInvariant() == "TB" ? v * 1024 : v;
+        }
+
+        /// <summary>
+        /// O que o bloco mostra, como dados: a interface nova desenha o mesmo
+        /// mosaico com estes textos, que saem do mesmo Montar da classica.
+        /// </summary>
+        internal Dictionary<string, object> Modelo()
+        {
+            Dictionary<string, object> d = new Dictionary<string, object>();
+            d["titulo"] = _g.Titulo ?? "";
+            d["destaque"] = _destaque ?? "";
+            d["sub"] = _sub ?? "";
+            d["largo"] = Largo;
+            List<object> etiquetas = new List<object>();
+            foreach (string e in _etiquetas) etiquetas.Add(e);
+            d["etiquetas"] = etiquetas;
+
+            List<object> slots = new List<object>();
+            for (int i = 0; i < _slotsTotal; i++)
+            {
+                Dictionary<string, object> x = new Dictionary<string, object>();
+                bool nomeados = _slots != null && i < _slots.Count;
+                x["nome"] = nomeados ? _slots[i].Nome ?? "" : "";
+                x["cheio"] = nomeados ? _slots[i].Ocupado : i < _slotsUsados;
+                x["dica"] = nomeados ? TextoDoSlot(_slots[i]) : "";
+                slots.Add(x);
+            }
+            d["slots"] = slots;
+            d["slotsNomeados"] = _slots != null;
+            d["slotsTxt"] = _slotsTotal > 0 ? T.SpecSlotsUsed(_slotsUsados, _slotsTotal) : "";
+
+            List<object> discos = new List<object>();
+            for (int i = 0; i < _discos.Count; i++)
+            {
+                Dictionary<string, object> x = new Dictionary<string, object>();
+                bool temUso = _discosGb[i] > 0 && _discosUsados[i] >= 0;
+                x["nome"] = _discos[i][1];
+                x["direita"] = temUso ? SpecSheet.EmGigabytes((ulong)(_discosUsados[i] * 1073741824.0)) + " / " + _discos[i][0] : _discos[i][0];
+                x["pct"] = temUso ? (object)Math.Min(1.0, _discosUsados[i] / _discosGb[i]) : null;
+                discos.Add(x);
+            }
+            d["discos"] = discos;
+            return d;
         }
 
         // ---------------- medida e desenho ----------------
