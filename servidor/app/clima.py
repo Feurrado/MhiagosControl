@@ -243,7 +243,16 @@ def cidades(q):
             if "latitude" in c and "longitude" in c]
 
 
-def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umidade_dentro=None):
+# No modo seco o ar trava o alvo (22 °C neste modelo) e nao aceita mudar. Entao o seco nunca recebe
+# temperatura, e a decisao vira histerese: entra so quando o quarto esta bem acima do alvo travado
+# (senao o seco esfriaria demais) e sai quando o quarto chega nele ou a umidade cai.
+SECO_ALVO_PADRAO = 22
+SECO_ENTRA_UMIDADE, SECO_SAI_UMIDADE = 70, 60
+SECO_FOLGA_ENTRA, SECO_FOLGA_SAI = 2.0, 0.5
+
+
+def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umidade_dentro=None,
+             modo_atual=None, alvo_atual=None):
     """Conforto adaptativo (ASHRAE 55): T_neutra = 0,31 x media externa recente + 17,8.
 
     Devolve {acao, titulo, texto, cena?}. 'cena' e o que o botao Aplicar manda ao ar
@@ -282,16 +291,27 @@ def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umida
     # baixo quando chega perto (mais quieto e economiza). No meio, mantem o que esta.
     falta = dentro - alvo
     vento = -3 if falta >= 2.5 else -2 if falta <= 1 else -1
-    seco_ok = umidade is not None and umidade >= 70 and fora <= 27
+    em_seco = ligado and modo_atual == 3
+    trava = alvo_atual if (em_seco and alvo_atual) else SECO_ALVO_PADRAO
+    if em_seco:
+        # Ja no seco: fica enquanto ainda ha umidade e o quarto esta acima do alvo travado.
+        seco_ok = (umidade is not None and umidade >= SECO_SAI_UMIDADE and fora <= 28
+                   and dentro > trava + SECO_FOLGA_SAI)
+    else:
+        seco_ok = (umidade is not None and umidade >= SECO_ENTRA_UMIDADE and fora <= 27
+                   and dentro >= trava + SECO_FOLGA_ENTRA)
     # Mais fresco que o alvo e abafado: so ventilar. Pouco acima do conforto e sem umidade alta: ventilar basta.
     if dentro <= neutra + 1.5 and dentro <= 28 and not seco_ok and dentro - fora < 1 and not noite:
         return {"acao": "ventilar", "titulo": "Ventilar",
                 "texto": "Dentro %.0f °C, perto do conforto de %.1f °C: o ventilador basta." % (dentro, neutra),
                 "cena": {"modo": 0, "temp": -1, "vento": -2, "noturno": -1}}
     if seco_ok:
-        return {"acao": "seco", "titulo": "Desumidificar a %d °C" % alvo,
-                "texto": "Umidade em %.0f%%. O modo seco incomoda menos que o frio." % umidade,
-                "cena": {"modo": 3, "temp": alvo, "vento": vento, "noturno": -1}}
+        # Sem "temp": no seco o alvo e fixo do aparelho. Ventilador no automatico (o seco regula sozinho).
+        return {"acao": "seco", "titulo": "Desumidificar (alvo fixo de %d °C)" % trava,
+                "texto": "Umidade em %.0f%%, quarto a %.0f °C. O seco trava o alvo em %d °C: o automático "
+                         "sai dele quando o quarto chegar perto disso ou a umidade cair abaixo de %d%%." % (
+                             umidade, dentro, trava, SECO_SAI_UMIDADE),
+                "cena": {"modo": 3, "temp": -1, "vento": -1, "noturno": -1}}
     cena = {"modo": 2, "temp": alvo, "vento": vento, "noturno": 1 if noite else -1}
     return {"acao": "frio", "titulo": "Frio a %d °C%s" % (alvo, " no modo dormir" if noite else ""),
             "texto": "Conforto estimado em %.1f °C (dentro %.0f °C, fora %.0f °C)%s." % (

@@ -44,6 +44,23 @@ class Regras(unittest.TestCase):
     def test_umido_sugere_seco(self):
         self.assertEqual(clima.sugestao(30, 26, 80, 26, 30, 14, False)["cena"]["modo"], 3)
 
+    def test_seco_nunca_manda_temperatura(self):
+        self.assertEqual(clima.sugestao(30, 26, 80, 26, 30, 14, False)["cena"]["temp"], -1)
+
+    def test_seco_nao_entra_com_quarto_perto_do_alvo_travado(self):
+        self.assertNotEqual(clima.sugestao(23.5, 26, 80, 26, 30, 14, True)["cena"]["modo"], 3)
+
+    def test_seco_sai_quando_o_quarto_chega_no_alvo_travado(self):
+        dentro = clima.sugestao(26, 26, 80, 26, 30, 14, True, modo_atual=3, alvo_atual=22)
+        self.assertEqual(dentro["cena"]["modo"], 3)
+        s = clima.sugestao(22.3, 26, 80, 26, 30, 14, True, modo_atual=3, alvo_atual=22)
+        self.assertNotEqual(s["cena"]["modo"], 3)
+        self.assertIn(s["cena"]["modo"], (0, 2))
+
+    def test_seco_histerese_da_umidade(self):
+        self.assertEqual(clima.sugestao(26, 26, 65, 26, 30, 14, True, modo_atual=3, alvo_atual=22)["cena"]["modo"], 3)
+        self.assertNotEqual(clima.sugestao(26, 26, 65, 26, 30, 14, True)["cena"]["modo"], 3)
+
     def test_ventilar_quando_esta_perto_do_conforto(self):
         s = clima.sugestao(27.4, 26.8, 50, 27, 28, 14, True)
         self.assertEqual((s["acao"], s["cena"]["modo"], s["cena"]["vento"]), ("ventilar", 0, -2))

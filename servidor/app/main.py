@@ -453,6 +453,13 @@ def buscar_cidades(q: str = ""):
     return {"cidades": clima.cidades(q[:80])}
 
 
+def _alvo_em_c(d):
+    alvo = d.get("alvo")
+    if alvo is not None and d.get("unidade") == "°F":
+        alvo = round((alvo - 32) * 5 / 9)
+    return alvo
+
+
 def _sugestao_do_ar():
     """(aparelho, sugestao) do primeiro ar com clima e temperatura de dentro; sugestao None se falta dado."""
     loc = casa.preferencias()["dados"].get("local")
@@ -468,7 +475,8 @@ def _sugestao_do_ar():
         dentro = (dentro - 32) * 5 / 9
     ligado = bool(d.get("ligado"))
     s = clima.sugestao(dentro, c["agora"]["temp"], c["agora"]["umidade"], c.get("mediaRecente"), c.get("maxHoje"),
-                       datetime.now().hour, ligado, d.get("umidade"))
+                       datetime.now().hour, ligado, d.get("umidade"),
+                       modo_atual=(d.get("modo") or {}).get("valor"), alvo_atual=_alvo_em_c(d))
     return ar, s, c
 
 
