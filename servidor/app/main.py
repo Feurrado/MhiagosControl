@@ -16,10 +16,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, model_validator
 
-from . import avisos, banco, casa, clima, servico
+from . import avisos, banco, casa, clima, servico, sistema
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.9.0"
+VERSAO = "1.10.0"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
@@ -423,6 +423,11 @@ def _csv(linhas, colunas):
     for l in linhas:
         out.append(";".join("" if l.get(c) is None else str(l[c]) for c in colunas))
     return "\n".join(out) + "\n"
+
+
+@app.get("/api/sistema", dependencies=[Depends(autorizado)])
+def sistema_estado():
+    return sistema.estado(os.path.dirname(banco.ARQUIVO))
 
 
 @app.get("/api/clima", dependencies=[Depends(autorizado)])

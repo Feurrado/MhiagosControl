@@ -218,6 +218,29 @@ function icBarras(nivel) {
 
 // ---------------- leitura ----------------
 
+/** Controle segmentado com indicador que desliza (iOS): um span sob o botao "on". */
+function posicionarSeg() {
+  for (const g of document.querySelectorAll(".seg")) {
+    const on = g.querySelector("button.on");
+    let i = g.querySelector(".ind");
+    if (!i) { i = document.createElement("span"); i.className = "ind"; g.prepend(i); }
+    if (!on || !on.offsetWidth) { i.style.opacity = "0"; continue; }
+    i.style.opacity = "1"; i.style.width = on.offsetWidth + "px"; i.style.transform = "translateX(" + on.offsetLeft + "px)";
+    if (!i.dataset.pronto) requestAnimationFrame(() => requestAnimationFrame(() => { i.dataset.pronto = "1"; }));
+  }
+}
+let posSegAgenda = 0;
+new MutationObserver(() => { cancelAnimationFrame(posSegAgenda); posSegAgenda = requestAnimationFrame(posicionarSeg); })
+  .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+addEventListener("resize", () => requestAnimationFrame(posicionarSeg));
+
+/** O fundo ganha uma tinta suave do modo do ar: azul no frio, laranja no calor, verde no seco; sem tinta com o ar desligado. */
+function tintaDoAr() {
+  const ar = estado && estado.lista.find(ehAr);
+  const m = ar && ar.estado && ar.estado.t_power === "1" ? { 2: "frio", 5: "eco", 1: "calor", 3: "seco" }[+ar.estado.t_work_mode] : null;
+  if (m) document.body.dataset.modo = m; else delete document.body.dataset.modo;
+}
+
 async function atualizar() {
   if (!chave) { pedirChave(); return; }
   try {
@@ -225,6 +248,7 @@ async function atualizar() {
     marcarConexao(false);
     $("login").classList.toggle("oculto", estado.logado);
     desenharSituacao();
+    tintaDoAr();
     if (abaAtual === "painel") desenharCartoes();
   } catch (e) {
     if (e.message !== "chave") { $("situacao").textContent = "Sem resposta do servidor: " + e.message; marcarConexao(true); }
@@ -670,10 +694,20 @@ async function baixar(caminho, nome) {
 $("csvAr").onclick = () => baixar("exportar/ar.csv", "historico-ar.csv");
 $("csvCiclos").onclick = () => baixar("exportar/ciclos.csv", "ciclos-lavadora.csv");
 
+/** Texto explicativo escondido num (i): aparece ao passar o mouse, focar (Tab) ou tocar. */
+function dica(texto) {
+  const b = el("button", { class: "dica", type: "button", "aria-label": "Mais informações", "data-t": texto,
+    on: { click: e => { e.stopPropagation(); b.classList.toggle("aberta"); } }, }, "i");
+  b.addEventListener("blur", () => b.classList.remove("aberta"));
+  return b;
+}
+
 function cartaoSimples(titulo, det, ic, ...corpo) {
+  let info = null;
+  if (corpo.length && corpo[corpo.length - 1] && corpo[corpo.length - 1].dica) info = dica(corpo.pop().dica);
   return el("div", { class: "cartao" },
     el("div", { class: "cab" }, ic ? el("div", { class: "ico" }, ic) : null,
-      el("div", { class: "nomes" }, el("div", { class: "nome" }, titulo), det ? el("div", { class: "det" }, det) : null)),
+      el("div", { class: "nomes" }, el("div", { class: "nome" }, titulo), det ? el("div", { class: "det" }, det) : null), info),
     el("div", { class: "corpo" }, corpo));
 }
 
@@ -937,6 +971,29 @@ async function carregarLavadoraConsumo() {
             el("td", { class: "n" }, num(p.agua / p.n, 0) + " L"), el("td", { class: "n" }, num(p.energia / p.n, 2) + " kWh"))))] : null));
 }
 
+// ---------------- saude do servidor ----------------
+
+async function carregarSistema(caixa) {
+  try {
+    const x = await api("sistema");
+    const mb = v => v >= 1024 ? num(v / 1024, 1) + " GB" : v + " MB";
+    const linhas = [];
+    if (x.carga) linhas.push(["Carga", x.carga.join(" · ") + " (" + x.cpus + " núcleos)", x.carga[0] > x.cpus * 1.5]);
+    if (x.memoria) linhas.push(["Memória livre", mb(x.memoria.livreMB) + " de " + mb(x.memoria.totalMB), x.memoria.livreMB < x.memoria.totalMB * 0.1]);
+    if (x.disco) linhas.push(["Disco livre", num(x.disco.livreGB, 1) + " GB de " + num(x.disco.totalGB, 0) + " GB", x.disco.livreGB < 2]);
+    if (x.temperatura != null) linhas.push(["Temperatura", num(x.temperatura, 0) + " °C", x.temperatura >= 80]);
+    if (x.ligadoHoras != null) linhas.push(["Ligado há", x.ligadoHoras >= 48 ? num(x.ligadoHoras / 24, 1) + " dias" : num(x.ligadoHoras, 1) + " h", false]);
+    if (x.banco) linhas.push(["Banco da Casa", num(x.banco.MB, 1) + " MB", false]);
+    if (x.backup) linhas.push(["Último backup", x.backup.quantidade ? (x.backup.idadeHoras < 1 ? "há menos de 1 h" : "há " + num(x.backup.idadeHoras, 0) + " h") + " (" + x.backup.quantidade + " guardados)" : "nenhum encontrado", x.backup.velho]);
+    const alerta = linhas.some(l => l[2]);
+    caixa.replaceChildren(
+      el("div", { class: "cab" }, el("div", { class: "nomes" }, el("div", { class: "nome" }, "Saúde do servidor"),
+        el("div", { class: "det" }, alerta ? "algo pede atenção" : "tudo em ordem"))),
+      el("div", { class: "corpo" }, el("table", { class: "aparelhos" }, linhas.map(l => el("tr", {}, el("td", {}, l[0]),
+        el("td", { class: "n" + (l[2] ? " mais" : "") }, l[2] ? "⚠ " + l[1] : l[1]))))));
+  } catch (e) { caixa.replaceChildren(el("div", { class: "corpo mu" }, "Saúde do servidor indisponível: " + e.message)); }
+}
+
 // ---------------- clima e sugestao ----------------
 
 const ICONES_CLIMA = {
@@ -1105,7 +1162,7 @@ function desenharAjustes() {
   const consumo = cartaoSimples("Estimativa de consumo do ar", "o ar não informa o consumo", null,
     el("div", { class: "form" }, campoNum("Frio (W)", "potenciaFrio"), campoNum("ECO (W)", "potenciaEco"),
       campoNum("Desumidificar (W)", "potenciaSeco"), campoNum("Ventilar (W)", "potenciaVentilar"), campoNum("Tarifa (R$/kWh)", "tarifa", 0.01)),
-    el("div", { class: "mu", style: "margin-top:10px" }, "A estimativa usa o tempo ligado em cada modo vezes a potência."));
+    { dica: "A estimativa usa o tempo ligado em cada modo vezes a potência." });
 
   const retorno = cartaoSimples("Padrão de retorno das cenas", "para onde uma cena com duração volta", null,
     el("div", { class: "form" },
@@ -1113,7 +1170,7 @@ function desenharAjustes() {
       el("label", { class: "campo" }, "Temperatura (°C)", el("input", { type: "number", min: 16, max: 32, value: d.retornoTemp, on: { change: e => gravarPref({ retornoTemp: +e.target.value }) } })),
       el("label", { class: "campo" }, "Ventilador", el("select", { on: { change: e => gravarPref({ retornoVento: +e.target.value }) } },
         ventos.map(v => el("option", { value: v.valor, selected: v.valor === d.retornoVento }, v.nome))))),
-    el("div", { class: "mu", style: "margin-top:10px" }, "Mudar o ar à mão cancela a volta."));
+    { dica: "Mudar o ar à mão cancela a volta." });
 
   const lista = d.cenas.map(c => Object.assign({}, c));
   const salvarCenas = () => gravarPref({ cenas: lista });
@@ -1149,6 +1206,9 @@ function desenharAjustes() {
       el("button", { class: "b", on: { click: () => { try { localStorage.removeItem("chave"); } catch (e) {} chave = ""; pedirChave(); } } }, "Trocar a chave deste navegador"),
       el("button", { class: "b perigo", on: { click: async () => { if (confirm("Desconectar o servidor da conta ConnectLife?")) { await api("conta", "DELETE"); atualizar(); } } } }, "Sair da conta ConnectLife")));
 
+  const saude = el("div", { class: "cartao" }, el("div", { class: "corpo mu" }, "Carregando…"));
+  carregarSistema(saude);
+
   // Ar-condicionado: bipe dos comandos (preferencia do servidor) e unidade (propriedade do aparelho)
   const ehF = ar && String(valor(ar, "t_temp_type")) === "1";
   const arCartao = cartaoSimples("Ar-condicionado", ar ? ar.apelido : "nenhum ar conectado", null,
@@ -1169,7 +1229,7 @@ function desenharAjustes() {
     ["clima", "Clima e local", d.local ? d.local.nome : "Nenhuma cidade", clima],
     ["retorno", "Retorno das cenas", (({ 0: "Ventilar", 2: "Frio", 3: "Desumidificar", 5: "ECO" })[d.retornoModo] || "Manter") + " · " + d.retornoTemp + " °C", retorno],
     ["cenas", "Cenas", lista.length + " de 8", cenas],
-    ["servidor", "Servidor", pref.atualizado ? "Salvo " + dataHora(pref.atualizado) : "Nada salvo", conta]
+    ["servidor", "Servidor", pref.atualizado ? "Salvo " + dataHora(pref.atualizado) : "Nada salvo", el("div", { class: "pilha" }, conta, saude)]
   ];
   if (!secoes.some(x => x[0] === ajSecao)) ajSecao = "alertas";
   const atual = secoes.find(x => x[0] === ajSecao);
