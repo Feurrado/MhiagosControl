@@ -69,12 +69,40 @@ namespace MhiagosControl
         /// adotada, que a politica de conteudo do servidor nao barra, e vale em
         /// qualquer largura. Nao muda nada no servidor.
         /// </summary>
+        /// <summary>
+        /// O mesmo padrao de movimento da janela nova (app.css): as animacoes
+        /// proprias da pagina da Casa ficam com os tempos curtos, e a cascata
+        /// de 60 ms por cartao vira a da janela (abaixo).
+        /// </summary>
+        private const string Movimento =
+            " .m3-aba { animation-duration: .12s !important; } .m3-surge { animation-duration: .2s !important; animation-delay: 0s !important; }" +
+            " .m3-abre { animation-duration: .15s !important; } .m3-frente, .m3-tras { animation-duration: .2s !important; }" +
+            " @keyframes mhg-entra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }" +
+            " @keyframes mhg-esmaece { from { opacity: 0; } to { opacity: 1; } }" +
+            " .mhg-pag { animation: mhg-esmaece .12s linear both; } .mhg-item { animation: mhg-entra .2s cubic-bezier(.05,.7,.1,1) both; }" +
+            " @media (prefers-reduced-motion: reduce) { .mhg-pag, .mhg-item { animation: none !important; } }";
+
+        /// <summary>
+        /// A aba Casa entra como as outras paginas da janela: a camada da Casa so
+        /// fica visivel quando a pessoa abre a aba (visibilitychange), e ai a
+        /// pagina esmaece e os cartoes a vista sobem 20 ms um do outro (no maximo
+        /// 160 ms de espera).
+        /// </summary>
+        private const string EntradaAoMostrar =
+            "var an=function(e,c,d){e.classList.remove(c);void e.offsetWidth;e.style.animationDelay=d||'';e.classList.add(c);" +
+            "e.addEventListener('animationend',function f(v){if(v.target!==e)return;e.classList.remove(c);e.style.animationDelay='';e.removeEventListener('animationend',f);});};" +
+            "document.addEventListener('visibilitychange',function(){try{if(document.visibilityState!=='visible')return;" +
+            "if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;var m=document.querySelector('main');if(!m)return;an(m,'mhg-pag');" +
+            "var h=innerHeight,l=[];m.querySelectorAll('.cartao').forEach(function(c){if(c.parentElement&&c.parentElement.closest('.cartao'))return;" +
+            "var r=c.getBoundingClientRect();if(r.width===0||r.bottom<0||r.top>h)return;l.push({c:c,y:r.top,x:r.left});});" +
+            "l.sort(function(a,b){return a.y-b.y||a.x-b.x;});l.forEach(function(o,n){an(o.c,'mhg-item',Math.min(n*20,160)+'ms');});}catch(e){}});";
+
         internal static string ScriptEmbutido(string origem)
         {
             string css = "html, body { background: var(--window) !important; } .app { flex-direction: column !important; min-height: 0 !important; } nav { width: auto !important; height: auto !important; position: static !important; flex-direction: row !important; align-items: center !important; flex-wrap: wrap !important; background: transparent !important; border: 0 !important; padding: 16px 16px 12px !important; gap: 6px !important; } nav .marca, nav .perfil, nav .rodape { display: none !important; } nav .item { flex: none !important; flex-direction: row !important; justify-content: center !important; gap: 0 !important; margin: 0 !important; padding: 0 16px !important; height: 30px !important; min-width: 82px !important; font-size: 13.33px !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; box-sizing: border-box !important; } nav .item svg { display: none !important; } nav .item:hover { background: var(--hover) !important; } nav .item.ativo { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; font-weight: 600 !important; } nav .item.ativo::before { display: none !important; } main { padding: 0 16px 24px !important; } .topo h1 { display: none !important; }";
             return "(function(){try{if(location.origin!==" + Json.Escrever(origem) + ")return;" +
-                   "var s=new CSSStyleSheet();s.replaceSync(" + Json.Escrever(css) + ");" +
-                   "document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);}catch(e){}})();";
+                   "var s=new CSSStyleSheet();s.replaceSync(" + Json.Escrever(css + Movimento) + ");" +
+                   "document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);" + EntradaAoMostrar + "}catch(e){}})();";
         }
 
         private JanelaWeb()
