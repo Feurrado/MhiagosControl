@@ -243,8 +243,56 @@ def cidades(q):
             if "latitude" in c and "longitude" in c]
 
 
-def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umidade_dentro=None):
+# ---- Controle do ar por faixas com histerese ----
+# Mesma ideia do termostato de banda morta (generic_thermostat do Home Assistant, Climate React da Sensibo):
+# um limite para entrar em cada modo e outro, afastado, para sair; entre os dois o ar fica como esta.
+CONFORTO_MIN, CONFORTO_MAX = 23, 26      # faixa do alvo do frio
+FRIO_ENTRA = 1.5       # entra no frio com o quarto este tanto acima do alvo...
+FRIO_SAI = 1.0         # ...e so sai com o quarto este tanto ABAIXO do alvo (no meio, o proprio ar segura o alvo)
+TETO_VENTILAR = 28     # acima disto nunca fica so no ventilador
+# No modo seco este aparelho trava o alvo em 22 °C e nao aceita mudar. Por isso o seco nunca recebe
+# temperatura e e tratado como um ciclo com piso: pode esfriar o quarto so ate SECO_SOBRE abaixo do alvo
+# de conforto (o "overcool to dehumidify" dos termostatos com controle de umidade, limitado a ~3 °F).
+SECO_TRAVA = 22
+SECO_ENTRA_UMIDADE, SECO_SAI_UMIDADE = 70, 60
+SECO_SOBRE = 1.5       # quanto o seco pode esfriar abaixo do alvo de conforto
+SECO_CURSO = 1.5       # so entra com pelo menos esta folga acima do piso, ou seja, do alvo para cima
+SECO_QUENTE_ENTRA, SECO_QUENTE_SAI = 1.5, 2.5   # quarto quente demais para o seco: o frio vem primeiro
+SECO_FORA_ENTRA, SECO_FORA_SAI = 27, 28          # calor la fora: o seco nao da conta
+
+
+def _c(v):
+    """28.5 -> "28,5" e 28.0 -> "28" (textos em portugues)."""
+    return ("%.1f" % v).rstrip("0").rstrip(".").replace(".", ",")
+
+
+def piso_do_seco(alvo):
+    """Ate onde o seco pode esfriar o quarto: SECO_SOBRE abaixo do conforto, e nunca colado na trava."""
+    return max(alvo - SECO_SOBRE, SECO_TRAVA + 0.5)
+
+
+def _usar_seco(dentro, fora, umidade, alvo, em_seco):
+    if umidade is None:
+        return False
+    piso = piso_do_seco(alvo)
+    if em_seco:   # fica ate secar, chegar no piso ou esquentar demais
+        return (umidade > SECO_SAI_UMIDADE and dentro > piso and dentro < alvo + SECO_QUENTE_SAI
+                and fora <= SECO_FORA_SAI)
+    return (umidade >= SECO_ENTRA_UMIDADE and dentro >= piso + SECO_CURSO and dentro < alvo + SECO_QUENTE_ENTRA
+            and fora <= SECO_FORA_ENTRA)
+
+
+def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umidade_dentro=None, modo_atual=None):
     """Conforto adaptativo (ASHRAE 55): T_neutra = 0,31 x media externa recente + 17,8.
+
+    A escolha do modo tem histerese pelo modo em que o ar ja esta (modo_atual, t_work_mode):
+    - Frio: entra com o quarto FRIO_ENTRA acima do alvo (ou acima de TETO_VENTILAR, ou a noite) e fica
+      ate o quarto cair FRIO_SAI abaixo do alvo. No meio quem regula e o termostato do proprio ar.
+    - Seco: entra com umidade >= 70% e o quarto entre o alvo e alvo + 1,5 (mais quente que isso, o frio
+      vem primeiro); fica ate a umidade cair a 60%, o quarto chegar no piso (alvo - 1,5) ou esquentar a
+      alvo + 2,5. Nunca manda temperatura: o aparelho trava o seco em 22 °C.
+    - Ventilar: o que sobra com o ar ligado ou com o quarto pouco acima do alvo; desligado e mais fresco
+      que o alvo, nao precisa do ar.
 
     Devolve {acao, titulo, texto, cena?}. 'cena' e o que o botao Aplicar manda ao ar
     (mesmo formato das cenas, entregue a casa.comando_da_cena).
@@ -265,7 +313,9 @@ def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umida
         return {"acao": "desligar", "titulo": "Desligue e abra as janelas",
                 "texto": "Lá fora está %.0f °C e dentro %.0f °C, sem previsão de calor forte hoje." % (fora, dentro),
                 "cena": {"desligar": True}}
-    if abs(dentro - neutra) <= 1 and fora < dentro and (umidade is None or umidade < 70):
+    em_frio, em_seco = bool(ligado) and modo_atual == 2, bool(ligado) and modo_atual == 3
+    # No seco quem decide ficar ou sair e a faixa do seco, la embaixo (senao ele passaria do piso).
+    if not em_seco and abs(dentro - neutra) <= 1 and fora < dentro and (umidade is None or umidade < 70):
         return {"acao": "nada", "titulo": "Não precisa do ar",
                 "texto": "Dentro %.0f °C, perto do conforto de %.1f °C, e lá fora está mais fresco." % (dentro, neutra)}
     if media < 18 or fora < 16:
@@ -277,23 +327,30 @@ def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umida
                 "texto": "Está frio (fora %.0f °C). Conforto estimado em %.1f °C." % (fora, neutra),
                 "cena": {"modo": 1, "temp": alvo, "vento": -1, "noturno": -1}}
     noite = hora >= 22 or hora < 6
-    alvo = int(min(26, max(23, round(neutra))))
-    # Ventilador: alto enquanto o quarto esta longe do alvo (esfria mais rapido na primeira vez que liga),
-    # baixo quando chega perto (mais quieto e economiza). No meio, mantem o que esta.
-    falta = dentro - alvo
-    vento = -3 if falta >= 2.5 else -2 if falta <= 1 else -1
-    seco_ok = umidade is not None and umidade >= 70 and fora <= 27
-    # Mais fresco que o alvo e abafado: so ventilar. Pouco acima do conforto e sem umidade alta: ventilar basta.
-    if dentro <= neutra + 1.5 and dentro <= 28 and not seco_ok and dentro - fora < 1 and not noite:
-        return {"acao": "ventilar", "titulo": "Ventilar",
-                "texto": "Dentro %.0f °C, perto do conforto de %.1f °C: o ventilador basta." % (dentro, neutra),
-                "cena": {"modo": 0, "temp": -1, "vento": -2, "noturno": -1}}
-    if seco_ok:
-        return {"acao": "seco", "titulo": "Desumidificar a %d °C" % alvo,
-                "texto": "Umidade em %.0f%%. O modo seco incomoda menos que o frio." % umidade,
-                "cena": {"modo": 3, "temp": alvo, "vento": vento, "noturno": -1}}
-    cena = {"modo": 2, "temp": alvo, "vento": vento, "noturno": 1 if noite else -1}
-    return {"acao": "frio", "titulo": "Frio a %d °C%s" % (alvo, " no modo dormir" if noite else ""),
-            "texto": "Conforto estimado em %.1f °C (dentro %.0f °C, fora %.0f °C)%s." % (
-                neutra, dentro, fora, ", ventilador alto para esfriar logo" if vento == -3 else ", ventilador baixo"
-                if vento == -2 else ""), "cena": cena}
+    alvo = int(min(CONFORTO_MAX, max(CONFORTO_MIN, round(neutra))))
+    if _usar_seco(dentro, fora, umidade, alvo, em_seco):
+        # Sem "temp" (o alvo e fixo do aparelho) e sem mexer no ventilador (o seco regula sozinho).
+        piso = piso_do_seco(alvo)
+        return {"acao": "seco", "titulo": "Desumidificar",
+                "texto": "Umidade em %.0f%%. Neste modo o aparelho trava em %d °C, então o automático sai dele quando "
+                         "a umidade cair a %d%% ou o quarto chegar a %s °C." % (umidade, SECO_TRAVA, SECO_SAI_UMIDADE, _c(piso)),
+                "cena": {"modo": 3, "temp": -1, "vento": -1, "noturno": -1}}
+    # Desligado e mais fresco que o alvo: nao ha por que ligar o ar, nem a noite.
+    if not ligado and dentro < alvo:
+        return {"acao": "nada", "titulo": "Não precisa do ar",
+                "texto": "Dentro %.0f °C, abaixo do conforto de %.1f °C." % (dentro, neutra)}
+    # Frio: entra longe do alvo e so sai abaixo dele; no meio o termostato do proprio ar segura o alvo.
+    quente = dentro >= alvo + FRIO_ENTRA or dentro > TETO_VENTILAR
+    if noite or (dentro > alvo - FRIO_SAI if em_frio else quente):
+        # Ventilador: alto enquanto o quarto esta longe do alvo (esfria mais rapido na primeira vez que liga),
+        # baixo quando chega perto (mais quieto e economiza). No meio, mantem o que esta.
+        falta = dentro - alvo
+        vento = -3 if falta >= 2.5 else -2 if falta <= 1 else -1
+        cena = {"modo": 2, "temp": alvo, "vento": vento, "noturno": 1 if noite else -1}
+        return {"acao": "frio", "titulo": "Frio a %d °C%s" % (alvo, " no modo dormir" if noite else ""),
+                "texto": "Conforto estimado em %.1f °C (dentro %.0f °C, fora %.0f °C)%s." % (
+                    neutra, dentro, fora, ", ventilador alto para esfriar logo" if vento == -3 else ", ventilador baixo"
+                    if vento == -2 else ""), "cena": cena}
+    return {"acao": "ventilar", "titulo": "Ventilar",
+            "texto": "Dentro %.0f °C, perto do conforto de %.1f °C: o ventilador basta." % (dentro, neutra),
+            "cena": {"modo": 0, "temp": -1, "vento": -2, "noturno": -1}}

@@ -63,6 +63,20 @@ class Automatico(Base):
         self.assertEqual(len(self.enviados), 1)
         self.assertIsNotNone(automatico.passo(agora=12_000 + 3700, hora=14, sugerir=lambda: (ar(t_temp=21), FRIO, None)))
 
+    def test_trava_do_seco_nao_e_mudanca_manual(self):
+        # no seco o aparelho poe o alvo em 22 sozinho: isso nao pode pausar o automatico
+        seco = {"acao": "seco", "titulo": "Desumidificar", "texto": "t", "cena": {"modo": 3, "temp": -1, "vento": -1, "noturno": -1}}
+        self.comando.stop()
+        self.ligar(pausaMin=60)
+        self.assertEqual(automatico.passo(agora=10_000, hora=14, sugerir=lambda: (ar(t_temp=25), seco, None)), "Desumidificar")
+        self.assertNotIn("t_temp", self.enviados[-1])
+        self.assertIsNone(automatico.passo(agora=10_400, hora=14, sugerir=lambda: (ar(t_work_mode=3, t_temp=22), seco, None)))
+        self.assertEqual(automatico.situacao()["pausaAte"], 0)
+        # ja no frio, mexer no alvo continua sendo mudanca manual
+        automatico.passo(agora=12_000, hora=14, sugerir=lambda: (ar(t_work_mode=3, t_temp=22), FRIO, None))
+        automatico.passo(agora=12_400, hora=14, sugerir=lambda: (ar(t_work_mode=2, t_temp=21), FRIO, None))
+        self.assertIn("pausado", automatico.situacao()["registro"][0]["texto"])
+
     def test_nao_liga_sozinho_por_padrao(self):
         self.ligar()
         self.assertIsNone(automatico.passo(agora=10_000, hora=14, sugerir=lambda: (ar(t_power=0), FRIO, None)))
