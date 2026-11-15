@@ -200,12 +200,75 @@
   .sugestao { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; padding:12px 14px; background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; }
   .sugestao b { display:block; } .sugestao span { font-size:13px; color:var(--muted); }
   #clima { margin-bottom:14px; }
-  .clima-agora { display:flex; align-items:baseline; gap:12px; } .clima-agora b { font:600 30px "Segoe UI Variable Display","Segoe UI",sans-serif; } .clima-agora span { color:var(--muted); font-size:13px; }
-  .clima-horas, .clima-dias { display:grid; gap:6px; text-align:center; margin-top:10px; }
-  .clima-horas { grid-template-columns:repeat(6,1fr); } .clima-dias { grid-template-columns:repeat(5,1fr); }
-  .clima-horas > div, .clima-dias > div { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:13px; }
-  .clima-horas small, .clima-dias small { color:var(--muted); font-size:12px; } .clima-dias span { color:var(--muted); font-size:12px; }
-  .clima-horas svg, .clima-dias svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  /* ---------- tempo, no estilo do app Tempo do iPhone ---------- */
+  .cartao.tempo { overflow:hidden; }
+  .tic { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .tic .s { stroke:#EFA51C; } .tic .l { stroke:#B9962E; } .tic .g { stroke:#2F8AF0; } .tic .r { stroke:#EFA51C; }
+  @media (prefers-color-scheme:dark) { .tic .s, .tic .r { stroke:#F5B82E; } .tic .l { stroke:#E9D9A0; } .tic .g { stroke:#4FA3F7; } }
+  .theroi .tic .s { stroke:#FFD15C; } .theroi .tic .l { stroke:#F3E3A6; }
+  .tsi { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .theroi { color:#fff; padding:18px 22px 22px; background:linear-gradient(160deg,#3D7DD8,#78B3EA); }
+  .theroi.ceu-limpo.escuro, .theroi.ceu-noite { background:linear-gradient(160deg,#0F1B36,#2B3F68); }
+  .theroi.ceu-nublado { background:linear-gradient(160deg,#5D6E82,#93A3B5); } .theroi.ceu-nublado.escuro { background:linear-gradient(160deg,#262E3B,#4A5566); }
+  .theroi.ceu-chuva { background:linear-gradient(160deg,#41566E,#7189A2); } .theroi.ceu-chuva.escuro { background:linear-gradient(160deg,#1C2636,#3A4A60); }
+  .theroi.ceu-tempestade { background:linear-gradient(160deg,#2B2E3E,#545A72); }
+  .theroi .tic .n { stroke:#fff; }
+  .th-topo { display:flex; justify-content:space-between; align-items:center; font-size:13px; opacity:.92; }
+  .th-local { display:flex; align-items:center; gap:6px; font-weight:600; font-size:14px; }
+  .th-at { font-size:12px; opacity:.8; }
+  .th-meio { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:6px; }
+  .th-temp { font:200 76px/1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; letter-spacing:-2px; margin-left:-3px; }
+  .th-cond { font-size:18px; font-weight:600; margin-top:6px; }
+  .th-mm { font-size:13.5px; opacity:.9; margin-top:4px; white-space:pre-wrap; }
+  .tic.th-ic { width:96px; height:96px; stroke-width:1.1; filter:drop-shadow(0 4px 12px rgba(0,0,0,.18)); }
+  .tcorpo { display:flex; flex-direction:column; gap:12px; }
+  .tcorpo .sugestao { margin:0; }
+  .tsec { background:var(--surface-alt); border:1px solid var(--border); border-radius:12px; padding:12px 14px; min-width:0; }
+  .tsec-tit { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .tresumo { font-size:13px; color:var(--text); padding-bottom:8px; margin-bottom:6px; border-bottom:1px solid var(--border); }
+  .thoras { display:flex; gap:2px; overflow-x:auto; scroll-snap-type:x proximity; padding-bottom:4px; scrollbar-width:thin; }
+  .th-h { flex:none; width:58px; scroll-snap-align:start; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:13px; }
+  .th-h small { color:var(--muted); font-size:12px; white-space:nowrap; } .th-h.agora small { color:var(--text); font-weight:600; }
+  .th-h > span { font-size:11px; font-weight:600; min-height:13px; } .th-h b { font-weight:600; font-size:15px; }
+  .th-h.evento { width:68px; } .th-h.evento b { font-size:11.5px; font-weight:600; white-space:nowrap; }
+  .azul { color:#3B8EF0; } @media (prefers-color-scheme:dark) { .azul { color:#64AEFF; } }
+  .tgrade { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:start; }
+  .tseg { margin-bottom:10px; }
+  .tdias { display:flex; flex-direction:column; }
+  .tdia { display:grid; grid-template-columns:64px 44px 34px minmax(40px,1fr) 34px; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--border); font-size:14px; }
+  .tdia:first-child { border-top:0; }
+  .tnome { font-weight:600; white-space:nowrap; }
+  .tic-col { display:flex; flex-direction:column; align-items:center; gap:0; } .tic-col small { font-size:10.5px; font-weight:600; white-space:nowrap; }
+  .tmin { color:var(--muted); text-align:right; } .tmax { font-weight:600; }
+  .tbar { position:relative; height:5px; border-radius:3px; background:var(--border); }
+  .tbar i { position:absolute; top:0; bottom:0; border-radius:3px; }
+  .tbar b, .tuv b { position:absolute; top:50%; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%; background:#fff; box-shadow:0 0 0 1.5px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.35); }
+  .tdet { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .ttile { display:flex; flex-direction:column; min-height:120px; }
+  .tval { font:400 28px/1.1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; }
+  .tval small { font-size:14px; color:var(--muted); }
+  .tfrase { margin-top:auto; padding-top:8px; font-size:12.5px; color:var(--muted); line-height:1.3; }
+  .tvento { display:flex; align-items:center; gap:6px; margin-top:6px; font-weight:600; font-size:13px; color:var(--muted); }
+  .tseta { width:22px; height:22px; fill:var(--accent); transition:transform .3s; }
+  .tuv { position:relative; height:5px; border-radius:3px; margin-top:10px; background:linear-gradient(90deg,#3EB55A,#E5D22D 30%,#F39A2B 55%,#E5463D 75%,#9D4FD8); }
+  .tarco-svg { width:100%; max-width:150px; height:auto; margin-top:6px; overflow:visible; }
+  .tarco-svg .tarco { fill:none; stroke:var(--border); stroke-width:2; stroke-dasharray:3 3; }
+  .tarco-svg .tarco-feito { fill:none; stroke:#F5B82E; stroke-width:2.2; }
+  .tarco-svg .thor { stroke:var(--muted); stroke-width:1; opacity:.5; }
+  .tarco-svg .tsolp { fill:#F5B82E; stroke:var(--surface-alt); stroke-width:2; }
+  .tgraf { width:100%; height:auto; display:block; overflow:visible; }
+  .tgraf .tg-faixa { fill:#F5A342; opacity:.12; } .tgraf .tg-grade { stroke:var(--border); stroke-width:1; }
+  .tgraf .tg-eixo { fill:var(--muted); font-size:11px; } .tgraf .tg-hoje-t { fill:var(--text); font-weight:600; }
+  .tgraf .tg-passado { fill:var(--text); opacity:.035; } .tgraf .tg-hoje { stroke:var(--text); stroke-width:1; stroke-dasharray:3 3; opacity:.5; }
+  .tgraf .tg-max { fill:none; stroke:#F08A24; stroke-width:2.2; stroke-linejoin:round; } .tgraf .tg-min { fill:none; stroke:#3B8EF0; stroke-width:2.2; stroke-linejoin:round; }
+  .tgraf .tg-pmax { fill:#F08A24; } .tgraf .tg-pmin { fill:#3B8EF0; }
+  .tg-legenda { display:flex; gap:14px; font-size:12px; color:var(--muted); margin:-2px 0 4px; }
+  .tg-legenda span::before { content:""; display:inline-block; width:10px; height:3px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+  .tg-lmax::before { background:#F08A24; } .tg-lmin::before { background:#3B8EF0; } .tg-lpas::before { background:var(--text); opacity:.15; height:8px !important; }
+  .tfonte { font-size:11.5px; color:var(--faint); text-align:right; }
+  @media (max-width:960px) { .tgrade { grid-template-columns:1fr; } }
+  @media (max-width:760px) { .theroi { padding:16px 16px 18px; } .th-temp { font-size:64px; } .tic.th-ic { width:76px; height:76px; } .tcorpo { padding:12px; } }
+  @media (max-width:420px) { .tdia { grid-template-columns:52px 40px 30px minmax(30px,1fr) 30px; gap:6px; } .tdet { gap:8px; } .ttile { min-height:110px; } }
   .ordem { display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--border); }
   .ordem:first-child { border-top:0; } .ordem > span { flex:1; }
   .ordem .b { padding:2px 10px; } .ordem.fora > span { color:var(--muted); text-decoration:line-through; }

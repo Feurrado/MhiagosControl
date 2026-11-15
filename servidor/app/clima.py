@@ -16,20 +16,30 @@ VALIDADE = 15 * 60
 _trava = threading.Lock()
 _cache = {}     # (lat, lon) -> (instante, dados)
 
-# Codigos WMO da Open-Meteo agrupados em poucas descricoes.
-_CODIGOS = ((0, "Céu limpo", "sol"), (2, "Parcialmente nublado", "sol-nuvem"), (3, "Nublado", "nuvem"),
-            (48, "Neblina", "nuvem"), (57, "Garoa", "chuva"), (67, "Chuva", "chuva"), (77, "Neve", "nuvem"),
-            (82, "Pancadas de chuva", "chuva"), (86, "Neve", "nuvem"), (99, "Tempestade", "chuva"))
+# Codigos WMO da Open-Meteo: (ate este codigo, texto, icone). O icone de dia vira o de noite em _NOITE.
+_CODIGOS = ((0, "Céu limpo", "sol"), (1, "Predomínio de sol", "sol-nuvem"), (2, "Parcialmente nublado", "sol-nuvem"),
+            (3, "Nublado", "nuvem"), (48, "Neblina", "neblina"), (55, "Garoa", "garoa"), (57, "Garoa congelante", "garoa"),
+            (63, "Chuva", "chuva"), (65, "Chuva forte", "chuva-forte"), (67, "Chuva congelante", "chuva"), (77, "Neve", "neve"),
+            (81, "Pancadas de chuva", "chuva"), (82, "Pancadas fortes", "chuva-forte"), (86, "Neve", "neve"),
+            (99, "Tempestade", "tempestade"))
+_NOITE = {"sol": "lua", "sol-nuvem": "lua-nuvem"}
+
+PASSADO = 7      # dias de historico
+FUTURO = 10      # dias de previsao (contando hoje)
+HORAS = 24       # horas na faixa por hora
 
 
-def descricao(codigo):
-    """(texto, icone) de um codigo WMO."""
+def descricao(codigo, dia=True):
+    """(texto, icone) de um codigo WMO; de noite, sol vira lua."""
     try:
         c = int(codigo)
     except (TypeError, ValueError):
         return "", "nuvem"
     for limite, texto, icone in _CODIGOS:
         if c <= limite:
+            if not dia:
+                texto = "Céu limpo" if c == 0 else texto
+                icone = _NOITE.get(icone, icone)
             return texto, icone
     return "", "nuvem"
 
@@ -38,36 +48,98 @@ def arredondar(v, casas=1):
     return None if v is None else round(float(v), casas)
 
 
+def _serie(bloco, nome, n):
+    """A coluna 'nome' do bloco (hourly/daily) com o tamanho certo; None onde faltar."""
+    v = bloco.get(nome) or []
+    return list(v) + [None] * (n - len(v))
+
+
+def _hora(iso):
+    return (iso or "")[11:16]
+
+
 def _normalizar(j):
-    """Do JSON da Open-Meteo para o que o painel desenha."""
+    """Do JSON da Open-Meteo para o que o painel desenha (campos novos so se somam aos antigos)."""
     atual = j.get("current") or {}
-    texto, icone = descricao(atual.get("weather_code"))
-    r = {"agora": {"temp": arredondar(atual.get("temperature_2m")), "umidade": arredondar(atual.get("relative_humidity_2m"), 0),
-                   "texto": texto, "icone": icone}, "horas": [], "dias": []}
+    agora_iso = atual.get("time") or ""
+    hoje = agora_iso[:10]
+    dia_agora = atual.get("is_day", 1) != 0
+    texto, icone = descricao(atual.get("weather_code"), dia_agora)
+
     h = j.get("hourly") or {}
     tempos = h.get("time") or []
-    inicio = atual.get("time") or ""
-    # Proximas 6 horas a partir da hora cheia seguinte.
+    n = len(tempos)
+    h_temp, h_cod, h_prob, h_dia, h_uv = (_serie(h, k, n) for k in
+                                          ("temperature_2m", "weather_code", "precipitation_probability", "is_day", "uv_index"))
+    uv_agora = None
     for i, t in enumerate(tempos):
-        if t > inicio and len(r["horas"]) < 6:
-            tx, ic = descricao((h.get("weather_code") or [None] * len(tempos))[i])
-            r["horas"].append({"hora": t[11:16], "temp": arredondar(h["temperature_2m"][i]), "icone": ic, "texto": tx})
+        if t[:13] == agora_iso[:13]:
+            uv_agora = h_uv[i]
+
+    r = {"agora": {"temp": arredondar(atual.get("temperature_2m")), "umidade": arredondar(atual.get("relative_humidity_2m"), 0),
+                   "texto": texto, "icone": icone, "dia": dia_agora,
+                   "sensacao": arredondar(atual.get("apparent_temperature")),
+                   "vento": arredondar(atual.get("wind_speed_10m"), 0), "rajada": arredondar(atual.get("wind_gusts_10m"), 0),
+                   "direcao": arredondar(atual.get("wind_direction_10m"), 0), "pressao": arredondar(atual.get("pressure_msl"), 0),
+                   "nuvens": arredondar(atual.get("cloud_cover"), 0), "chuva": arredondar(atual.get("precipitation")),
+                   "uv": arredondar(uv_agora)},
+         "horas": [], "dias": [], "passado": []}
+
     d = j.get("daily") or {}
     dias = d.get("time") or []
-    hoje = (atual.get("time") or "")[:10]
-    medias = []
+    m = len(dias)
+    d_max, d_min, d_cod, d_mm, d_prob, d_nasc, d_por, d_uv, d_vento = (_serie(d, k, m) for k in (
+        "temperature_2m_max", "temperature_2m_min", "weather_code", "precipitation_sum", "precipitation_probability_max",
+        "sunrise", "sunset", "uv_index_max", "wind_speed_10m_max"))
     for i, dia in enumerate(dias):
-        mx, mn = d["temperature_2m_max"][i], d["temperature_2m_min"][i]
+        tx, ic = descricao(d_cod[i])
+        x = {"dia": dia, "max": arredondar(d_max[i]), "min": arredondar(d_min[i]), "icone": ic, "texto": tx,
+             "chuvaMm": arredondar(d_mm[i])}
         if dia < hoje:
-            if mx is not None and mn is not None:
-                medias.append((mx + mn) / 2)
-            continue
-        if len(r["dias"]) < 5:
-            tx, ic = descricao((d.get("weather_code") or [None] * len(dias))[i])
-            r["dias"].append({"dia": dia, "max": arredondar(mx), "min": arredondar(mn), "icone": ic, "texto": tx})
+            r["passado"].append(x)
+        elif len(r["dias"]) < FUTURO:
+            x.update(prob=arredondar(d_prob[i], 0), nascer=_hora(d_nasc[i]), por=_hora(d_por[i]),
+                     uvMax=arredondar(d_uv[i]), ventoMax=arredondar(d_vento[i], 0))
+            r["dias"].append(x)
+    r["passado"] = r["passado"][-PASSADO:]
+
+    # Proximas 24 horas a partir da hora cheia seguinte, com o nascer e o por do sol no meio (como no iPhone).
+    for i, t in enumerate(tempos):
+        if t > agora_iso and len(r["horas"]) < HORAS:
+            tx, ic = descricao(h_cod[i], h_dia[i] != 0)
+            r["horas"].append({"t": t, "hora": _hora(t), "temp": arredondar(h_temp[i]), "icone": ic, "texto": tx,
+                               "prob": arredondar(h_prob[i], 0)})
+    if r["horas"]:
+        ini, fim = agora_iso, r["horas"][-1]["t"]
+        eventos = [(iso, tipo) for iso, tipo in [(x, "nascer") for x in d_nasc] + [(x, "por") for x in d_por]
+                   if iso and ini < iso <= fim]
+        for iso, tipo in eventos:
+            pos = next((k for k, x in enumerate(r["horas"]) if x["t"] > iso), len(r["horas"]))
+            r["horas"].insert(pos, {"t": iso, "hora": _hora(iso), "tipo": tipo})
+
+    medias = [(x["max"] + x["min"]) / 2 for x in r["passado"] if x["max"] is not None and x["min"] is not None]
     r["mediaRecente"] = arredondar(sum(medias) / len(medias)) if medias else None
     r["maxHoje"] = r["dias"][0]["max"] if r["dias"] else None
+    r["destaques"] = _destaques(r)
     return r
+
+
+def _destaques(r):
+    """Uma ou duas frases como as do app Tempo: chuva chegando e comparacao com a semana."""
+    l = []
+    chovendo = (r["agora"].get("chuva") or 0) > 0
+    proxima = next((x for x in r["horas"][:12] if (x.get("prob") or 0) >= 50), None)
+    if proxima and not chovendo:
+        l.append("Chuva provável por volta das %s (%d%%)." % (proxima["hora"], proxima["prob"]))
+    elif chovendo:
+        seca = next((x for x in r["horas"][:12] if x.get("prob") is not None and x["prob"] < 30), None)
+        l.append("Chovendo agora" + (", deve parar por volta das %s." % seca["hora"] if seca else "."))
+    maximas = [x["max"] for x in r["passado"] if x["max"] is not None]
+    if maximas and r["maxHoje"] is not None:
+        dif = r["maxHoje"] - sum(maximas) / len(maximas)
+        if abs(dif) >= 2:
+            l.append("Hoje a máxima fica %.0f° %s que a média dos últimos %d dias." % (abs(dif), "acima" if dif > 0 else "abaixo", len(maximas)))
+    return l
 
 
 def previsao(lat, lon, agora=None):
@@ -80,9 +152,12 @@ def previsao(lat, lon, agora=None):
         return dict(c[1], velho=False)
     try:
         r = httpx.get(URL_PREVISAO, timeout=8, params={
-            "latitude": chave[0], "longitude": chave[1], "timezone": "auto", "past_days": 3, "forecast_days": 5,
-            "current": "temperature_2m,relative_humidity_2m,weather_code", "hourly": "temperature_2m,weather_code",
-            "daily": "temperature_2m_max,temperature_2m_min,weather_code"})
+            "latitude": chave[0], "longitude": chave[1], "timezone": "auto", "past_days": PASSADO, "forecast_days": FUTURO,
+            "current": "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,"
+                       "cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+            "hourly": "temperature_2m,weather_code,precipitation_probability,is_day,uv_index",
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,"
+                     "sunrise,sunset,uv_index_max,wind_speed_10m_max"})
         r.raise_for_status()
         dados = _normalizar(r.json())
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
