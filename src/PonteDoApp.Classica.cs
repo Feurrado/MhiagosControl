@@ -37,6 +37,14 @@ namespace MhiagosControl
                 case "github": Navegador.Abrir(Repositorio); return Feito(id, true);
                 case "visao.sistema": Sistema(id); return null;
                 case "metricas.acao": return AcaoDeMetricas(id, a);
+                case "specs.copiar":
+                    {
+                        string texto = SpecSheet.EmTexto();
+                        if (string.IsNullOrEmpty(texto)) return Falha(id, T.SpecsFailed);
+                        try { System.Windows.Forms.Clipboard.SetText(texto); }
+                        catch (Exception ex) { Log.Error("copiar especificacoes", ex); return Falha(id, T.CasaFalhaInesperada); }
+                        return Feito(id, T.SpecsCopied);
+                    }
                 case "baterias": return Feito(id, Baterias());
                 case "bateria.detalhes": DetalhesDaBateria.Alternar(Texto(a, "chave")); return Feito(id, Baterias());
                 default: return Falha(id, "pedido desconhecido");

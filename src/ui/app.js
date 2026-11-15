@@ -183,20 +183,6 @@
     return c;
   }
 
-  /// O cartao das paginas que ainda nao passaram para o desenho da classica.
-  function cartaoSimples(titulo, classe) {
-    var c = el("div", "cartao simples" + (classe ? " " + classe : ""));
-    if (titulo) c.appendChild(el("h2", "", titulo));
-    return c;
-  }
-
-  function linha(k, v) {
-    var valor = el("span", "v", v);
-    var l = el("div", "linha", null, el("span", "k", k), valor);
-    l.valor = valor;
-    return l;
-  }
-
   /// Toggle: trilho de 38 x 20 com o botao branco.
   function troca(ligado, aoMudar) {
     var b = el("button", "troca");
@@ -1700,37 +1686,121 @@
   // ---------------- Especificacoes ----------------
 
   MONTAR.specs = function (alvo) {
-    var grade = el("div", "grade larga");
-    alvo.appendChild(grade);
-    var vivo = true;
-    function desenhar() {
-      limpar(grade);
-      specs.forEach(function (g) {
-        var c = cartaoSimples(g.titulo);
-        if (g.destaque) {
-          var d = el("div", "valor", g.destaque);
-          d.style.fontSize = "17px"; d.style.marginBottom = "8px"; d.style.userSelect = "text";
-          c.appendChild(d);
-        }
-        var ls = el("div", "linhas");
-        g.linhas.forEach(function (l) { ls.appendChild(linha(l[0], l[1])); });
-        c.appendChild(ls);
-        grade.appendChild(c);
+    var vivo = true, categoria = 0, estado = "carregando";
+    var copiar = botao(T("SpecsCopy", t("Copiar tudo", "Copy all")), "b");
+    copiar.disabled = true;
+    var texto = el("span", "sp-estado", T("SpecsLoading", t("Consultando o sistema…", "Querying the system…")));
+    alvo.appendChild(el("div", "sp-topo", null, copiar, texto));
+    var pilulas = el("div", "sp-cats");
+    var corpo = el("div", "sp-corpo");
+    alvo.appendChild(pilulas);
+    alvo.appendChild(corpo);
+
+    copiar.addEventListener("click", function () {
+      if (estado === "falhou") { coletar(); return; }
+      pedir("specs.copiar").then(function (m) { faixa(typeof m === "string" ? m : T("SpecsCopied", t("Especificações copiadas", "Specs copied"))); },
+        function (e) { faixa(e.message, true); });
+    });
+
+    function ordenados() {
+      var ordem = [T("SpecCpu"), T("SpecGpu"), T("SpecRam"), T("SpecStorage"), T("SpecBoard"), T("SpecOs"), T("SpecNetwork")];
+      var fila = [];
+      ordem.forEach(function (n) { specs.forEach(function (g) { if (g.titulo === n && fila.indexOf(g) < 0) fila.push(g); }); });
+      specs.forEach(function (g) { if (fila.indexOf(g) < 0) fila.push(g); });
+      return fila;
+    }
+
+    function blocoDoResumo(g) {
+      var b = g.bloco || { titulo: g.titulo, destaque: g.destaque || (g.linhas[0] ? g.linhas[0][1] : ""), sub: "", largo: false, etiquetas: [], slots: [], slotsTxt: "", discos: [] };
+      var c = el("div", "cartao sp-bloco");
+      c.appendChild(el("div", "sp-bt", null, el("span", "", g.titulo), el("span", "ver", T("SpecSeeAll", t("Ver tudo ›", "See all ›")))));
+      var dest = el("div", "sp-dest", b.destaque); dest.title = b.destaque;
+      c.appendChild(dest);
+      if (b.sub) c.appendChild(el("div", "sp-sub", b.sub));
+      if (b.etiquetas.length) {
+        var et = el("div", "sp-tags");
+        b.etiquetas.forEach(function (x) { et.appendChild(el("span", "", x)); });
+        c.appendChild(et);
+      }
+      if (b.slots.length) {
+        var ln = el("div", "sp-slots" + (b.slotsNomeados ? " nom" : ""));
+        b.slots.forEach(function (s) {
+          var q = el("span", "sl" + (s.cheio ? " cheio" : ""), null, el("i"), b.slotsNomeados ? el("em", "", s.nome) : null);
+          if (s.dica) q.title = s.dica;
+          ln.appendChild(q);
+        });
+        ln.appendChild(el("small", "", b.slotsTxt));
+        c.appendChild(ln);
+      }
+      if (b.discos.length) {
+        var ds = el("div", "sp-discos");
+        b.discos.forEach(function (d) {
+          var cab = el("div", "dl", null, el("b", "", d.nome), el("span", "", d.direita));
+          ds.appendChild(cab);
+          if (d.pct !== null && d.pct !== undefined) {
+            var cheio = el("i"); cheio.style.width = Math.max(1, Math.round(d.pct * 1000) / 10) + "%";
+            ds.appendChild(el("div", "trilho", null, cheio));
+          }
+        });
+        c.appendChild(ds);
+      }
+      c.tabIndex = 0;
+      c.addEventListener("click", function () { escolher(specs.indexOf(g) + 1); });
+      c.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); escolher(specs.indexOf(g) + 1); } });
+      c.largo = !!b.largo;
+      return c;
+    }
+
+    function ficha(g) {
+      var c = cartao(g.titulo, "sp-ficha");
+      g.linhas.forEach(function (l) {
+        c.corpo.appendChild(el("div", "sp-lin", null, el("span", "r", l[0]), el("span", "v", l[1])));
       });
-      if (!specs.length) grade.appendChild(el("div", "vazio", t("Nada para mostrar.", "Nothing to show.")));
+      return c;
+    }
+
+    function desenhar() {
+      limpar(pilulas); limpar(corpo);
+      var nomes = [T("SpecsOverview", t("Resumo", "Overview"))].concat(specs.map(function (g) { return g.titulo; }));
+      nomes.forEach(function (n, i) {
+        var b = botao(n, "b" + (i === categoria ? " p" : ""), function () { escolher(i); });
+        pilulas.appendChild(b);
+      });
+      if (categoria > 0 && specs[categoria - 1]) { corpo.appendChild(ficha(specs[categoria - 1])); return; }
+      var mosaico = el("div", "sp-mosaico");
+      var fila = ordenados().map(blocoDoResumo), i = 0;
+      while (i < fila.length) {
+        var a = fila[i], b = (!a.largo && i + 1 < fila.length && !fila[i + 1].largo) ? fila[i + 1] : null;
+        if (!b) { a.classList.add("inteiro"); mosaico.appendChild(a); i++; continue; }
+        mosaico.appendChild(a); mosaico.appendChild(b); i += 2;
+      }
+      corpo.appendChild(mosaico);
+    }
+
+    function escolher(i) { categoria = i; desenhar(); var m = document.getElementById("main"); if (m) m.scrollTop = 0; }
+
+    function pronto() {
+      if (!vivo) return;
+      if (!specs || !specs.length) {
+        estado = "falhou";
+        texto.textContent = T("SpecsFailed", t("Não foi possível consultar o sistema. Os detalhes estão no log.", "Couldn't query the system. Details are in the log."));
+        texto.classList.add("claro");
+        copiar.textContent = T("SpecsRetry", t("Tentar de novo", "Try again")); copiar.disabled = false;
+        return;
+      }
+      estado = "pronto";
+      texto.textContent = T("SpecsNote", ""); texto.classList.remove("claro"); texto.classList.add("nota");
+      copiar.textContent = T("SpecsCopy", t("Copiar tudo", "Copy all")); copiar.disabled = false;
+      desenhar();
     }
     function coletar() {
-      limpar(grade);
-      grade.appendChild(el("div", "vazio", t("Lendo o hardware…", "Reading the hardware…")));
-      pedir("specs").then(function (r) { specs = r || []; if (vivo) desenhar(); },
-        function (e) { if (vivo) { limpar(grade); grade.appendChild(el("div", "vazio", e.message)); } });
+      estado = "carregando"; specs = null;
+      copiar.disabled = true; copiar.textContent = T("SpecsCopy", t("Copiar tudo", "Copy all"));
+      texto.textContent = T("SpecsLoading", t("Consultando o sistema…", "Querying the system…")); texto.className = "sp-estado";
+      limpar(pilulas); limpar(corpo);
+      pedir("specs").then(function (r) { specs = r || []; pronto(); }, function () { specs = []; pronto(); });
     }
-    var de = el("button", "b", t("Ler de novo", "Read again"));
-    de.type = "button";
-    de.addEventListener("click", coletar);
-    var barraDeSpecs = el("div", "barra-de-acoes", null, de);
-    alvo.insertBefore(barraDeSpecs, grade);
-    if (specs) desenhar(); else coletar();
+    if (specs) pronto(); else coletar();
     return { sair: function () { vivo = false; } };
   };
 

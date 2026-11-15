@@ -349,6 +349,9 @@ namespace MhiagosControl
                             linhas.Add(par);
                         }
                         d["linhas"] = linhas;
+                        // O resumo da classica (BlocoDeSpec): se falhar, a pagina cai no destaque simples.
+                        try { using (BlocoDeSpec b = new BlocoDeSpec(g)) d["bloco"] = b.Modelo(); }
+                        catch (Exception ex) { Log.Error("interface nova: bloco de especificacao", ex); d["bloco"] = null; }
                         grupos.Add(d);
                     }
                     resposta = Feito(id, grupos);
