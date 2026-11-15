@@ -174,6 +174,10 @@ namespace MhiagosControl
                     Verdade(volta != null && PonteOk(volta), "ponte: a resposta vira JSON valido");
                 }
 
+                // baterias: lista (pode vir vazia sem aparelhos)
+                r = PedirNaPonte(ponte, "{\"id\":2,\"m\":\"baterias\"}");
+                Verdade(PonteOk(r) && r.ContainsKey("r") && r["r"] is List<object>, "ponte: baterias devolve uma lista");
+
                 // perfil.salvar
                 r = PedirNaPonte(ponte, "{\"id\":1,\"m\":\"perfil.salvar\",\"a\":{\"nome\":\"GPU\",\"p1\":\"cpu:temp\",\"p2\":\"\",\"fahrenheit\":true,\"percent\":true,\"div1\":10,\"div2\":0,\"rodizio\":true}}");
                 Verdade(PonteOk(r), "ponte: perfil salvo");
