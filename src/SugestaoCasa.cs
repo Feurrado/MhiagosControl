@@ -9,26 +9,57 @@ namespace MhiagosControl
     /// <summary>
     /// A sugestao de conforto (GET /api/sugestao) e o tempo da cidade da casa com a qualidade do ar
     /// (GET /api/clima) para o cartao do tempo da Visao geral da interface nova. Busca em segundo
-    /// plano a cada 5 minutos, sem travar a interface, e some em silencio se o servidor for antigo
-    /// (sem a rota) ou nao responder.
+    /// plano, sem travar a interface, e some em silencio se o servidor for antigo (sem a rota) ou nao
+    /// responder. O tempo vale 5 minutos. A sugestao vale 1 minuto e e refeita na hora quando o ar muda
+    /// (ligou, trocou de modo ou de alvo, o quarto esfriou), para o app nao mostrar outra coisa que o painel web.
     /// </summary>
     internal static class SugestaoCasa
     {
-        private const int ValidadeSeg = 300;
+        private const int ValidadeSeg = 300, ValidadeDaSugestaoSeg = 60, MinimoEntreSeg = 5;
         private static readonly object _trava = new object();
         private static Dictionary<string, object> _atual, _tempo;
-        private static DateTime _em = DateTime.MinValue;
-        private static bool _buscando;
+        private static DateTime _em = DateTime.MinValue, _emSug = DateTime.MinValue, _pedidaEm = DateTime.MinValue;
+        private static bool _buscando, _buscandoSug;
+        private static string _arVisto;
 
         /// <summary>O tempo mudou (o widget da area de trabalho redesenha). Vem de outra thread.</summary>
         public static event EventHandler Mudou;
 
-        /// <summary>{titulo, texto, aplicavel} ou nulo. Dispara a busca se a ultima estiver velha.</summary>
-        public static Dictionary<string, object> Atual()
+        /// <summary>
+        /// {titulo, texto, aplicavel} ou nulo. Dispara a busca se a ultima estiver velha ou se o ar mudou
+        /// desde ela: estadoDoAr e um resumo do que pesa na sugestao (EstadoDoAr), ou nulo para so o prazo.
+        /// </summary>
+        public static Dictionary<string, object> Atual(string estadoDoAr)
         {
             if (!ServidorCasa.Configurado) return null;
-            Disparar();
+            bool buscar;
+            lock (_trava)
+            {
+                DateTime agora = DateTime.UtcNow;
+                bool arMudou = estadoDoAr != null && estadoDoAr != _arVisto;
+                buscar = !_buscandoSug && (agora - _pedidaEm).TotalSeconds >= MinimoEntreSeg && (arMudou || agora > _emSug);
+                if (buscar)
+                {
+                    _buscandoSug = true;
+                    _pedidaEm = agora;
+                    if (estadoDoAr != null) _arVisto = estadoDoAr;
+                }
+            }
+            if (buscar) ThreadPool.QueueUserWorkItem(delegate { BuscarSugestao(); });
             lock (_trava) return _atual;
+        }
+
+        /// <summary>O que pesa na sugestao e muda rapido: ligado, modo, alvo, temperatura e umidade do quarto.</summary>
+        internal static string EstadoDoAr(Aparelho ar)
+        {
+            if (ar == null) return null;
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            foreach (string k in new string[] { "t_power", "t_work_mode", "t_temp", "f_temp_in", "f_humidity" })
+            {
+                string v;
+                sb.Append(ar.Estado != null && ar.Estado.TryGetValue(k, out v) ? v : "").Append('|');
+            }
+            return sb.Append(ar.Online ? '1' : '0').ToString();
         }
 
         /// <summary>{local, temp, texto, icone, max, min, horas, aqi, aqiTexto, aqiCor} ou nulo.</summary>
@@ -54,14 +85,25 @@ namespace MhiagosControl
         public static void Aplicar()
         {
             ServidorCasa.AplicarSugestao();
-            lock (_trava) _em = DateTime.MinValue;
+            lock (_trava) { _emSug = DateTime.MinValue; _pedidaEm = DateTime.MinValue; }
         }
 
-        private static void Buscar()
+        private static void BuscarSugestao()
         {
             Dictionary<string, object> r = null;
             try { r = ServidorCasa.Sugestao(); }
             catch (Exception ex) { Log.Write("casa: sugestao indisponivel: " + ex.Message); }
+            lock (_trava)
+            {
+                _buscandoSug = false;
+                _atual = Montar(r);
+                // sem resposta (servidor antigo ou fora do ar) espera o prazo longo, para nao insistir a cada minuto
+                _emSug = DateTime.UtcNow.AddSeconds(r == null ? ValidadeSeg : ValidadeDaSugestaoSeg);
+            }
+        }
+
+        private static void Buscar()
+        {
             Dictionary<string, object> c = null;
             try { c = ServidorCasa.Clima(); }
             catch (Exception ex) { Log.Write("casa: clima indisponivel: " + ex.Message); }
@@ -71,7 +113,6 @@ namespace MhiagosControl
             {
                 _buscando = false;
                 _em = DateTime.UtcNow;
-                _atual = Montar(r);
                 mudou = Json.Escrever(tempo) != Json.Escrever(_tempo);
                 _tempo = tempo;
             }
