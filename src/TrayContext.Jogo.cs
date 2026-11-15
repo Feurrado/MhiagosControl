@@ -39,7 +39,7 @@ namespace MhiagosControl
                 // configuracao viva e fica aberta (ou minimizada) durante o
                 // jogo; pausar por ela deixava o perfil do jogo sem trocar e
                 // sem voltar ao padrao.
-                if (_settingsForm != null && !_settingsForm.IsDisposed) return;
+                if (_edicaoClassica) return;
 
                 string agora = _cfg.GameProfiles ? Rtss.JogoAtual : null;
                 string alvo = string.IsNullOrEmpty(agora) ? null : _cfg.PerfilDoJogo(agora);
