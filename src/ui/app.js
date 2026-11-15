@@ -41,6 +41,7 @@
     if (!d || typeof d !== "object") return;
     if (d.ev === "estado") {
       E = d.d;
+      if (aoPrimeiroEstado) { var f = aoPrimeiroEstado; aoPrimeiroEstado = null; f(); }
       aoEstado();
       return;
     }
@@ -139,6 +140,9 @@
   function entradaDaPagina(raiz) {
     if (semMovimento()) return;
     animarEntrada(raiz, "m3-aba");
+    // Na abertura da janela a pagina entra inteira, ja com tudo: os cartoes
+    // subindo um a um ali pareciam carregamento.
+    if (primeiraEntrada) return;
     var cartoes = raiz.querySelectorAll(".cartao, .opcao, .grupo, .vg-cab, .mt-barra, .bat-topo");
     var n = 0;
     for (var i = 0; i < cartoes.length && n < 10; i++) {
@@ -151,6 +155,8 @@
       n++;
     }
   }
+
+  var aoPrimeiroEstado = null, primeiraEntrada = false;
 
   var faixaTimer = 0;
   /// A faixa de aviso no alto do conteudo (FaixaDeAviso), com acao opcional.
@@ -2632,9 +2638,24 @@
       try { guardada = sessionStorage.getItem("pagina") || ""; } catch (e) { }
       // A pagina pedida por quem abriu a janela vem no fragmento (#baterias, #casa...).
       var pedida = decodeURIComponent((location.hash || "").replace(/^#/, ""));
-      mostrar(MONTAR[pedida] ? pedida : guardada || "visao");
+      var primeira = MONTAR[pedida] ? pedida : guardada || "visao";
+      // A primeira pagina so e montada com o primeiro retrato (que o app manda
+      // junto com o "iniciar"): nada de cartoes vazios esperando o relogio.
+      // Depois de desenhada, o app mostra a janela ("pronto").
+      var montada = false;
+      function montar() {
+        if (montada) return;
+        montada = true; aoPrimeiroEstado = null;
+        primeiraEntrada = true;
+        mostrar(primeira);
+        primeiraEntrada = false;
+        avisar("pronto");
+      }
+      if (E) montar();
+      else { aoPrimeiroEstado = montar; setTimeout(montar, 1500); }
     }, function (e) {
       $("pagina").appendChild(el("div", "vazio", e.message));
+      avisar("pronto");
     });
   }
 
