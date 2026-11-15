@@ -169,6 +169,7 @@ namespace MhiagosControl
                 // ser completo, senao o seletor listaria so os sensores que ja
                 // estao no mostrador.
                 _janelaAberta = true;
+                _edicaoClassica = true;
                 AjustarFoco();
 
                 List<SensorEntry> list;
@@ -215,6 +216,7 @@ namespace MhiagosControl
 
                 _snapshotWanted = false;
                 _janelaAberta = false;   // antes de Publicar, que reaplica o foco
+                _edicaoClassica = false;
 
                 if (r != DialogResult.OK) _cfg = Config.Load();   // descarta edicoes
                 MetricHistory.Seguir(IdsAcompanhados());
@@ -225,6 +227,7 @@ namespace MhiagosControl
             {
                 _snapshotWanted = false;
                 _janelaAberta = false;
+                _edicaoClassica = false;
                 AjustarFoco();
                 Log.Error("janela de configuracao", ex);
                 ErroInesperado.Mostrar(ex);

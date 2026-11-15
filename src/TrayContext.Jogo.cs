@@ -34,8 +34,12 @@ namespace MhiagosControl
         {
             try
             {
-                // A automacao espera o fim da edicao e reavalia tambem o vinculo.
-                if (_janelaAberta) return;
+                // So a janela classica pausa a automacao: ela edita um rascunho
+                // e gravaria por cima da troca. A janela nova edita a
+                // configuracao viva e fica aberta (ou minimizada) durante o
+                // jogo; pausar por ela deixava o perfil do jogo sem trocar e
+                // sem voltar ao padrao.
+                if (_edicaoClassica) return;
 
                 string agora = _cfg.GameProfiles ? Rtss.JogoAtual : null;
                 string alvo = string.IsNullOrEmpty(agora) ? null : _cfg.PerfilDoJogo(agora);

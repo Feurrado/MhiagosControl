@@ -210,6 +210,7 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .vinculos { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
 .vinculo { display:flex; align-items:center; gap:12px; padding:8px 12px; background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; }
 .vinculo .ji { width:38px; height:38px; font-size:16px; }
+.ji img { width:72%; height:72%; object-fit:contain; image-rendering:auto; }
 .vinculo .vt { flex:1; min-width:0; }
 .vinculo .vt b { display:block; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .vinculo .vt small { display:block; color:var(--accent-text); font:12px var(--f-peq); }
@@ -255,8 +256,14 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .lista-sensores .sn { display:flex; align-items:center; gap:10px; height:32px; padding:0 10px; border-radius:4px; }
 .lista-sensores .sn:hover { background:var(--hover); }
 .lista-sensores .sn.sel { background:var(--accent-soft); }
-.lista-sensores .sn span:first-child { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.lista-sensores .sn span:last-child { color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.lista-sensores .sn .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lista-sensores .sn .nm small { font:12px var(--f-peq); color:var(--faint); margin-left:8px; }
+.lista-sensores .sn.sel .nm { font-weight:600; }
+.cats-sensor { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.chip { height:26px; padding:0 12px; border-radius:13px; border:1px solid var(--border); background:var(--surface); color:var(--muted); font:12px var(--f-peq); white-space:nowrap; cursor:pointer; transition:background-color 83ms linear, color 83ms linear, border-color 83ms linear; }
+.chip:hover { background:var(--hover); color:var(--text); }
+.chip.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+.lista-sensores .sn .vl { color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
 
 /* ---------------- paginas ainda no desenho de transicao ---------------- */
 
@@ -522,8 +529,17 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
    animacoes do Windows desligadas, nada se move. */
 .item, .link, .mi, .seg button, .bat-mais, .vg-tile, .vg-mostrador, .faixa .fechar, .menu .mi, .lista-sensores .sn, .mc, .mc-bt, .num button, .pf, .sp-bloco, .x, .opcao { transition:background-color 83ms linear, color 83ms linear, border-color 83ms linear, box-shadow 83ms linear; }
 .b { transition:background-color 83ms linear, border-color 83ms linear, color 83ms linear; }
-.menu { animation:menu-entra 83ms linear; }
-@keyframes menu-entra { from { opacity:0; } to { opacity:1; } }
+/* Entrada no estilo da pagina da Casa (Material 3, mesmos tempos e curvas). */
+:root { --m3-entra:cubic-bezier(.05,.7,.1,1); --m3-padrao:cubic-bezier(.2,0,0,1); }
+@keyframes m3-fade-through { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
+@keyframes m3-surge { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+@keyframes m3-abre { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
+.m3-aba { animation:m3-fade-through .28s var(--m3-entra) both; }
+.m3-surge { animation:m3-surge .42s var(--m3-entra) both; }
+.m3-abre { animation:m3-abre .26s var(--m3-entra) both; }
+.dialogo, .menu { animation:m3-abre .26s var(--m3-entra) both; }
+.fundo { animation:m3-esmaece .2s var(--m3-padrao) both; }
+@keyframes m3-esmaece { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration:0s !important; animation-duration:0s !important; animation-iteration-count:1 !important; }
   .pilha.carga i::after { display:none; }

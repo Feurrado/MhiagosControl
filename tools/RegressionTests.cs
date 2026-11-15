@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -304,10 +304,17 @@ namespace MhiagosControl
                 GameTick(context);
                 Igual("B", game.ActiveName, "jogo inicia com o perfil vinculado");
                 game.MapearJogo("regression-game.exe", "C");
-                Field(context, "_janelaAberta", true); GameTick(context);
+                Field(context, "_janelaAberta", true); Field(context, "_edicaoClassica", true); GameTick(context);
                 Igual("B", game.ActiveName, "aguarda terminar a edicao");
-                Field(context, "_janelaAberta", false); GameTick(context);
+                Field(context, "_janelaAberta", false); Field(context, "_edicaoClassica", false); GameTick(context);
                 Igual("C", game.ActiveName, "F10: fechar a janela reavalia novo vinculo sem reabrir jogo");
+                // A janela nova edita a configuracao viva e fica aberta durante o jogo: nao pausa.
+                game.MapearJogo("regression-game.exe", "B");
+                Field(context, "_janelaAberta", true); GameTick(context);
+                Igual("B", game.ActiveName, "janela nova aberta nao pausa o perfil por jogo");
+                game.MapearJogo("regression-game.exe", "C"); GameTick(context);
+                Igual("C", game.ActiveName, "janela nova aberta: vinculo novo vale na hora");
+                Field(context, "_janelaAberta", false);
                 using (ToolStripMenuItem manual = new ToolStripMenuItem("B"))
                 {
                     manual.Tag = game.Profiles[1];

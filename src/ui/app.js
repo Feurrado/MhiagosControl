@@ -41,6 +41,7 @@
     if (!d || typeof d !== "object") return;
     if (d.ev === "estado") {
       E = d.d;
+      if (aoPrimeiroEstado) { var f = aoPrimeiroEstado; aoPrimeiroEstado = null; f(); }
       aoEstado();
       return;
     }
@@ -118,6 +119,45 @@
     };
   }
 
+  /// Tamanho de layout (sem transform): os graficos medem por aqui para nao
+  /// nascerem 4% menores durante a entrada da pagina, que usa escala.
+  function medida(e) { return { width: e.clientWidth, height: e.clientHeight, left: 0, top: 0 }; }
+
+  // ---------------- entrada no estilo da Casa (Material 3) ----------------
+  // As mesmas classes e tempos da pagina da Casa (servidor/app/static):
+  // a pagina troca com fade-through e os cartoes sobem um a um (60 ms).
+  function animarEntrada(e, classe) {
+    if (!e || semMovimento()) return;
+    e.classList.remove("m3-aba", "m3-surge", "m3-abre");
+    void e.offsetWidth;
+    e.classList.add(classe);
+    e.addEventListener("animationend", function fim(ev) {
+      if (ev.target !== e) return;
+      e.classList.remove(classe); e.style.animationDelay = "";
+      e.removeEventListener("animationend", fim);
+    });
+  }
+  function entradaDaPagina(raiz) {
+    if (semMovimento()) return;
+    animarEntrada(raiz, "m3-aba");
+    // Na abertura da janela a pagina entra inteira, ja com tudo: os cartoes
+    // subindo um a um ali pareciam carregamento.
+    if (primeiraEntrada) return;
+    var cartoes = raiz.querySelectorAll(".cartao, .opcao, .grupo, .vg-cab, .mt-barra, .bat-topo");
+    var n = 0;
+    for (var i = 0; i < cartoes.length && n < 10; i++) {
+      var c = cartoes[i];
+      if (c.parentElement && c.parentElement.closest(".cartao")) continue;   // so os de primeiro nivel
+      var r = c.getBoundingClientRect();
+      if (r.top > window.innerHeight) break;                                  // fora da vista nao anima
+      c.style.animationDelay = (n * 60) + "ms";
+      animarEntrada(c, "m3-surge");
+      n++;
+    }
+  }
+
+  var aoPrimeiroEstado = null, primeiraEntrada = false;
+
   var faixaTimer = 0;
   /// A faixa de aviso no alto do conteudo (FaixaDeAviso), com acao opcional.
   function faixa(texto, erro, acaoTexto, acao) {
@@ -128,8 +168,10 @@
     var lugar = $("faixa-acao");
     limpar(lugar);
     if (acaoTexto && acao) lugar.appendChild(botao(acaoTexto, "b p", function () { f.hidden = true; acao(); }));
+    var nova = f.hidden;
     f.className = erro ? "faixa erro" : "faixa";
     f.hidden = false;
+    if (nova) animarEntrada(f, "m3-abre");
     faixaTimer = setTimeout(function () { f.hidden = true; }, erro ? 10000 : 5000);
   }
 
@@ -424,28 +466,48 @@
     busca.placeholder = T("SearchSensor", t("Buscar sensor...", "Search sensor..."));
     var lista = el("div", "lista-sensores");
     lista.setAttribute("role", "listbox");
+    // Como no seletor da classica (SensorPicker): pilulas de categoria acima
+    // da lista, cabecalho por categoria e o nome curto do sensor na linha,
+    // com a peca em cinza para separar os de mesmo nome.
+    var pilulas = el("div", "cats-sensor");
+    var catAtual = "";
+    function grupoDe(x) { return x.grupo || x.categoria || x.hardware || t("Outros", "Other"); }
+    var todasCats = [];
+    S.sensores.forEach(function (x) { var g = grupoDe(x); if (todasCats.indexOf(g) < 0) todasCats.push(g); });
+    function desenharPilulas() {
+      limpar(pilulas);
+      [""].concat(todasCats).forEach(function (g) {
+        var b = botao(g || t("Todos", "All"), "chip" + (g === catAtual ? " on" : ""), function () { catAtual = g; desenharPilulas(); desenhar(); });
+        b.setAttribute("aria-pressed", g === catAtual ? "true" : "false");
+        pilulas.appendChild(b);
+      });
+    }
     var c = cartao(null);
     c.corpo.appendChild(busca);
+    if (todasCats.length > 1) c.corpo.appendChild(pilulas);
     c.corpo.appendChild(lista);
     var linhas = [];
     function desenhar() {
       limpar(lista);
       linhas = [];
-      var q = busca.value.trim().toLowerCase();
+      var termos = busca.value.trim().toLowerCase().split(/\s+/).filter(function (x) { return x; });
       var grupos = {}, ordem = [];
       S.sensores.forEach(function (x) {
-        var txt = (x.rotulo + " " + x.nome + " " + x.hardware + " " + (x.grupo || "")).toLowerCase();
-        if (q && txt.indexOf(q) < 0) return;
-        var g = x.grupo || x.categoria || t("Outros", "Other");
+        var g = grupoDe(x);
+        if (catAtual && g !== catAtual) return;
+        var txt = (x.rotulo + " " + x.nome + " " + x.hardware + " " + (x.grupo || "") + " " + (x.categoria || "")).toLowerCase();
+        for (var k = 0; k < termos.length; k++) if (txt.indexOf(termos[k]) < 0) return;
         if (!grupos[g]) { grupos[g] = []; ordem.push(g); }
         grupos[g].push(x);
       });
-      ordem.forEach(function (g) {
-        lista.appendChild(el("div", "cat", g));
+      todasCats.filter(function (g) { return ordem.indexOf(g) >= 0; }).forEach(function (g) {
+        if (!catAtual) lista.appendChild(el("div", "cat", g));
         grupos[g].forEach(function (x) {
-          var r = el("div", "sn" + (x.id === escolhido ? " sel" : ""), null, el("span", "", x.rotulo), el("span", "", comUnidade(x.id)));
+          var nome = el("span", "nm", null, document.createTextNode(x.nome || x.rotulo));
+          if (x.hardware) nome.appendChild(el("small", "", x.hardware));
+          var r = el("div", "sn" + (x.id === escolhido ? " sel" : ""), null, nome, el("span", "vl", comUnidade(x.id)));
           r.setAttribute("role", "option");
-          r.title = x.hardware;
+          r.title = x.rotulo;
           r.addEventListener("click", function () { escolhido = x.id; marcar(); });
           r.addEventListener("dblclick", function () { escolhido = x.id; if (dialogo.ultima && dialogo.ultima.principal) dialogo.ultima.principal.click(); });
           r.idSensor = x.id;
@@ -470,6 +532,7 @@
       i = Math.max(0, Math.min(linhas.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
       if (linhas[i]) { escolhido = linhas[i].idSensor; marcar(); }
     });
+    desenharPilulas();
     desenhar();
     var p = dialogo(titulo, "largo", c, [[T("Cancel", "Cancelar"), null], [T("Use", "Usar"), function () { return escolhido || null; }, "b p"]]);
     marcar();
@@ -631,6 +694,8 @@
     vista = MONTAR[pagina](dentro) || {};
     alvo.scrollTop = rolagem;
     if (E && vista.atualizar) vista.atualizar();
+    // A Casa e a pagina do servidor numa camada propria, com as animacoes dela.
+    if (mudou && !mesma && pagina !== "casa") entradaDaPagina(alvo);
   }
 
   function aoEstado() {
@@ -756,7 +821,7 @@
         p.desenhar();
       },
       desenhar: function () {
-        var r = caixa.getBoundingClientRect();
+        var r = medida(caixa);
         var dpr = window.devicePixelRatio || 1;
         var W = Math.max(1, Math.round(r.width)), H = Math.max(1, Math.round(r.height));
         if (W < 40 || H < 30) return;
@@ -841,7 +906,7 @@
 
   /// A curva de fundo de um bloco: area sob a linha e a media tracejada, como o MetricCard.
   function desenharCurva(canvas, pontos, cor) {
-    var r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    var r = medida(canvas), dpr = window.devicePixelRatio || 1;
     var w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
     if (canvas.width !== w) canvas.width = w;
     if (canvas.height !== h) canvas.height = h;
@@ -882,7 +947,55 @@
     g.moveTo(0, y(media)); g.lineTo(w, y(media));
     g.strokeStyle = cor + "99"; g.lineWidth = dpr; g.stroke();
     g.setLineDash([]);
-    return { max: max, media: media };
+    return { max: max, media: media, lo: lo, hi: hi, topo: topo, base: base, n: n, w: w, h: h, dpr: dpr };
+  }
+
+  /// O ponto sob o ponteiro, como o DesenharDetalhe da classica: linha
+  /// vertical, ponto na curva e o balao com o valor e a hora. Numa lacuna
+  /// longa o balao diz quanto tempo ficou sem leitura em vez de inventar
+  /// numero; numa curta, segue a linha entre as leituras vizinhas.
+  function detalheNaCurva(canvas, pontos, corHex, geo, hx, fimMs, passoS, janelaS, unidade) {
+    if (!geo || !pontos || geo.n < 2 || hx < 0) return;
+    var g = canvas.getContext("2d"), dpr = geo.dpr, n = geo.n;
+    var i = Math.round(hx * dpr / geo.w * (n - 1));
+    i = Math.max(0, Math.min(n - 1, i));
+    var v = pontos[i], semLeitura = null;
+    if (v === null || v === undefined) {
+      var a = i, b = i;
+      while (a >= 0 && pontos[a] === null) a--;
+      while (b < n && pontos[b] === null) b++;
+      if (a < 0 || b >= n) return;
+      if (b - a - 1 > 2) {
+        var seg = (b - a - 1) * passoS;
+        semLeitura = t("sem leitura por ", "no reading for ") + (seg >= 3600 ? (seg / 3600).toFixed(1).replace(".", S.pt ? "," : ".") + " h" : seg >= 60 ? Math.round(seg / 60) + " min" : seg + " s");
+      }
+      v = pontos[a] + (pontos[b] - pontos[a]) * (i - a) / (b - a);
+    }
+    var x = i * (geo.w - 1) / (n - 1), y = geo.base - (v - geo.lo) / (geo.hi - geo.lo) * (geo.base - geo.topo);
+    g.save();
+    g.strokeStyle = corHex + "46"; g.lineWidth = dpr;
+    g.beginPath(); g.moveTo(x, geo.topo - 8 * dpr); g.lineTo(x, geo.base); g.stroke();
+    g.beginPath(); g.arc(x, y, 3 * dpr, 0, Math.PI * 2);
+    g.fillStyle = corHex; g.fill();
+    g.strokeStyle = cor("--surface"); g.lineWidth = 1.5 * dpr; g.stroke();
+    var quando = new Date(fimMs - (n - 1 - i) * passoS * 1000);
+    var hora = quando.toLocaleTimeString(S.pt ? "pt-BR" : "en-US", janelaS <= 600 ? { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false } : { hour: "2-digit", minute: "2-digit", hour12: false });
+    var txt = (semLeitura || numero(v) + (unidade ? " " + unidade : "")) + "   " + hora;
+    g.font = (12 * dpr) + "px " + getComputedStyle(document.body).fontFamily;
+    var bw = g.measureText(txt).width + 14 * dpr, bh = 22 * dpr;
+    var bx = Math.round(x - bw / 2), by = Math.round(y - bh - 10 * dpr);
+    if (by < 2 * dpr) by = Math.round(y + 10 * dpr);
+    if (by + bh > geo.h - 2 * dpr) by = geo.h - 2 * dpr - bh;
+    bx = Math.max(2 * dpr, Math.min(geo.w - 2 * dpr - bw, bx));
+    var r = 4 * dpr;
+    g.beginPath();
+    g.moveTo(bx + r, by); g.arcTo(bx + bw, by, bx + bw, by + bh, r); g.arcTo(bx + bw, by + bh, bx, by + bh, r);
+    g.arcTo(bx, by + bh, bx, by, r); g.arcTo(bx, by, bx + bw, by, r); g.closePath();
+    g.fillStyle = cor("--window"); g.fill();
+    g.strokeStyle = cor("--border"); g.lineWidth = dpr; g.stroke();
+    g.fillStyle = cor("--text"); g.textBaseline = "middle";
+    g.fillText(txt, bx + 7 * dpr, by + bh / 2 + 0.5 * dpr);
+    g.restore();
   }
 
   function mm(f) { return f ? t("máx ", "max ") + numero(f.max) + " · " + t("méd ", "avg ") + numero(f.media) : ""; }
@@ -1205,6 +1318,15 @@
     return pct <= 10 ? "#EB5A4B" : pct <= 30 ? "#F0AF3C" : cor("--accent");
   }
 
+  /// O icone real do jogo (vem do app como PNG) ou o glifo de controle.
+  function iconeDoJogo(caixa, imagem) {
+    limpar(caixa);
+    caixa.classList.toggle("icone", !imagem);
+    if (imagem) { var im = el("img"); im.alt = ""; im.src = imagem; caixa.appendChild(im); }
+    else caixa.textContent = "";
+    return caixa;
+  }
+
   function pilhaDesenhada(pct, c, carregando) {
     var corpo = el("span", "pilha" + (carregando ? " carga" : ""));
     var nivel = el("i");
@@ -1217,7 +1339,7 @@
   /// A carga das ultimas 48 h: faixa verde nas horas no cabo, curva que se
   /// interrompe nas lacunas (com ponte tracejada) e um ponto em "agora".
   function desenharCurvaDaBateria(canvas, d, c) {
-    var r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    var r = medida(canvas), dpr = window.devicePixelRatio || 1;
     var W = Math.max(10, Math.round(r.width)), H = Math.max(10, Math.round(r.height));
     if (canvas.width !== W * dpr) canvas.width = W * dpr;
     if (canvas.height !== H * dpr) canvas.height = H * dpr;
@@ -1503,13 +1625,13 @@
 
     function baldes() { return Math.max(2, Math.round(estado.janela / estado.passo)); }
     function total() { return Math.round(BALDES_6H / estado.passo); }
-    function faixaR() { var r = canvas.getBoundingClientRect(); return { x: 1, y: TOPO, w: Math.max(10, r.width - 2), h: Math.max(10, r.height - TOPO - RODAPE) }; }
+    function faixaR() { var r = medida(canvas); return { x: 1, y: TOPO, w: Math.max(10, r.width - 2), h: Math.max(10, r.height - TOPO - RODAPE) }; }
     function xDe(i) { var f = faixaR(); return f.x + i / (total() - 1) * f.w; }
     function xFim() { return xDe(total() - 1 - estado.atras); }
     function xIni() { return xDe(total() - estado.atras - baldes()); }
 
     function desenhar() {
-      var r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      var r = medida(canvas), dpr = window.devicePixelRatio || 1;
       var W = Math.max(10, Math.round(r.width)), H = Math.max(10, Math.round(r.height));
       if (canvas.width !== W * dpr) canvas.width = W * dpr;
       if (canvas.height !== H * dpr) canvas.height = H * dpr;
@@ -1782,7 +1904,15 @@
           pedir("metricas.acao", { acao: "nav", id: it.id }).catch(function () { });
           buscarNav();
         });
-        var obj = { it: it, el: c, canvas: canvas, valor: valor, stats: stats, corAtual: "" };
+        var obj = { it: it, el: c, canvas: canvas, valor: valor, stats: stats, corAtual: "", hx: -1 };
+        // Ponteiro sobre o grafico: o valor naquele ponto (fora dos botoes).
+        c.addEventListener("pointermove", function (e) {
+          var r = canvas.getBoundingClientRect();
+          var hx = e.target.closest && e.target.closest(".mc-bts") ? -1 : e.clientX - r.left;
+          if (hx === obj.hx) return;
+          obj.hx = hx; desenharCartao(obj);
+        });
+        c.addEventListener("pointerleave", function () { if (obj.hx < 0) return; obj.hx = -1; desenharCartao(obj); });
         cartoes.push(obj);
         grade.appendChild(c);
       });
@@ -1799,8 +1929,9 @@
       return formas;
     }
 
-    function desenharCartoes() {
-      cartoes.forEach(function (c) {
+    function desenharCartoes() { cartoes.forEach(desenharCartao); }
+    function desenharCartao(c) {
+      (function () {
         var pontos = series[c.it.id] || null;
         var v = leitura(c.it.id);
         // Na grade o numero e de enfase; so atencao e perigo mudam a cor (a Visao geral e que usa o tom quente).
@@ -1811,7 +1942,8 @@
         limpar(c.valor);
         c.valor.appendChild(document.createTextNode(numero(v)));
         if (v !== null && c.it.unidade) c.valor.appendChild(el("small", "", c.it.unidade));
-        desenharCurva(c.canvas, pontos, hex);
+        var geo = desenharCurva(c.canvas, pontos, hex);
+        if (c.hx >= 0) detalheNaCurva(c.canvas, pontos, hex, geo, c.hx, Date.now() - estado.atras * estado.passo * 1000, estado.passo, estado.janela, c.it.unidade);
         var e = estatisticas(pontos);
         c.estat = e;
         limpar(c.stats);
@@ -1820,7 +1952,7 @@
           for (var k = 0; k < formas.length; k++) { c.stats.textContent = formas[k]; if (c.stats.scrollWidth <= larg) { usado = formas[k]; break; } }
           c.stats.textContent = usado;
         }
-      });
+      })();
     }
 
     // ---- dados ----
@@ -2214,7 +2346,8 @@
     legenda.style.marginLeft = "4px";
     jogos.corpo.appendChild(legenda);
     var nomeJogo = el("b"), subJogo = el("small");
-    jogos.corpo.appendChild(el("div", "jogo", null, el("div", "ji icone", ""), el("div", "", null, nomeJogo, subJogo)));
+    var jiAgora = el("div", "ji");
+    jogos.corpo.appendChild(el("div", "jogo", null, jiAgora, el("div", "", null, nomeJogo, subJogo)));
     var vincular = botao("", "b p", function () { mudar("jogo.vincular", { perfil: p.nome }); });
     var desvincular = botao(T("UnbindGame", t("Desvincular", "Unbind")), "b", function () {
       var j = E && E.jogo;
@@ -2245,7 +2378,7 @@
     S.jogos.vinculos.forEach(function (v) {
       var x = botao("", "x icone", function () { mudar("jogo.desvincular", { chave: v.chave }); });
       x.setAttribute("aria-label", t("Desvincular ", "Unbind ") + v.nome);
-      vinculos.appendChild(el("div", "vinculo", null, el("div", "ji icone", ""),
+      vinculos.appendChild(el("div", "vinculo", null, iconeDoJogo(el("div", "ji"), v.imagem),
         el("div", "vt", null, el("b", "", v.nome), el("small", "", v.perfil)), x));
     });
     if (!S.jogos.vinculos.length) vinculos.appendChild(el("div", "nota", T("NoGameBindings")));
@@ -2255,9 +2388,10 @@
     var ultimo = "-";
     function atualizarJogo() {
       var j = E ? E.jogo : null;
-      var marca = j ? j.chave + "|" + (j.perfil || "") + "|" + j.nome : "";
+      var marca = j ? j.chave + "|" + (j.perfil || "") + "|" + j.nome + "|" + (j.imagem ? j.imagem.length : 0) : "";
       if (marca === ultimo) return;
       ultimo = marca;
+      iconeDoJogo(jiAgora, j ? j.imagem : null);
       var rtss = S.rtss ? S.rtss.presente : S.jogos.rtss;
       nomeJogo.textContent = !rtss ? T("RtssMissing", t("RTSS não encontrado", "RTSS not found")) : j ? j.nome : T("NoGameToBind");
       nomeJogo.style.color = rtss ? "" : "var(--warn)";
@@ -2306,9 +2440,8 @@
       });
     })));
 
-    alvo.appendChild(opcao("", T("VisaoNovaOpcao"), T("VisaoNovaNota"), interruptor(!S.visaoNova, function (v) {
-      mudar("visao.classica", { ligado: v });
-    })));
+    // "Usar a Visao geral classica" so muda a janela classica: a interface
+    // nova tem uma Visao geral so, entao a opcao nao aparece aqui.
 
     alvo.appendChild(grupo(T("PanelLabel", t("Painel", "Panel"))));
     alvo.appendChild(opcao("", T("ShowAllSensors"), T("ShowAllShort"), interruptor(S.todos, function (v) {
@@ -2505,9 +2638,24 @@
       try { guardada = sessionStorage.getItem("pagina") || ""; } catch (e) { }
       // A pagina pedida por quem abriu a janela vem no fragmento (#baterias, #casa...).
       var pedida = decodeURIComponent((location.hash || "").replace(/^#/, ""));
-      mostrar(MONTAR[pedida] ? pedida : guardada || "visao");
+      var primeira = MONTAR[pedida] ? pedida : guardada || "visao";
+      // A primeira pagina so e montada com o primeiro retrato (que o app manda
+      // junto com o "iniciar"): nada de cartoes vazios esperando o relogio.
+      // Depois de desenhada, o app mostra a janela ("pronto").
+      var montada = false;
+      function montar() {
+        if (montada) return;
+        montada = true; aoPrimeiroEstado = null;
+        primeiraEntrada = true;
+        mostrar(primeira);
+        primeiraEntrada = false;
+        avisar("pronto");
+      }
+      if (E) montar();
+      else { aoPrimeiroEstado = montar; setTimeout(montar, 1500); }
     }, function (e) {
       $("pagina").appendChild(el("div", "vazio", e.message));
+      avisar("pronto");
     });
   }
 

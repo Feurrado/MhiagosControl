@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing.Imaging;
+using System.IO;
 using System.Threading;
 
 namespace MhiagosControl
@@ -82,6 +84,7 @@ namespace MhiagosControl
                 v["chave"] = c.GameKeys[i];
                 v["nome"] = NomeDoJogo(c, c.GameKeys[i]);
                 v["perfil"] = c.GameProfileNames[i];
+                v["imagem"] = ImagemDoJogo(c.GameKeys[i], 0);
                 vinculos.Add(v);
             }
             jogos["vinculos"] = vinculos;
@@ -128,7 +131,38 @@ namespace MhiagosControl
             d["chave"] = jogo;
             d["nome"] = NomeDoJogo(_app.Cfg, jogo);
             d["perfil"] = _app.Cfg.PerfilDoJogo(jogo);
+            d["imagem"] = ImagemDoJogo(jogo, Rtss.JogoAtualPid);
             return d;
+        }
+
+        /// <summary>
+        /// O icone real do jogo (o mesmo da classica, GameIdentity), como PNG em
+        /// data: para a pagina. Guardado por chave: o retrato vai a cada segundo
+        /// e nao refaz o arquivo nem a conversao. Sem icone, a pagina usa o glifo.
+        /// </summary>
+        private static readonly Dictionary<string, string> _imagensDeJogo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        private string ImagemDoJogo(string chave, int pid)
+        {
+            if (string.IsNullOrEmpty(chave)) return null;
+            string r;
+            lock (_imagensDeJogo) if (_imagensDeJogo.TryGetValue(chave, out r) && (r != null || pid <= 0)) return r;
+            r = null;
+            try
+            {
+                Config c = _app.Cfg;
+                GameIdentityInfo info = GameIdentity.Resolve(chave, pid, c.NomeDoJogo(chave), c.CaminhoDoJogo(chave));
+                if (info != null && info.Icon != null)
+                    using (MemoryStream ms = new MemoryStream())
+                    {
+                        info.Icon.Save(ms, ImageFormat.Png);
+                        r = "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
+                    }
+            }
+            catch (Exception ex) { Log.Error("icone do jogo", ex); }
+            // Sem icone com o jogo rodando, tenta de novo so quando o pid mudar.
+            lock (_imagensDeJogo) if (r != null || pid <= 0) _imagensDeJogo[chave] = r;
+            return r;
         }
 
         // ---------------- transacao ----------------

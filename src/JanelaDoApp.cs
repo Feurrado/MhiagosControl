@@ -35,7 +35,7 @@ namespace MhiagosControl
 
         private readonly PonteDoApp _ponte;
         private readonly Label _aviso;
-        private readonly Timer _relogio;
+        private readonly Timer _relogio, _reserva, _textoDoAviso;
         private WebView2 _app, _casa;
         private CoreWebView2Environment _ambiente;
         private bool _pronta, _casaIniciada;
@@ -98,6 +98,18 @@ namespace MhiagosControl
             _relogio.Interval = 1000;
             _relogio.Tick += delegate { Publicar(); };
 
+            // A pagina so aparece quando ja esta desenhada com os valores (aviso
+            // "pronto" da pagina), para nao mostrar os cartoes vazios da primeira
+            // abertura. Ate la fica a cor da janela; o "Abrindo..." so se demorar.
+            _aviso.Text = "";
+            _textoDoAviso = new Timer();
+            _textoDoAviso.Interval = 900;
+            _textoDoAviso.Tick += delegate { _textoDoAviso.Stop(); if (!IsDisposed && _aviso.Visible && _aviso.Text.Length == 0) _aviso.Text = T.NovoAbrindo; };
+            _textoDoAviso.Start();
+            _reserva = new Timer();
+            _reserva.Interval = 2000;
+            _reserva.Tick += delegate { MostrarPagina(); };
+
             try { Iniciar(); }
             catch (Exception ex) { Falhou(ex); }
         }
@@ -144,6 +156,7 @@ namespace MhiagosControl
         private void Falhou(Exception ex)
         {
             Log.Error("interface nova: WebView2", ex);
+            _reserva.Stop(); _textoDoAviso.Stop();
             _aviso.Text = T.CasaNovaSemWebView;
             _aviso.Visible = true;
             if (_app != null) _app.Visible = false;
@@ -205,9 +218,12 @@ namespace MhiagosControl
                 c.NavigationCompleted += delegate(object s, CoreWebView2NavigationCompletedEventArgs n)
                 {
                     if (!n.IsSuccess) { Falhou(new Exception("pagina do app nao carregou: " + n.WebErrorStatus)); return; }
-                    _app.Visible = true; _aviso.Visible = false;
                     _pronta = true;
                     _relogio.Start();
+                    Publicar();
+                    // A pagina avisa "pronto" depois de desenhar com os dados; se o
+                    // aviso nao vier, mostra assim mesmo em 2 s.
+                    _reserva.Start();
                 };
                 // A pagina inicial vai no fragmento; app.js so aceita nomes de pagina conhecidos.
                 c.Navigate(OrigemDoApp + "/app.html" + (string.IsNullOrEmpty(_paginaInicial) ? "" : "#" + Uri.EscapeDataString(_paginaInicial)));
@@ -233,6 +249,15 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("interface nova: servir recurso", ex); }
         }
 
+        private void MostrarPagina()
+        {
+            _reserva.Stop();
+            _textoDoAviso.Stop();
+            if (IsDisposed || _app == null || _app.Visible) return;
+            _app.Visible = true;
+            _aviso.Visible = false;
+        }
+
         // ---------------- ponte ----------------
 
         private void AoReceber(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -243,6 +268,7 @@ namespace MhiagosControl
                 if (!JanelaWeb.MesmaOrigem(e.Source, OrigemDoApp)) return;
                 Dictionary<string, object> pedido = Json.Ler(e.WebMessageAsJson) as Dictionary<string, object>;
                 if (pedido == null) return;
+                if (Json.Texto(pedido, "m") == "pronto") { MostrarPagina(); return; }
                 if (Json.Texto(pedido, "m") == "casa.area")
                 {
                     object area;
@@ -252,7 +278,9 @@ namespace MhiagosControl
                 }
                 Dictionary<string, object> resposta = _ponte.Atender(pedido);
                 if (resposta != null) Postar(resposta);
-                if (Json.Texto(pedido, "m") == "iniciar") Publicar();
+                // O primeiro retrato vai junto com o "iniciar": a pagina abre ja com
+                // os valores, sem esperar o relogio de 1 s (antes ficava vazia).
+                if (Json.Texto(pedido, "m") == "iniciar") Publicar(true);
             }
             catch (Exception ex) { Log.Error("interface nova: mensagem da pagina", ex); }
         }
@@ -274,9 +302,11 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("interface nova: resposta de fundo", ex); }
         }
 
-        private void Publicar()
+        private void Publicar() { Publicar(false); }
+
+        private void Publicar(bool mesmoAntesDePronta)
         {
-            if (!_pronta || IsDisposed || WindowState == FormWindowState.Minimized) return;
+            if ((!_pronta && !mesmoAntesDePronta) || IsDisposed || WindowState == FormWindowState.Minimized) return;
             try { Postar(_ponte.Estado()); }
             catch (Exception ex) { Log.Error("interface nova: estado", ex); }
         }
@@ -396,6 +426,8 @@ namespace MhiagosControl
         {
             _relogio.Stop();
             _relogio.Dispose();
+            _reserva.Stop(); _reserva.Dispose();
+            _textoDoAviso.Stop(); _textoDoAviso.Dispose();
             _ponte.Enviar = null;
             _ponte.Adiar = null;
             _ponte.Arquivo = null;

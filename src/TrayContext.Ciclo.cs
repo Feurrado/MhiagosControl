@@ -121,6 +121,8 @@ namespace MhiagosControl
         }
 
         private volatile bool _janelaAberta = false;
+        /// <summary>A janela classica (modal, com rascunho) esta aberta: so ela pausa o perfil por jogo.</summary>
+        private volatile bool _edicaoClassica = false;
 
         private void OnToggleAutostart(object sender, EventArgs e)
         {
