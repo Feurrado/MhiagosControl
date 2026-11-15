@@ -1470,7 +1470,7 @@ function blocoAuto(d) {
   })();
   return el("div", {},
     chaveLinha("Modo automático", a.ligado, false, v => mudar({ ligado: v })),
-    el("div", { class: "mu", style: "margin:2px 0 10px" }, "A cada 5 minutos o servidor olha a temperatura de dentro e de fora, a umidade (a de dentro, quando o ar mede), a média dos últimos dias e a máxima de hoje, e põe o ar no modo e na temperatura de conforto. Cada modo tem um limite para entrar e outro para sair, para o ar não ficar trocando: o frio entra com o quarto 1,5 °C acima do conforto e só sai 1 °C abaixo dele; o desumidificar entra com 70% de umidade e sai com 60% ou quando o quarto esfria 1,5 °C abaixo do conforto (nesse modo o aparelho trava em 22 °C). Entre duas mudanças ele espera pelo menos 15 minutos."),
+    el("div", { class: "mu", style: "margin:2px 0 10px" }, "A cada 5 minutos o servidor olha a temperatura de dentro e de fora, a umidade (a de dentro, quando o ar mede), a média dos últimos dias e a máxima de hoje, e põe o ar no modo e na temperatura de conforto. Cada modo tem um limite para entrar e outro para sair, para o ar não ficar trocando: o frio entra com o quarto 1,5 °C acima do conforto e só sai 1 °C abaixo dele; o desumidificar só é usado quando o ar mede a umidade de dentro (a da rua não serve para isso): entra com 70% e sai com 60% ou quando o quarto esfria 1,5 °C abaixo do conforto (nesse modo o aparelho trava em 22 °C). Entre duas mudanças ele espera pelo menos 15 minutos."),
     chaveLinha("Pode ligar o ar sozinho", a.podeLigar, !a.ligado, v => mudar({ podeLigar: v })),
     chaveLinha("Pode desligar quando abrir a janela resolve", a.podeDesligar, !a.ligado, v => mudar({ podeDesligar: v })),
     el("div", { class: "form", style: "margin-top:10px" },
