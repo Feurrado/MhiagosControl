@@ -53,22 +53,21 @@ nav.recolhida { width:56px; }
 nav.recolhida .logo { left:13px; width:30px; height:30px; }
 .nome-app, .perfil, .item .tx { transition:opacity 167ms cubic-bezier(.4,0,.2,1) 83ms, visibility 0s linear 0s; }
 nav.recolhida .nome-app, nav.recolhida .item .tx { transition:opacity 120ms linear, visibility 0s linear 120ms; }
-.perfil { transition:opacity 167ms cubic-bezier(.4,0,.2,1) 83ms, visibility 0s linear 0s, height 250ms cubic-bezier(.4,0,.2,1); }
-nav.recolhida .perfil { transition:opacity 120ms linear, visibility 0s linear 120ms, height 250ms cubic-bezier(.4,0,.2,1); }
+.perfil { transition:opacity 167ms cubic-bezier(.4,0,.2,1) 83ms, visibility 0s linear 0s; }
+nav.recolhida .perfil { transition:opacity 120ms linear, visibility 0s linear 120ms; }
 nav.recolhida .nome-app, nav.recolhida .perfil { visibility:hidden; opacity:0; }
 nav.recolhida .hamb { left:13px; top:60px; }
-nav.recolhida .perfil { height:42px; }
-#itens { transition:padding 250ms cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; gap:2px; padding:0 8px 8px; overflow-y:auto; overflow-x:hidden; flex:1; }
-nav.recolhida #itens { padding:0 6px 6px; }
+#itens { display:flex; flex-direction:column; gap:2px; padding:0 8px 8px; overflow-y:auto; overflow-x:hidden; flex:1; }
 .item { display:flex; align-items:center; height:40px; flex:none; padding:0; border:0; border-radius:4px; background:transparent; text-align:left; color:var(--muted); position:relative; white-space:nowrap; }
 .item:hover { background:var(--hover); }
-.item .gl { transition:width 250ms cubic-bezier(.4,0,.2,1), padding-left 250ms cubic-bezier(.4,0,.2,1); width:42px; flex:none; padding-left:14px; font-size:14.67px; display:flex; align-items:center; }
+/* O icone fica no mesmo x aberto e recolhido (centro em 28 px, o meio da
+   faixa de 56): so a barra estreita, como na classica, e nada anda de lado. */
+.item .gl { width:40px; flex:none; padding-left:12px; box-sizing:border-box; font-size:14.67px; display:flex; align-items:center; }
 .item .gl svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.35; stroke-linecap:round; stroke-linejoin:round; }
 .item .tx { overflow:hidden; text-overflow:ellipsis; }
 .item[aria-selected="true"] { background:var(--accent-soft); color:var(--text); font-weight:600; }
 .item[aria-selected="true"] .gl { color:var(--accent); }
 .item[aria-selected="true"]::before { content:""; position:absolute; left:0; top:9px; height:22px; width:3px; border-radius:2px; background:var(--accent); }
-nav.recolhida .item .gl { width:44px; padding-left:0; justify-content:center; }
 nav.recolhida .item .tx { opacity:0; visibility:hidden; }
 .item.arrastando { opacity:.5; }
 .item.alvo-antes { box-shadow:0 -2px 0 var(--accent); }
