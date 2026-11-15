@@ -206,6 +206,9 @@
   .clima-horas > div, .clima-dias > div { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:13px; }
   .clima-horas small, .clima-dias small { color:var(--muted); font-size:12px; } .clima-dias span { color:var(--muted); font-size:12px; }
   .clima-horas svg, .clima-dias svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .ordem { display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--border); }
+  .ordem:first-child { border-top:0; } .ordem > span { flex:1; }
+  .ordem .b { padding:2px 10px; } .ordem.fora > span { color:var(--muted); text-decoration:line-through; }
   .cidades { display:flex; flex-direction:column; gap:6px; margin-top:10px; align-items:flex-start; }
   @media (max-width:760px) { .sugestao { flex-direction:column; align-items:stretch; } .destaques { grid-template-columns:1fr 1fr; } }
   .destaques { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
@@ -471,8 +474,9 @@
     <section id="aba-painel">
       <div class="topo">
         <div><h1>Casa</h1><div class="sub" id="situacao"></div></div>
-        <div class="acoes"><button class="b" id="lerAgora">Atualizar</button></div>
+        <div class="acoes"><button class="b" id="personalizar">Personalizar</button><button class="b" id="lerAgora">Atualizar</button></div>
       </div>
+      <div class="cartao oculto" id="editaInicio" style="margin-bottom:14px"></div>
       <div class="cartao oculto" id="clima"></div>
       <div class="pilha" id="cartoes">
         <div class="cartao esqueleto"><div class="cab"><div class="ico"></div><div style="flex:1"><i style="width:140px"></i><i style="width:240px"></i></div></div>

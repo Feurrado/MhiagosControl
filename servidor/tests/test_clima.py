@@ -105,5 +105,22 @@ class Rotas(Base):
         self.assertGreaterEqual(r["previsao"]["kwh"], r["atual"]["kwh"])
 
 
+
+class Inicio(Base):
+    def put(self, v):
+        return self.cliente.put("/api/preferencias", headers=self.cab, json={"dados": {"inicio": v}, "origem": "t"})
+
+    def test_arranjo_valido_e_sem_repeticao(self):
+        r = self.put({"ordem": ["b", "a", "b"], "ocultos": ["clima"]})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["dados"]["inicio"], {"ordem": ["b", "a"], "ocultos": ["clima"]})
+
+    def test_arranjo_invalido(self):
+        self.assertEqual(self.put({"ordem": "a", "ocultos": []}).status_code, 422)
+        self.assertEqual(self.put({"ordem": [1], "ocultos": []}).status_code, 422)
+        self.assertEqual(self.put({"ordem": ["x"] * 33, "ocultos": []}).status_code, 422)
+        self.assertEqual(self.put(None).status_code, 422)
+
+
 if __name__ == "__main__":
     unittest.main()
