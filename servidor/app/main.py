@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import avisos, banco, casa, clima, servico, sistema
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.12.0"
+VERSAO = "1.13.0"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
@@ -431,13 +431,20 @@ def sistema_estado():
 
 
 @app.get("/api/clima", dependencies=[Depends(autorizado)])
-def clima_agora():
-    """Clima do local escolhido nos Ajustes (Open-Meteo). local nulo: nenhum local escolhido."""
-    loc = casa.preferencias()["dados"].get("local")
-    if not loc:
-        return {"local": None}
+def clima_agora(i: int = 0):
+    """Clima de uma cidade: i=0 e a casa (a da sugestao), 1 em diante as outras cidades dos Ajustes.
+    local nulo: nenhuma cidade escolhida."""
+    p = casa.preferencias()["dados"]
+    casa_ = p.get("local")
+    todas = ([casa_] if casa_ else []) + list(p.get("locais") or [])
+    nomes = [{"nome": x["nome"], "casa": n == 0 and bool(casa_)} for n, x in enumerate(todas)]
+    if not todas:
+        return {"local": None, "locais": []}
+    i = max(0, min(len(todas) - 1, i))
+    loc = todas[i]
     r = clima.previsao(loc["lat"], loc["lon"])
-    return {"local": loc, "clima": r, "erro": None if r else "sem resposta da Open-Meteo"}
+    return {"local": loc, "i": i, "locais": nomes, "clima": r, "ar": clima.qualidade_ar(loc["lat"], loc["lon"]),
+            "erro": None if r else "sem resposta da Open-Meteo"}
 
 
 @app.get("/api/cidades", dependencies=[Depends(autorizado)])

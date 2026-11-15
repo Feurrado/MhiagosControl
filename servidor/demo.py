@@ -81,9 +81,14 @@ def clima_falso(lat, lon, agora=None):
 if __name__ == "__main__":
     clima.previsao = clima_falso
     clima.cidades = lambda q: [{"nome": "Cidade demo, SP, BR", "lat": -23.55, "lon": -46.63}]
+    clima.qualidade_ar = lambda lat, lon, agora=None: {"aqi": 42 if lat < -20 else 68, "categoria": "Boa" if lat < -20 else "Moderada",
+                                                       "cor": "#3EB55A" if lat < -20 else "#E5C62D", "pm25": 8, "pm10": 15, "o3": 60,
+                                                       "no2": 9, "pior24": 71, "categoriaPior": "Moderada"}
     banco.con()
     semear_historico()
-    casa.gravar_preferencias({"local": {"nome": "Cidade demo, SP, BR", "lat": -23.55, "lon": -46.63}}, "demo")
+    casa.gravar_preferencias({"local": {"nome": "Cidade demo, SP, BR", "lat": -23.55, "lon": -46.63},
+                              "locais": [{"nome": "Praia demo, SP, BR", "lat": -23.96, "lon": -46.33},
+                                         {"nome": "Serra demo, MG, BR", "lat": -19.92, "lon": -43.94}]}, "demo")
     servico._usar(NuvemDemo())
     servico.iniciar()
     print("Demo em http://127.0.0.1:%d/#chave=%s" % (PORTA, CHAVE))

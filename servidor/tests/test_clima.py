@@ -112,6 +112,23 @@ class Completo(unittest.TestCase):
         self.assertTrue(clima._destaques(r)[0].startswith("Chovendo agora"))
 
 
+class QualidadeDoAr(unittest.TestCase):
+    def test_categorias(self):
+        self.assertEqual(clima.categoria_aqi(12)[0], "Boa")
+        self.assertEqual(clima.categoria_aqi(51)[0], "Moderada")
+        self.assertEqual(clima.categoria_aqi(180)[0], "Ruim")
+        self.assertEqual(clima.categoria_aqi(999)[0], "Perigosa")
+        self.assertIsNone(clima.categoria_aqi(None))
+
+    def test_normaliza(self):
+        j = {"current": {"time": "2026-11-15T15:00", "us_aqi": 42.4, "pm2_5": 8.12, "pm10": 15.0, "ozone": 61.7, "nitrogen_dioxide": 9.2},
+             "hourly": {"time": ["2026-11-15T15:00", "2026-11-15T16:00", "2026-11-15T17:00"], "us_aqi": [42, 70, None]}}
+        r = clima._normalizar_ar(j)
+        self.assertEqual((r["aqi"], r["categoria"], r["pior24"], r["categoriaPior"]), (42, "Boa", 70, "Moderada"))
+        self.assertEqual(r["pm25"], 8.1)
+        self.assertIsNone(clima._normalizar_ar({"current": {}}))
+
+
 class Rotas(Base):
     def setUp(self):
         super().setUp()
@@ -119,7 +136,7 @@ class Rotas(Base):
         servico._aparelhos = [dict(NuvemFalsa().lista[0])]
 
     def test_sem_local(self):
-        self.assertEqual(self.cliente.get("/api/clima", headers=self.cab).json(), {"local": None})
+        self.assertEqual(self.cliente.get("/api/clima", headers=self.cab).json(), {"local": None, "locais": []})
         self.assertIsNone(self.cliente.get("/api/sugestao", headers=self.cab).json()["sugestao"])
 
     def test_local_invalido_recusado(self):
@@ -129,12 +146,29 @@ class Rotas(Base):
     def test_clima_e_sugestao(self):
         banco.con()
         casa.gravar_preferencias({"local": {"nome": "Casa", "lat": -23.5, "lon": -46.6}}, "t")
-        with mock.patch.object(clima, "previsao", return_value=clima._normalizar(JSON_OM) | {"velho": False}):
+        with mock.patch.object(clima, "previsao", return_value=clima._normalizar(JSON_OM) | {"velho": False}), \
+             mock.patch.object(clima, "qualidade_ar", return_value=None):
             r = self.cliente.get("/api/clima", headers=self.cab).json()
             self.assertEqual(r["clima"]["agora"]["temp"], 24.4)
             s = self.cliente.get("/api/sugestao", headers=self.cab).json()
             self.assertEqual(s["puid"], "p-ar")
             self.assertIsNotNone(s["sugestao"])
+
+    def test_outras_cidades(self):
+        banco.con()
+        casa.gravar_preferencias({"local": {"nome": "Casa", "lat": -20.4, "lon": -40.5},
+                                  "locais": [{"nome": "Praia", "lat": -20.6, "lon": -40.4}]}, "t")
+        vistos = []
+        with mock.patch.object(clima, "previsao", side_effect=lambda la, lo: vistos.append((la, lo)) or clima._normalizar(JSON_OM)), \
+             mock.patch.object(clima, "qualidade_ar", return_value=None):
+            r = self.cliente.get("/api/clima?i=1", headers=self.cab).json()
+            self.assertEqual((r["i"], r["local"]["nome"]), (1, "Praia"))
+            self.assertEqual([x["nome"] for x in r["locais"]], ["Casa", "Praia"])
+            self.assertTrue(r["locais"][0]["casa"])
+            self.assertEqual(self.cliente.get("/api/clima?i=9", headers=self.cab).json()["i"], 1)
+        self.assertEqual(vistos[0], (-20.6, -40.4))
+        ruim = self.cliente.put("/api/preferencias", headers=self.cab, json={"dados": {"locais": [{"nome": "X", "lat": 0, "lon": 999}]}, "origem": "t"})
+        self.assertEqual(ruim.status_code, 422)
 
     def test_aplicar_sem_sugestao_da_409(self):
         self.assertEqual(self.cliente.post("/api/sugestao/aplicar", headers=self.cab).status_code, 409)

@@ -199,7 +199,19 @@
   /* consumo num lugar so */
   .sugestao { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; padding:12px 14px; background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; }
   .sugestao b { display:block; } .sugestao span { font-size:13px; color:var(--muted); }
-  #clima { margin-bottom:14px; }
+  #clima { margin-top:14px; max-width:1100px; }
+  /* cidades da aba Clima: troca rapida */
+  .chips { display:flex; gap:8px; overflow-x:auto; padding:2px 0 12px; scrollbar-width:none; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chip { flex:none; display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 14px; border-radius:17px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; transition:background .12s, border-color .12s; }
+  .chip svg { width:15px; height:15px; }
+  .chip.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .chip.mais { color:var(--muted); border-style:dashed; font-weight:500; }
+  .chip:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .cidade-linha, .cidade-achada { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--border); }
+  .cidade-linha > span, .cidade-achada > span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cidade-linha:first-of-type { border-top:0; }
   /* ---------- tempo, no estilo do app Tempo do iPhone ---------- */
   .cartao.tempo { overflow:hidden; }
   .tic { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; flex:none; }
@@ -266,7 +278,20 @@
   .tg-legenda span::before { content:""; display:inline-block; width:10px; height:3px; border-radius:2px; margin-right:5px; vertical-align:middle; }
   .tg-lmax::before { background:#F08A24; } .tg-lmin::before { background:#3B8EF0; } .tg-lpas::before { background:var(--text); opacity:.15; height:8px !important; }
   .tfonte { font-size:11.5px; color:var(--faint); text-align:right; }
+  .th-aqi { display:inline-flex; align-items:center; gap:6px; margin-top:8px; padding:3px 10px; border-radius:12px; background:rgba(255,255,255,.18); font-size:12.5px; font-weight:600; }
+  .th-aqi i { width:8px; height:8px; border-radius:50%; box-shadow:0 0 0 1.5px rgba(255,255,255,.7); }
+  .theroi.compacto { padding:14px 18px 16px; }
+  .theroi.compacto .th-temp { font-size:56px; letter-spacing:-1.5px; }
+  .theroi.compacto .th-cond { font-size:16px; margin-top:4px; }
+  .th-mini { display:grid; grid-template-columns:repeat(6, minmax(34px, 1fr)); gap:4px; flex:0 1 330px; text-align:center; }
+  .th-mini > div { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:12px; }
+  .th-mini small { opacity:.85; font-size:11.5px; } .th-mini b { font-weight:600; font-size:13.5px; } .th-mini .tic { width:22px; height:22px; }
+  .ttile.tlarga { grid-column:1 / -1; min-height:0; }
+  .taqi { background:linear-gradient(90deg,#3EB55A,#E5C62D 17%,#F39A2B 33%,#E5463D 50%,#9D4FD8 67%,#7E1F35); }
+  .b.tmais { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .b.tmais svg { width:16px; height:16px; transform:rotate(-90deg); }
   @media (max-width:960px) { .tgrade { grid-template-columns:1fr; } }
+  @media (max-width:560px) { .theroi.compacto .th-meio { flex-direction:column; align-items:stretch; } .th-mini { flex:auto; margin-top:6px; } }
   @media (max-width:760px) { .theroi { padding:16px 16px 18px; } .th-temp { font-size:64px; } .tic.th-ic { width:76px; height:76px; } .tcorpo { padding:12px; } }
   @media (max-width:420px) { .tdia { grid-template-columns:52px 40px 30px minmax(30px,1fr) 30px; gap:6px; } .tdet { gap:8px; } .ttile { min-height:110px; } }
   .ordem { display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--border); }
@@ -511,6 +536,7 @@
     <div class="marca"><img src="/icone.png" alt=""><span>Mhiagos Control</span></div>
     <div class="perfil"><small>SERVIDOR DA CASA</small><b id="servidorNome">192.168.1.100</b></div>
     <button class="item ativo" data-aba="painel" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span>Casa</span></button>
+    <button class="item" data-aba="clima"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 11.2 3.5 3.5 0 0 0 7 18z"/></svg><span>Clima</span></button>
     <button class="item" data-aba="consumo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 20h16M7 16V11M12 16V6M17 16v-7"/></svg><span>Consumo</span></button>
     <button class="item" data-aba="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.38 5.50 L10.75 2.68 L13.25 2.68 L13.62 5.50 L15.46 6.26 L17.70 4.53 L19.47 6.30 L17.74 8.54 L18.50 10.38 L21.32 10.75 L21.32 13.25 L18.50 13.62 L17.74 15.46 L19.47 17.70 L17.70 19.47 L15.46 17.74 L13.62 18.50 L13.25 21.32 L10.75 21.32 L10.38 18.50 L8.54 17.74 L6.30 19.47 L4.53 17.70 L6.26 15.46 L5.50 13.62 L2.68 13.25 L2.68 10.75 L5.50 10.38 L6.26 8.54 L4.53 6.30 L6.30 4.53 L8.54 6.26 Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6"/></svg><span>Ajustes</span></button>
     <div class="rodape" id="rodape"></div>
@@ -540,13 +566,19 @@
         <div class="acoes"><button class="b" id="personalizar">Personalizar</button><button class="b" id="lerAgora">Atualizar</button></div>
       </div>
       <div class="cartao oculto" id="editaInicio" style="margin-bottom:14px"></div>
-      <div class="cartao oculto" id="clima"></div>
       <div class="pilha" id="cartoes">
         <div class="cartao esqueleto"><div class="cab"><div class="ico"></div><div style="flex:1"><i style="width:140px"></i><i style="width:240px"></i></div></div>
           <div class="corpo" style="display:flex;gap:28px"><i style="width:230px;height:230px;border-radius:50%"></i><div style="flex:1"><i style="width:50%;height:48px"></i><i style="height:70px;margin-top:20px"></i><i style="height:44px;margin-top:16px"></i></div></div></div>
         <div class="cartao esqueleto"><div class="cab"><div class="ico"></div><div style="flex:1"><i style="width:180px"></i><i style="width:200px"></i></div></div>
           <div class="corpo"><i style="width:40%;height:18px"></i></div></div>
       </div>
+      <div class="cartao oculto" id="clima"></div>
+    </section>
+
+    <section id="aba-clima" class="oculto">
+      <div class="topo"><div><h1>Clima</h1><div class="sub">Previsão, histórico e qualidade do ar. Toque numa cidade para trocar.</div></div></div>
+      <div class="chips" id="cidadesChips"></div>
+      <div class="pilha"><div class="cartao" id="climaPagina"><div class="corpo mu">Carregando…</div></div></div>
     </section>
 
     <section id="aba-consumo" class="oculto">
