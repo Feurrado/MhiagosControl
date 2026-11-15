@@ -1240,111 +1240,460 @@
 
   function cor(nome) { return getComputedStyle(document.documentElement).getPropertyValue(nome).trim(); }
 
-  function desenharGrafico(canvas, pontos) {
-    var r = canvas.getBoundingClientRect();
-    var dpr = window.devicePixelRatio || 1;
-    var w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
-    if (canvas.width !== w) canvas.width = w;
-    if (canvas.height !== h) canvas.height = h;
-    var g = canvas.getContext("2d");
-    g.clearRect(0, 0, w, h);
-    var min = Infinity, max = -Infinity, n = pontos ? pontos.length : 0, i;
-    for (i = 0; i < n; i++) if (pontos[i] !== null) { if (pontos[i] < min) min = pontos[i]; if (pontos[i] > max) max = pontos[i]; }
-    g.strokeStyle = cor("--border");
-    g.lineWidth = dpr;
-    g.beginPath();
-    for (i = 1; i < 4; i++) { var y0 = Math.round(h * i / 4) + 0.5; g.moveTo(0, y0); g.lineTo(w, y0); }
-    g.stroke();
-    if (min === Infinity || n < 2) return null;
-    var folga = (max - min) * 0.12 || Math.max(1, Math.abs(max) * 0.05);
-    var lo = min - folga, hi = max + folga;
-    function x(k) { return k * (w - 1) / (n - 1); }
-    function y(v) { return h - 2 * dpr - (v - lo) / (hi - lo) * (h - 4 * dpr); }
-    // Onde nao houve amostra a linha se interrompe: nao ha reta inventada por cima da falha.
-    g.strokeStyle = cor("--accent");
-    g.lineWidth = 1.8 * dpr;
-    g.lineJoin = "round";
-    g.beginPath();
-    var solto = true;
-    for (i = 0; i < n; i++) {
-      if (pontos[i] === null) { solto = true; continue; }
-      if (solto) g.moveTo(x(i), y(pontos[i])); else g.lineTo(x(i), y(pontos[i]));
-      solto = false;
+  // ---------------- menus (MenuTema) ----------------
+
+  var menusAbertos = [];
+
+  function fecharMenus() {
+    menusAbertos.forEach(function (m) { if (m.parentNode) m.parentNode.removeChild(m); });
+    menusAbertos = [];
+    document.removeEventListener("mousedown", foraDoMenu, true);
+    document.removeEventListener("keydown", teclaDoMenu, true);
+  }
+  function foraDoMenu(e) {
+    for (var i = 0; i < menusAbertos.length; i++) if (menusAbertos[i].contains(e.target)) return;
+    fecharMenus();
+  }
+  function teclaDoMenu(e) { if (e.key === "Escape") { e.stopPropagation(); fecharMenus(); } }
+
+  /// Um menu ancorado num ponto; um item com "sub" abre outro ao lado.
+  function desenharMenu(itens, x, y, nivel) {
+    while (menusAbertos.length > nivel) { var velho = menusAbertos.pop(); if (velho.parentNode) velho.parentNode.removeChild(velho); }
+    var m = el("div", "menu");
+    itens.forEach(function (it) {
+      if (it.sep) { m.appendChild(el("div", "sep")); return; }
+      var b = el("button", "mi", it.texto);
+      b.type = "button";
+      if (it.sub) {
+        b.appendChild(el("span", "icone seta-m", ""));
+        b.addEventListener("click", function () {
+          var r = b.getBoundingClientRect();
+          desenharMenu(it.sub, r.right - 4, r.top - 5, nivel + 1);
+        });
+      } else {
+        b.addEventListener("click", function () { fecharMenus(); it.ao(); });
+      }
+      m.appendChild(b);
+    });
+    document.body.appendChild(m);
+    var r = m.getBoundingClientRect();
+    m.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + "px";
+    m.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
+    menusAbertos.push(m);
+    if (nivel === 0) {
+      document.addEventListener("mousedown", foraDoMenu, true);
+      document.addEventListener("keydown", teclaDoMenu, true);
     }
-    g.stroke();
-    return { min: min, max: max };
   }
 
-  MONTAR.metricas = function (alvo) {
-    var barra = el("div", "barra-de-acoes");
-    var seletor = seletorDeSensor("", t("Acompanhar um sensor…", "Track a sensor…"));
-    seletor.setAttribute("aria-label", t("Acompanhar um sensor", "Track a sensor"));
-    seletor.addEventListener("change", function () {
-      var id = seletor.value;
-      if (!id || S.metricas.indexOf(id) >= 0) { seletor.value = ""; return; }
-      mudar("metricas.definir", { ids: S.metricas.concat([id]) });
-    });
-    barra.appendChild(seletor);
-    barra.appendChild(segmentos([[600, "10 min"], [3600, "1 h"], [21600, "6 h"]], janela, function (v) { janela = v; buscar(); }));
-    alvo.appendChild(barra);
+  function abrirMenu(ancora, itens) {
+    var jaAberto = menusAbertos.length > 0;
+    fecharMenus();
+    if (jaAberto && ancora.menuAberto) { ancora.menuAberto = false; return; }
+    var r = ancora.getBoundingClientRect();
+    desenharMenu(itens, r.left, r.bottom + 2, 0);
+    ancora.menuAberto = true;
+    setTimeout(function () { ancora.menuAberto = false; }, 300);
+  }
 
-    var grade = el("div", "grade larga");
-    var cartoes = [];
-    S.metricas.forEach(function (id) {
-      var s = sensor(id);
-      var c = el("div", "cartao simples");
-      var fechar = el("button", "x", "✕");
-      fechar.type = "button";
-      fechar.setAttribute("aria-label", t("Deixar de acompanhar", "Stop tracking"));
-      fechar.addEventListener("click", function () {
-        mudar("metricas.definir", { ids: S.metricas.filter(function (x) { return x !== id; }) });
-      });
-      var titulo = el("span", "t", s ? s.rotulo : t("sensor ausente", "missing sensor"));
-      titulo.title = titulo.textContent;
-      c.appendChild(el("div", "cab", null, titulo, fechar));
-      var valor = el("div", "valor", "--");
-      var faixaDoGrafico = el("div", "legenda", " ");
-      var canvas = el("canvas", "grafico");
-      c.appendChild(valor); c.appendChild(canvas); c.appendChild(faixaDoGrafico);
-      grade.appendChild(c);
-      cartoes.push({ id: id, s: s, valor: valor, canvas: canvas, faixa: faixaDoGrafico, pontos: null });
-    });
-    if (!cartoes.length)
-      grade.appendChild(el("div", "vazio", t("Nenhum sensor acompanhado. Escolha um na lista acima.", "No tracked sensor. Pick one from the list above.")));
-    alvo.appendChild(grade);
+  // ---------------- Metricas ----------------
+
+  var BALDES_6H = 21600;
+
+  function nomeDaJanela(s) {
+    if (s >= 3600) { var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return m === 0 ? h + " h" : h + " h " + m + " min"; }
+    if (s < 60) return s + " s";
+    return Math.floor(s / 60) + " min";
+  }
+
+  function hora2(n) { return ("0" + n).slice(-2); }
+  function horaDe(d, comSegundos) { return hora2(d.getHours()) + ":" + hora2(d.getMinutes()) + (comSegundos ? ":" + hora2(d.getSeconds()) : ""); }
+
+  function corResolvida(c) { return c.replace(/var\((--[a-z-]+)\)/g, function (m, n) { return cor(n); }); }
+
+  function estatisticas(pontos) {
+    var min = Infinity, max = -Infinity, soma = 0, n = 0;
+    (pontos || []).forEach(function (v) { if (v === null) return; if (v < min) min = v; if (v > max) max = v; soma += v; n++; });
+    return n ? { min: min, max: max, med: soma / n } : null;
+  }
+
+  /// O NavegadorDeJanela: as seis horas numa faixa, com o trecho escolhido
+  /// (tamanho e posicao) e o botao "ao vivo".
+  function navegadorDeJanela(estado, aoMudar, aoConfirmar) {
+    var canvas = el("canvas", "nav-canvas");
+    var serie = [], corLinha = "", btVivo = { x: 0, y: 0, w: 0, h: 0 }, sobreVivo = false, arraste = "";
+    var xInicio = 0, janelaInicio = 0, atrasInicio = 0;
+    var TOPO = 22, RODAPE = 16, PEGA = 7;
+
+    function baldes() { return Math.max(2, Math.round(estado.janela / estado.passo)); }
+    function total() { return Math.round(BALDES_6H / estado.passo); }
+    function faixaR() { var r = canvas.getBoundingClientRect(); return { x: 1, y: TOPO, w: Math.max(10, r.width - 2), h: Math.max(10, r.height - TOPO - RODAPE) }; }
+    function xDe(i) { var f = faixaR(); return f.x + i / (total() - 1) * f.w; }
+    function xFim() { return xDe(total() - 1 - estado.atras); }
+    function xIni() { return xDe(total() - estado.atras - baldes()); }
 
     function desenhar() {
+      var r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      var W = Math.max(10, Math.round(r.width)), H = Math.max(10, Math.round(r.height));
+      if (canvas.width !== W * dpr) canvas.width = W * dpr;
+      if (canvas.height !== H * dpr) canvas.height = H * dpr;
+      var g = canvas.getContext("2d");
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, W, H);
+      var f = faixaR(), vivo = estado.atras === 0;
+      var fam = "'Segoe UI Variable Small','Segoe UI',sans-serif";
+      // cabecalho: o trecho escolhido em horas de relogio
+      var tFim = new Date(Date.now() - estado.atras * estado.passo * 1000), tIni = new Date(tFim.getTime() - estado.janela * 1000);
+      var curto = estado.janela <= 600;
+      var titulo = horaDe(tIni, curto) + " – " + (vivo ? T("NavNow", t("agora", "now")) : horaDe(tFim, curto)) + "  ·  " + nomeDaJanela(estado.janela);
+      g.textBaseline = "top"; g.textAlign = "left";
+      g.font = "600 13.33px 'Segoe UI Variable Text','Segoe UI',sans-serif"; g.fillStyle = cor("--text");
+      g.fillText(titulo, 0, 2);
+      // a direita: o estado, que vira botao quando ha para onde voltar
+      var rotulo = vivo ? T("NavLive", t("ao vivo", "live")) : T("NavBackToLive", t("Voltar ao vivo", "Back to live"));
+      g.font = "12px " + fam;
+      var tw = g.measureText(rotulo).width;
+      btVivo = { x: W - tw - 18, y: 0, w: tw + 16, h: 18 };
+      g.beginPath();
+      if (g.roundRect) g.roundRect(btVivo.x, btVivo.y, btVivo.w, btVivo.h, 9); else g.rect(btVivo.x, btVivo.y, btVivo.w, btVivo.h);
+      g.fillStyle = vivo ? cor("--accent-soft") : (sobreVivo ? cor("--hover") : cor("--surface"));
+      g.fill();
+      if (!vivo) { g.strokeStyle = cor("--border"); g.lineWidth = 1; g.stroke(); }
+      if (vivo) { g.beginPath(); g.arc(btVivo.x + 8.5, btVivo.y + 9.5, 2.5, 0, Math.PI * 2); g.fillStyle = cor("--accent"); g.fill(); }
+      g.fillStyle = vivo ? cor("--accent-text") : cor("--text");
+      g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText(rotulo, btVivo.x + btVivo.w / 2 + (vivo ? 6 : 0), btVivo.y + 10);
+      // faixa com as seis horas
+      g.beginPath();
+      if (g.roundRect) g.roundRect(f.x, f.y, f.w, f.h, 4); else g.rect(f.x, f.y, f.w, f.h);
+      g.fillStyle = cor("--surface"); g.fill(); g.strokeStyle = cor("--border"); g.lineWidth = 1; g.stroke();
+      resumo(g, f);
+      // o que esta fora da selecao fica esmaecido
+      var x0 = Math.max(f.x, xIni()), x1 = Math.min(f.x + f.w, xFim());
+      if (x1 - x0 < 4) { var mid = (x0 + x1) / 2; x0 = mid - 2; x1 = mid + 2; }
+      g.fillStyle = S.escuro ? "rgba(28,28,31,0.59)" : "rgba(244,245,247,0.55)";
+      if (x0 > f.x) g.fillRect(f.x, f.y + 1, x0 - f.x, f.h - 1);
+      if (x1 < f.x + f.w) g.fillRect(x1, f.y + 1, f.x + f.w - x1, f.h - 1);
+      g.strokeStyle = cor("--accent"); g.lineWidth = 1.6; g.strokeRect(x0, f.y, x1 - x0, f.h);
+      g.fillStyle = cor("--text");
+      [x0, x1].forEach(function (x) {
+        g.beginPath();
+        if (g.roundRect) g.roundRect(Math.round(x) - 3, f.y + f.h / 2 - 8, 6, 16, 2); else g.rect(Math.round(x) - 3, f.y + f.h / 2 - 8, 6, 16);
+        g.fill();
+      });
+      // eixo: as pontas e as horas cheias de duas em duas
+      var yE = f.y + f.h + 2;
+      g.fillStyle = cor("--faint"); g.textBaseline = "top";
+      g.textAlign = "left"; g.fillText(t("6 h atrás", "6 h ago"), f.x, yE);
+      g.textAlign = "right"; g.fillText(T("Now", t("agora", "now")), f.x + f.w, yE);
+      g.textAlign = "center";
+      [4, 2].forEach(function (h) { g.fillText(t(h + " h atrás", h + " h ago"), xDe(total() - 1 - h * 3600 / estado.passo), yE); });
+    }
+
+    /// A forma da leitura nas seis horas: minimo e maximo por coluna de pixel.
+    function resumo(g, f) {
+      var n = serie.length, min = Infinity, max = -Infinity, i;
+      for (i = 0; i < n; i++) { var v = serie[i]; if (v === null) continue; if (v < min) min = v; if (v > max) max = v; }
+      if (min > max) return;
+      var faixa = Math.max(0.001, max - min), alto = f.y + 4, alt = f.h - 8;
+      g.strokeStyle = (corLinha || cor("--accent")) + "96"; g.lineWidth = 1;
+      var colunas = Math.max(1, Math.floor(f.w - 2)), ultimo = null;
+      for (var c = 0; c < colunas; c++) {
+        var a = Math.floor(c * n / colunas), b = Math.floor((c + 1) * n / colunas), lo = Infinity, hi = -Infinity, fim = null;
+        for (i = a; i < b && i < n; i++) { if (serie[i] === null) continue; if (serie[i] < lo) lo = serie[i]; if (serie[i] > hi) hi = serie[i]; fim = serie[i]; }
+        if (lo > hi) { ultimo = null; continue; }
+        if (ultimo !== null) { if (ultimo < lo) lo = ultimo; if (ultimo > hi) hi = ultimo; }
+        ultimo = fim;
+        var x = f.x + 1 + c + 0.5, y0 = alto + alt - (hi - min) / faixa * alt, y1 = alto + alt - (lo - min) / faixa * alt;
+        if (y1 - y0 < 1) y1 = y0 + 1;
+        g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
+      }
+    }
+
+    function onde(x, y) {
+      var f = faixaR();
+      if (y < f.y - 2 || y > f.y + f.h + 2) return "";
+      if (Math.abs(x - xIni()) <= PEGA) return "esq";
+      if (Math.abs(x - xFim()) <= PEGA) return "dir";
+      if (x > xIni() && x < xFim()) return "meio";
+      return "";
+    }
+    function sobreBotao(x, y) { return estado.atras !== 0 && x >= btVivo.x && x <= btVivo.x + btVivo.w && y >= btVivo.y && y <= btVivo.y + btVivo.h; }
+
+    function aplicar(nb, atras) {
+      var minimo = Math.round(60 / estado.passo);
+      if (nb < minimo) nb = minimo;
+      if (nb > total()) nb = total();
+      if (atras < 0) atras = 0;
+      if (atras > total() - nb) atras = total() - nb;
+      var janela = nb * estado.passo;
+      if (janela === estado.janela && atras === estado.atras) return;
+      estado.janela = janela; estado.atras = atras;
+      desenhar(); aoMudar();
+    }
+
+    function ponto(e) { var r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+    canvas.addEventListener("pointermove", function (e) {
+      var p = ponto(e), sobre = sobreBotao(p.x, p.y);
+      if (sobre !== sobreVivo) { sobreVivo = sobre; desenhar(); }
+      if (!arraste) {
+        var o = onde(p.x, p.y), f = faixaR();
+        canvas.style.cursor = sobre ? "pointer" : (o === "esq" || o === "dir") ? "ew-resize" : o === "meio" ? "move" : (p.y >= f.y && p.y <= f.y + f.h) ? "pointer" : "default";
+        return;
+      }
+      var porPixel = (total() - 1) / faixaR().w, delta = Math.round((p.x - xInicio) * porPixel);
+      var nbIni = Math.round(janelaInicio / estado.passo), atras = atrasInicio, nb = nbIni;
+      if (arraste === "meio") atras = atrasInicio - delta;
+      else if (arraste === "esq") nb = nbIni - delta;
+      else if (arraste === "dir") { atras = Math.max(0, atrasInicio - delta); nb = nbIni + (atrasInicio - atras); }
+      aplicar(nb, atras);
+    });
+    canvas.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      var p = ponto(e), f = faixaR();
+      if (sobreBotao(p.x, p.y)) { voltarAoVivo(); return; }
+      if (p.y < f.y || p.y > f.y + f.h) return;
+      var a = onde(p.x, p.y);
+      if (!a) {
+        var i = (p.x - f.x) / f.w * (total() - 1);
+        aplicar(baldes(), Math.round(total() - 1 - i - baldes() / 2));
+        a = "meio";
+      }
+      arraste = a; xInicio = p.x; janelaInicio = estado.janela; atrasInicio = estado.atras;
+      try { canvas.setPointerCapture(e.pointerId); } catch (x) { }
+    });
+    function soltar() { if (!arraste) return; arraste = ""; aoConfirmar(); }
+    canvas.addEventListener("pointerup", soltar);
+    canvas.addEventListener("pointercancel", soltar);
+    canvas.addEventListener("pointerleave", function () { if (sobreVivo) { sobreVivo = false; desenhar(); } });
+    canvas.addEventListener("dblclick", function () { voltarAoVivo(); });
+    canvas.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      aplicar(Math.round(baldes() * (e.deltaY < 0 ? 1 / 1.25 : 1.25)), estado.atras);
+      aoConfirmar();
+    }, { passive: false });
+    function voltarAoVivo() { if (estado.atras === 0) return; estado.atras = 0; desenhar(); aoMudar(); aoConfirmar(); }
+
+    return {
+      canvas: canvas,
+      desenhar: desenhar,
+      definir: function (pontos, c) { serie = pontos || []; corLinha = c || ""; desenhar(); }
+    };
+  }
+
+  /// A pagina Metricas: grade de cartoes, conjuntos, perfis de metricas e o navegador de janela.
+  MONTAR.metricas = function (alvo) {
+    var vivo = true, P = null, estado = { janela: 600, atras: 0, passo: S.passo || 5 };
+    var series = {}, cartoes = [], seriesNav = null, pendente = 0;
+
+    var btAdd = botao(T("AddMetric", t("Adicionar métrica", "Add metric")), "b p");
+    var btConj = botao(T("DefaultMetrics", t("Conjuntos", "Presets")), "b");
+    var btPerf = botao(T("MetricProfiles", t("Perfis de métricas", "Metric profiles")), "b");
+    var dica = el("span", "mt-dica", T("MetricsHint", t("Passe o ponteiro sobre um cartão para mover, redimensionar ou remover.", "Hover a card to move, resize or remove it.")));
+    alvo.appendChild(el("div", "mt-barra", null, btAdd, btConj, btPerf, dica));
+
+    var nav = navegadorDeJanela(estado, function () { agendar(); }, function () { confirmarJanela(); });
+    alvo.appendChild(el("div", "nav-caixa", null, nav.canvas));
+    var vazio = el("div", "vazio", T("NoMetrics", t("Nenhuma métrica escolhida. Use “Adicionar métrica”.", "No metric chosen. Use “Add metric”.")));
+    var grade = el("div", "mt-grade");
+    alvo.appendChild(vazio);
+    alvo.appendChild(grade);
+
+    function acao(a) {
+      return pedir("metricas.acao", a).then(function (r) {
+        if (!vivo) return r;
+        carregar(r);
+        if (r.aviso) faixa(r.aviso);
+        return r;
+      }, function (e) { faixa(e.message, true); });
+    }
+
+    function carregar(r) {
+      P = r;
+      S.metricas = r.itens.map(function (i) { return i.id; });
+      estado.passo = r.passo || estado.passo;
+      estado.janela = r.janela;
+      montarGrade();
+      buscar();
+    }
+
+    function confirmarJanela() {
+      if (!P || P.janela === estado.janela) return;
+      P.janela = estado.janela;
+      pedir("metricas.acao", { acao: "janela", segundos: estado.janela }).catch(function () { });
+    }
+
+    // ---- menus ----
+    btAdd.addEventListener("click", function () {
+      escolherSensor(T("AddMetric", t("Adicionar métrica", "Add metric")), "").then(function (id) {
+        if (id) acao({ acao: "add", id: id });
+      });
+    });
+    btConj.addEventListener("click", function () {
+      if (!P) return;
+      abrirMenu(btConj, P.conjuntos.map(function (c) { return { texto: c.nome, ao: function () { acao({ acao: "conjunto", chave: c.chave }); } }; }));
+    });
+    btPerf.addEventListener("click", function () {
+      if (!P) return;
+      var itens = [{ texto: T("SaveMetricProfile", t("Salvar perfil atual…", "Save current profile…")), ao: function () {
+        perguntarNome(T("MetricProfileName", t("Nome do perfil de métricas", "Metric profile name")), Tm("DefaultMetricProfileName", P.perfis.length + 1) || (t("Perfil ", "Profile ") + (P.perfis.length + 1))).then(function (nome) {
+          if (nome) acao({ acao: "perfil.salvar", nome: nome });
+        });
+      } }];
+      if (P.perfis.length) itens.push({ sep: true });
+      P.perfis.forEach(function (nome) {
+        itens.push({ texto: nome, sub: [
+          { texto: T("Apply", t("Aplicar", "Apply")), ao: function () { acao({ acao: "perfil.aplicar", nome: nome }); } },
+          { texto: T("UpdateMetricProfile", t("Atualizar com a grade atual", "Update with current grid")), ao: function () { acao({ acao: "perfil.atualizar", nome: nome }); } },
+          { texto: T("RenameMetricProfile", t("Renomear perfil…", "Rename profile…")), ao: function () {
+            perguntarNome(T("MetricProfileName", t("Nome do perfil de métricas", "Metric profile name")), nome).then(function (novo) {
+              if (novo && novo !== nome) acao({ acao: "perfil.renomear", nome: nome, novo: novo });
+            });
+          } },
+          { sep: true },
+          { texto: T("DeleteMetricProfile", t("Excluir perfil", "Delete profile")), ao: function () {
+            confirmar(Tm("DeleteMetricProfileQ", nome) || (t("Excluir o perfil “", "Delete the profile “") + nome + "”?"), T("DeleteMetricProfile", t("Excluir perfil", "Delete profile")), "b p perigo").then(function (sim) {
+              if (sim) acao({ acao: "perfil.excluir", nome: nome });
+            });
+          } }
+        ] });
+      });
+      abrirMenu(btPerf, itens);
+    });
+
+    // ---- grade ----
+    function colunas() {
+      var disp = Math.max(320, grade.clientWidth || (alvo.clientWidth - 4));
+      var por = Math.floor(disp / 200);
+      por = Math.max(4, Math.min(12, por));
+      por -= por % 4;
+      return Math.min(por, Math.max(1, Math.floor((disp - 4 + 12) / (140 + 12))));
+    }
+
+    function iconeDoCartao(glifo, dica, ao) {
+      var b = el("button", "mc-bt icone", glifo);
+      b.type = "button"; b.title = dica;
+      b.addEventListener("click", function (e) { e.stopPropagation(); ao(); });
+      return b;
+    }
+
+    function montarGrade() {
+      cartoes.forEach(function (c) { if (c.el.parentNode) c.el.parentNode.removeChild(c.el); });
+      cartoes = [];
+      limpar(grade);
+      vazio.hidden = P.itens.length > 0;
+      var por = colunas();
+      grade.style.gridTemplateColumns = "repeat(" + por + ", minmax(0, 1fr))";
+      P.itens.forEach(function (it, i) {
+        var cols = Math.min(por, it.tam >= 2 ? 4 : it.tam === 1 ? 2 : 1);
+        var canvas = el("canvas", "mc-curva");
+        var titulo = el("div", "mc-t", it.titulo); titulo.title = it.titulo;
+        var valor = el("div", "mc-v"), stats = el("div", "mc-s");
+        var sub = el("div", "mc-f", it.sub);
+        var barra = el("div", "mc-bts",  null,
+          iconeDoCartao("", t("Mover para a esquerda", "Move left"), function () { acao({ acao: "esq", id: it.id }); }),
+          iconeDoCartao("", t("Mover para a direita", "Move right"), function () { acao({ acao: "dir", id: it.id }); }),
+          iconeDoCartao("", t("Mudar o tamanho", "Change size"), function () { acao({ acao: "tamanho", id: it.id }); }),
+          iconeDoCartao("", t("Remover", "Remove"), function () { acao({ acao: "remover", id: it.id }); }));
+        var c = el("div", "cartao mc" + (P.nav === it.id ? " sel" : ""), null, canvas, titulo, barra, valor, stats, sub);
+        c.style.gridColumn = "span " + cols;
+        c.style.height = (it.tam >= 2 ? 220 : it.tam === 1 ? 140 : 104) + "px";
+        c.addEventListener("click", function () {
+          if (P.nav === it.id) return;
+          P.nav = it.id;
+          cartoes.forEach(function (x) { x.el.classList.toggle("sel", x.it.id === it.id); });
+          pedir("metricas.acao", { acao: "nav", id: it.id }).catch(function () { });
+          buscarNav();
+        });
+        var obj = { it: it, el: c, canvas: canvas, valor: valor, stats: stats, corAtual: "" };
+        cartoes.push(obj);
+        grade.appendChild(c);
+      });
+      desenharCartoes();
+      nav.desenhar();
+    }
+
+    function textoEstat(it, e) {
+      if (!e) return "";
+      var formas = [
+        t("mín ", "min ") + numero(e.min) + "    " + t("méd ", "avg ") + numero(e.med) + "    " + t("máx ", "max ") + numero(e.max),
+        t("máx ", "max ") + numero(e.max) + "  ·  " + t("méd ", "avg ") + numero(e.med),
+        t("máx ", "max ") + numero(e.max)];
+      return formas;
+    }
+
+    function desenharCartoes() {
       cartoes.forEach(function (c) {
-        var f = desenharGrafico(c.canvas, c.pontos);
-        var u = c.s && c.s.unidade ? " " + c.s.unidade : "";
-        c.faixa.textContent = f ? t("mín ", "min ") + numero(f.min) + u + "  ·  " + t("máx ", "max ") + numero(f.max) + u
-          : t("sem amostras neste período", "no samples in this period");
+        var pontos = series[c.it.id] || null;
+        var v = leitura(c.it.id);
+        // Na grade o numero e de enfase; so atencao e perigo mudam a cor (a Visao geral e que usa o tom quente).
+        var hex = v !== null && c.it.perigo !== null && v >= c.it.perigo ? cor("--danger")
+          : v !== null && c.it.atencao !== null && v >= c.it.atencao ? cor("--warn") : cor("--accent");
+        c.corAtual = hex;
+        c.valor.style.color = hex;
+        limpar(c.valor);
+        c.valor.appendChild(document.createTextNode(numero(v)));
+        if (v !== null && c.it.unidade) c.valor.appendChild(el("small", "", c.it.unidade));
+        desenharCurva(c.canvas, pontos, hex);
+        var e = estatisticas(pontos);
+        c.estat = e;
+        limpar(c.stats);
+        if (e && c.it.tam > 0) {
+          var formas = textoEstat(c.it, e), larg = c.el.clientWidth - 20, usado = "";
+          for (var k = 0; k < formas.length; k++) { c.stats.textContent = formas[k]; if (c.stats.scrollWidth <= larg) { usado = formas[k]; break; } }
+          c.stats.textContent = usado;
+        }
       });
     }
 
-    var vivo = true;
+    // ---- dados ----
     function buscar() {
-      if (!cartoes.length) return;
-      pedir("metricas", { ids: S.metricas, segundos: janela }).then(function (r) {
+      if (!P || !P.itens.length) { series = {}; return; }
+      var n = ++pendente;
+      pedir("metricas", { ids: P.itens.map(function (i) { return i.id; }), segundos: estado.janela, atras: estado.atras }).then(function (r) {
+        if (!vivo || n !== pendente) return;
+        series = r.series || {};
+        desenharCartoes();
+        nav.desenhar();
+      }, function () { });
+      buscarNav();
+    }
+    function buscarNav() {
+      if (!P || !P.nav) { nav.definir([], ""); return; }
+      pedir("metricas", { ids: [P.nav], segundos: BALDES_6H, atras: 0 }).then(function (r) {
         if (!vivo) return;
-        cartoes.forEach(function (c) { c.pontos = r.series[c.id] || null; });
-        desenhar();
+        var c = ""; cartoes.forEach(function (x) { if (x.it.id === P.nav) c = x.corAtual; });
+        nav.definir((r.series || {})[P.nav] || [], c);
       }, function () { });
     }
-    buscar();
+    var espera = null;
+    function agendar() {
+      if (espera) return;
+      espera = setTimeout(function () { espera = null; buscar(); }, 120);
+    }
+
+    pedir("metricas.acao", { acao: "pagina" }).then(function (r) {
+      if (!vivo) return;
+      estado.atras = 0; estado.janela = r.janela;
+      carregar(r);
+    }, function (e) { faixa(e.message, true); });
     var relogio = setInterval(buscar, (S.passo || 5) * 1000);
-    window.addEventListener("resize", desenhar);
+    var redesenhar = function () { if (P) { montarGrade(); } };
+    window.addEventListener("resize", redesenhar);
 
     return {
       atualizar: function () {
-        cartoes.forEach(function (c) {
-          var v = leitura(c.id);
-          limpar(c.valor);
-          c.valor.appendChild(document.createTextNode(numero(v)));
-          if (v !== null && c.s && c.s.unidade) c.valor.appendChild(el("small", "", c.s.unidade));
-        });
+        if (P) {
+          cartoes.forEach(function (c) {
+            var v = leitura(c.it.id);
+            limpar(c.valor);
+            c.valor.appendChild(document.createTextNode(numero(v)));
+            if (v !== null && c.it.unidade) c.valor.appendChild(el("small", "", c.it.unidade));
+          });
+        }
       },
-      sair: function () { vivo = false; clearInterval(relogio); window.removeEventListener("resize", desenhar); }
+      sair: function () { vivo = false; clearInterval(relogio); fecharMenus(); window.removeEventListener("resize", redesenhar); }
     };
   };
 
