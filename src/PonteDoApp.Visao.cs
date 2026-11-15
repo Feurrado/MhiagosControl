@@ -41,7 +41,7 @@ namespace MhiagosControl
                 x["fora"] = T.ClimaLaFora;
                 x["clima"] = Clima.Texto();
                 x["origem"] = Clima.Origem();
-                x["sug"] = SugestaoCasa.Atual();
+                x["sug"] = SugestaoCasa.Atual(SugestaoCasa.EstadoDoAr(ar));
                 r["ar"] = x;
             }
             else r["ar"] = null;
