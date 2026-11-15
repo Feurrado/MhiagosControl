@@ -4,7 +4,7 @@ fora, umidade de dentro e de fora, media dos ultimos dias, maxima de hoje e a ho
 Freios, para o ar nao ficar mudando nem brigar com quem mexe nele:
 - desligado por padrao; so age dentro da janela de horas escolhida;
 - nao liga o ar sozinho a menos que "podeLigar" esteja marcado; desliga so com "podeDesligar";
-- entre duas mudancas automaticas, pelo menos 30 minutos;
+- entre duas mudancas automaticas, pelo menos 15 minutos (o ventilador alto some quando o quarto esfria);
 - qualquer mudanca que nao foi dele (painel, app, controle remoto) pausa o automatico por "pausaMin";
 - so manda o comando quando o ar esta diferente do que a sugestao pede.
 """
@@ -18,7 +18,7 @@ from . import casa, servico
 log = logging.getLogger("automatico")
 
 INTERVALO = 300
-MINIMO_ENTRE = 30 * 60
+MINIMO_ENTRE = 15 * 60
 PADRAO = {"ligado": False, "podeLigar": False, "podeDesligar": True, "pausaMin": 120, "inicio": 0, "fim": 24}
 
 _trava = threading.Lock()

@@ -1063,9 +1063,9 @@
 
     var meio = el("div", "vg-meio"), esq = el("div", "vg-esq"), dir = el("div", "vg-dir");
     // A casa: o cartao do ar, o do tempo, o da lavadora durante um ciclo, ou o convite.
-    // Os proximos dias vao para a coluna do cooler, no espaco que sobrava embaixo dele.
-    var vagaDosDias = el("div", "vg-vaga-dias");
-    var casa = cartoesDaCasa(vagaDosDias);
+    // Ordem: ar, lavadora, tempo e proximos dias na coluna da esquerda; Perifericos e Eventos
+    // ficam embaixo do cooler, na coluna da direita.
+    var casa = cartoesDaCasa();
     esq.appendChild(casa.el);
     var duas = el("div", "vg-duas");
     var perLista = el("div");
@@ -1075,7 +1075,6 @@
     var evLista = el("div", "vg-ev");
     var ev = el("div", "cartao vg-box", null, el("div", "cb", null, el("span", "mono", T("VisaoEventos", t("EVENTOS", "EVENTS")))), evLista);
     duas.appendChild(per); duas.appendChild(ev);
-    esq.appendChild(duas);
     meio.appendChild(esq);
 
     // O display do cooler: a previa, o perfil e as curvas dos dois mostradores.
@@ -1095,7 +1094,7 @@
       return m;
     });
     dir.appendChild(cooler);
-    dir.appendChild(vagaDosDias);
+    dir.appendChild(duas);
     meio.appendChild(dir);
     alvo.appendChild(meio);
 
@@ -1256,7 +1255,7 @@
     cartao.addEventListener("click", function (e) { if (!e.target.closest("button, a, input")) fazer(); });
   }
 
-  function cartoesDaCasa(vagaDosDias) {
+  function cartoesDaCasa() {
     var raiz = el("div", "vg-casa-pilha");
     var ultimo = null, alvoLocal = null, espera = 0, ar = null;
 
@@ -1346,21 +1345,25 @@
 
     // A lavadora.
     var lavNome = el("b"), lavLinha = el("small"), lavTempo = el("span", "tempo"), lavFim = el("small", "fim");
-    var trilho = el("div", "trilho", null, el("i")), etapas = el("div", "etapas");
+    var etapas = el("div", "etapas");
     var cartaoLav = el("div", "cartao vg-lav vai", null,
       el("div", "topo", null, el("span", "ic maquina", null, el("i")), el("div", "ct", null, lavNome, lavLinha),
-        el("div", "rel", null, lavTempo, lavFim)), trilho, etapas);
+        el("div", "rel", null, lavTempo, lavFim)), etapas);
     function desenharLav(l) {
       lavNome.textContent = l.nome;
       lavLinha.textContent = l.erro ? l.erro : l.linha;
       lavLinha.classList.toggle("erro", !!l.erro);
       lavTempo.textContent = l.tempo;
       lavFim.textContent = l.fim;
-      trilho.firstChild.style.width = Math.round((l.prog || 0) * 1000) / 10 + "%";
-      trilho.classList.toggle("pausada", !!l.pausada);
+      // Um segmento por etapa, com o nome embaixo: as feitas cheias, a atual pela fracao do ciclo, as demais vazias.
+      var n = (l.etapas || []).length || 1;
+      etapas.className = "etapas" + (l.pausada ? " pausada" : "");
+      etapas.style.gridTemplateColumns = "repeat(" + n + ", minmax(0, 1fr))";
       limpar(etapas);
       (l.etapas || []).forEach(function (e, i) {
-        etapas.appendChild(el("span", i < l.atual ? "feita" : i === l.atual ? "agora" : "", e));
+        var f = i < l.atual ? 1 : i === l.atual ? Math.max(0.08, Math.min(1, (l.prog || 0) * n - i)) : 0;
+        var seg = el("i"); seg.style.width = Math.round(f * 100) + "%";
+        etapas.appendChild(el("div", "et " + (i < l.atual ? "feita" : i === l.atual ? "agora" : ""), null, el("span", "eseg", null, seg), el("small", "", e)));
       });
     }
 
@@ -1392,15 +1395,6 @@
     cartaoTempo.title = cartaoDias.title = t("Abrir o clima", "Open weather");
     aoClicar(cartaoTempo, abrirClima);
     aoClicar(cartaoDias, abrirClima);
-    // So os dias que cabem inteiros na vaga; com menos de dois, o cartao some.
-    function caberDias() {
-      var linhas = tpDias.children, h = vagaDosDias ? vagaDosDias.clientHeight : 0;
-      var n = Math.floor((h - 46) / 32);
-      cartaoDias.style.display = n >= 2 ? "" : "none";
-      for (var i = 0; i < linhas.length; i++) linhas[i].style.display = i < n ? "" : "none";
-    }
-    var obsDias = vagaDosDias && window.ResizeObserver ? new ResizeObserver(caberDias) : null;
-    if (obsDias) obsDias.observe(vagaDosDias);
     var SEMANA = S && !S.pt ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
     function graus(v) { return v === null || v === undefined ? "--" : v + "°"; }
     function desenharTempo(tp, sug) {
@@ -1435,7 +1429,6 @@
           el("span", "mn", graus(d.min)), barra, el("span", "mx", graus(d.max))));
       });
       tpDiasTit.textContent = t("PRÓXIMOS DIAS · ", "NEXT DAYS · ") + tp.local;
-      caberDias();
       limpar(tpSug);
       tpSug.style.display = sug ? "" : "none";
       if (sug) {
@@ -1456,9 +1449,6 @@
       if (ar) { desenharAr(); raiz.appendChild(cartaoAr); }
       var sug = ar ? ar.sug : null;
       if (v.tempo) desenharTempo(v.tempo, sug);
-      if (v.tempo) raiz.appendChild(cartaoTempo);
-      if (v.tempo && v.tempo.dias && v.tempo.dias.length && vagaDosDias) { if (!cartaoDias.parentNode) vagaDosDias.appendChild(cartaoDias); caberDias(); }
-      else if (cartaoDias.parentNode) cartaoDias.parentNode.removeChild(cartaoDias);
       if (!v.tempo && sug) {
         cartaoSug.appendChild(sugAplicar);
         sugTitulo.textContent = ar.sug.titulo;
@@ -1468,6 +1458,8 @@
         raiz.appendChild(cartaoSug);
       }
       if (v.lav) { desenharLav(v.lav); raiz.appendChild(cartaoLav); }
+      if (v.tempo) raiz.appendChild(cartaoTempo);
+      if (v.tempo && v.tempo.dias && v.tempo.dias.length) raiz.appendChild(cartaoDias);
       if (v.convite || (!ar && !v.lav)) {
         var c = v.convite || {};
         cvTitulo.textContent = c.titulo || T("NavCasa", t("Casa", "Home"));
@@ -1475,7 +1467,7 @@
         raiz.appendChild(convite);
       }
     }
-    return { el: raiz, definir: function (v) { if (alvoLocal === null) definir(v); }, sair: function () { clearTimeout(espera); if (obsDias) obsDias.disconnect(); } };
+    return { el: raiz, definir: function (v) { if (alvoLocal === null) definir(v); }, sair: function () { clearTimeout(espera); } };
   }
 
   // ---------------- Baterias ----------------

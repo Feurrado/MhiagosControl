@@ -44,6 +44,21 @@ class Regras(unittest.TestCase):
     def test_umido_sugere_seco(self):
         self.assertEqual(clima.sugestao(30, 26, 80, 26, 30, 14, False)["cena"]["modo"], 3)
 
+    def test_ventilar_quando_esta_perto_do_conforto(self):
+        s = clima.sugestao(27.4, 26.8, 50, 27, 28, 14, True)
+        self.assertEqual((s["acao"], s["cena"]["modo"], s["cena"]["vento"]), ("ventilar", 0, -2))
+
+    def test_ventilador_alto_longe_do_alvo_e_baixo_perto(self):
+        longe = clima.sugestao(31, 30, 40, 27, 33, 14, True)["cena"]
+        perto = clima.sugestao(26.5, 31, 40, 27, 33, 14, True)["cena"]
+        self.assertEqual(longe["vento"], -3)
+        self.assertEqual(perto["vento"], -2)
+
+    def test_muda_livremente_entre_frio_ventilar_e_seco(self):
+        modos = {clima.sugestao(d, f, u, 27, 33, 14, True)["cena"]["modo"]
+                 for d, f, u in ((31, 30, 40), (27.4, 26.8, 50), (30, 26, 80))}
+        self.assertEqual(modos, {2, 0, 3})
+
     def test_noite_liga_o_modo_dormir(self):
         self.assertEqual(clima.sugestao(30, 28, 50, 27, 31, 23, False)["cena"]["noturno"], 1)
         self.assertEqual(clima.sugestao(30, 28, 50, 27, 31, 14, False)["cena"]["noturno"], -1)

@@ -278,10 +278,22 @@ def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umida
                 "cena": {"modo": 1, "temp": alvo, "vento": -1, "noturno": -1}}
     noite = hora >= 22 or hora < 6
     alvo = int(min(26, max(23, round(neutra))))
-    if umidade is not None and umidade >= 70 and fora <= 27:
+    # Ventilador: alto enquanto o quarto esta longe do alvo (esfria mais rapido na primeira vez que liga),
+    # baixo quando chega perto (mais quieto e economiza). No meio, mantem o que esta.
+    falta = dentro - alvo
+    vento = -3 if falta >= 2.5 else -2 if falta <= 1 else -1
+    seco_ok = umidade is not None and umidade >= 70 and fora <= 27
+    # Mais fresco que o alvo e abafado: so ventilar. Pouco acima do conforto e sem umidade alta: ventilar basta.
+    if dentro <= neutra + 1.5 and dentro <= 28 and not seco_ok and dentro - fora < 1 and not noite:
+        return {"acao": "ventilar", "titulo": "Ventilar",
+                "texto": "Dentro %.0f °C, perto do conforto de %.1f °C: o ventilador basta." % (dentro, neutra),
+                "cena": {"modo": 0, "temp": -1, "vento": -2, "noturno": -1}}
+    if seco_ok:
         return {"acao": "seco", "titulo": "Desumidificar a %d °C" % alvo,
                 "texto": "Umidade em %.0f%%. O modo seco incomoda menos que o frio." % umidade,
-                "cena": {"modo": 3, "temp": alvo, "vento": -1, "noturno": -1}}
-    cena = {"modo": 2, "temp": alvo, "vento": -1, "noturno": 1 if noite else -1}
+                "cena": {"modo": 3, "temp": alvo, "vento": vento, "noturno": -1}}
+    cena = {"modo": 2, "temp": alvo, "vento": vento, "noturno": 1 if noite else -1}
     return {"acao": "frio", "titulo": "Frio a %d °C%s" % (alvo, " no modo dormir" if noite else ""),
-            "texto": "Conforto estimado em %.1f °C (dentro %.0f °C, fora %.0f °C)." % (neutra, dentro, fora), "cena": cena}
+            "texto": "Conforto estimado em %.1f °C (dentro %.0f °C, fora %.0f °C)%s." % (
+                neutra, dentro, fora, ", ventilador alto para esfriar logo" if vento == -3 else ", ventilador baixo"
+                if vento == -2 else ""), "cena": cena}

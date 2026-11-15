@@ -340,6 +340,7 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .link { border:0; background:transparent; color:var(--accent-text); padding:0; font:12px var(--f-peq); white-space:nowrap; }
 .link:hover { text-decoration:underline; }
 .vg-duas { display:grid; grid-template-columns:1fr 1fr; gap:12px; flex:1; }
+.vg-dir > .vg-duas { min-height:190px; }
 .vg-box { padding:12px 14px; min-height:190px; }
 .vg-box .cb { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .vg-box .cb b { font-weight:600; }
@@ -414,8 +415,7 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 /* Os proximos dias no espaco que sobra embaixo do cooler: a vaga nao pesa na altura da linha
    (contain), e o cartao mostra so os dias que cabem inteiros. */
 .vg-dir { display:flex; flex-direction:column; gap:12px; min-width:0; }
-.vg-vaga-dias { flex:1 1 0; min-height:0; contain:size; display:flex; flex-direction:column; }
-.vg-dias { flex:1; min-height:0; overflow:hidden; padding:10px 16px 6px; }
+.vg-dias { padding:10px 16px 6px; }
 .vg-dias .tt { font:11px/14px var(--f-mono); color:var(--muted); text-transform:uppercase; margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .vg-dias .dia { display:grid; grid-template-columns:44px 52px 34px minmax(30px,1fr) 34px; align-items:center; gap:8px; height:32px; border-top:1px solid var(--border); font-size:13px; }
 .vg-dias .dia:first-child { border-top:0; }
@@ -440,12 +440,14 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .vg-lav .fim { font:12px var(--f-peq); color:var(--muted); }
 .ic.maquina { width:40px; height:40px; border-radius:11px; background:var(--accent-soft); flex:none; display:flex; align-items:center; justify-content:center; }
 .ic.maquina i { width:18px; height:18px; border-radius:50%; border:2px solid var(--accent-text); box-sizing:border-box; }
-.vg-lav .trilho { height:4px; border-radius:2px; background:var(--border); overflow:hidden; }
-.vg-lav .trilho i { display:block; height:100%; background:var(--accent); border-radius:2px; transition:width 250ms cubic-bezier(.4,0,.2,1), background-color 250ms; }
-.vg-lav .trilho.pausada i { background:var(--warn); }
-.vg-lav .etapas { display:flex; gap:6px 14px; flex-wrap:wrap; font:12px var(--f-peq); color:var(--faint); }
-.vg-lav .etapas .feita { color:var(--muted); }
-.vg-lav .etapas .agora { color:var(--text); font-weight:600; }
+.vg-lav .etapas { display:grid; gap:4px; }
+.vg-lav .et { min-width:0; text-align:center; }
+.vg-lav .eseg { display:block; height:4px; border-radius:2px; background:var(--border); overflow:hidden; }
+.vg-lav .eseg i { display:block; height:100%; background:var(--accent); border-radius:2px; transition:width 250ms cubic-bezier(.4,0,.2,1), background-color 250ms; }
+.vg-lav .etapas.pausada .seg i { background:var(--warn); }
+.vg-lav .et small { display:block; margin-top:6px; font:11.5px var(--f-peq); color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vg-lav .et.feita small { color:var(--muted); }
+.vg-lav .et.agora small { color:var(--text); font-weight:600; }
 .vg-casa .link { margin-left:auto; }
 
 /* ---------------- Baterias (BatteryPage) ---------------- */
