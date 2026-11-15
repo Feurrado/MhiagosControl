@@ -393,6 +393,8 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .pilula:not(.on):hover:not(:disabled) { background:var(--hover); }
 .pilula.fora, .pilula:disabled { background:var(--surface-alt); border-color:var(--border); color:var(--faint); cursor:default; }
 /* O tempo da casa: icone, agora e AQI a esquerda, proximas horas a direita; a sugestao embaixo. */
+.vai { cursor:pointer; transition:background-color 120ms linear; }
+.vai:hover { background:var(--hover); }
 .vg-tempo { display:flex; flex-direction:column; padding:0 16px; }
 .vg-tempo .topo { display:flex; align-items:center; gap:14px; min-height:76px; }
 .vg-tempo .ic { width:40px; height:40px; border-radius:11px; background:var(--accent-soft); display:flex; align-items:center; justify-content:center; flex:none; }
@@ -409,6 +411,20 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 @container (max-width:620px) { .vg-tempo .horas div:nth-child(n+4) { display:none; } }
 .vg-tempo .sug { display:flex; align-items:center; gap:14px; padding:10px 0 12px; border-top:1px solid var(--border); }
 .vg-tempo .sug .ct small { white-space:normal; }
+/* Os proximos dias no espaco que sobra embaixo do cooler: a vaga nao pesa na altura da linha
+   (contain), e o cartao mostra so os dias que cabem inteiros. */
+.vg-dir { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.vg-vaga-dias { flex:1 1 0; min-height:0; contain:size; display:flex; flex-direction:column; }
+.vg-dias { flex:1; min-height:0; overflow:hidden; padding:10px 16px 6px; }
+.vg-dias .tt { font:11px/14px var(--f-mono); color:var(--muted); text-transform:uppercase; margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vg-dias .dia { display:grid; grid-template-columns:44px 52px 34px minmax(30px,1fr) 34px; align-items:center; gap:8px; height:32px; border-top:1px solid var(--border); font-size:13px; }
+.vg-dias .dia:first-child { border-top:0; }
+.vg-dias .nome { font-weight:600; }
+.vg-dias .ico { display:flex; align-items:center; gap:3px; } .vg-dias .ico .tic { width:18px; height:18px; }
+.vg-dias .ico small { font:600 10.5px var(--f-mono); color:#3B8EF0; }
+.vg-dias .mn { color:var(--muted); text-align:right; font-family:var(--f-mono); } .vg-dias .mx { font-weight:600; font-family:var(--f-mono); }
+.vg-dias .bar { position:relative; height:5px; border-radius:3px; background:var(--border); }
+.vg-dias .bar i { position:absolute; top:0; bottom:0; border-radius:3px; background:linear-gradient(90deg,#4FA3F7,#F5B82E 60%,#F08A24); }
 .tic { fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; overflow:visible; }
 .tic .s, .tic .r { stroke:#EFA51C; } .tic .l { stroke:#B9962E; } .tic .g { stroke:#2F8AF0; }
 :root[data-tema="escuro"] .tic .l { stroke:#E9D9A0; } :root[data-tema="escuro"] .tic .g { stroke:#4FA3F7; }

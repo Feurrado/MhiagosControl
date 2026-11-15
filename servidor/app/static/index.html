@@ -290,6 +290,37 @@
   .taqi { background:linear-gradient(90deg,#3EB55A,#E5C62D 17%,#F39A2B 33%,#E5463D 50%,#9D4FD8 67%,#7E1F35); }
   .b.tmais { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .b.tmais svg { width:16px; height:16px; transform:rotate(-90deg); }
+  /* Sem buraco embaixo da previsao: as duas colunas tem a mesma altura e as linhas dos dias se espalham. */
+  @media (min-width:961px) {
+    .tgrade { align-items:stretch; }
+    .tgrade > .tsec:first-child { display:flex; flex-direction:column; }
+    .tgrade > .tsec:first-child .tdias { flex:1; justify-content:space-between; }
+    .tgrade > .tsec:first-child > .seg { align-self:flex-start; }
+  }
+  .tg-caixa { position:relative; touch-action:pan-y; }
+  .tg-caixa .tgraf { cursor:crosshair; }
+  .tgraf .tg-mira line { stroke:var(--text); stroke-width:1; opacity:.35; }
+  .tgraf .tg-mira circle { stroke:var(--surface-alt); stroke-width:2; }
+  .tg-balao { position:absolute; pointer-events:none; padding:6px 10px; border-radius:8px; background:var(--surface); border:1px solid var(--border);
+    box-shadow:0 4px 14px rgba(0,0,0,.18); font-size:12.5px; white-space:nowrap; line-height:1.45; }
+  .tg-balao b { display:block; font-size:12px; } .tg-balao small { display:block; color:var(--muted); font-size:11.5px; }
+  .tg-balao .tg-lmax { color:#F08A24; font-weight:600; } .tg-balao .tg-lmin { color:#3B8EF0; font-weight:600; }
+  .tg-balao .tg-lmax::before, .tg-balao .tg-lmin::before { display:none; }
+  /* A cidade ainda sem dados: o desenho da pagina em brilho. */
+  .cartao.esqueleto .esq-heroi { min-height:170px; }
+  .cartao.esqueleto .esq-heroi i { background:linear-gradient(90deg, rgba(255,255,255,.12) 25%, rgba(255,255,255,.3) 50%, rgba(255,255,255,.12) 75%); background-size:200% 100%; height:14px; margin-top:14px; }
+  .cartao.esqueleto .esq-heroi i:first-of-type { height:52px; margin-top:12px; }
+  /* Ar automatico (Ajustes) */
+  .auto-pausa { display:flex; align-items:center; gap:10px; justify-content:space-between; margin-top:12px; padding:10px 12px; border-radius:8px; background:var(--surface-alt); border:1px solid var(--border); }
+  .auto-reg { display:grid; grid-template-columns:96px minmax(0,1fr); gap:10px; padding:6px 0; border-top:1px solid var(--border); font-size:13px; }
+  .auto-reg:first-of-type { border-top:0; }
+  .sugestao .auto-nota { display:block; margin-top:4px; font-size:12px; color:var(--accent-text, var(--accent)); }
+  /* A barra de carregamento global: fina, no alto, indeterminada. */
+  #carga { position:fixed; top:0; left:0; right:0; height:3px; z-index:50; overflow:hidden; pointer-events:none; opacity:0; transition:opacity .2s; }
+  #carga.vis { opacity:1; }
+  #carga::before { content:""; position:absolute; top:0; bottom:0; width:40%; border-radius:2px; background:var(--accent); animation:carga 1.1s cubic-bezier(.4,0,.2,1) infinite; }
+  @keyframes carga { from { left:-40%; } to { left:100%; } }
+  @media (prefers-reduced-motion:reduce) { #carga::before { animation:none; left:0; width:100%; opacity:.6; } }
   @media (max-width:960px) { .tgrade { grid-template-columns:1fr; } }
   @media (max-width:560px) { .theroi.compacto .th-meio { flex-direction:column; align-items:stretch; } .th-mini { flex:auto; margin-top:6px; } }
   @media (max-width:760px) { .theroi { padding:16px 16px 18px; } .th-temp { font-size:64px; } .tic.th-ic { width:76px; height:76px; } .tcorpo { padding:12px; } }
@@ -531,6 +562,7 @@
 </style>
 </head>
 <body>
+<div id="carga" aria-hidden="true"></div>
 <div class="app">
   <nav>
     <div class="marca"><img src="/icone.png" alt=""><span>Mhiagos Control</span></div>

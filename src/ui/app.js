@@ -22,6 +22,7 @@
   var pendentes = {};
   var proximo = 1;
   var ponte = window.chrome && window.chrome.webview;
+  var casaAba = "";        // a aba da pagina da Casa a abrir na proxima vez (o cartao do tempo pede "clima")
 
   // ---------------- ponte ----------------
 
@@ -32,6 +33,14 @@
       pendentes[id] = { ok: ok, falha: falha };
       ponte.postMessage({ id: id, m: m, a: a || {} });
     });
+  }
+
+  /// "casa:clima" (o tempo no widget) e a pagina Casa ja na aba Clima.
+  function paginaPedida(p) {
+    var m = /^casa:(clima|consumo|ajustes)$/.exec(p || "");
+    if (!m) return p;
+    casaAba = m[1];
+    return "casa";
   }
 
   function avisar(m, a) { if (ponte) ponte.postMessage({ m: m, a: a || {} }); }
@@ -47,7 +56,8 @@
     }
     if (d.ev === "ir") {
       // A bandeja, um aviso ou o widget pediram uma pagina com a janela ja aberta.
-      if (S && MONTAR[d.p]) mostrar(d.p);
+      var ir = paginaPedida(d.p);
+      if (S && MONTAR[ir]) mostrar(ir);
       return;
     }
     var p = pendentes[d.id];
@@ -1051,14 +1061,17 @@
       tiles.style.gridTemplateColumns = "repeat(" + porFila + ", minmax(0, 1fr))";
     }
 
-    var meio = el("div", "vg-meio"), esq = el("div", "vg-esq");
-    // A casa: o cartao do ar, o da lavadora durante um ciclo, ou o convite.
-    var casa = cartoesDaCasa();
+    var meio = el("div", "vg-meio"), esq = el("div", "vg-esq"), dir = el("div", "vg-dir");
+    // A casa: o cartao do ar, o do tempo, o da lavadora durante um ciclo, ou o convite.
+    // Os proximos dias vao para a coluna do cooler, no espaco que sobrava embaixo dele.
+    var vagaDosDias = el("div", "vg-vaga-dias");
+    var casa = cartoesDaCasa(vagaDosDias);
     esq.appendChild(casa.el);
     var duas = el("div", "vg-duas");
     var perLista = el("div");
-    var per = el("div", "cartao vg-box", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals"))),
+    var per = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals"))),
       botao(T("VisaoBaterias", t("Baterias ▸", "Batteries ▸")), "link", function () { mostrar("baterias"); })), perLista);
+    aoClicar(per, function () { mostrar("baterias"); });
     var evLista = el("div", "vg-ev");
     var ev = el("div", "cartao vg-box", null, el("div", "cb", null, el("span", "mono", T("VisaoEventos", t("EVENTOS", "EVENTS")))), evLista);
     duas.appendChild(per); duas.appendChild(ev);
@@ -1081,7 +1094,9 @@
       seguirPonteiro(c, m);
       return m;
     });
-    meio.appendChild(cooler);
+    dir.appendChild(cooler);
+    dir.appendChild(vagaDosDias);
+    meio.appendChild(dir);
     alvo.appendChild(meio);
 
     // A tira de especificacoes.
@@ -1236,7 +1251,12 @@
     return s;
   }
 
-  function cartoesDaCasa() {
+  /// Um cartao inteiro leva a outra pagina; o clique num botao ou link dentro dele fica com o botao.
+  function aoClicar(cartao, fazer) {
+    cartao.addEventListener("click", function (e) { if (!e.target.closest("button, a, input")) fazer(); });
+  }
+
+  function cartoesDaCasa(vagaDosDias) {
     var raiz = el("div", "vg-casa-pilha");
     var ultimo = null, alvoLocal = null, espera = 0, ar = null;
 
@@ -1254,7 +1274,7 @@
       enviar("t_power", novo ? 1 : 0);
     });
     var anel = el("span", "anel"), arIc = el("span", "ic icone", null, document.createTextNode("\uE9CA"), anel);
-    var cartaoAr = el("div", "cartao vg-ar", null, arIc,
+    var cartaoAr = el("div", "cartao vg-ar vai", null, arIc,
       el("div", "ct", null, arNome, arFora), el("div", "ctl", null, menos, arNum, mais), pilula);
 
     // O - e o + piscam ao clique (FlashDoBotao, 150 ms).
@@ -1327,7 +1347,7 @@
     // A lavadora.
     var lavNome = el("b"), lavLinha = el("small"), lavTempo = el("span", "tempo"), lavFim = el("small", "fim");
     var trilho = el("div", "trilho", null, el("i")), etapas = el("div", "etapas");
-    var cartaoLav = el("div", "cartao vg-lav", null,
+    var cartaoLav = el("div", "cartao vg-lav vai", null,
       el("div", "topo", null, el("span", "ic maquina", null, el("i")), el("div", "ct", null, lavNome, lavLinha),
         el("div", "rel", null, lavTempo, lavFim)), trilho, etapas);
     function desenharLav(l) {
@@ -1348,7 +1368,8 @@
     var cvTitulo = el("b"), cvTexto = el("small");
     var convite = el("div", "cartao vg-casa", null, el("span", "ic icone", "\uE80F"), el("div", "ct", null, cvTitulo, cvTexto),
       botao(T("VisaoAbrirCasa", t("Abrir Casa ▸", "Open Home ▸")), "link", function () { mostrar("casa"); }));
-    cartaoAr.addEventListener("dblclick", function (e) { if (e.target === cartaoAr) mostrar("casa"); });
+    aoClicar(cartaoAr, function () { mostrar("casa"); });
+    aoClicar(cartaoLav, function () { mostrar("casa"); });
 
     // A sugestao de conforto do servidor (clima e ASHRAE 55), com Aplicar quando ha o que mandar ao ar.
     var sugTitulo = el("b"), sugTexto = el("small");
@@ -1356,15 +1377,31 @@
       sugAplicar.disabled = true;
       pedir("casa.sugestao", {}).then(function (v) { sugAplicar.disabled = false; if (v) definir(v); }, function () { sugAplicar.disabled = false; });
     });
-    var cartaoSug = el("div", "cartao vg-casa vg-sug", null, el("span", "ic icone", "\uE706"), el("div", "ct", null, sugTitulo, sugTexto), sugAplicar);
+    var cartaoSug = el("div", "cartao vg-casa vg-sug vai", null, el("span", "ic icone", "\uE706"), el("div", "ct", null, sugTitulo, sugTexto), sugAplicar);
 
     // O tempo da cidade da casa (do servidor): agora, maxima e minima, AQI e as proximas horas.
     // Com tempo, a sugestao entra no mesmo cartao, abaixo de uma linha, em vez de um cartao a parte.
-    var tpIc = el("span", "ic"), tpTitulo = el("b"), tpLinha = el("small"), tpHoras = el("div", "horas");
+    aoClicar(cartaoSug, function () { mostrar("casa"); });
+    var tpIc = el("span", "ic"), tpTitulo = el("b"), tpLinha = el("small"), tpHoras = el("div", "horas"), tpDias = el("div", "dias");
     var tpSug = el("div", "sug");
-    var cartaoTempo = el("div", "cartao vg-tempo", null,
+    var cartaoTempo = el("div", "cartao vg-tempo vai", null,
       el("div", "topo", null, tpIc, el("div", "ct", null, tpTitulo, tpLinha), tpHoras), tpSug);
-    cartaoTempo.addEventListener("dblclick", function (e) { if (!e.target.closest("button")) mostrar("casa"); });
+    var tpDiasTit = el("div", "tt");
+    var cartaoDias = el("div", "cartao vg-dias vai", null, tpDiasTit, tpDias);
+    function abrirClima() { casaAba = "clima"; mostrar("casa"); }
+    cartaoTempo.title = cartaoDias.title = t("Abrir o clima", "Open weather");
+    aoClicar(cartaoTempo, abrirClima);
+    aoClicar(cartaoDias, abrirClima);
+    // So os dias que cabem inteiros na vaga; com menos de dois, o cartao some.
+    function caberDias() {
+      var linhas = tpDias.children, h = vagaDosDias ? vagaDosDias.clientHeight : 0;
+      var n = Math.floor((h - 46) / 32);
+      cartaoDias.style.display = n >= 2 ? "" : "none";
+      for (var i = 0; i < linhas.length; i++) linhas[i].style.display = i < n ? "" : "none";
+    }
+    var obsDias = vagaDosDias && window.ResizeObserver ? new ResizeObserver(caberDias) : null;
+    if (obsDias) obsDias.observe(vagaDosDias);
+    var SEMANA = S && !S.pt ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
     function graus(v) { return v === null || v === undefined ? "--" : v + "°"; }
     function desenharTempo(tp, sug) {
       limpar(tpIc); tpIc.appendChild(iconeDoTempo(tp.icone));
@@ -1383,6 +1420,22 @@
       (tp.horas || []).forEach(function (h) {
         tpHoras.appendChild(el("div", "", null, el("small", "", h.hora), iconeDoTempo(h.icone), el("b", "", graus(h.temp))));
       });
+      // Os proximos dias com a barra de minima a maxima na mesma escala, como no app Tempo.
+      limpar(tpDias);
+      var dias = tp.dias || [], lo = Infinity, hi = -Infinity;
+      dias.forEach(function (d) { lo = Math.min(lo, d.min); hi = Math.max(hi, d.max); });
+      var faixa = Math.max(1, hi - lo);
+      dias.forEach(function (d, i) {
+        var p = d.dia.split("-"), dt = new Date(+p[0], +p[1] - 1, +p[2]);
+        var barra = el("span", "bar", null, el("i"));
+        barra.firstChild.style.left = ((d.min - lo) / faixa * 100) + "%";
+        barra.firstChild.style.right = ((hi - d.max) / faixa * 100) + "%";
+        tpDias.appendChild(el("div", "dia", null, el("span", "nome", i === 0 ? t("Hoje", "Today") : SEMANA[dt.getDay()]),
+          el("span", "ico", null, iconeDoTempo(d.icone), d.prob >= 30 ? el("small", "", d.prob + "%") : null),
+          el("span", "mn", graus(d.min)), barra, el("span", "mx", graus(d.max))));
+      });
+      tpDiasTit.textContent = t("PRÓXIMOS DIAS · ", "NEXT DAYS · ") + tp.local;
+      caberDias();
       limpar(tpSug);
       tpSug.style.display = sug ? "" : "none";
       if (sug) {
@@ -1402,8 +1455,11 @@
       ar = v.ar ? JSON.parse(JSON.stringify(v.ar)) : null;
       if (ar) { desenharAr(); raiz.appendChild(cartaoAr); }
       var sug = ar ? ar.sug : null;
-      if (v.tempo) { desenharTempo(v.tempo, sug); raiz.appendChild(cartaoTempo); }
-      else if (sug) {
+      if (v.tempo) desenharTempo(v.tempo, sug);
+      if (v.tempo) raiz.appendChild(cartaoTempo);
+      if (v.tempo && v.tempo.dias && v.tempo.dias.length && vagaDosDias) { if (!cartaoDias.parentNode) vagaDosDias.appendChild(cartaoDias); caberDias(); }
+      else if (cartaoDias.parentNode) cartaoDias.parentNode.removeChild(cartaoDias);
+      if (!v.tempo && sug) {
         cartaoSug.appendChild(sugAplicar);
         sugTitulo.textContent = ar.sug.titulo;
         sugTexto.textContent = ar.sug.texto;
@@ -1419,7 +1475,7 @@
         raiz.appendChild(convite);
       }
     }
-    return { el: raiz, definir: function (v) { if (alvoLocal === null) definir(v); }, sair: function () { clearTimeout(espera); } };
+    return { el: raiz, definir: function (v) { if (alvoLocal === null) definir(v); }, sair: function () { clearTimeout(espera); if (obsDias) obsDias.disconnect(); } };
   }
 
   // ---------------- Baterias ----------------
@@ -2718,9 +2774,12 @@
     area.id = "casa-area";
     alvo.appendChild(area);
     area.appendChild(el("span", "", t("Abrindo a Casa…", "Opening Home…")));
+    var aba = casaAba;
+    casaAba = "";
     function medir() {
       var r = area.getBoundingClientRect();
-      avisar("casa.area", { visivel: true, x: r.left, y: r.top, w: r.width, h: r.height });
+      avisar("casa.area", { visivel: true, x: r.left, y: r.top, w: r.width, h: r.height, aba: aba });
+      aba = "";
     }
     var obs = null;
     if (window.ResizeObserver) { obs = new ResizeObserver(medir); obs.observe(area); }
@@ -2752,7 +2811,7 @@
       var guardada = "";
       try { guardada = sessionStorage.getItem("pagina") || ""; } catch (e) { }
       // A pagina pedida por quem abriu a janela vem no fragmento (#baterias, #casa...).
-      var pedida = decodeURIComponent((location.hash || "").replace(/^#/, ""));
+      var pedida = paginaPedida(decodeURIComponent((location.hash || "").replace(/^#/, "")));
       var primeira = MONTAR[pedida] ? pedida : guardada || "visao";
       // A primeira pagina so e montada com o primeiro retrato (que o app manda
       // junto com o "iniciar"): nada de cartoes vazios esperando o relogio.

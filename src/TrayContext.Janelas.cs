@@ -119,6 +119,8 @@ namespace MhiagosControl
                 return;
             }
             _classicaPedida = false;
+            // A janela classica nao tem a aba Clima: vai a Casa.
+            if (_paginaPedida == "casa:clima") _paginaPedida = "casa";
             PedirJanelaClassica();
         }
 

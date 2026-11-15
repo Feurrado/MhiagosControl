@@ -12,7 +12,27 @@ const $ = id => document.getElementById(id);
 
 // ---------------- base ----------------
 
+/**
+ * A barra de carregamento global, no alto da tela: aparece quando algum pedido passa de 300 ms
+ * (a espera longa das mudancas nao conta) e some quando o ultimo termina.
+ */
+const carga = { n: 0, t: 0 };
+function cargaMais() {
+  if (carga.n++ === 0) carga.t = setTimeout(() => { const b = document.getElementById("carga"); if (b) b.classList.add("vis"); }, 300);
+}
+function cargaMenos() {
+  if (--carga.n > 0) return;
+  carga.n = 0; clearTimeout(carga.t);
+  const b = document.getElementById("carga"); if (b) b.classList.remove("vis");
+}
+
 async function api(caminho, metodo, corpo) {
+  const longa = caminho.startsWith("mudancas");
+  if (!longa) cargaMais();
+  try { return await apiDireto(caminho, metodo, corpo); } finally { if (!longa) cargaMenos(); }
+}
+
+async function apiDireto(caminho, metodo, corpo) {
   const r = await fetch("/api/" + caminho, { method: metodo || "GET",
     headers: { "Authorization": "Bearer " + chave, "Content-Type": "application/json" },
     body: corpo === undefined ? undefined : JSON.stringify(corpo) });
@@ -1075,6 +1095,8 @@ let climaAba = "futuro";
 let climaDados = null, climaEm = 0;
 // Cidade aberta na aba Clima (so neste aparelho): 0 e a casa; as outras vem dos Ajustes.
 let climaIdx = 0, climaPag = null;
+// As cidades ja abertas ficam guardadas: voltar a uma delas e instantaneo, e a leitura nova vem por tras.
+const climaCache = {};
 try { climaIdx = Math.max(0, parseInt(localStorage.getItem("climaCidade"), 10) || 0); } catch (e) {}
 
 async function carregarClima(forcar) {
@@ -1093,10 +1115,16 @@ async function carregarCidade(i, quieto) {
   climaIdx = i;
   try { localStorage.setItem("climaCidade", String(i)); } catch (e) {}
   if (i === 0) { climaPag = null; if (!quieto) desenharClimaPagina(); return; }
-  if (!quieto) { climaPag = { carregando: true }; desenharClimaPagina(); }
-  try { climaPag = { c: await api("clima?i=" + i) }; climaIdx = climaPag.c.i || 0; }
-  catch (e) { climaPag = { erro: e.message }; }
-  if (!quieto) desenharClimaPagina();
+  const guardado = climaCache[i];
+  if (!quieto) { climaPag = guardado || { carregando: true }; desenharClimaPagina(); }
+  if (guardado && Date.now() - guardado.em < 10 * 60 * 1000) return;
+  let novo;
+  try { novo = { c: await api("clima?i=" + i), em: Date.now() }; climaCache[i] = novo; }
+  catch (e) { novo = guardado || { erro: e.message }; }
+  if (climaIdx !== i) return;          // trocou de cidade enquanto esta carregava
+  climaPag = novo;
+  if (novo.c) climaIdx = novo.c.i || 0;
+  if (!quieto || abaAtual === "clima") desenharClimaPagina();
 }
 
 async function aplicarSugestao(botao) {
@@ -1212,8 +1240,8 @@ function listaDeDias(c) {
     barraTemp(x.min, x.max, lo, hi, futuro && i === 0 ? c.agora.temp : null),
     el("span", { class: "tmax" }, graus(x.max))));
   const seg = el("div", { class: "seg tseg" },
-    el("button", { class: futuro ? "on" : "", on: { click: () => { climaAba = "futuro"; desenharClima(); } } }, (c.dias.length) + " dias"),
-    el("button", { class: futuro ? "" : "on", on: { click: () => { climaAba = "passado"; desenharClima(); } } }, "Últimos " + (c.passado || []).length));
+    el("button", { class: futuro ? "on" : "", on: { click: () => { climaAba = "futuro"; desenharClimaPagina(); } } }, (c.dias.length) + " dias"),
+    el("button", { class: futuro ? "" : "on", on: { click: () => { climaAba = "passado"; desenharClimaPagina(); } } }, "Últimos " + (c.passado || []).length));
   let resumo = null;
   if (!futuro && c.passado && c.passado.length) {
     const mx = c.passado.map(x => x.max).filter(v => v != null), chuva = c.passado.reduce((t, x) => t + (x.chuvaMm || 0), 0);
@@ -1253,12 +1281,37 @@ function graficoDoTempo(c, largura) {
     const passo = W < 520 ? 3 : W < 800 ? 2 : 1;
     if ((i - iHoje) % passo === 0) g += '<text x="' + X(i).toFixed(1) + '" y="' + (H - 8) + '" class="tg-eixo" text-anchor="middle">' + (i === iHoje ? "Hoje" : SEMANA[diaDe(x.dia).getDay()] + " " + diaDe(x.dia).getDate()) + '</text>';
   });
+  // O ponteiro: uma linha no dia mais proximo, os dois pontos em destaque e um balao com os valores.
+  g += '<g class="tg-mira" style="display:none"><line y1="' + mt + '" y2="' + (H - mb) + '"/><circle r="4.5" class="tg-pmax"/><circle r="4.5" class="tg-pmin"/></g>';
   const s = svg(g, "0 0 " + W + " " + H);
   s.setAttribute("class", "tgraf");
   s.setAttribute("role", "img");
   s.setAttribute("aria-label", "Máximas e mínimas dos últimos " + (c.passado || []).length + " dias e dos próximos " + c.dias.length);
+  const balao = el("div", { class: "tg-balao oculto" });
+  const caixa = el("div", { class: "tg-caixa" }, s, balao);
+  const mira = s.querySelector(".tg-mira"), [linhaM, pMax, pMin] = mira.children;
+  const mover = e => {
+    const r = s.getBoundingClientRect(), k = W / r.width;
+    const i = Math.max(0, Math.min(dias.length - 1, Math.round(((e.clientX - r.left) * k - ml) / ((W - ml - mr) / (dias.length - 1)))));
+    const x = dias[i], xi = X(i);
+    mira.style.display = "";
+    linhaM.setAttribute("x1", xi); linhaM.setAttribute("x2", xi);
+    pMax.setAttribute("cx", xi); pMax.setAttribute("cy", Y(x.max)); pMin.setAttribute("cx", xi); pMin.setAttribute("cy", Y(x.min));
+    const nome = i === iHoje ? "Hoje" : SEMANA[diaDe(x.dia).getDay()] + " " + diaDe(x.dia).getDate() + "/" + (diaDe(x.dia).getMonth() + 1);
+    const extra = i < iHoje ? (x.chuvaMm > 0.1 ? num(x.chuvaMm, 1) + " mm de chuva" : "sem chuva") : (x.prob != null ? "chuva " + num(x.prob, 0) + "%" : "");
+    balao.replaceChildren(el("b", {}, nome + (i < iHoje ? " · medido" : "")),
+      el("div", {}, el("span", { class: "tg-lmax" }, "máx " + graus(x.max)), "  ", el("span", { class: "tg-lmin" }, "mín " + graus(x.min))),
+      extra ? el("small", {}, x.texto ? x.texto + " · " + extra : extra) : null);
+    balao.classList.remove("oculto");
+    const px = xi / k, lb = balao.offsetWidth;
+    balao.style.left = Math.max(0, Math.min(r.width - lb, px - lb / 2)) + "px";
+    balao.style.top = Math.max(0, Y(x.max) / k - balao.offsetHeight - 12) + "px";
+  };
+  s.addEventListener("pointermove", mover);
+  s.addEventListener("pointerdown", mover);
+  s.addEventListener("pointerleave", () => { mira.style.display = "none"; balao.classList.add("oculto"); });
   return secao("termometro", "Temperatura: últimos " + (c.passado || []).length + " dias e próximos " + c.dias.length,
-    el("div", { class: "tg-legenda" }, el("span", { class: "tg-lmax" }, "máxima"), el("span", { class: "tg-lmin" }, "mínima"), el("span", { class: "tg-lpas" }, "medido")), s);
+    el("div", { class: "tg-legenda" }, el("span", { class: "tg-lmax" }, "máxima"), el("span", { class: "tg-lmin" }, "mínima"), el("span", { class: "tg-lpas" }, "medido")), caixa);
 }
 
 function heroiDoTempo(c, local, ar, compacto) {
@@ -1281,8 +1334,10 @@ function heroiDoTempo(c, local, ar, compacto) {
 }
 
 function blocoSugestao(s) {
+  const auto = pref && pref.dados.auto && pref.dados.auto.ligado;
   return s ? el("div", { class: "sugestao" },
-    el("div", {}, el("b", {}, s.titulo), el("span", {}, s.texto)),
+    el("div", {}, el("b", {}, s.titulo), el("span", {}, s.texto),
+      auto ? el("small", { class: "auto-nota" }, "Ar automático ligado: o servidor aplica sozinho.") : null),
     s.cena ? el("button", { class: "b pri", on: { click: e => aplicarSugestao(e.currentTarget) } }, "Aplicar") : null) : null;
 }
 
@@ -1344,11 +1399,13 @@ function desenharClimaPagina() {
     on: { click: () => { if (i !== climaIdx) carregarCidade(i); } } }, x.casa ? icSec("casa") : null, x.nome.split(",")[0])),
     el("button", { class: "chip mais", type: "button", title: "Adicionar cidade", on: { click: () => irPara("ajustes-clima") } }, "+ Cidade"));
   const pag = climaIdx === 0 ? { c: casaD.c, s: casaD.s } : climaPag || { carregando: true };
-  if (pag.carregando || pag.erro || !pag.c.clima) {
-    caixa.classList.remove("tempo");
-    trocarConteudo(caixa, el("div", { class: "corpo mu" }, pag.carregando ? "Carregando…" : pag.erro ? "Clima indisponível: " + pag.erro : "A Open-Meteo não respondeu agora."));
+  if (pag.carregando) { esqueletoDoClima(caixa, lista[climaIdx]); return; }
+  if (pag.erro || !pag.c.clima) {
+    caixa.classList.remove("tempo", "esqueleto");
+    trocarConteudo(caixa, el("div", { class: "corpo mu" }, pag.erro ? "Clima indisponível: " + pag.erro : "A Open-Meteo não respondeu agora."));
     return;
   }
+  caixa.classList.remove("esqueleto");
   const c = pag.c.clima;
   const rolagem = caixa.querySelector(".thoras") ? caixa.querySelector(".thoras").scrollLeft : 0;
   const largura = caixa.clientWidth - (matchMedia("(max-width:760px)").matches ? 54 : 66);
@@ -1359,6 +1416,52 @@ function desenharClimaPagina() {
       el("div", { class: "tfonte" }, pag.c.local.nome + " · dados da Open-Meteo")));
   const h = caixa.querySelector(".thoras");
   if (h) h.scrollLeft = rolagem;
+}
+
+/** A cidade ainda sem dados: o desenho da pagina em brilho, no lugar do "Carregando". */
+function esqueletoDoClima(caixa, cidade) {
+  caixa.classList.add("tempo", "esqueleto");
+  const barras = (...l) => l.map(w => el("i", { style: "width:" + w }));
+  trocarConteudo(caixa,
+    el("div", { class: "theroi ceu-nublado esq-heroi" },
+      el("div", { class: "th-topo" }, el("span", { class: "th-local" }, icSec("local"), cidade ? cidade.nome.split(",")[0] : ""), el("span", { class: "th-at" }, el("span", { class: "gira" }), "carregando")),
+      ...barras("120px", "180px", "220px")),
+    el("div", { class: "corpo tcorpo" },
+      el("div", { class: "tsec" }, ...barras("30%", "100%", "100%")),
+      el("div", { class: "tsec" }, el("i", { style: "width:100%;height:150px" })),
+      el("div", { class: "tgrade" }, el("div", { class: "tsec" }, ...barras("40%", "100%", "100%", "100%", "100%")), el("div", { class: "tsec" }, ...barras("40%", "100%", "100%", "100%", "100%")))));
+}
+
+/** O modo automatico do ar: liga, limites e o que ele fez por ultimo (GET /api/auto). */
+function blocoAuto(d) {
+  const a = Object.assign({ ligado: false, podeLigar: false, podeDesligar: true, pausaMin: 120, inicio: 0, fim: 24 }, d.auto || {});
+  const mudar = x => gravarPref({ auto: Object.assign({}, a, x) });
+  const horas = (de, ate, v) => Array.from({ length: ate - de + 1 }, (_, i) => de + i).map(h => el("option", { value: h, selected: h === v }, String(h).padStart(2, "0") + ":00"));
+  const situacao = el("div", { class: "auto-sit mu" }, "Carregando…");
+  (async () => {
+    try {
+      const s = await api("auto");
+      const linhas = [];
+      if (s.pausaAte) linhas.push(el("div", { class: "auto-pausa" }, el("span", {}, "Pausado até " + hora(s.pausaAte) + " porque o ar foi mudado à mão."),
+        el("button", { class: "b peq", on: { click: async () => { await api("auto/retomar", "POST"); desenharAjustes(); } } }, "Retomar agora")));
+      linhas.push(el("div", { class: "rot", style: "margin-top:12px" }, "Últimas ações"));
+      linhas.push(...(s.registro.length ? s.registro.map(r => el("div", { class: "auto-reg" }, el("span", { class: "mu" }, dataHora(r.t)), el("span", {}, r.texto)))
+        : [el("div", { class: "mu" }, a.ligado ? "Nada ainda: ele olha a cada 5 minutos e só muda o que precisa." : "Desligado.")]));
+      situacao.className = "auto-sit";
+      situacao.replaceChildren(...linhas);
+    } catch (e) { situacao.textContent = "Sem situação: " + e.message; }
+  })();
+  return el("div", {},
+    chaveLinha("Modo automático", a.ligado, false, v => mudar({ ligado: v })),
+    el("div", { class: "mu", style: "margin:2px 0 10px" }, "A cada 5 minutos o servidor olha a temperatura de dentro e de fora, a umidade (a de dentro, quando o ar mede), a média dos últimos dias e a máxima de hoje, e põe o ar no modo e na temperatura de conforto. Mudanças pequenas não viram comando, e entre duas mudanças ele espera pelo menos 30 minutos."),
+    chaveLinha("Pode ligar o ar sozinho", a.podeLigar, !a.ligado, v => mudar({ podeLigar: v })),
+    chaveLinha("Pode desligar quando abrir a janela resolve", a.podeDesligar, !a.ligado, v => mudar({ podeDesligar: v })),
+    el("div", { class: "form", style: "margin-top:10px" },
+      el("label", { class: "campo" }, "Das", el("select", { disabled: !a.ligado, on: { change: e => mudar({ inicio: +e.target.value }) } }, horas(0, 23, a.inicio))),
+      el("label", { class: "campo" }, "Até", el("select", { disabled: !a.ligado, on: { change: e => mudar({ fim: +e.target.value }) } }, horas(1, 24, a.fim))),
+      el("label", { class: "campo" }, "Pausa ao mexer à mão", el("select", { disabled: !a.ligado, on: { change: e => mudar({ pausaMin: +e.target.value }) } },
+        [[30, "30 min"], [60, "1 hora"], [120, "2 horas"], [240, "4 horas"], [480, "8 horas"]].map(([v, t]) => el("option", { value: v, selected: v === a.pausaMin }, t))))),
+    situacao);
 }
 
 /** Cidade do clima: busca pelo nome na Open-Meteo (pelo servidor) e grava as coordenadas. */
@@ -1429,10 +1532,11 @@ const AJ_ICONES = {
   retorno: '<path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"/>',
   cenas: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
   clima: '<circle cx="9" cy="9" r="3.2"/><path d="M9 3v1.5M3 9h1.5M4.8 4.8l1 1M13.2 4.8l-1 1"/><path d="M8 20h9a3.5 3.5 0 0 0 .4-7A5 5 0 0 0 8 13.6 3.2 3.2 0 0 0 8 20z"/>',
+  auto: '<path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2"/><path d="M9 15.5 12 8l3 7.5M10.1 13h3.8"/>',
   servidor: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
   seta: '<path d="m9 6 6 6-6 6"/>', voltar: '<path d="m15 6-6 6 6 6"/>'
 };
-const AJ_COR = { alertas: "#EB5A4B", ar: "#2D7DF6", consumo: "#F08A24", retorno: "#2EA043", cenas: "#7B61E0", clima: "#1FA3C7", servidor: "#7C808B" };
+const AJ_COR = { alertas: "#EB5A4B", ar: "#2D7DF6", auto: "#0E9F9A", consumo: "#F08A24", retorno: "#2EA043", cenas: "#7B61E0", clima: "#1FA3C7", servidor: "#7C808B" };
 function ajSvg(n, cls) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("fill", "none"); s.setAttribute("stroke", "currentColor");
@@ -1537,11 +1641,14 @@ function desenharAjustes() {
     !ar || !ar.info.unidadeGrava ? el("div", { class: "mu", style: "margin-top:8px" }, "A unidade só muda com o ar conectado e se ele aceitar.") : null);
 
   const clima = cartaoSimples("Clima e local", "a cidade usada na previsão e na sugestão para o ar", null, blocoLocal(d));
+  const auto = cartaoSimples("Ar automático", "o servidor ajusta o ar sozinho pelo conforto", null, blocoAuto(d),
+    { dica: "Usa a mesma conta da sugestão: conforto adaptativo da ASHRAE 55 com a média dos últimos dias." });
 
   const sim = b => b ? 1 : 0;
   const secoes = [
     ["alertas", "Alertas", sim(d.alertaFalha) + sim(d.alertaDesconectado) + sim(d.alertaQuente) + sim(d.alertaLavadoraFim) + " de 4 ligados" + (d.ntfyTopico ? " · no celular" : ""), alertas],
     ["ar", "Ar-condicionado", (d.semBipe ? "Sem bipe" : "Com bipe") + " · " + (ehF ? "°F" : "°C"), arCartao],
+    ["auto", "Ar automático", !d.auto || !d.auto.ligado ? "Desligado" : "Ligado" + (d.auto.inicio === 0 && d.auto.fim === 24 ? "" : " · " + d.auto.inicio + "h às " + d.auto.fim + "h"), auto],
     ["consumo", "Consumo do ar", "Tarifa R$ " + String(d.tarifa).replace(".", ","), consumo],
     ["clima", "Clima e local", d.local ? d.local.nome : "Nenhuma cidade", clima],
     ["retorno", "Retorno das cenas", (({ 0: "Ventilar", 2: "Frio", 3: "Desumidificar", 5: "ECO" })[d.retornoModo] || "Manter") + " · " + d.retornoTemp + " °C", retorno],
