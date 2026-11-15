@@ -16,10 +16,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, model_validator
 
-from . import avisos, banco, casa, servico
+from . import avisos, banco, casa, clima, servico
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.8.0"
+VERSAO = "1.9.0"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
@@ -425,6 +425,60 @@ def _csv(linhas, colunas):
     return "\n".join(out) + "\n"
 
 
+@app.get("/api/clima", dependencies=[Depends(autorizado)])
+def clima_agora():
+    """Clima do local escolhido nos Ajustes (Open-Meteo). local nulo: nenhum local escolhido."""
+    loc = casa.preferencias()["dados"].get("local")
+    if not loc:
+        return {"local": None}
+    r = clima.previsao(loc["lat"], loc["lon"])
+    return {"local": loc, "clima": r, "erro": None if r else "sem resposta da Open-Meteo"}
+
+
+@app.get("/api/cidades", dependencies=[Depends(autorizado)])
+def buscar_cidades(q: str = ""):
+    return {"cidades": clima.cidades(q[:80])}
+
+
+def _sugestao_do_ar():
+    """(aparelho, sugestao) do primeiro ar com clima e temperatura de dentro; sugestao None se falta dado."""
+    loc = casa.preferencias()["dados"].get("local")
+    ar = next((a for a in servico.aparelhos() if a["tipo"] in ("008", "009")), None)
+    if not loc or not ar:
+        return ar, None, None
+    c = clima.previsao(loc["lat"], loc["lon"])
+    if not c or c["agora"]["temp"] is None:
+        return ar, None, c
+    d = casa.descrever_ar(ar)
+    dentro = d.get("ambiente")
+    if dentro is not None and d.get("unidade") == "°F":
+        dentro = (dentro - 32) * 5 / 9
+    ligado = bool(d.get("ligado"))
+    s = clima.sugestao(dentro, c["agora"]["temp"], c["agora"]["umidade"], c.get("mediaRecente"), c.get("maxHoje"),
+                       datetime.now().hour, ligado)
+    return ar, s, c
+
+
+@app.get("/api/sugestao", dependencies=[Depends(autorizado)])
+def sugestao():
+    ar, s, _ = _sugestao_do_ar()
+    return {"puid": ar["puid"] if ar else None, "sugestao": s}
+
+
+@app.post("/api/sugestao/aplicar", dependencies=[Depends(autorizado)])
+def aplicar_sugestao():
+    """Refaz a sugestao agora e manda ao ar. O cliente nao diz o que enviar: so confirma."""
+    ar, s, _ = _sugestao_do_ar()
+    if not s or not s.get("cena"):
+        raise HTTPException(409, "nao ha sugestao para aplicar")
+    props = casa.comando_da_cena(s["cena"], ar)
+    if props is None:
+        raise HTTPException(409, "este aparelho nao aceita a sugestao")
+    servico.enviar(ar["puid"], props, _sem_bipe(None))
+    servico.cancelar(ar["puid"], "retorno")
+    return {"ok": True, "sugestao": s}
+
+
 @app.get("/api/exportar/ar.csv", dependencies=[Depends(autorizado)])
 def exportar_ar(desde: int = 0):
     l = banco.linhas("SELECT puid,t,amb,alvo,ligado,modo FROM amostras_ar WHERE t > ? ORDER BY puid,t", (desde,))
@@ -530,7 +584,25 @@ def resumo_mes():
     for k in chaves:
         r[k] = {c: round(v, 2) for c, v in r[k].items()}
     r.update(mes=mes_atual, mesAnterior=mes_ant, tarifa=tarifa)
+    r["previsao"] = _previsao_do_mes(hoje, r["atual"], tarifa)
     return r
+
+
+def _previsao_do_mes(hoje, atual, tarifa):
+    """Medido ate agora + media diaria dos ultimos 7 dias x dias que faltam (so o ar; a lavadora
+    e de ciclos soltos e fica no medido). 'dias' diz quantos dias de dados sustentam a media."""
+    ult = (hoje.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    faltam = (ult - hoje).days
+    kwh7, dias7 = 0.0, 0
+    for a in servico.aparelhos():
+        if a["tipo"] in ("008", "009"):
+            for d in casa.consumo_ar(a["puid"], 7):
+                kwh7 += d["kwh"]
+                dias7 += 1 if d["horas"] > 0 else 0
+    media = kwh7 / 7
+    kwh = atual["kwh"] + media * faltam
+    return {"kwh": round(kwh, 2), "custo": round(atual["custo"] + media * faltam * tarifa, 2),
+            "mediaDia": round(media, 2), "diasComUso": dias7, "faltam": faltam}
 
 
 @app.get("/api/eventos", dependencies=[Depends(autorizado)])

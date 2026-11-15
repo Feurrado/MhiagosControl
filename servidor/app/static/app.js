@@ -700,11 +700,14 @@ function janelas() {
 async function carregarConsumo() {
   desenharGrafico();
   carregarLavadoraConsumo();
-  try { desenharResumo(await api("consumo?dias=62&meses=2")); }
+  try {
+    const [r, m] = await Promise.all([api("consumo?dias=62&meses=2"), api("resumo-mes").catch(() => null)]);
+    desenharResumo(r, m);
+  }
   catch (e) { trocarConteudo($("consResumo"), el("div", { class: "corpo mu" }, "Erro: " + e.message)); }
 }
 
-function desenharResumo(r) {
+function desenharResumo(r, mes) {
   const j = janelas(), p = r.preferencias, lista = estado ? estado.lista : [];
   const soma = (l, k) => l.reduce((t, d) => t + (d[k] || 0), 0);
   const ap = Object.entries(r.aparelhos).map(([puid, c]) => {
@@ -735,7 +738,9 @@ function desenharResumo(r) {
       el("div", { class: "destaques" },
         bloco("Custo estimado", "R$ " + num(total, 2), v == null ? "sem dados " + j.sem + " para comparar" : (v <= 0 ? "▼ " : "▲ ") + num(Math.abs(v), 0) + "% contra " + j.contra, v == null ? "" : v <= 0 ? "menos" : "mais"),
         bloco("Energia", num(kwh, 1) + " kWh", "média de " + num(kwh / Math.max(1, ap[0] ? ap[0].dias.length : 1), 2) + " kWh por dia"),
-        bloco("Água", num(agua, 0) + " L", "só a lavadora")),
+        bloco("Água", num(agua, 0) + " L", "só a lavadora"),
+        mes && mes.previsao ? bloco("Previsão de " + NOME_MES[+mes.mes.slice(5) - 1], "R$ " + num(mes.previsao.custo, 2),
+          mes.previsao.diasComUso < 3 ? "poucos dias de uso para prever" : num(mes.previsao.kwh, 0) + " kWh, a " + num(mes.previsao.mediaDia, 1) + " kWh por dia") : null),
       tabela,
       el("div", { class: "rot", style: "margin-top:18px" }, "Energia por dia"),
       empilhadas(ap)));
@@ -932,6 +937,90 @@ async function carregarLavadoraConsumo() {
             el("td", { class: "n" }, num(p.agua / p.n, 0) + " L"), el("td", { class: "n" }, num(p.energia / p.n, 2) + " kWh"))))] : null));
 }
 
+// ---------------- clima e sugestao ----------------
+
+const ICONES_CLIMA = {
+  sol: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
+  "sol-nuvem": '<circle cx="8.5" cy="8.5" r="3"/><path d="M8.5 3v1M3 8.5h1M4.6 4.6l.7.7M12.4 4.6l-.7.7"/><path d="M9 20h8a3.2 3.2 0 0 0 .4-6.4A4.6 4.6 0 0 0 9 14.6 2.7 2.7 0 0 0 9 20z"/>',
+  nuvem: '<path d="M7 19h10a4 4 0 0 0 .5-8A5.5 5.5 0 0 0 7 12.5 3.3 3.3 0 0 0 7 19z"/>',
+  chuva: '<path d="M7 15h10a4 4 0 0 0 .5-8A5.5 5.5 0 0 0 7 8.5 3.3 3.3 0 0 0 7 15z"/><path d="M9 18l-1 2.5M13 18l-1 2.5M17 18l-1 2.5"/>'
+};
+function icClima(n) {
+  const s = ajSvg("seta"); s.removeAttribute("class"); s.innerHTML = ICONES_CLIMA[n] || ICONES_CLIMA.nuvem; return s;
+}
+const DIA_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const diaDe = iso => { const [a, m, d] = iso.split("-").map(Number); return new Date(a, m - 1, d); };
+
+let climaDados = null, climaEm = 0;
+
+async function carregarClima(forcar) {
+  if (!forcar && Date.now() - climaEm < 5 * 60 * 1000) return;
+  climaEm = Date.now();
+  try {
+    const [c, s] = await Promise.all([api("clima"), api("sugestao")]);
+    climaDados = { c, s: s.sugestao };
+  } catch (e) { climaDados = { erro: e.message }; }
+  desenharClima();
+}
+
+async function aplicarSugestao(botao) {
+  botao.disabled = true;
+  try { await api("sugestao/aplicar", "POST"); aviso("Sugestão enviada ao ar"); setTimeout(atualizar, 3500); }
+  catch (e) { aviso("Não deu: " + e.message); }
+  botao.disabled = false;
+}
+
+function desenharClima() {
+  const caixa = $("clima");
+  if (!caixa) return;
+  const d = climaDados;
+  if (!d || d.erro || !d.c.local || !d.c.clima) {
+    const msg = !d ? "Carregando…" : d.erro ? "Clima indisponível: " + d.erro : !d.c.local ? "Escolha a cidade nos Ajustes para ver a previsão e a sugestão para o ar."
+      : "A Open-Meteo não respondeu agora.";
+    trocarConteudo(caixa, el("div", { class: "cab" }, el("div", { class: "ico" }, icClima("sol-nuvem")),
+      el("div", { class: "nomes" }, el("div", { class: "nome" }, "Clima"), el("div", { class: "det" }, msg))),
+      d && !d.erro && !d.c.local ? el("div", { class: "corpo" }, el("button", { class: "b", on: { click: () => irPara("ajustes-clima") } }, "Escolher cidade")) : null);
+    caixa.classList.toggle("oculto", !d);
+    return;
+  }
+  const c = d.c.clima, ag = c.agora, s = d.s;
+  const sug = s ? el("div", { class: "sugestao" },
+    el("div", {}, el("b", {}, s.titulo), el("span", {}, s.texto)),
+    s.cena ? el("button", { class: "b pri", on: { click: e => aplicarSugestao(e.currentTarget) } }, "Aplicar") : null) : null;
+  trocarConteudo(caixa,
+    el("div", { class: "cab" }, el("div", { class: "ico" }, icClima(ag.icone)),
+      el("div", { class: "nomes" }, el("div", { class: "nome" }, d.c.local.nome), el("div", { class: "det" }, ag.texto + (c.velho ? " · dados antigos" : "")))),
+    el("div", { class: "corpo" },
+      el("div", { class: "clima-agora" }, el("b", {}, num(ag.temp, 0) + " °C"), el("span", {}, ag.umidade != null ? "umidade " + num(ag.umidade, 0) + "%" : "")),
+      sug,
+      el("div", { class: "clima-horas" }, c.horas.map(h => el("div", {}, el("small", {}, h.hora), icClima(h.icone), el("b", {}, num(h.temp, 0) + "°")))),
+      el("div", { class: "clima-dias" }, c.dias.map((x, i) => el("div", {}, el("small", {}, i === 0 ? "hoje" : DIA_SEMANA[diaDe(x.dia).getDay()]), icClima(x.icone),
+        el("b", {}, num(x.max, 0) + "°"), el("span", {}, num(x.min, 0) + "°"))))));
+  caixa.classList.remove("oculto");
+}
+
+/** Cidade do clima: busca pelo nome na Open-Meteo (pelo servidor) e grava as coordenadas. */
+function blocoLocal(d) {
+  const achados = el("div", { class: "cidades" });
+  const entrada = el("input", { placeholder: "Buscar cidade", style: "flex:1;min-width:0", "aria-label": "Buscar cidade" });
+  let t = null;
+  const buscar = async () => {
+    const q = entrada.value.trim();
+    if (q.length < 2) { achados.replaceChildren(); return; }
+    try {
+      const r = await api("cidades?q=" + encodeURIComponent(q));
+      achados.replaceChildren(...(r.cidades.length ? r.cidades.map(c => el("button", { class: "b", type: "button",
+        on: { click: async () => { await gravarPref({ local: c }); climaEm = 0; carregarClima(true); } } }, c.nome)) : [el("div", { class: "mu" }, "Nenhuma cidade com esse nome.")]));
+    } catch (e) { achados.replaceChildren(el("div", { class: "mu" }, "Busca falhou: " + e.message)); }
+  };
+  entrada.addEventListener("input", () => { clearTimeout(t); t = setTimeout(buscar, 350); });
+  return el("div", {},
+    el("div", { class: "mu", style: "margin-bottom:8px" }, d.local ? "Agora: " + d.local.nome : "Nenhuma cidade escolhida. Sem ela o painel não mostra clima nem sugestão."),
+    el("div", { class: "linha" }, entrada, d.local ? el("button", { class: "b", on: { click: async () => { await gravarPref({ local: null }); climaDados = null; desenharClima(); } } }, "Remover") : null),
+    achados,
+    el("div", { class: "mu", style: "margin-top:10px" }, "Previsão da Open-Meteo (gratuita). A sugestão usa o conforto adaptativo (ASHRAE 55): a temperatura ideal sobe e desce com a média dos últimos dias lá fora."));
+}
+
 // ---------------- ajustes ----------------
 
 async function carregarPref() {
@@ -965,10 +1054,11 @@ const AJ_ICONES = {
   consumo: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
   retorno: '<path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"/>',
   cenas: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  clima: '<circle cx="9" cy="9" r="3.2"/><path d="M9 3v1.5M3 9h1.5M4.8 4.8l1 1M13.2 4.8l-1 1"/><path d="M8 20h9a3.5 3.5 0 0 0 .4-7A5 5 0 0 0 8 13.6 3.2 3.2 0 0 0 8 20z"/>',
   servidor: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
   seta: '<path d="m9 6 6 6-6 6"/>', voltar: '<path d="m15 6-6 6 6 6"/>'
 };
-const AJ_COR = { alertas: "#EB5A4B", ar: "#2D7DF6", consumo: "#F08A24", retorno: "#2EA043", cenas: "#7B61E0", servidor: "#7C808B" };
+const AJ_COR = { alertas: "#EB5A4B", ar: "#2D7DF6", consumo: "#F08A24", retorno: "#2EA043", cenas: "#7B61E0", clima: "#1FA3C7", servidor: "#7C808B" };
 function ajSvg(n, cls) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("fill", "none"); s.setAttribute("stroke", "currentColor");
@@ -1069,11 +1159,14 @@ function desenharAjustes() {
         on: { click: () => { comando(ar, { t_temp_type: String(n) }); desenharAjustes(); } } }, t)))),
     !ar || !ar.info.unidadeGrava ? el("div", { class: "mu", style: "margin-top:8px" }, "A unidade só muda com o ar conectado e se ele aceitar.") : null);
 
+  const clima = cartaoSimples("Clima e local", "a cidade usada na previsão e na sugestão para o ar", null, blocoLocal(d));
+
   const sim = b => b ? 1 : 0;
   const secoes = [
     ["alertas", "Alertas", sim(d.alertaFalha) + sim(d.alertaDesconectado) + sim(d.alertaQuente) + sim(d.alertaLavadoraFim) + " de 4 ligados" + (d.ntfyTopico ? " · no celular" : ""), alertas],
     ["ar", "Ar-condicionado", (d.semBipe ? "Sem bipe" : "Com bipe") + " · " + (ehF ? "°F" : "°C"), arCartao],
     ["consumo", "Consumo do ar", "Tarifa R$ " + String(d.tarifa).replace(".", ","), consumo],
+    ["clima", "Clima e local", d.local ? d.local.nome : "Nenhuma cidade", clima],
     ["retorno", "Retorno das cenas", (({ 0: "Ventilar", 2: "Frio", 3: "Desumidificar", 5: "ECO" })[d.retornoModo] || "Manter") + " · " + d.retornoTemp + " °C", retorno],
     ["cenas", "Cenas", lista.length + " de 8", cenas],
     ["servidor", "Servidor", pref.atualizado ? "Salvo " + dataHora(pref.atualizado) : "Nada salvo", conta]
@@ -1133,7 +1226,7 @@ async function tudo() {
     tudo.ciclos = Date.now();
     await carregarCiclos();
   }
-  if (abaAtual === "painel") desenharCartoes();
+  if (abaAtual === "painel") { desenharCartoes(); carregarClima(); }
 }
 
 async function escutar() {

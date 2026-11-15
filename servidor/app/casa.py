@@ -225,7 +225,7 @@ CENAS_PADRAO = [
 PREF_PADRAO = {
     "alertaFalha": True, "alertaDesconectado": True, "alertaQuente": True, "alertaLavadoraFim": True,
     "limiteQuente": 28, "potenciaFrio": 1100, "potenciaEco": 1100, "potenciaSeco": 600, "potenciaVentilar": 60,
-    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "ntfyTopico": "", "cenas": CENAS_PADRAO,
+    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "ntfyTopico": "", "local": None, "cenas": CENAS_PADRAO,
 }
 
 
@@ -270,6 +270,21 @@ def _validar_cenas(v):
     return r
 
 
+def _validar_local(v):
+    """Cidade do clima: nulo (sem clima) ou {nome, lat, lon} com coordenadas de verdade."""
+    if v is None:
+        return None
+    if not isinstance(v, dict):
+        raise PreferenciaInvalida("local: nulo ou {nome, lat, lon}")
+    nome, lat, lon = v.get("nome"), v.get("lat"), v.get("lon")
+    if not isinstance(nome, str) or not 1 <= len(nome.strip()) <= 80:
+        raise PreferenciaInvalida("local: nome de 1 a 80 letras")
+    for n, x, m in (("lat", lat, 90), ("lon", lon, 180)):
+        if isinstance(x, bool) or not isinstance(x, (int, float)) or abs(x) > m:
+            raise PreferenciaInvalida("local: %s fora da faixa" % n)
+    return {"nome": nome.strip(), "lat": round(float(lat), 2), "lon": round(float(lon), 2)}
+
+
 def validar_preferencias(dados):
     """So as chaves conhecidas, com o tipo e a faixa certos. Antes uma tarifa em texto
     ficava gravada e derrubava o consumo e o resumo do mes com erro 500."""
@@ -289,6 +304,8 @@ def validar_preferencias(dados):
             if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v < 100:
                 raise PreferenciaInvalida("tarifa: numero de 0 a 100")
             limpo[k] = round(float(v), 4)
+        elif k == "local":
+            limpo[k] = _validar_local(v)
         elif k == "cenas":
             limpo[k] = _validar_cenas(v)
         elif k == "ntfyTopico":

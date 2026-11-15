@@ -187,7 +187,18 @@
 
   /* ---------- consumo e ajustes ---------- */
   /* consumo num lugar so */
-  .destaques { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .sugestao { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; padding:12px 14px; background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; }
+  .sugestao b { display:block; } .sugestao span { font-size:13px; color:var(--muted); }
+  #clima { margin-bottom:14px; }
+  .clima-agora { display:flex; align-items:baseline; gap:12px; } .clima-agora b { font:600 30px "Segoe UI Variable Display","Segoe UI",sans-serif; } .clima-agora span { color:var(--muted); font-size:13px; }
+  .clima-horas, .clima-dias { display:grid; gap:6px; text-align:center; margin-top:10px; }
+  .clima-horas { grid-template-columns:repeat(6,1fr); } .clima-dias { grid-template-columns:repeat(5,1fr); }
+  .clima-horas > div, .clima-dias > div { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:13px; }
+  .clima-horas small, .clima-dias small { color:var(--muted); font-size:12px; } .clima-dias span { color:var(--muted); font-size:12px; }
+  .clima-horas svg, .clima-dias svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .cidades { display:flex; flex-direction:column; gap:6px; margin-top:10px; align-items:flex-start; }
+  @media (max-width:760px) { .sugestao { flex-direction:column; align-items:stretch; } .destaques { grid-template-columns:1fr 1fr; } }
+  .destaques { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
   .destaques > div { background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; padding:12px 14px; min-width:0; }
   .destaques small { display:block; color:var(--muted); font-size:12px; }
   .destaques b { display:block; font:600 24px "Segoe UI Variable Display","Segoe UI",sans-serif; margin:2px 0; white-space:nowrap; }
@@ -451,6 +462,7 @@
         <div><h1>Casa</h1><div class="sub" id="situacao"></div></div>
         <div class="acoes"><button class="b" id="lerAgora">Atualizar</button></div>
       </div>
+      <div class="cartao oculto" id="clima"></div>
       <div class="pilha" id="cartoes">
         <div class="cartao esqueleto"><div class="cab"><div class="ico"></div><div style="flex:1"><i style="width:140px"></i><i style="width:240px"></i></div></div>
           <div class="corpo" style="display:flex;gap:28px"><i style="width:230px;height:230px;border-radius:50%"></i><div style="flex:1"><i style="width:50%;height:48px"></i><i style="height:70px;margin-top:20px"></i><i style="height:44px;margin-top:16px"></i></div></div></div>
