@@ -89,6 +89,35 @@
     return s;
   }
 
+  // ---------------- movimento (Motion.cs) ----------------
+  // As mesmas duracoes e curvas da classica. Com as animacoes do Windows
+  // desligadas (prefers-reduced-motion no WebView2) tudo vai direto ao fim.
+  var MOV = { rapida: 83, media: 167, lenta: 250, padrao: "cubic-bezier(.4,0,.2,1)", entrada: "cubic-bezier(0,0,0,1)", saida: "cubic-bezier(1,0,1,1)" };
+  var movReduzido = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  function semMovimento() { return !!(movReduzido && movReduzido.matches) || typeof Element.prototype.animate !== "function"; }
+  function animar(elm, quadros, ms, curva) {
+    if (semMovimento() || !elm || !elm.isConnected) return null;
+    try { return elm.animate(quadros, { duration: ms, easing: curva || MOV.padrao }); } catch (e) { return null; }
+  }
+
+  /// Abre ou fecha deslizando a altura, como o CollapsiblePanel: 250 ms,
+  /// entrada suave ao abrir, saida ao fechar; virar no meio parte de onde esta.
+  function deslizarAltura(elm, abrir) {
+    var de = elm.hidden ? 0 : elm.getBoundingClientRect().height;
+    if (elm._anim) { elm._anim.cancel(); elm._anim = null; }
+    elm.hidden = false;
+    var ate = abrir ? elm.getBoundingClientRect().height : 0;
+    if (semMovimento() || !elm.isConnected || de === ate) { elm.hidden = !abrir; return; }
+    elm.style.overflow = "hidden";
+    elm.style.boxSizing = "border-box";
+    var a = elm.animate([{ height: de + "px" }, { height: ate + "px" }], { duration: MOV.lenta, easing: abrir ? MOV.entrada : MOV.saida });
+    elm._anim = a;
+    a.onfinish = function () {
+      elm._anim = null; elm.style.overflow = ""; elm.style.boxSizing = "";
+      if (!abrir) elm.hidden = true;
+    };
+  }
+
   var faixaTimer = 0;
   /// A faixa de aviso no alto do conteudo (FaixaDeAviso), com acao opcional.
   function faixa(texto, erro, acaoTexto, acao) {
@@ -1024,8 +1053,8 @@
 
     // O ar.
     var arNome = el("b"), arFora = el("small"), arNum = el("span", "alvo");
-    var menos = botao("\uE738", "redondo icone", function () { passo(-1); });
-    var mais = botao("\uE710", "redondo icone", function () { passo(1); });
+    var menos = botao("\uE738", "redondo icone", function () { piscar(menos); passo(-1); });
+    var mais = botao("\uE710", "redondo icone", function () { piscar(mais); passo(1); });
     menos.setAttribute("aria-label", t("Diminuir", "Lower"));
     mais.setAttribute("aria-label", t("Aumentar", "Raise"));
     var pilula = botao("", "pilula", function () {
@@ -1035,8 +1064,38 @@
       desenharAr();
       enviar("t_power", novo ? 1 : 0);
     });
-    var cartaoAr = el("div", "cartao vg-ar", null, el("span", "ic icone", "\uE9CA"),
+    var anel = el("span", "anel"), arIc = el("span", "ic icone", null, document.createTextNode("\uE9CA"), anel);
+    var cartaoAr = el("div", "cartao vg-ar", null, arIc,
       el("div", "ct", null, arNome, arFora), el("div", "ctl", null, menos, arNum, mais), pilula);
+
+    // O - e o + piscam ao clique (FlashDoBotao, 150 ms).
+    function piscar(b) {
+      if (b.disabled) return;
+      animar(b, [{ backgroundColor: cor("--accent"), color: "#fff" }, { backgroundColor: "transparent" }], 150, "linear");
+    }
+    // Ligar: um anel azul cresce ate 1,6x e some, e a borda do cartao acende
+    // e esmaece (700 ms). Desligar: um anel cinza se fecha sobre o icone.
+    var ligadoAntes = null, numAntes = null;
+    function animarLigado(ligado) {
+      if (ligadoAntes === null || ligadoAntes === ligado) { ligadoAntes = ligado; return; }
+      ligadoAntes = ligado;
+      // virar no meio recomeca do zero, como a classica
+      [anel, cartaoAr].forEach(function (x) { if (x.getAnimations) x.getAnimations().forEach(function (y) { y.cancel(); }); });
+      if (ligado) {
+        animar(anel, [{ transform: "scale(1)", opacity: 0.7, borderColor: cor("--accent") }, { transform: "scale(1.6)", opacity: 0, borderColor: cor("--accent") }], 700, MOV.entrada);
+        animar(cartaoAr, [{ boxShadow: "0 0 0 2.5px " + cor("--accent") }, { boxShadow: "0 0 0 2.5px transparent" }], 700, MOV.entrada);
+      } else {
+        animar(anel, [{ transform: "scale(1.6)", opacity: 0, borderColor: cor("--muted") }, { transform: "scale(1)", opacity: 0.66, borderColor: cor("--muted"), offset: 0.85 }, { transform: "scale(1)", opacity: 0, borderColor: cor("--muted") }], 450, MOV.padrao);
+      }
+    }
+    // O alvo desliza ao mudar (AnimacaoDoAr, 300 ms): ao subir, o novo entra
+    // por baixo; ao descer, por cima.
+    function deslizarNumero(v) {
+      if (numAntes === null || v === null || v === numAntes) { numAntes = v; return; }
+      var dir = v > numAntes ? 1 : -1;
+      numAntes = v;
+      animar(arNum, [{ transform: "translateY(" + (dir * 45) + "%)", opacity: 0 }, { transform: "none", opacity: 1 }], 300, MOV.entrada);
+    }
 
     function passo(d) {
       if (!ar || !ar.ajusta) return;
@@ -1062,6 +1121,9 @@
       if (ar.clima) arFora.appendChild(el("span", "quente", ar.clima));
       if (ar.origem) arFora.appendChild(document.createTextNode(" · " + ar.origem));
       var v = alvoLocal !== null ? alvoLocal : ar.alvo;
+      cartaoAr.classList.toggle("on", !!(ar.online && ar.ligado));
+      animarLigado(!!(ar.online && ar.ligado));
+      deslizarNumero(v === undefined ? null : v);
       limpar(arNum);
       arNum.appendChild(document.createTextNode(v === null || v === undefined ? "--" : String(v)));
       arNum.appendChild(el("small", "", "°"));
@@ -1129,8 +1191,8 @@
     return pct <= 10 ? "#EB5A4B" : pct <= 30 ? "#F0AF3C" : cor("--accent");
   }
 
-  function pilhaDesenhada(pct, c) {
-    var corpo = el("span", "pilha");
+  function pilhaDesenhada(pct, c, carregando) {
+    var corpo = el("span", "pilha" + (carregando ? " carga" : ""));
     var nivel = el("i");
     nivel.style.width = Math.max(0, Math.min(100, pct)) + "%";
     nivel.style.background = c;
@@ -1219,7 +1281,7 @@
     var pct = el("span", "bat-pct", d.pct === null ? "--" : d.pct + "%");
     pct.style.color = c;
     var linha = el("div", "bat-linha", null, pct);
-    if (d.pct !== null) linha.appendChild(pilhaDesenhada(d.pct, corDaBateria(d.pct, false) === c ? c : corDaBateria(d.pct, false)));
+    if (d.pct !== null) linha.appendChild(pilhaDesenhada(d.pct, corDaBateria(d.pct, false) === c ? c : corDaBateria(d.pct, false), !!d.carregando));
     var selo = el("span", "bat-selo" + (d.carregando ? " carga" : d.pct === null ? " off" : ""), null, el("i"), el("span", "", d.selo));
     linha.appendChild(selo);
     card.appendChild(el("div", "bat-cab", null, img, el("div", "bat-id", null, el("b", "", d.nome), linha)));
@@ -1239,14 +1301,15 @@
       det.appendChild(x);
     });
     var barra = botao("", "bat-mais", null);
-    function rotular() {
-      limpar(barra);
-      barra.appendChild(el("span", "seta icone" + (d.aberto ? " aberta" : ""), ""));
-      barra.appendChild(document.createTextNode(d.aberto ? T("LessDetails", t("Menos detalhes", "Less details")) : T("MoreDetails", t("Mais detalhes", "More details"))));
-      det.hidden = !d.aberto;
+    var seta = el("span", "seta icone", ""), rotulo = el("span");
+    barra.appendChild(seta); barra.appendChild(rotulo);
+    function rotular(animando) {
+      seta.classList.toggle("aberta", !!d.aberto);
+      rotulo.textContent = d.aberto ? T("LessDetails", t("Menos detalhes", "Less details")) : T("MoreDetails", t("Mais detalhes", "More details"));
+      if (animando) deslizarAltura(det, !!d.aberto); else det.hidden = !d.aberto;
     }
     barra.addEventListener("click", function () {
-      d.aberto = !d.aberto; rotular();
+      d.aberto = !d.aberto; rotular(true);
       pedir("bateria.detalhes", { chave: d.chave }).catch(function () { });
     });
     rotular();
@@ -1264,18 +1327,19 @@
     var botaoWidget = el("button", "b bat-widget");
     botaoWidget.type = "button";
     var painel = el("div", "bat-painel");
-    function desenharBotao() {
-      limpar(botaoWidget);
-      botaoWidget.appendChild(el("span", "icone", ""));
-      botaoWidget.appendChild(el("span", "", T("WidgetButton", "Widget")));
-      botaoWidget.appendChild(el("span", "icone seta-w" + (aberto ? " aberta" : ""), ""));
-      botaoWidget.title = T("WidgetButtonTip");
-      painel.hidden = !aberto;
+    var setaW = el("span", "icone seta-w", "");
+    botaoWidget.appendChild(el("span", "icone", ""));
+    botaoWidget.appendChild(el("span", "", T("WidgetButton", "Widget")));
+    botaoWidget.appendChild(setaW);
+    botaoWidget.title = T("WidgetButtonTip");
+    function desenharBotao(animando) {
+      setaW.classList.toggle("aberta", aberto);
+      if (animando) deslizarAltura(painel, aberto); else painel.hidden = !aberto;
     }
     botaoWidget.addEventListener("click", function () {
       aberto = !aberto;
       try { sessionStorage.setItem("widgetAberto", aberto ? "1" : "0"); } catch (e) { }
-      desenharBotao();
+      desenharBotao(true);
     });
     alvo.appendChild(el("div", "bat-topo", null, botaoWidget));
 
