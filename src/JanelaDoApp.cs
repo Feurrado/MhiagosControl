@@ -41,7 +41,8 @@ namespace MhiagosControl
         private bool _pronta, _casaIniciada;
         private string _casaOrigem = "", _casaEndereco = "";
         private Rectangle _casaArea = Rectangle.Empty;
-        private bool _casaVisivel;
+        private bool _casaVisivel, _casaAVista;
+        private readonly Timer _casaRecolhe;
 
         private static int _webView = -1;
 
@@ -106,6 +107,13 @@ namespace MhiagosControl
             _textoDoAviso.Interval = 900;
             _textoDoAviso.Tick += delegate { _textoDoAviso.Stop(); if (!IsDisposed && _aviso.Visible && _aviso.Text.Length == 0) _aviso.Text = T.NovoAbrindo; };
             _textoDoAviso.Start();
+            _casaRecolhe = new Timer();
+            _casaRecolhe.Interval = 400;
+            _casaRecolhe.Tick += delegate
+            {
+                _casaRecolhe.Stop();
+                if (!IsDisposed && _casa != null && !_casaAVista) _casa.Visible = false;
+            };
             _reserva = new Timer();
             _reserva.Interval = 2000;
             _reserva.Tick += delegate { MostrarPagina(); };
@@ -161,6 +169,7 @@ namespace MhiagosControl
             _aviso.Visible = true;
             if (_app != null) _app.Visible = false;
             if (_casa != null) _casa.Visible = false;
+            _casaAVista = false;
         }
 
         private void Iniciar()
@@ -363,7 +372,7 @@ namespace MhiagosControl
         {
             if (!_casaVisivel || _casaArea.Width < 50 || _casaArea.Height < 50)
             {
-                if (_casa != null) _casa.Visible = false;
+                EsconderCasa();
                 return;
             }
             if (_casa == null)
@@ -383,6 +392,41 @@ namespace MhiagosControl
             _casa.Bounds = _casaArea;
             _casa.Visible = _casaIniciada;
             _casa.BringToFront();
+            if (_casaIniciada && !_casaAVista)
+            {
+                _casaAVista = true;
+                _casaRecolhe.Stop();
+                RoteiroDaCasa(JanelaWeb.ScriptMostrar);
+            }
+        }
+
+        /// <summary>
+        /// Tira a Casa da area sem esconder o WebView na hora: ele continua desenhando,
+        /// apaga o conteudo (mhgOcultar) e so depois e escondido. Escondido direto, ele
+        /// guardaria o quadro cheio e, ao voltar, mostraria esse quadro antes da entrada.
+        /// </summary>
+        private void EsconderCasa()
+        {
+            if (_casa == null || !_casaAVista) return;
+            _casaAVista = false;
+            if (!_casa.Visible) return;
+            _casa.Location = new Point(-_casa.Width - 100, -_casa.Height - 100);
+            RoteiroDaCasa(JanelaWeb.ScriptOcultar);
+            _casaRecolhe.Stop();
+            _casaRecolhe.Start();
+        }
+
+        private void RoteiroDaCasa(string js)
+        {
+            try
+            {
+                if (_casa == null || _casa.CoreWebView2 == null) return;
+                _casa.CoreWebView2.ExecuteScriptAsync(js).ContinueWith(delegate(Task<string> t)
+                {
+                    if (t.Exception != null) Log.Write("interface nova: Casa, roteiro falhou (" + t.Exception.InnerException.GetType().Name + ")");
+                }, TaskContinuationOptions.OnlyOnFaulted);
+            }
+            catch (Exception ex) { Log.Error("interface nova: Casa", ex); }
         }
 
         private void AoIniciarCasa(object sender, CoreWebView2InitializationCompletedEventArgs e)
@@ -394,6 +438,7 @@ namespace MhiagosControl
                 CoreWebView2 c = _casa.CoreWebView2;
                 Endurecer(c);
                 c.AddScriptToExecuteOnDocumentCreatedAsync(JanelaWeb.Script(_casaOrigem, ServidorCasa.ChaveDaPagina));
+                c.AddScriptToExecuteOnDocumentCreatedAsync(JanelaWeb.ScriptOcultoAoCarregar);
                 c.AddScriptToExecuteOnDocumentCreatedAsync(JanelaWeb.ScriptEmbutido(_casaOrigem));
                 c.NavigationStarting += delegate(object s, CoreWebView2NavigationStartingEventArgs n)
                 {
@@ -427,6 +472,7 @@ namespace MhiagosControl
             _relogio.Stop();
             _relogio.Dispose();
             _reserva.Stop(); _reserva.Dispose();
+            _casaRecolhe.Stop(); _casaRecolhe.Dispose();
             _textoDoAviso.Stop(); _textoDoAviso.Dispose();
             _ponte.Enviar = null;
             _ponte.Adiar = null;

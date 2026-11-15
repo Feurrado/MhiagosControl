@@ -531,14 +531,16 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .b { transition:background-color 83ms linear, border-color 83ms linear, color 83ms linear; }
 /* Entrada no estilo da pagina da Casa (Material 3, mesmos tempos e curvas). */
 :root { --m3-entra:cubic-bezier(.05,.7,.1,1); --m3-padrao:cubic-bezier(.2,0,0,1); }
-@keyframes m3-fade-through { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
-@keyframes m3-surge { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
-@keyframes m3-abre { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
-.m3-aba { animation:m3-fade-through .28s var(--m3-entra) both; }
-.m3-surge { animation:m3-surge .42s var(--m3-entra) both; }
-.m3-abre { animation:m3-abre .26s var(--m3-entra) both; }
-.dialogo, .menu { animation:m3-abre .26s var(--m3-entra) both; }
-.fundo { animation:m3-esmaece .2s var(--m3-padrao) both; }
+/* Um padrao so, curto ("snappy"): pagina 120 ms, itens 200 ms subindo 8 px,
+   avisos, dialogos e menus 150 ms. A Casa recebe os mesmos tempos (JanelaWeb). */
+@keyframes m3-fade-through { from { opacity:0; } to { opacity:1; } }
+@keyframes m3-surge { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+@keyframes m3-abre { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+.m3-aba { animation:m3-fade-through .12s linear both; }
+.m3-surge { animation:m3-surge .2s var(--m3-entra) both; }
+.m3-abre { animation:m3-abre .15s var(--m3-entra) both; }
+.dialogo, .menu { animation:m3-abre .15s var(--m3-entra) both; }
+.fundo { animation:m3-esmaece .12s linear both; }
 @keyframes m3-esmaece { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration:0s !important; animation-duration:0s !important; animation-iteration-count:1 !important; }

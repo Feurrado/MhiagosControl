@@ -143,17 +143,23 @@
     // Na abertura da janela a pagina entra inteira, ja com tudo: os cartoes
     // subindo um a um ali pareciam carregamento.
     if (primeiraEntrada) return;
-    var cartoes = raiz.querySelectorAll(".cartao, .opcao, .grupo, .vg-cab, .mt-barra, .bat-topo");
-    var n = 0;
-    for (var i = 0; i < cartoes.length && n < 10; i++) {
+    // Todos os itens a vista entram, na ordem da tela, 20 ms um do outro e
+    // no maximo 160 ms de espera: a pagina inteira assenta em ~0,35 s, sem
+    // item ja pronto ao lado de item ainda escondido.
+    var cartoes = raiz.querySelectorAll(".cartao, .opcao, .grupo, .vg-cab, .mt-barra, .bat-topo, .vg-tiles > *");
+    var alto = window.innerHeight, lista = [];
+    for (var i = 0; i < cartoes.length; i++) {
       var c = cartoes[i];
       if (c.parentElement && c.parentElement.closest(".cartao")) continue;   // so os de primeiro nivel
       var r = c.getBoundingClientRect();
-      if (r.top > window.innerHeight) break;                                  // fora da vista nao anima
-      c.style.animationDelay = (n * 60) + "ms";
-      animarEntrada(c, "m3-surge");
-      n++;
+      if (r.bottom < 0 || r.top > alto) continue;                             // fora da vista nao anima
+      lista.push({ c: c, y: Math.round(r.top), x: Math.round(r.left) });
     }
+    lista.sort(function (a, b) { return a.y - b.y || a.x - b.x; });
+    lista.forEach(function (o, n) {
+      o.c.style.animationDelay = Math.min(n * 20, 160) + "ms";
+      animarEntrada(o.c, "m3-surge");
+    });
   }
 
   var aoPrimeiroEstado = null, primeiraEntrada = false;
@@ -924,24 +930,36 @@
     function y(v) { return base - (v - lo) / (hi - lo) * (base - topo); }
     var cheio = g.createLinearGradient(0, topo, 0, base);
     cheio.addColorStop(0, cor + "55"); cheio.addColorStop(1, cor + "11");
-    g.beginPath();
-    var aberto = false, ultimo = 0, primeiro = 0;
+    // Como na classica: falha curta (ate 2 leituras) segue a linha entre as
+    // vizinhas, sem quebrar; falha longa vira uma ponte tracejada e o
+    // preenchimento para ali, em vez de a curva sumir e reaparecer.
+    var trechos = [], atual = null, vazio = 0;
     for (var i = 0; i < n; i++) {
-      if (pontos[i] === null) continue;
-      if (!aberto) { g.moveTo(x(i), base); g.lineTo(x(i), y(pontos[i])); aberto = true; primeiro = i; }
-      else g.lineTo(x(i), y(pontos[i]));
-      ultimo = i;
+      if (pontos[i] === null || pontos[i] === undefined) { vazio++; continue; }
+      if (atual && vazio <= 2) atual.push(i);
+      else { atual = [i]; trechos.push(atual); }
+      vazio = 0;
     }
-    g.lineTo(x(ultimo), base); g.closePath();
-    g.fillStyle = cheio; g.fill();
-    g.beginPath();
-    var solto = true;
-    for (i = 0; i < n; i++) {
-      if (pontos[i] === null) { solto = true; continue; }
-      if (solto) g.moveTo(x(i), y(pontos[i])); else g.lineTo(x(i), y(pontos[i]));
-      solto = false;
+    g.lineJoin = "round";
+    trechos.forEach(function (tr) {
+      if (tr.length < 2) return;
+      g.beginPath();
+      g.moveTo(x(tr[0]), base);
+      tr.forEach(function (k) { g.lineTo(x(k), y(pontos[k])); });
+      g.lineTo(x(tr[tr.length - 1]), base); g.closePath();
+      g.fillStyle = cheio; g.fill();
+      g.beginPath();
+      tr.forEach(function (k, j) { if (j === 0) g.moveTo(x(k), y(pontos[k])); else g.lineTo(x(k), y(pontos[k])); });
+      g.strokeStyle = cor; g.lineWidth = 1.2 * dpr; g.stroke();
+    });
+    for (var t2 = 1; t2 < trechos.length; t2++) {
+      var de = trechos[t2 - 1][trechos[t2 - 1].length - 1], ate = trechos[t2][0];
+      g.beginPath();
+      g.setLineDash([3 * dpr, 3 * dpr]);
+      g.moveTo(x(de), y(pontos[de])); g.lineTo(x(ate), y(pontos[ate]));
+      g.strokeStyle = cor + "aa"; g.lineWidth = dpr; g.stroke();
+      g.setLineDash([]);
     }
-    g.strokeStyle = cor; g.lineWidth = 1.2 * dpr; g.lineJoin = "round"; g.stroke();
     g.beginPath();
     g.setLineDash([4 * dpr, 4 * dpr]);
     g.moveTo(0, y(media)); g.lineTo(w, y(media));
@@ -1018,7 +1036,9 @@
       c.title = d.sub;
       c.addEventListener("click", function () { mostrar("metricas"); });
       tiles.appendChild(c);
-      blocos.push({ id: d.id, d: d, canvas: canvas, valor: valor, faixa: faixa, cor: "" });
+      var b = { id: d.id, d: d, canvas: canvas, valor: valor, faixa: faixa, cor: "", hx: -1 };
+      seguirPonteiro(c, b);
+      blocos.push(b);
     });
     alvo.appendChild(tiles);
     // Os destaques numa fileira so; com mais de 3 e pouca largura, em duas.
@@ -1057,7 +1077,9 @@
       var c = el("div", "vg-mostrador", null, canvas, tt, valor, faixa);
       c.addEventListener("click", function () { mostrar("painel"); });
       cooler.appendChild(c);
-      return { n: n, canvas: canvas, tt: tt, valor: valor, faixa: faixa, id: "" };
+      var m = { n: n, canvas: canvas, tt: tt, valor: valor, faixa: faixa, id: "", hx: -1 };
+      seguirPonteiro(c, m);
+      return m;
     });
     meio.appendChild(cooler);
     alvo.appendChild(meio);
@@ -1073,15 +1095,32 @@
       linhas.forEach(function (l) { onde.appendChild(el("div", "", null, el("small", "", l[0]), el("b", "", l[1]))); });
     }
 
+    // Ponteiro sobre um grafico: o valor e a hora daquele ponto, como nas Metricas.
+    function seguirPonteiro(caixa, alvoDoPonto) {
+      caixa.addEventListener("pointermove", function (e) {
+        var hx = e.clientX - alvoDoPonto.canvas.getBoundingClientRect().left;
+        if (hx === alvoDoPonto.hx) return;
+        alvoDoPonto.hx = hx; pintar();
+      });
+      caixa.addEventListener("pointerleave", function () { alvoDoPonto.hx = -1; pintar(); });
+    }
+    function detalhe(x, unidade) {
+      if (x.hx >= 0) detalheNaCurva(x.canvas, serie[x.id], x.hex, x.f, x.hx, Date.now(), S.passo || 5, 300, unidade);
+    }
+
     function pintar() {
       blocos.forEach(function (b) {
-        b.f = desenharCurva(b.canvas, serie[b.id], corDoValor(b.d.unidade, leitura(b.id), b.d.atencao, b.d.perigo).replace("var(--danger)", "#EB5A4B").replace("var(--warn)", "#F0AF3C").replace("var(--quente)", cor("--quente")).replace("var(--accent-text)", cor("--accent-text")));
+        b.hex = corDoValor(b.d.unidade, leitura(b.id), b.d.atencao, b.d.perigo).replace("var(--danger)", "#EB5A4B").replace("var(--warn)", "#F0AF3C").replace("var(--quente)", cor("--quente")).replace("var(--accent-text)", cor("--accent-text"));
+        b.f = desenharCurva(b.canvas, serie[b.id], b.hex);
+        detalhe(b, b.d.unidade);
         caber(b);
       });
       mostradores.forEach(function (m) {
-        var s = sensor(m.id), c = m.n === 1 ? cor("--quente") : cor("--accent-text");
-        var f = desenharCurva(m.canvas, serie[m.id], c);
-        m.faixa.textContent = mm(f);
+        var s = sensor(m.id);
+        m.hex = m.n === 1 ? cor("--quente") : cor("--accent-text");
+        m.f = desenharCurva(m.canvas, serie[m.id], m.hex);
+        detalhe(m, s ? s.unidade : "");
+        m.faixa.textContent = mm(m.f);
       });
     }
 
