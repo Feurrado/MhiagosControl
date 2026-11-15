@@ -135,6 +135,12 @@ namespace MhiagosControl
             return Pedir("GET", "/api/sugestao", null);
         }
 
+        /// <summary>O tempo da cidade da casa, com a qualidade do ar (GET /api/clima). Lanca na falha.</summary>
+        public static Dictionary<string, object> Clima()
+        {
+            return Pedir("GET", "/api/clima", null);
+        }
+
         /// <summary>Pede ao servidor que aplique a sugestao atual ao ar (ele a refaz na hora). Lanca na falha.</summary>
         public static void AplicarSugestao()
         {

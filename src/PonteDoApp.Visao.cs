@@ -45,6 +45,7 @@ namespace MhiagosControl
                 r["ar"] = x;
             }
             else r["ar"] = null;
+            r["tempo"] = SugestaoCasa.Tempo();
 
             CicloAtual c = lav != null ? CicloAtual.De(lav) : null;
             bool temCiclo = c != null && c.Online && c.Rodando;

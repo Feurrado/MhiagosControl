@@ -1213,6 +1213,29 @@
   /// A casa na Visao geral, igual a classica: o ar com - e + (espera 700 ms
   /// antes de enviar) e a pilula de liga/desliga; a lavadora so durante um
   /// ciclo, com o tempo, o fim e as etapas; o convite quando nao ha nada.
+  // Icones do tempo em traco (os mesmos da pagina da Casa), com cor por parte: sol, lua, nuvem, gota, raio.
+  var NUV = ["path", { "class": "n", d: "M7 18.5h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 11.6 3.45 3.45 0 0 0 7 18.5z" }];
+  var NUV_ALTA = ["path", { "class": "n", d: "M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 8.1 3.45 3.45 0 0 0 7 15z" }];
+  var NUV_BAIXA = ["path", { "class": "n", d: "M10.5 20.5h7a3.5 3.5 0 0 0 .5-6.96 4.8 4.8 0 0 0-9.1 1.06 2.95 2.95 0 0 0 1.6 5.9z" }];
+  var ICONES_TEMPO = {
+    sol: [["circle", { "class": "s", cx: 12, cy: 12, r: 4.2 }], ["path", { "class": "s", d: "M12 2.8v2.2M12 19v2.2M2.8 12H5M19 12h2.2M5.5 5.5 7 7M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5" }]],
+    lua: [["path", { "class": "l", d: "M19.5 14.6A7.6 7.6 0 0 1 9.4 4.5a7.6 7.6 0 1 0 10.1 10.1z" }]],
+    "sol-nuvem": [["circle", { "class": "s", cx: 8.5, cy: 8, r: 3 }], ["path", { "class": "s", d: "M8.5 2.2v1.2M2.7 8h1.2M4.4 3.9l.9.9M12.6 3.9l-.9.9M4.4 12.1l.9-.9" }], NUV_BAIXA],
+    "lua-nuvem": [["path", { "class": "l", d: "M12.3 9.2A4.6 4.6 0 0 1 6.3 3.2a4.6 4.6 0 1 0 6 6z" }], NUV_BAIXA],
+    nuvem: [NUV],
+    neblina: [NUV_ALTA, ["path", { "class": "n", d: "M4 18h16M6 21h12" }]],
+    garoa: [NUV_ALTA, ["path", { "class": "g", d: "M8.5 18.2v1M12 19v1M15.5 18.2v1" }]],
+    chuva: [NUV_ALTA, ["path", { "class": "g", d: "M8.2 17.5l-1 2.6M12.2 17.5l-1 2.6M16.2 17.5l-1 2.6" }]],
+    "chuva-forte": [NUV_ALTA, ["path", { "class": "g", d: "M7 17.5l-1.4 3.6M10.4 17.5 9 21.1M13.8 17.5l-1.4 3.6M17.2 17.5l-1.4 3.6" }]],
+    tempestade: [NUV_ALTA, ["path", { "class": "r", d: "M12.8 15.5 10.6 19h3l-2.2 3.5" }]],
+    neve: [NUV_ALTA, ["path", { "class": "g", d: "M8 18.5h.01M12 19.5h.01M16 18.5h.01M10 21.5h.01M14 21.5h.01" }]]
+  };
+  function iconeDoTempo(nome) {
+    var s = svg(ICONES_TEMPO[nome] || ICONES_TEMPO.nuvem, "0 0 24 24");
+    s.setAttribute("class", "tic");
+    return s;
+  }
+
   function cartoesDaCasa() {
     var raiz = el("div", "vg-casa-pilha");
     var ultimo = null, alvoLocal = null, espera = 0, ar = null;
@@ -1335,6 +1358,41 @@
     });
     var cartaoSug = el("div", "cartao vg-casa vg-sug", null, el("span", "ic icone", "\uE706"), el("div", "ct", null, sugTitulo, sugTexto), sugAplicar);
 
+    // O tempo da cidade da casa (do servidor): agora, maxima e minima, AQI e as proximas horas.
+    // Com tempo, a sugestao entra no mesmo cartao, abaixo de uma linha, em vez de um cartao a parte.
+    var tpIc = el("span", "ic"), tpTitulo = el("b"), tpLinha = el("small"), tpHoras = el("div", "horas");
+    var tpSug = el("div", "sug");
+    var cartaoTempo = el("div", "cartao vg-tempo", null,
+      el("div", "topo", null, tpIc, el("div", "ct", null, tpTitulo, tpLinha), tpHoras), tpSug);
+    cartaoTempo.addEventListener("dblclick", function (e) { if (!e.target.closest("button")) mostrar("casa"); });
+    function graus(v) { return v === null || v === undefined ? "--" : v + "°"; }
+    function desenharTempo(tp, sug) {
+      limpar(tpIc); tpIc.appendChild(iconeDoTempo(tp.icone));
+      tpTitulo.textContent = graus(tp.temp) + "  " + tp.texto;
+      limpar(tpLinha);
+      tpLinha.appendChild(document.createTextNode(tp.local + " · " + t("Máx ", "High ") + graus(tp.max) + t("  Mín ", "  Low ") + graus(tp.min)));
+      if (tp.aqi !== null && tp.aqi !== undefined) {
+        var p = el("span", "aqi", null, el("i"));
+        p.firstChild.style.background = tp.aqiCor;
+        p.appendChild(document.createTextNode("AQI " + tp.aqi + (tp.aqiTexto ? " " + tp.aqiTexto : "")));
+        tpLinha.appendChild(document.createTextNode(" · "));
+        tpLinha.appendChild(p);
+      }
+      tpLinha.title = tpLinha.textContent;
+      limpar(tpHoras);
+      (tp.horas || []).forEach(function (h) {
+        tpHoras.appendChild(el("div", "", null, el("small", "", h.hora), iconeDoTempo(h.icone), el("b", "", graus(h.temp))));
+      });
+      limpar(tpSug);
+      tpSug.style.display = sug ? "" : "none";
+      if (sug) {
+        tpSug.appendChild(el("div", "ct", null, el("b", "", sug.titulo), el("small", "", sug.texto)));
+        tpSug.lastChild.lastChild.title = sug.texto;
+        sugAplicar.style.display = sug.aplicavel ? "" : "none";
+        tpSug.appendChild(sugAplicar);
+      }
+    }
+
     function definir(v) {
       v = v || { convite: { titulo: T("VisaoConecteCasa", t("Conecte a casa", "Connect your home")), texto: "" } };
       var chave = JSON.stringify(v);
@@ -1343,7 +1401,10 @@
       limpar(raiz);
       ar = v.ar ? JSON.parse(JSON.stringify(v.ar)) : null;
       if (ar) { desenharAr(); raiz.appendChild(cartaoAr); }
-      if (ar && ar.sug) {
+      var sug = ar ? ar.sug : null;
+      if (v.tempo) { desenharTempo(v.tempo, sug); raiz.appendChild(cartaoTempo); }
+      else if (sug) {
+        cartaoSug.appendChild(sugAplicar);
         sugTitulo.textContent = ar.sug.titulo;
         sugTexto.textContent = ar.sug.texto;
         sugTexto.title = ar.sug.texto;

@@ -87,6 +87,17 @@ namespace MhiagosControl
             Verdade(sem != null && Json.Texto(sem, "aplicavel") == "false", "sugestao: sem cena nao tem Aplicar");
             Verdade(SugestaoCasa.Montar(Json.Ler("{\"puid\":null,\"sugestao\":null}") as Dictionary<string, object>) == null, "sugestao: nula some");
             Verdade(SugestaoCasa.Montar(null) == null, "sugestao: sem resposta some");
+
+            // O tempo da casa (GET /api/clima) para o cartao da Visao geral: so as horas de verdade, AQI com cor validada.
+            Dictionary<string, object> tp = SugestaoCasa.MontarTempo(Json.Ler("{\"local\":{\"nome\":\"Campinas, SP, BR\",\"lat\":-22.9,\"lon\":-47.06},"
+                + "\"clima\":{\"agora\":{\"temp\":23.6,\"texto\":\"Nublado\",\"icone\":\"nuvem\"},\"dias\":[{\"max\":27.2,\"min\":17}],"
+                + "\"horas\":[{\"hora\":\"20:00\",\"temp\":22,\"icone\":\"lua\"},{\"hora\":\"05:14\",\"tipo\":\"nascer\"},{\"hora\":\"21:00\",\"temp\":21.4,\"icone\":\"lua\"}]},"
+                + "\"ar\":{\"aqi\":42,\"categoria\":\"Boa\",\"cor\":\"red;x\"}}") as Dictionary<string, object>);
+            Verdade(tp != null && Json.Texto(tp, "local") == "Campinas" && Json.Texto(tp, "temp") == "24" && Json.Texto(tp, "max") == "27", "tempo: agora e hoje");
+            Verdade(tp != null && ((List<object>)tp["horas"]).Count == 2 && Json.Texto((Dictionary<string, object>)((List<object>)tp["horas"])[1], "hora") == "21h", "tempo: nascer do sol fora das horas");
+            Verdade(tp != null && Json.Texto(tp, "aqi") == "42" && Json.Texto(tp, "aqiCor") == "#888888", "tempo: cor do AQI validada");
+            Verdade(SugestaoCasa.MontarTempo(Json.Ler("{\"local\":null,\"locais\":[]}") as Dictionary<string, object>) == null, "tempo: sem cidade some");
+            Verdade(SugestaoCasa.MontarTempo(null) == null, "tempo: sem resposta some");
         }
     }
 }
