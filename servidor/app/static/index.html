@@ -141,6 +141,7 @@
   .tile.horiz svg { width:18px; height:18px; }
   .tile:hover:not(:disabled) { background:var(--hover); }
   .tile.on { color:#fff; font-weight:600; }
+  .tile.tile-auto.on-auto { color:var(--accent-text, var(--accent)); font-weight:600; border-color:var(--accent); background:color-mix(in srgb, var(--accent) 16%, var(--surface-alt)); }
   .baixo { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px; }
   .cenas { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; }
   .cena { all:unset; cursor:pointer; display:flex; align-items:center; gap:12px; border:1px solid var(--border); border-radius:8px; padding:10px 12px; min-width:0; }

@@ -215,6 +215,7 @@ const ICONES = {
   lua: '<path ' + L + ' d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
   floco: '<g ' + L + '><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7"/><path d="M9 4l3 2 3-2M9 20l3-2 3 2"/></g>',
   folha: '<path ' + L + ' d="M5 19C5 10 11 5 20 4c0 9-5 15-14 15zM5 19l8-8"/>',
+  brilho: '<g ' + L + '><path d="M10 3.5l1.6 4.4L16 9.5l-4.4 1.6L10 15.5l-1.6-4.4L4 9.5l4.4-1.6z"/><path d="M17.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></g>',
   sol: '<g ' + L + '><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g>',
   gota: '<path ' + L + ' d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z"/>',
   ventoinha: '<g ' + L + '><circle cx="12" cy="12" r="1.6"/><path d="M12 10c0-4 1-7 4-7 2 0 2 3 0 5l-4 2zM14 12c4 0 7 1 7 4 0 2-3 2-5 0l-2-4zM12 14c0 4-1 7-4 7-2 0-2-3 0-5l4-2zM10 12c-4 0-7-1-7-4 0-2 3-2 5 0l2 4z"/></g>',
@@ -561,6 +562,22 @@ function cartaoAr(a) {
         disabled: !ok || !ligado || !grava, "data-id": a.puid + k + m.valor, on: { click: () => comando(a, { [k]: String(m.valor) }) } }, ic(m, n), el("span", {}, m.nome));
     }));
 
+  // O ar automatico do servidor, ao lado dos modos: acende com borda e fundo suaves (nao e um modo do aparelho).
+  const auto = Object.assign({ ligado: false }, (pref && pref.dados.auto) || {});
+  const btAuto = el("button", { class: "tile tile-auto" + (auto.ligado ? " on-auto" : ""), "aria-pressed": String(auto.ligado), disabled: !ok || !pref,
+    title: auto.ligado ? "Ar automático ligado: o servidor ajusta modo e temperatura pelo conforto. Toque para desligar."
+      : "Ligar o ar automático: o servidor ajusta modo e temperatura pelo conforto (Ajustes › Ar automático).",
+    "data-id": a.puid + "auto", on: { click: async () => {
+      await gravarPref({ auto: Object.assign({}, auto, { ligado: !auto.ligado }) });
+      aviso(!auto.ligado ? "Ar automático ligado" : "Ar automático desligado");
+    } } }, icone("brilho"), el("span", {}, i.modos.some(m => m.valor === 4) ? "Auto conforto" : "Auto"));
+  const linhaModos = () => {
+    const t = tiles(i.modos, modo, "t_work_mode", i.grava.t_work_mode, false, m => icone(ICONE_MODO[m.valor]));
+    t.appendChild(btAuto);
+    t.style.gridTemplateColumns = "repeat(" + (i.modos.length + 1) + ",1fr)";
+    return t;
+  };
+
   const extras = [i.umidade != null ? "Umidade " + num(i.umidade, 0) + "%" : null, i.potencia != null ? "Potência " + num(i.potencia, 0) + " W" : null,
     i.filtro ? "Limpar o filtro" : null].filter(Boolean);
   const direita = el("div", {},
@@ -572,7 +589,7 @@ function cartaoAr(a) {
         el("button", { class: "redondo" + (noturno && ligado ? " on" : ""), title: "Apagar LEDs (liga o modo noturno do aparelho)", "data-id": a.puid + "lua", disabled: !ok || !ligado,
           on: { click: () => comando(a, { t_sleep: noturno ? "0" : "1" }) } }, icone("lua"))) : null),
     extras.length ? el("div", { class: "mu", style: "margin-top:8px" }, extras.join("  ·  ")) : null,
-    i.modos.length ? [el("div", { class: "rot" }, "Modo"), tiles(i.modos, modo, "t_work_mode", i.grava.t_work_mode, false, m => icone(ICONE_MODO[m.valor]))] : null,
+    i.modos.length ? [el("div", { class: "rot" }, "Modo"), linhaModos()] : null,
     i.ventos.length ? [el("div", { class: "rot" }, "Ventilador"), tiles(i.ventos, vento, "t_fan_speed", i.grava.t_fan_speed, true, (m, n) => icBarras(n + 1))] : null);
 
   // Cenas e timer lado a lado, como no app
