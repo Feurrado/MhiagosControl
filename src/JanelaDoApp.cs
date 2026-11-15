@@ -438,6 +438,7 @@ namespace MhiagosControl
                 CoreWebView2 c = _casa.CoreWebView2;
                 Endurecer(c);
                 c.AddScriptToExecuteOnDocumentCreatedAsync(JanelaWeb.Script(_casaOrigem, ServidorCasa.ChaveDaPagina));
+                c.AddScriptToExecuteOnDocumentCreatedAsync(JanelaWeb.ScriptOcultoAoCarregar);
                 c.AddScriptToExecuteOnDocumentCreatedAsync(JanelaWeb.ScriptEmbutido(_casaOrigem));
                 c.NavigationStarting += delegate(object s, CoreWebView2NavigationStartingEventArgs n)
                 {

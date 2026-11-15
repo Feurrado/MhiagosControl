@@ -80,7 +80,6 @@ namespace MhiagosControl
             " @keyframes mhg-entra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }" +
             " @keyframes mhg-esmaece { from { opacity: 0; } to { opacity: 1; } }" +
             " .mhg-pag { animation: mhg-esmaece .12s linear both; } .mhg-item { animation: mhg-entra .2s cubic-bezier(.05,.7,.1,1) both; }" +
-            " html.mhg-oculto .app, html.mhg-oculto main { opacity: 0 !important; }" +
             " @media (prefers-reduced-motion: reduce) { .mhg-pag, .mhg-item { animation: none !important; } }";
 
         /// <summary>
@@ -92,26 +91,36 @@ namespace MhiagosControl
         /// outro (no maximo 160 ms); cartao que a pagina troca durante a entrada (a
         /// Casa redesenha ao voltar a ficar visivel) entra no mesmo ponto da animacao
         /// do que ele substituiu, em vez de aparecer pronto no meio dos outros.
+        /// Na primeira abertura a pagina nasce apagada (ScriptOcultoAoCarregar) e a
+        /// entrada so roda quando os cartoes de verdade substituiram o esqueleto
+        /// (ou depois de 2 s, se o servidor nao responder).
         /// </summary>
         private const string Entrada =
-            "var an=function(e,c,d){e.classList.remove(c);void e.offsetWidth;e.style.animationDelay=d||'';e.classList.add(c);" +
+            "var an=function(e,c,d){e.classList.remove(c,'m3-surge','m3-aba','m3-abre');void e.offsetWidth;e.style.animationDelay=d||'';e.classList.add(c);" +
             "e.addEventListener('animationend',function f(v){if(v.target!==e)return;e.classList.remove(c);e.style.animationDelay='';e.removeEventListener('animationend',f);});};" +
             "var topo=function(m){var h=innerHeight,l=[];m.querySelectorAll('.cartao').forEach(function(c){if(c.parentElement&&c.parentElement.closest('.cartao'))return;" +
             "var r=c.getBoundingClientRect();if(r.width===0||r.bottom<0||r.top>h)return;l.push({c:c,y:r.top,x:r.left});});" +
             "l.sort(function(a,b){return a.y-b.y||a.x-b.x;});return l;};" +
             "var obs=null,fim=function(){if(obs){obs.disconnect();obs=null;}};" +
-            "window.mhgOcultar=function(){fim();document.documentElement.classList.add('mhg-oculto');};" +
-            "window.mhgMostrar=function(){try{var d=document.documentElement,oculto=d.classList.contains('mhg-oculto');d.classList.remove('mhg-oculto');fim();" +
+            "var oc=new CSSStyleSheet();oc.replaceSync('.app, main { opacity: 0 !important; }');oc.disabled=!window.mhgNasceOculto;" +
+            "document.adoptedStyleSheets=document.adoptedStyleSheets.concat([oc]);var quer=true,pronta=false,t1=Date.now();" +
+            "var carregou=function(){var m=document.querySelector('main');if(!m)return false;" +
+            "var e=m.querySelectorAll('.esqueleto');for(var i=0;i<e.length;i++)if(e[i].getBoundingClientRect().width>0)return false;return true;};" +
+            "window.mhgOcultar=function(){quer=false;fim();oc.disabled=false;};" +
+            "window.mhgMostrar=function(){quer=true;if(!pronta)return;try{var oculto=!oc.disabled;oc.disabled=true;fim();" +
             "var m=document.querySelector('main');if(!oculto||!m||matchMedia('(prefers-reduced-motion: reduce)').matches)return;" +
             "an(document.querySelector('.app')||m,'mhg-pag');var t0=performance.now(),feito=new WeakSet();" +
             "topo(m).forEach(function(o,n){feito.add(o.c);an(o.c,'mhg-item',Math.min(n*20,160)+'ms');});" +
             "obs=new MutationObserver(function(){var p=performance.now()-t0;if(p>360){fim();return;}" +
             "topo(m).forEach(function(o,n){if(feito.has(o.c))return;feito.add(o.c);an(o.c,'mhg-item',Math.round(Math.min(n*20,160)-p)+'ms');});});" +
-            "obs.observe(m,{childList:true,subtree:true});setTimeout(fim,400);}catch(e){}};";
+            "obs.observe(m,{childList:true,subtree:true});setTimeout(fim,400);}catch(e){}};" +
+            "(function espera(){if(carregou()||Date.now()-t1>2000){pronta=true;if(quer&&document.visibilityState==='visible')mhgMostrar();return;}setTimeout(espera,40);})();";
 
         /// <summary>Chamados pela janela ao tirar e ao trazer de volta a camada da Casa.</summary>
         internal const string ScriptOcultar = "window.mhgOcultar&&mhgOcultar();";
         internal const string ScriptMostrar = "window.mhgMostrar&&mhgMostrar();";
+        /// <summary>So na janela do app: a Casa nasce apagada e espera mhgMostrar (ver Entrada).</summary>
+        internal const string ScriptOcultoAoCarregar = "window.mhgNasceOculto=1;";
 
         internal static string ScriptEmbutido(string origem)
         {
