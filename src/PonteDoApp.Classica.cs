@@ -36,6 +36,8 @@ namespace MhiagosControl
                 case "diagnostico.salvar": SalvarDiagnostico(id); return null;
                 case "github": Navegador.Abrir(Repositorio); return Feito(id, true);
                 case "visao.sistema": Sistema(id); return null;
+                case "baterias": return Feito(id, Baterias());
+                case "bateria.detalhes": DetalhesDaBateria.Alternar(Texto(a, "chave")); return Feito(id, Baterias());
                 default: return Falha(id, "pedido desconhecido");
             }
         }

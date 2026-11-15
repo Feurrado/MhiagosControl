@@ -1022,91 +1022,219 @@
 
   // ---------------- Baterias ----------------
 
-  var ESTADOS = {
-    Desligado: ["desligado", "off"], Desconectado: ["desconectado", "disconnected"],
-    SemLeitura: ["sem leitura", "no reading"], Dormindo: ["dormindo", "asleep"]
-  };
+  var VERDE = "#2EA043";
 
-  function desenharBaterias(alvo, curto) {
-    limpar(alvo);
-    var lista = E ? E.baterias : [];
-    if (!lista.length) {
-      alvo.appendChild(el("div", "vazio", t("Nenhum periférico com bateria encontrado.", "No battery-powered peripheral found.")));
-      return;
-    }
-    lista.forEach(function (b) {
-      var tem = b.bateria !== null && b.bateria !== undefined;
-      var nota = "";
-      if (b.carregando) nota = t("carregando", "charging");
-      else if (!tem) { var e = ESTADOS[b.estado]; nota = e ? t(e[0], e[1]) : b.estado; }
-      else if (b.restante) nota = "~" + b.restante;
-      var nome = el("div", "nome", null, el("span", "", b.nome));
-      if (nota) nome.appendChild(el("small", "", nota));
-      var barra = el("div", "barra"), nivel = el("i");
-      nivel.style.width = (tem ? Math.max(0, Math.min(100, b.bateria)) : 0) + "%";
-      if (tem && b.bateria <= 15) nivel.className = "baixa"; else if (tem && b.bateria <= 35) nivel.className = "media";
-      barra.appendChild(nivel);
-      var linhaDaBateria = el("div", "bat", null, nome, barra, el("span", "pct", tem ? b.bateria + "%" : "--"));
-      if (!curto) linhaDaBateria.title = b.fonte;
-      alvo.appendChild(linhaDaBateria);
-    });
+  /// A cor do nivel: vermelho ate 10%, amarelo ate 30%, destaque acima; verde no cabo.
+  function corDaBateria(pct, carregando) {
+    if (pct === null || pct === undefined) return cor("--muted");
+    if (carregando) return VERDE;
+    return pct <= 10 ? "#EB5A4B" : pct <= 30 ? "#F0AF3C" : cor("--accent");
   }
 
+  function pilhaDesenhada(pct, c) {
+    var corpo = el("span", "pilha");
+    var nivel = el("i");
+    nivel.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    nivel.style.background = c;
+    corpo.appendChild(nivel);
+    return el("span", "pilha-caixa", null, corpo, el("span", "pilha-ponta"));
+  }
 
-  /// Um botao que pede confirmacao no segundo clique (a pagina nao usa caixas de dialogo).
-  function botaoPerigoso(texto, confirmar, aoConfirmar) {
-    var armado = false, relogio = 0;
-    var b = botao(texto, "b", function () {
-      if (!armado) {
-        armado = true;
-        b.textContent = confirmar;
-        b.classList.add("perigo");
-        relogio = setTimeout(function () { armado = false; b.textContent = texto; b.classList.remove("perigo"); }, 4000);
-        return;
-      }
-      clearTimeout(relogio);
-      aoConfirmar();
+  /// A carga das ultimas 48 h: faixa verde nas horas no cabo, curva que se
+  /// interrompe nas lacunas (com ponte tracejada) e um ponto em "agora".
+  function desenharCurvaDaBateria(canvas, d, c) {
+    var r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    var W = Math.max(10, Math.round(r.width)), H = Math.max(10, Math.round(r.height));
+    if (canvas.width !== W * dpr) canvas.width = W * dpr;
+    if (canvas.height !== H * dpr) canvas.height = H * dpr;
+    var g = canvas.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+    var ax = 40, ay = 6, aw = W - 40 - 6, ah = H - 6 - 20, janela = 48 * 60;
+    g.font = "12px 'Segoe UI Variable Small','Segoe UI',sans-serif";
+    g.fillStyle = cor("--faint"); g.textBaseline = "middle"; g.textAlign = "right";
+    [0, 50, 100].forEach(function (n) {
+      var y = Math.round(ay + ah - ah * n / 100) + 0.5;
+      g.beginPath(); g.setLineDash(n === 50 ? [3, 4] : []);
+      g.moveTo(ax, y); g.lineTo(ax + aw, y);
+      g.strokeStyle = cor("--border"); g.lineWidth = 1; g.stroke();
+      g.fillText(n + "%", ax - 6, y);
     });
-    return b;
+    g.setLineDash([]);
+    g.textBaseline = "top";
+    g.textAlign = "left"; g.fillText(t("48 h atrás", "48 h ago"), ax, ay + ah + 5);
+    g.textAlign = "center"; g.fillText(t("24 h atrás", "24 h ago"), ax + aw / 2, ay + ah + 5);
+    g.textAlign = "right"; g.fillText(T("Now", t("agora", "now")), ax + aw, ay + ah + 5);
+    function X(min) { return ax + (1 - min / janela) * aw; }
+    function Y(p) { return ay + ah - ah * p / 100; }
+    var am = d.pontos || [];
+    g.fillStyle = "rgba(46,160,67," + (S.escuro ? 0.133 : 0.157) + ")";
+    for (var i = 0; i < am.length; i++) {
+      if (!am[i][2]) continue;
+      var ate = i + 1 < am.length ? am[i + 1][0] : 0;
+      var de = am[i][0];
+      if (i > 0 && !am[i - 1][2] && (am[i - 1][0] - de) <= 30) de = am[i - 1][0];
+      var x0 = Math.max(ax, X(de)), x1 = Math.min(ax + aw, X(ate));
+      if (x1 > x0) g.fillRect(x0, ay, x1 - x0, ah);
+    }
+    var trechos = [], pts = [], anterior = null;
+    am.forEach(function (s) {
+      if (anterior !== null && (anterior - s[0]) > 30 && pts.length) { trechos.push(pts); pts = []; }
+      pts.push([X(s[0]), Y(s[1])]);
+      anterior = s[0];
+    });
+    var chegaAgora = d.pct !== null && anterior !== null && anterior <= 30;
+    if (chegaAgora) pts.push([X(0), Y(d.pct)]);
+    if (pts.length) trechos.push(pts);
+    if (!trechos.length) return;
+    trechos.forEach(function (tr) {
+      if (tr.length < 2) return;
+      var gr = g.createLinearGradient(0, ay, 0, ay + ah);
+      gr.addColorStop(0, c + "55"); gr.addColorStop(1, c + "08");
+      g.beginPath(); g.moveTo(tr[0][0], ay + ah);
+      tr.forEach(function (p) { g.lineTo(p[0], p[1]); });
+      g.lineTo(tr[tr.length - 1][0], ay + ah); g.closePath(); g.fillStyle = gr; g.fill();
+    });
+    g.lineJoin = "round"; g.lineWidth = 2; g.strokeStyle = c;
+    trechos.forEach(function (tr) {
+      g.beginPath();
+      tr.forEach(function (p, k) { if (k) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); });
+      g.stroke();
+    });
+    g.setLineDash([4, 4]); g.strokeStyle = c + "78"; g.lineWidth = 1.6;
+    for (i = 1; i < trechos.length; i++) {
+      var a = trechos[i - 1][trechos[i - 1].length - 1], b = trechos[i][0];
+      g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+    }
+    g.setLineDash([]);
+    if (chegaAgora) {
+      var u = pts[pts.length - 1];
+      g.beginPath(); g.arc(u[0], u[1], 3.5, 0, Math.PI * 2); g.fillStyle = c; g.fill();
+    }
+  }
+
+  function cartaoDeBateria(d, aoMudarAltura) {
+    var c = corDaBateria(d.pct, d.carregando);
+    var card = el("div", "cartao bat-card");
+    var img = el("img", "bat-img");
+    if (d.imagem) { img.src = d.imagem; img.alt = ""; }
+    var pct = el("span", "bat-pct", d.pct === null ? "--" : d.pct + "%");
+    pct.style.color = c;
+    var linha = el("div", "bat-linha", null, pct);
+    if (d.pct !== null) linha.appendChild(pilhaDesenhada(d.pct, corDaBateria(d.pct, false) === c ? c : corDaBateria(d.pct, false)));
+    var selo = el("span", "bat-selo" + (d.carregando ? " carga" : d.pct === null ? " off" : ""), null, el("i"), el("span", "", d.selo));
+    linha.appendChild(selo);
+    card.appendChild(el("div", "bat-cab", null, img, el("div", "bat-id", null, el("b", "", d.nome), linha)));
+    var blocos = el("div", "bat-blocos");
+    d.blocos.forEach(function (b) {
+      var x = el("div", "bat-bloco", null, el("small", "", b[0]), el("b", "", b[1]));
+      if (b[2]) x.appendChild(el("span", "", b[2]));
+      blocos.appendChild(x);
+    });
+    card.appendChild(blocos);
+    var canvas = el("canvas");
+    card.appendChild(el("div", "bat-curva", null, canvas));
+    var det = el("div", "bat-det");
+    d.detalhes.forEach(function (b) {
+      var x = el("div", "", null, el("small", "", b[0]), el("b", "", b[1]));
+      if (b[2]) x.appendChild(el("span", "", b[2]));
+      det.appendChild(x);
+    });
+    var barra = botao("", "bat-mais", null);
+    function rotular() {
+      limpar(barra);
+      barra.appendChild(el("span", "seta icone" + (d.aberto ? " aberta" : ""), ""));
+      barra.appendChild(document.createTextNode(d.aberto ? T("LessDetails", t("Menos detalhes", "Less details")) : T("MoreDetails", t("Mais detalhes", "More details"))));
+      det.hidden = !d.aberto;
+    }
+    barra.addEventListener("click", function () {
+      d.aberto = !d.aberto; rotular();
+      pedir("bateria.detalhes", { chave: d.chave }).catch(function () { });
+    });
+    rotular();
+    card.appendChild(barra);
+    card.appendChild(det);
+    card.desenhar = function () { desenharCurvaDaBateria(canvas, d, c); };
+    return card;
   }
 
   MONTAR.baterias = function (alvo) {
-    var grade = el("div", "grade larga");
-    var c = cartaoSimples(t("Periféricos", "Peripherals"), "duplo");
-    var lista = el("div");
-    c.appendChild(lista);
-    grade.appendChild(c);
+    var vivo = true, cartoes = {}, lista = el("div", "bat-lista");
+    var aberto = false;
+    try { aberto = sessionStorage.getItem("widgetAberto") === "1"; } catch (e) { }
+
+    var botaoWidget = el("button", "b bat-widget");
+    botaoWidget.type = "button";
+    var painel = el("div", "bat-painel");
+    function desenharBotao() {
+      limpar(botaoWidget);
+      botaoWidget.appendChild(el("span", "icone", ""));
+      botaoWidget.appendChild(el("span", "", T("WidgetButton", "Widget")));
+      botaoWidget.appendChild(el("span", "icone seta-w" + (aberto ? " aberta" : ""), ""));
+      botaoWidget.title = T("WidgetButtonTip");
+      painel.hidden = !aberto;
+    }
+    botaoWidget.addEventListener("click", function () {
+      aberto = !aberto;
+      try { sessionStorage.setItem("widgetAberto", aberto ? "1" : "0"); } catch (e) { }
+      desenharBotao();
+    });
+    alvo.appendChild(el("div", "bat-topo", null, botaoWidget));
 
     if (S.widget) {
       var w = S.widget;
-      var wc = cartaoSimples(t("Widget na área de trabalho", "Desktop widget"));
-      function mudarWidget(a) { mudar("widget", a); }
-      wc.appendChild(chave(t("Mostrar o widget", "Show the widget"), null, troca(w.ativo, function (v) { mudarWidget({ ativo: v }); })));
-      wc.appendChild(chave(t("Mostrar a Casa no widget", "Show Home on the widget"), null, troca(w.casa, function (v) { mudarWidget({ casa: v }); })));
-      wc.appendChild(chave(t("Sempre na frente", "Always on top"), null, troca(w.frente, function (v) { mudarWidget({ frente: v }); })));
-      wc.appendChild(chave(t("Travar a posição", "Lock position"), null, troca(w.travado, function (v) { mudarWidget({ travado: v }); })));
-      wc.appendChild(campo(t("Arranjo", "Layout"), segmentos([["aneis", t("Anéis", "Rings")], ["lista", t("Lista", "List")]], w.layout,
-        function (v) { mudarWidget({ layout: v }); })));
-      wc.appendChild(campo(t("Vidro", "Glass"), segmentos([["nitido", t("Nítido", "Sharp")], ["claro", t("Claro", "Clear")], ["fosco", t("Fosco", "Frosted")]], w.vidro,
-        function (v) { mudarWidget({ vidro: v }); })));
-      wc.appendChild(campo(t("Tom", "Tint"), segmentos([["auto", t("Automático", "Automatic")], ["escura", t("Escuro", "Dark")], ["clara", t("Claro", "Light")]], w.cor,
-        function (v) { mudarWidget({ cor: v }); })));
-      wc.appendChild(botao(t("Voltar ao canto", "Back to the corner"), "b", function () {
-        pedir("widget.canto").catch(function (e) { faixa(e.message, true); });
-      }));
-      grade.appendChild(wc);
+      var cw = cartao(T("WidgetCard", t("Widget na área de trabalho", "Desktop widget")));
+      var mw = function (a) { mudar("widget", a); };
+      var linhaToggles = el("div", "wd-linha", null,
+        trocaComRotulo(T("WidgetShow"), w.ativo, function (v) { mw({ ativo: v }); }),
+        trocaComRotulo(T("CasaWidgetOpcao", t("Mostrar a casa no widget", "Show home in the widget")), w.casa, function (v) { mw({ casa: v }); }));
+      cw.corpo.appendChild(linhaToggles);
+      function grupoSeg(rotulo, opcoes, valor, larg, cb) {
+        var s = segmentos(opcoes, valor, cb);
+        if (larg) s.style.width = larg + "px";
+        return el("div", "wd-grupo", null, el("div", "rotulo", rotulo), s);
+      }
+      cw.corpo.appendChild(el("div", "wd-linha", null,
+        grupoSeg(T("WidgetLayout"), [["aneis", T("WidgetRings")], ["lista", T("WidgetList")]], w.layout, 216, function (v) { mw({ layout: v }); }),
+        grupoSeg(T("WidgetGlass"), [["nitido", T("WidgetSharpShort")], ["claro", T("WidgetClear")], ["fosco", T("WidgetFrosted")]], w.vidro, 300, function (v) { mw({ vidro: v }); })));
+      cw.corpo.appendChild(el("div", "wd-linha", null,
+        grupoSeg(T("WidgetTint"), [["auto", T("WidgetTintAutoShort")], ["escura", T("WidgetTintDark")], ["clara", T("WidgetTintLight")]], w.cor, 450, function (v) { mw({ cor: v }); })));
+      cw.corpo.appendChild(el("div", "wd-linha", null,
+        trocaComRotulo(T("WidgetOnTop"), w.frente, function (v) { mw({ frente: v }); }),
+        trocaComRotulo(T("WidgetLock"), w.travado, function (v) { mw({ travado: v }); })));
+      cw.corpo.appendChild(el("div", "wd-linha", null,
+        botao(T("WidgetBackToCorner"), "b", function () { pedir("widget.canto").catch(function (e) { faixa(e.message, true); }); }),
+        el("span", "nota", T("WidgetCardNote"))));
+      painel.appendChild(cw);
     }
-    alvo.appendChild(grade);
-    return { atualizar: function () { desenharBaterias(lista, false); } };
+    alvo.appendChild(painel);
+    desenharBotao();
+    alvo.appendChild(lista);
+
+    var vazio = el("div", "vazio", T("BatNoDevices", t("Nenhum periférico com bateria encontrado.", "No battery-powered peripheral found.")));
+
+    function montar(dados) {
+      var chaves = dados.map(function (d) { return d.chave; });
+      var igual = Object.keys(cartoes).join("|") === chaves.join("|");
+      if (!igual) { limpar(lista); cartoes = {}; }
+      dados.forEach(function (d) {
+        var novo = cartaoDeBateria(d);
+        if (cartoes[d.chave]) lista.replaceChild(novo, cartoes[d.chave]);
+        else lista.appendChild(novo);
+        cartoes[d.chave] = novo;
+      });
+      if (!dados.length) { limpar(lista); lista.appendChild(vazio); }
+      Object.keys(cartoes).forEach(function (k) { cartoes[k].desenhar(); });
+    }
+    function buscar() {
+      pedir("baterias").then(function (r) { if (vivo) montar(r || []); }, function () { });
+    }
+    buscar();
+    var relogio = setInterval(buscar, 5000);
+    var redesenhar = function () { Object.keys(cartoes).forEach(function (k) { cartoes[k].desenhar(); }); };
+    window.addEventListener("resize", redesenhar);
+    return { sair: function () { vivo = false; clearInterval(relogio); window.removeEventListener("resize", redesenhar); } };
   };
-
-  function botaoClassica(pagina) {
-    var b = el("button", "b", t("Abrir a janela clássica", "Open the classic window"));
-    b.type = "button";
-    b.addEventListener("click", function () { pedir("abrir", { pagina: pagina || "" }).catch(function (e) { faixa(e.message, true); }); });
-    return b;
-  }
-
 
   // ---------------- Metricas ----------------
 
@@ -1256,7 +1384,6 @@
     if (specs) desenhar(); else coletar();
     return { sair: function () { vivo = false; } };
   };
-
 
   // ---------------- Painel CPU: Paineis e Perfis ----------------
 

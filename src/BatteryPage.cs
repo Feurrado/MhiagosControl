@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -88,6 +88,20 @@ namespace MhiagosControl
             int h = AlturaDoCabecalho + AlturaDosBlocos(largura) + Ui.S(14) + AlturaDaCurva + Ui.S(8) + AlturaDaBarraDeDetalhes;
             if (detalhes) h += (4 / ColunasDeDetalhe(largura)) * AlturaDaLinhaDeDetalhe + Ui.S(8);
             return h;
+        }
+
+        /// <summary>
+        /// Os textos deste cartao (selo, quatro blocos e quatro detalhes), para a
+        /// interface nova mostrar exatamente o que a classica mostra. O cartao
+        /// nasce sem janela, so serve de molde do texto, e e descartado.
+        /// </summary>
+        internal static void Resumo(AnaliseDeBateria a, int? autonomia, out string selo, out string[][] blocos, out string[][] detalhes)
+        {
+            using (CartaoDeBateria c = new CartaoDeBateria())
+            {
+                c._a = a; c._autonomia = autonomia;
+                selo = c.Selo(); blocos = c.Blocos(); detalhes = c.Detalhes();
+            }
         }
 
         public bool DetalhesAbertos { get { return _a != null && DetalhesDaBateria.Aberto(_a.Chave); } }
