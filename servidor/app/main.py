@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import automatico, avisos, banco, casa, clima, servico, sistema
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.15.0"
+VERSAO = "1.16.0"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
@@ -453,13 +453,6 @@ def buscar_cidades(q: str = ""):
     return {"cidades": clima.cidades(q[:80])}
 
 
-def _alvo_em_c(d):
-    alvo = d.get("alvo")
-    if alvo is not None and d.get("unidade") == "°F":
-        alvo = round((alvo - 32) * 5 / 9)
-    return alvo
-
-
 def _sugestao_do_ar():
     """(aparelho, sugestao) do primeiro ar com clima e temperatura de dentro; sugestao None se falta dado."""
     loc = casa.preferencias()["dados"].get("local")
@@ -476,7 +469,7 @@ def _sugestao_do_ar():
     ligado = bool(d.get("ligado"))
     s = clima.sugestao(dentro, c["agora"]["temp"], c["agora"]["umidade"], c.get("mediaRecente"), c.get("maxHoje"),
                        datetime.now().hour, ligado, d.get("umidade"),
-                       modo_atual=(d.get("modo") or {}).get("valor"), alvo_atual=_alvo_em_c(d))
+                       modo_atual=(d.get("modo") or {}).get("valor"))
     return ar, s, c
 
 

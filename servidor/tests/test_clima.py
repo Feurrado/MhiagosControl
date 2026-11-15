@@ -41,25 +41,61 @@ class Regras(unittest.TestCase):
         self.assertEqual(s["cena"]["modo"], 1)
         self.assertTrue(20 <= s["cena"]["temp"] <= 23)
 
-    def test_umido_sugere_seco(self):
-        self.assertEqual(clima.sugestao(30, 26, 80, 26, 30, 14, False)["cena"]["modo"], 3)
+    def test_umido_sugere_seco_sem_temperatura(self):
+        # o aparelho trava o seco em 22 °C: a cena nao manda temperatura nem mexe no ventilador
+        s = clima.sugestao(27, 26, 80, 26, 30, 14, False)
+        self.assertEqual((s["acao"], s["cena"]["modo"], s["cena"]["temp"], s["cena"]["vento"]), ("seco", 3, -1, -1))
+        self.assertIn("24,5 °C", s["texto"])
 
-    def test_seco_nunca_manda_temperatura(self):
-        self.assertEqual(clima.sugestao(30, 26, 80, 26, 30, 14, False)["cena"]["temp"], -1)
+    def test_quente_e_umido_esfria_primeiro(self):
+        # 4 °C acima do alvo: o frio chega la mais rapido (e tambem seca); o seco entra perto do alvo
+        self.assertEqual(clima.sugestao(30, 26, 80, 26, 30, 14, False)["cena"]["modo"], 2)
+        self.assertEqual(clima.sugestao(27.5, 26, 80, 26, 30, 14, True, modo_atual=2)["cena"]["modo"], 2)
+        self.assertEqual(clima.sugestao(27, 26, 80, 26, 30, 14, True, modo_atual=2)["cena"]["modo"], 3)
 
-    def test_seco_nao_entra_com_quarto_perto_do_alvo_travado(self):
-        self.assertNotEqual(clima.sugestao(23.5, 26, 80, 26, 30, 14, True)["cena"]["modo"], 3)
+    def test_seco_nao_entra_perto_do_piso(self):
+        # alvo 26, piso 24,5: abaixo do alvo o seco sairia logo, entao nem entra
+        self.assertNotEqual(clima.sugestao(25.5, 27, 80, 26, 30, 14, True)["cena"]["modo"], 3)
+        self.assertEqual(clima.sugestao(26, 27, 80, 26, 30, 14, True)["cena"]["modo"], 3)
 
-    def test_seco_sai_quando_o_quarto_chega_no_alvo_travado(self):
-        dentro = clima.sugestao(26, 26, 80, 26, 30, 14, True, modo_atual=3, alvo_atual=22)
-        self.assertEqual(dentro["cena"]["modo"], 3)
-        s = clima.sugestao(22.3, 26, 80, 26, 30, 14, True, modo_atual=3, alvo_atual=22)
-        self.assertNotEqual(s["cena"]["modo"], 3)
-        self.assertIn(s["cena"]["modo"], (0, 2))
+    def test_seco_para_no_piso_e_nao_nos_22_do_aparelho(self):
+        self.assertEqual(clima.sugestao(25, 27, 80, 26, 30, 14, True, modo_atual=3)["cena"]["modo"], 3)
+        s = clima.sugestao(24.5, 27, 80, 26, 30, 14, True, modo_atual=3)
+        self.assertEqual((s["acao"], s["cena"]["modo"]), ("ventilar", 0))
+        # a noite sai para o frio no alvo (o ar fica parado ate o quarto passar dele)
+        s = clima.sugestao(24.5, 27, 80, 26, 30, 23, True, modo_atual=3)
+        self.assertEqual((s["cena"]["modo"], s["cena"]["temp"]), (2, 26))
+        # com conforto de 23 °C o piso nao cola na trava de 22
+        self.assertEqual(clima.piso_do_seco(23), 22.5)
 
     def test_seco_histerese_da_umidade(self):
-        self.assertEqual(clima.sugestao(26, 26, 65, 26, 30, 14, True, modo_atual=3, alvo_atual=22)["cena"]["modo"], 3)
+        self.assertEqual(clima.sugestao(26, 26, 65, 26, 30, 14, True, modo_atual=3)["cena"]["modo"], 3)
         self.assertNotEqual(clima.sugestao(26, 26, 65, 26, 30, 14, True)["cena"]["modo"], 3)
+        self.assertNotEqual(clima.sugestao(26, 26, 60, 26, 30, 14, True, modo_atual=3)["cena"]["modo"], 3)
+
+    def test_seco_no_conforto_nao_vira_nao_precisa(self):
+        # dentro do conforto e mais fresco la fora daria "nao precisa": no seco isso o deixaria passar do piso
+        self.assertEqual(clima.sugestao(26, 25, 65, 26, 30, 14, True, modo_atual=3)["acao"], "seco")
+        self.assertEqual(clima.sugestao(26, 25, 65, 26, 30, 14, True, modo_atual=2)["acao"], "nada")
+
+    def test_seco_esquentando_volta_ao_frio(self):
+        self.assertEqual(clima.sugestao(28.4, 27, 80, 26, 30, 14, True, modo_atual=3)["cena"]["modo"], 3)
+        self.assertEqual(clima.sugestao(28.5, 27, 80, 26, 30, 14, True, modo_atual=3)["cena"]["modo"], 2)
+
+    def test_frio_tem_histerese(self):
+        # alvo 26: entra no frio a 27,5 e, ja no frio, fica ate o quarto cair a 25 (o proprio ar segura os 26)
+        self.assertEqual(clima.sugestao(27, 31, 40, 27, 33, 14, True, modo_atual=0)["acao"], "ventilar")
+        self.assertEqual(clima.sugestao(27.5, 31, 40, 27, 33, 14, True, modo_atual=0)["acao"], "frio")
+        for dentro in (27, 26, 25.5):
+            self.assertEqual(clima.sugestao(dentro, 31, 40, 27, 33, 14, True, modo_atual=2)["acao"], "frio")
+        self.assertEqual(clima.sugestao(25, 31, 40, 27, 33, 14, True, modo_atual=2)["acao"], "ventilar")
+
+    def test_desligado_e_fresco_nao_liga_o_ventilador(self):
+        for hora in (14, 23):
+            s = clima.sugestao(24, 31, 40, 27, 33, hora, False)
+            self.assertEqual(s["acao"], "nada")
+            self.assertNotIn("cena", s)
+        self.assertEqual(clima.sugestao(24, 31, 40, 27, 33, 14, True)["acao"], "ventilar")
 
     def test_ventilar_quando_esta_perto_do_conforto(self):
         s = clima.sugestao(27.4, 26.8, 50, 27, 28, 14, True)
@@ -73,7 +109,7 @@ class Regras(unittest.TestCase):
 
     def test_muda_livremente_entre_frio_ventilar_e_seco(self):
         modos = {clima.sugestao(d, f, u, 27, 33, 14, True)["cena"]["modo"]
-                 for d, f, u in ((31, 30, 40), (27.4, 26.8, 50), (30, 26, 80))}
+                 for d, f, u in ((31, 30, 40), (27.4, 26.8, 50), (27, 26, 80))}
         self.assertEqual(modos, {2, 0, 3})
 
     def test_noite_liga_o_modo_dormir(self):

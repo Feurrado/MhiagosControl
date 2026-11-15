@@ -7,6 +7,8 @@ Freios, para o ar nao ficar mudando nem brigar com quem mexe nele:
 - entre duas mudancas automaticas, pelo menos 15 minutos (o ventilador alto some quando o quarto esfria);
 - qualquer mudanca que nao foi dele (painel, app, controle remoto) pausa o automatico por "pausaMin";
 - so manda o comando quando o ar esta diferente do que a sugestao pede.
+
+A escolha do modo (clima.sugestao) tem histerese pelo modo em que o ar esta: ver as faixas la.
 """
 import logging
 import threading
@@ -39,9 +41,13 @@ def _int(e, k):
         return None
 
 
+SEM_ALVO = (0, 3)   # ventilar nao tem alvo e o seco trava o seu (22 °C): o aparelho muda t_temp sozinho
+
+
 def _assinatura(estado):
-    """O que o automatico vigia no ar: ligado, modo e alvo."""
-    return (_int(estado, "t_power"), _int(estado, "t_work_mode"), _int(estado, "t_temp"))
+    """O que o automatico vigia no ar: ligado, modo e alvo (o alvo so nos modos em que ele e de quem usa)."""
+    modo = _int(estado, "t_work_mode")
+    return (_int(estado, "t_power"), modo, None if modo in SEM_ALVO else _int(estado, "t_temp"))
 
 
 def _registrar(agora, texto):
