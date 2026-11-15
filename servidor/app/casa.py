@@ -225,7 +225,7 @@ CENAS_PADRAO = [
 PREF_PADRAO = {
     "alertaFalha": True, "alertaDesconectado": True, "alertaQuente": True, "alertaLavadoraFim": True,
     "limiteQuente": 28, "potenciaFrio": 1100, "potenciaEco": 1100, "potenciaSeco": 600, "potenciaVentilar": 60,
-    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "ntfyTopico": "", "local": None, "inicio": {"ordem": [], "ocultos": []}, "cenas": CENAS_PADRAO,
+    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "ntfyTopico": "", "local": None, "locais": [], "inicio": {"ordem": [], "ocultos": []}, "cenas": CENAS_PADRAO,
 }
 
 
@@ -321,6 +321,10 @@ def validar_preferencias(dados):
             limpo[k] = _validar_inicio(v)
         elif k == "local":
             limpo[k] = _validar_local(v)
+        elif k == "locais":
+            if not isinstance(v, list) or len(v) > 8:
+                raise PreferenciaInvalida("locais: lista de ate 8 cidades")
+            limpo[k] = [_validar_local(x) for x in v if x is not None]
         elif k == "cenas":
             limpo[k] = _validar_cenas(v)
         elif k == "ntfyTopico":

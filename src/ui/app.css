@@ -392,6 +392,27 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .pilula:not(.on) { background:var(--surface); border-color:var(--border); color:var(--muted); }
 .pilula:not(.on):hover:not(:disabled) { background:var(--hover); }
 .pilula.fora, .pilula:disabled { background:var(--surface-alt); border-color:var(--border); color:var(--faint); cursor:default; }
+/* O tempo da casa: icone, agora e AQI a esquerda, proximas horas a direita; a sugestao embaixo. */
+.vg-tempo { display:flex; flex-direction:column; padding:0 16px; }
+.vg-tempo .topo { display:flex; align-items:center; gap:14px; min-height:76px; }
+.vg-tempo .ic { width:40px; height:40px; border-radius:11px; background:var(--accent-soft); display:flex; align-items:center; justify-content:center; flex:none; }
+.vg-tempo .ic .tic { width:26px; height:26px; }
+.vg-tempo .ct { flex:1; min-width:0; }
+.vg-tempo .ct b { display:block; font-weight:600; font-size:14.67px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vg-tempo .ct small { display:block; font:12px var(--f-peq); color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vg-tempo .aqi i { display:inline-block; width:7px; height:7px; border-radius:50%; margin:0 5px 1px 0; vertical-align:middle; }
+.vg-tempo .horas { display:flex; gap:4px; flex:none; }
+.vg-tempo .horas div { width:38px; display:flex; flex-direction:column; align-items:center; gap:2px; }
+.vg-tempo .horas small { font:11px var(--f-mono); color:var(--muted); }
+.vg-tempo .horas b { font:600 12.67px var(--f-mono); }
+.vg-tempo .horas .tic { width:20px; height:20px; }
+@container (max-width:620px) { .vg-tempo .horas div:nth-child(n+4) { display:none; } }
+.vg-tempo .sug { display:flex; align-items:center; gap:14px; padding:10px 0 12px; border-top:1px solid var(--border); }
+.vg-tempo .sug .ct small { white-space:normal; }
+.tic { fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; overflow:visible; }
+.tic .s, .tic .r { stroke:#EFA51C; } .tic .l { stroke:#B9962E; } .tic .g { stroke:#2F8AF0; }
+:root[data-tema="escuro"] .tic .l { stroke:#E9D9A0; } :root[data-tema="escuro"] .tic .g { stroke:#4FA3F7; }
+@media (prefers-color-scheme: dark) { :root:not([data-tema]) .tic .l { stroke:#E9D9A0; } :root:not([data-tema]) .tic .g { stroke:#4FA3F7; } }
 .vg-lav { padding:14px 16px; min-height:128px; justify-content:center; gap:10px; }
 .vg-lav .topo { display:flex; align-items:center; gap:14px; }
 .vg-lav .ct { flex:1; min-width:0; }

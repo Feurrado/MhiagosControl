@@ -11,10 +11,13 @@ import httpx
 
 URL_PREVISAO = "https://api.open-meteo.com/v1/forecast"
 URL_CIDADES = "https://geocoding-api.open-meteo.com/v1/search"
+URL_AR = "https://air-quality-api.open-meteo.com/v1/air-quality"
+VALIDADE_AR = 30 * 60
 VALIDADE = 15 * 60
 
 _trava = threading.Lock()
 _cache = {}     # (lat, lon) -> (instante, dados)
+_cache_ar = {}  # (lat, lon) -> (instante, dados)
 
 # Codigos WMO da Open-Meteo: (ate este codigo, texto, icone). O icone de dia vira o de noite em _NOITE.
 _CODIGOS = ((0, "Céu limpo", "sol"), (1, "Predomínio de sol", "sol-nuvem"), (2, "Parcialmente nublado", "sol-nuvem"),
@@ -168,6 +171,60 @@ def previsao(lat, lon, agora=None):
     with _trava:
         _cache[chave] = (t, dados)
     return dict(dados, velho=False)
+
+
+# Faixas do AQI americano (EPA): ate este valor, nome e cor.
+_AQI = ((50, "Boa", "#3EB55A"), (100, "Moderada", "#E5C62D"), (150, "Ruim para sensíveis", "#F39A2B"),
+        (200, "Ruim", "#E5463D"), (300, "Muito ruim", "#9D4FD8"), (10_000, "Perigosa", "#7E1F35"))
+
+
+def categoria_aqi(v):
+    """(nome, cor) da faixa do AQI americano; None sem valor."""
+    if v is None:
+        return None
+    for limite, nome, cor in _AQI:
+        if v <= limite:
+            return nome, cor
+    return _AQI[-1][1:]
+
+
+def _normalizar_ar(j):
+    atual = j.get("current") or {}
+    aqi = atual.get("us_aqi")
+    if aqi is None:
+        return None
+    h = j.get("hourly") or {}
+    tempos, valores = h.get("time") or [], h.get("us_aqi") or []
+    agora = atual.get("time") or ""
+    prox = [v for t, v in zip(tempos, valores, strict=False) if t > agora and v is not None][:24]
+    nome, cor = categoria_aqi(aqi)
+    pior = max(prox) if prox else None
+    return {"aqi": int(round(aqi)), "categoria": nome, "cor": cor,
+            "pm25": arredondar(atual.get("pm2_5")), "pm10": arredondar(atual.get("pm10")),
+            "o3": arredondar(atual.get("ozone"), 0), "no2": arredondar(atual.get("nitrogen_dioxide"), 0),
+            "pior24": int(round(pior)) if pior is not None else None,
+            "categoriaPior": categoria_aqi(pior)[0] if pior is not None else None}
+
+
+def qualidade_ar(lat, lon, agora=None):
+    """Qualidade do ar (AQI americano da Open-Meteo, sem chave), cache de 30 min; None se nao houver."""
+    chave = (round(lat, 2), round(lon, 2))
+    t = agora or time.time()
+    with _trava:
+        c = _cache_ar.get(chave)
+    if c and t - c[0] < VALIDADE_AR:
+        return c[1]
+    try:
+        r = httpx.get(URL_AR, timeout=8, params={
+            "latitude": chave[0], "longitude": chave[1], "timezone": "auto", "forecast_days": 2,
+            "current": "us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide", "hourly": "us_aqi"})
+        r.raise_for_status()
+        dados = _normalizar_ar(r.json())
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return c[1] if c else None
+    with _trava:
+        _cache_ar[chave] = (t, dados)
+    return dados
 
 
 def cidades(q):
