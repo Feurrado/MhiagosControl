@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
@@ -158,6 +158,18 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("monitor de preferencias", ex); }
         }
 
+        /// <summary>A barra de titulo no tema do app (escura no escuro), sem mexer no resto da janela.</summary>
+        public static void BarraDeTitulo(Form form)
+        {
+            try
+            {
+                int on = IsDark ? 1 : 0;
+                if (DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref on, sizeof(int)) != 0)
+                    DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref on, sizeof(int));
+            }
+            catch (Exception ex) { Log.Error("barra de titulo escura", ex); }
+        }
+
         public static void Apply(Form form)
         {
             Repintar(form);
@@ -181,13 +193,7 @@ namespace MhiagosControl
             form.BackColor = Ui.Window;
             form.ForeColor = Ui.Text;
 
-            try
-            {
-                int on = IsDark ? 1 : 0;
-                if (DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref on, sizeof(int)) != 0)
-                    DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref on, sizeof(int));
-            }
-            catch (Exception ex) { Log.Error("barra de titulo escura", ex); }
+            BarraDeTitulo(form);
 
             ApplyScrollbars(form);
             form.Refresh();

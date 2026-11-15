@@ -89,6 +89,35 @@
     return s;
   }
 
+  // ---------------- movimento (Motion.cs) ----------------
+  // As mesmas duracoes e curvas da classica. Com as animacoes do Windows
+  // desligadas (prefers-reduced-motion no WebView2) tudo vai direto ao fim.
+  var MOV = { rapida: 83, media: 167, lenta: 250, padrao: "cubic-bezier(.4,0,.2,1)", entrada: "cubic-bezier(0,0,0,1)", saida: "cubic-bezier(1,0,1,1)" };
+  var movReduzido = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  function semMovimento() { return !!(movReduzido && movReduzido.matches) || typeof Element.prototype.animate !== "function"; }
+  function animar(elm, quadros, ms, curva) {
+    if (semMovimento() || !elm || !elm.isConnected) return null;
+    try { return elm.animate(quadros, { duration: ms, easing: curva || MOV.padrao }); } catch (e) { return null; }
+  }
+
+  /// Abre ou fecha deslizando a altura, como o CollapsiblePanel: 250 ms,
+  /// entrada suave ao abrir, saida ao fechar; virar no meio parte de onde esta.
+  function deslizarAltura(elm, abrir) {
+    var de = elm.hidden ? 0 : elm.getBoundingClientRect().height;
+    if (elm._anim) { elm._anim.cancel(); elm._anim = null; }
+    elm.hidden = false;
+    var ate = abrir ? elm.getBoundingClientRect().height : 0;
+    if (semMovimento() || !elm.isConnected || de === ate) { elm.hidden = !abrir; return; }
+    elm.style.overflow = "hidden";
+    elm.style.boxSizing = "border-box";
+    var a = elm.animate([{ height: de + "px" }, { height: ate + "px" }], { duration: MOV.lenta, easing: abrir ? MOV.entrada : MOV.saida });
+    elm._anim = a;
+    a.onfinish = function () {
+      elm._anim = null; elm.style.overflow = ""; elm.style.boxSizing = "";
+      if (!abrir) elm.hidden = true;
+    };
+  }
+
   var faixaTimer = 0;
   /// A faixa de aviso no alto do conteudo (FaixaDeAviso), com acao opcional.
   function faixa(texto, erro, acaoTexto, acao) {
@@ -517,8 +546,22 @@
     var nav = $("nav");
     var v = !nav.classList.contains("recolhida");
     nav.classList.toggle("recolhida", v);
+    acompanharLargura();
     if (S.barra) S.barra.recolhida = v;
     pedir("barra", { recolhida: v }).catch(function () { });
+  }
+
+  /// Enquanto a barra desliza, a pagina ao lado muda de largura a cada
+  /// quadro: graficos e a area da Casa sao refeitos junto (como na classica,
+  /// que repinta as paginas no deslize), em vez de esticar e saltar no fim.
+  var largura = 0;
+  function acompanharLargura() {
+    cancelAnimationFrame(largura);
+    var fim = performance.now() + (semMovimento() ? 0 : 300);
+    (function quadro() {
+      window.dispatchEvent(new Event("resize"));
+      if (performance.now() < fim) largura = requestAnimationFrame(quadro);
+    })();
   }
 
   /// Arrastar um item muda a ordem da barra, como na classica.
@@ -580,10 +623,10 @@
     var alvo = $("pagina");
     var rolagem = mesma ? alvo.scrollTop : 0;
     limpar(alvo);
-    alvo.className = pagina === "casa" ? "casa" : "";
+    alvo.className = pagina === "casa" ? "casa" : pagina === "visao" ? "visao" : "";
     if (mudou && !mesma) faixa("");
     if (pagina !== "casa") avisar("casa.area", { visivel: false, x: 0, y: 0, w: 0, h: 0 });
-    var dentro = pagina === "casa" ? alvo : el("div", "largura");
+    var dentro = pagina === "casa" || pagina === "visao" ? alvo : el("div", "largura");
     if (dentro !== alvo) alvo.appendChild(dentro);
     vista = MONTAR[pagina](dentro) || {};
     alvo.scrollTop = rolagem;
@@ -844,7 +887,11 @@
 
   function mm(f) { return f ? t("máx ", "max ") + numero(f.max) + " · " + t("méd ", "avg ") + numero(f.media) : ""; }
 
-  MONTAR.visao = function (alvo) {
+  MONTAR.visao = function (pagina) {
+    // Como na classica: largura maxima de 1100, centrada, e no meio da
+    // altura quando sobra espaco.
+    var alvo = el("div", "vg");
+    pagina.appendChild(alvo);
     var vivo = true, serie = {}, previa = previaDoCooler();
     var dataEl = el("div", "vg-data"), fraseEl = el("div", "vg-frase");
     alvo.appendChild(el("div", "vg-cab", null, dataEl, fraseEl));
@@ -861,13 +908,20 @@
       blocos.push({ id: d.id, d: d, canvas: canvas, valor: valor, faixa: faixa, cor: "" });
     });
     alvo.appendChild(tiles);
+    // Os destaques numa fileira so; com mais de 3 e pouca largura, em duas.
+    function arranjarTiles() {
+      var n = blocos.length;
+      if (!n) { tiles.style.display = "none"; return; }
+      var w = tiles.clientWidth || alvo.clientWidth;
+      var porFila = n;
+      if (n > 3 && (w - 12 * (n - 1)) / n < 150) porFila = Math.ceil(n / 2);
+      tiles.style.gridTemplateColumns = "repeat(" + porFila + ", minmax(0, 1fr))";
+    }
 
     var meio = el("div", "vg-meio"), esq = el("div", "vg-esq");
-    // A casa: convite ou o resumo dos aparelhos.
-    var casaTexto = el("div", "ct");
-    var casa = el("div", "cartao vg-casa", null, el("span", "ic icone", ""), casaTexto,
-      botao(T("VisaoAbrirCasa", t("Abrir Casa ▸", "Open Home ▸")), "link", function () { mostrar("casa"); }));
-    esq.appendChild(casa);
+    // A casa: o cartao do ar, o da lavadora durante um ciclo, ou o convite.
+    var casa = cartoesDaCasa();
+    esq.appendChild(casa.el);
     var duas = el("div", "vg-duas");
     var perLista = el("div");
     var per = el("div", "cartao vg-box", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals"))),
@@ -909,13 +963,24 @@
     function pintar() {
       blocos.forEach(function (b) {
         b.f = desenharCurva(b.canvas, serie[b.id], corDoValor(b.d.unidade, leitura(b.id), b.d.atencao, b.d.perigo).replace("var(--danger)", "#EB5A4B").replace("var(--warn)", "#F0AF3C").replace("var(--quente)", cor("--quente")).replace("var(--accent-text)", cor("--accent-text")));
-        b.faixa.textContent = mm(b.f);
+        caber(b);
       });
       mostradores.forEach(function (m) {
         var s = sensor(m.id), c = m.n === 1 ? cor("--quente") : cor("--accent-text");
         var f = desenharCurva(m.canvas, serie[m.id], c);
         m.faixa.textContent = mm(f);
       });
+    }
+
+    // Como no cartao compacto da classica: "max · med" a direita do valor;
+    // sem espaco, so o "max"; sem espaco nem para isso, nada.
+    function caber(b) {
+      var f = b.f, formas = f ? [mm(f), t("máx ", "max ") + numero(f.max)] : [];
+      for (var i = 0; i < formas.length; i++) {
+        b.faixa.textContent = formas[i];
+        if (b.valor.offsetLeft + b.valor.offsetWidth + 10 <= b.faixa.offsetLeft) return;
+      }
+      b.faixa.textContent = "";
     }
 
     var ids = [];
@@ -937,7 +1002,7 @@
       if (novos.join("|") !== ids.join("|")) { ids = novos; buscar(); }
     }
     var relogio = setInterval(buscar, (S.passo || 5) * 1000);
-    var redesenhar = function () { pintar(); previa.desenhar(); };
+    var redesenhar = function () { arranjarTiles(); pintar(); previa.desenhar(); };
     window.addEventListener("resize", redesenhar);
 
     return {
@@ -951,6 +1016,7 @@
           b.valor.style.color = v === null ? "var(--faint)" : corDoValor(b.d.unidade, v, b.d.atencao, b.d.perigo);
           b.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
           if (v !== null && b.d.unidade) b.valor.appendChild(el("small", "", b.d.unidade));
+          caber(b);
         });
         var p = E.painel;
         stEl.textContent = p.conectado ? T("VisaoConectado", t("conectado", "connected")) : T("VisaoDesconectado", t("desconectado", "disconnected"));
@@ -980,30 +1046,152 @@
         if (!E.eventos || !E.eventos.length) evLista.appendChild(el("div", "nota", T("VisaoSemEventos", t("Nada novo desde que o app abriu.", "Nothing new since the app started."))));
         (E.eventos || []).slice(0, 8).forEach(function (x) { evLista.appendChild(el("div", "", null, el("span", "", x.h), document.createTextNode(x.t))); });
         // casa
-        limpar(casaTexto);
-        if (!S.casa.servidor || !E.casa.length) {
-          casaTexto.appendChild(el("b", "", T("VisaoConecteCasa", t("Conecte a casa", "Connect your home"))));
-          casaTexto.appendChild(el("small", "", T("CasaResumoSemConta", t("Conecte o ar-condicionado e a lava e seca pela conta ConnectLife.", "Connect your air conditioner and washer with your ConnectLife account."))));
-        } else {
-          var ap = el("div", "ap");
-          E.casa.forEach(function (a) { ap.appendChild(el("span", "", null, el("b", "", a.nome), document.createTextNode(resumoDoAparelho(a)))); });
-          casaTexto.appendChild(ap);
-        }
+        casa.definir(E.vcasa);
+        arranjarTiles();
       },
       sair: function () {
         vivo = false; clearInterval(relogio);
         window.removeEventListener("resize", redesenhar);
         previa.sair();
+        casa.sair();
       }
     };
   };
 
-  function resumoDoAparelho(a) {
-    if (!a.online) return t("fora do ar", "offline");
-    if (a.tipo !== "ar") return t("online", "online");
-    if (!a.ligado) return t("desligado", "off") + (a.ambiente !== null ? " · " + numero(a.ambiente) + " °C" : "");
-    return (a.modo || t("ligado", "on")) + (a.alvo !== null ? " · " + numero(a.alvo) + " °C" : "") +
-      (a.ambiente !== null ? " (" + t("ambiente", "room") + " " + numero(a.ambiente) + " °C)" : "");
+  /// A casa na Visao geral, igual a classica: o ar com - e + (espera 700 ms
+  /// antes de enviar) e a pilula de liga/desliga; a lavadora so durante um
+  /// ciclo, com o tempo, o fim e as etapas; o convite quando nao ha nada.
+  function cartoesDaCasa() {
+    var raiz = el("div", "vg-casa-pilha");
+    var ultimo = null, alvoLocal = null, espera = 0, ar = null;
+
+    // O ar.
+    var arNome = el("b"), arFora = el("small"), arNum = el("span", "alvo");
+    var menos = botao("\uE738", "redondo icone", function () { piscar(menos); passo(-1); });
+    var mais = botao("\uE710", "redondo icone", function () { piscar(mais); passo(1); });
+    menos.setAttribute("aria-label", t("Diminuir", "Lower"));
+    mais.setAttribute("aria-label", t("Aumentar", "Raise"));
+    var pilula = botao("", "pilula", function () {
+      if (!ar || !ar.online) return;
+      var novo = !ar.ligado;
+      ar.ligado = novo; ar.ajusta = novo && ar.alvo !== null;
+      desenharAr();
+      enviar("t_power", novo ? 1 : 0);
+    });
+    var anel = el("span", "anel"), arIc = el("span", "ic icone", null, document.createTextNode("\uE9CA"), anel);
+    var cartaoAr = el("div", "cartao vg-ar", null, arIc,
+      el("div", "ct", null, arNome, arFora), el("div", "ctl", null, menos, arNum, mais), pilula);
+
+    // O - e o + piscam ao clique (FlashDoBotao, 150 ms).
+    function piscar(b) {
+      if (b.disabled) return;
+      animar(b, [{ backgroundColor: cor("--accent"), color: "#fff" }, { backgroundColor: "transparent" }], 150, "linear");
+    }
+    // Ligar: um anel azul cresce ate 1,6x e some, e a borda do cartao acende
+    // e esmaece (700 ms). Desligar: um anel cinza se fecha sobre o icone.
+    var ligadoAntes = null, numAntes = null;
+    function animarLigado(ligado) {
+      if (ligadoAntes === null || ligadoAntes === ligado) { ligadoAntes = ligado; return; }
+      ligadoAntes = ligado;
+      // virar no meio recomeca do zero, como a classica
+      [anel, cartaoAr].forEach(function (x) { if (x.getAnimations) x.getAnimations().forEach(function (y) { y.cancel(); }); });
+      if (ligado) {
+        animar(anel, [{ transform: "scale(1)", opacity: 0.7, borderColor: cor("--accent") }, { transform: "scale(1.6)", opacity: 0, borderColor: cor("--accent") }], 700, MOV.entrada);
+        animar(cartaoAr, [{ boxShadow: "0 0 0 2.5px " + cor("--accent") }, { boxShadow: "0 0 0 2.5px transparent" }], 700, MOV.entrada);
+      } else {
+        animar(anel, [{ transform: "scale(1.6)", opacity: 0, borderColor: cor("--muted") }, { transform: "scale(1)", opacity: 0.66, borderColor: cor("--muted"), offset: 0.85 }, { transform: "scale(1)", opacity: 0, borderColor: cor("--muted") }], 450, MOV.padrao);
+      }
+    }
+    // O alvo desliza ao mudar (AnimacaoDoAr, 300 ms): ao subir, o novo entra
+    // por baixo; ao descer, por cima.
+    function deslizarNumero(v) {
+      if (numAntes === null || v === null || v === numAntes) { numAntes = v; return; }
+      var dir = v > numAntes ? 1 : -1;
+      numAntes = v;
+      animar(arNum, [{ transform: "translateY(" + (dir * 45) + "%)", opacity: 0 }, { transform: "none", opacity: 1 }], 300, MOV.entrada);
+    }
+
+    function passo(d) {
+      if (!ar || !ar.ajusta) return;
+      var base = alvoLocal !== null ? alvoLocal : ar.alvo;
+      if (base === null) return;
+      alvoLocal = Math.max(ar.min, Math.min(ar.max, base + d));
+      desenharAr();
+      clearTimeout(espera);
+      espera = setTimeout(function () {
+        var v = alvoLocal; alvoLocal = null;
+        if (ar) ar.alvo = v;
+        enviar("t_temp", v);
+      }, 700);
+    }
+    function enviar(chave, valor) {
+      if (!ar) return;
+      pedir("casa.ar", { puid: ar.puid, chave: chave, valor: valor }).then(function (v) { if (v) definir(v); }, function () { });
+    }
+    function desenharAr() {
+      arNome.textContent = ar.nome;
+      limpar(arFora);
+      arFora.appendChild(document.createTextNode((ar.fora || "") + " "));
+      if (ar.clima) arFora.appendChild(el("span", "quente", ar.clima));
+      if (ar.origem) arFora.appendChild(document.createTextNode(" · " + ar.origem));
+      var v = alvoLocal !== null ? alvoLocal : ar.alvo;
+      cartaoAr.classList.toggle("on", !!(ar.online && ar.ligado));
+      animarLigado(!!(ar.online && ar.ligado));
+      deslizarNumero(v === undefined ? null : v);
+      limpar(arNum);
+      arNum.appendChild(document.createTextNode(v === null || v === undefined ? "--" : String(v)));
+      arNum.appendChild(el("small", "", "°"));
+      arNum.classList.toggle("apagado", !ar.ajusta);
+      var podeMenos = ar.ajusta && v !== null && v > ar.min, podeMais = ar.ajusta && v !== null && v < ar.max;
+      menos.disabled = !podeMenos; mais.disabled = !podeMais;
+      pilula.textContent = ar.liga || "";
+      pilula.disabled = !ar.online;
+      pilula.className = "pilula" + (!ar.online ? " fora" : ar.ligado ? " on" : "");
+    }
+
+    // A lavadora.
+    var lavNome = el("b"), lavLinha = el("small"), lavTempo = el("span", "tempo"), lavFim = el("small", "fim");
+    var trilho = el("div", "trilho", null, el("i")), etapas = el("div", "etapas");
+    var cartaoLav = el("div", "cartao vg-lav", null,
+      el("div", "topo", null, el("span", "ic maquina", null, el("i")), el("div", "ct", null, lavNome, lavLinha),
+        el("div", "rel", null, lavTempo, lavFim)), trilho, etapas);
+    function desenharLav(l) {
+      lavNome.textContent = l.nome;
+      lavLinha.textContent = l.erro ? l.erro : l.linha;
+      lavLinha.classList.toggle("erro", !!l.erro);
+      lavTempo.textContent = l.tempo;
+      lavFim.textContent = l.fim;
+      trilho.firstChild.style.width = Math.round((l.prog || 0) * 1000) / 10 + "%";
+      trilho.classList.toggle("pausada", !!l.pausada);
+      limpar(etapas);
+      (l.etapas || []).forEach(function (e, i) {
+        etapas.appendChild(el("span", i < l.atual ? "feita" : i === l.atual ? "agora" : "", e));
+      });
+    }
+
+    // O convite.
+    var cvTitulo = el("b"), cvTexto = el("small");
+    var convite = el("div", "cartao vg-casa", null, el("span", "ic icone", "\uE80F"), el("div", "ct", null, cvTitulo, cvTexto),
+      botao(T("VisaoAbrirCasa", t("Abrir Casa ▸", "Open Home ▸")), "link", function () { mostrar("casa"); }));
+    cartaoAr.addEventListener("dblclick", function (e) { if (e.target === cartaoAr) mostrar("casa"); });
+
+    function definir(v) {
+      v = v || { convite: { titulo: T("VisaoConecteCasa", t("Conecte a casa", "Connect your home")), texto: "" } };
+      var chave = JSON.stringify(v);
+      if (chave === ultimo) return;
+      ultimo = chave;
+      limpar(raiz);
+      ar = v.ar ? JSON.parse(JSON.stringify(v.ar)) : null;
+      if (ar) { desenharAr(); raiz.appendChild(cartaoAr); }
+      if (v.lav) { desenharLav(v.lav); raiz.appendChild(cartaoLav); }
+      if (v.convite || (!ar && !v.lav)) {
+        var c = v.convite || {};
+        cvTitulo.textContent = c.titulo || T("NavCasa", t("Casa", "Home"));
+        cvTexto.textContent = c.texto || "";
+        raiz.appendChild(convite);
+      }
+    }
+    return { el: raiz, definir: function (v) { if (alvoLocal === null) definir(v); }, sair: function () { clearTimeout(espera); } };
   }
 
   // ---------------- Baterias ----------------
@@ -1017,8 +1205,8 @@
     return pct <= 10 ? "#EB5A4B" : pct <= 30 ? "#F0AF3C" : cor("--accent");
   }
 
-  function pilhaDesenhada(pct, c) {
-    var corpo = el("span", "pilha");
+  function pilhaDesenhada(pct, c, carregando) {
+    var corpo = el("span", "pilha" + (carregando ? " carga" : ""));
     var nivel = el("i");
     nivel.style.width = Math.max(0, Math.min(100, pct)) + "%";
     nivel.style.background = c;
@@ -1107,7 +1295,7 @@
     var pct = el("span", "bat-pct", d.pct === null ? "--" : d.pct + "%");
     pct.style.color = c;
     var linha = el("div", "bat-linha", null, pct);
-    if (d.pct !== null) linha.appendChild(pilhaDesenhada(d.pct, corDaBateria(d.pct, false) === c ? c : corDaBateria(d.pct, false)));
+    if (d.pct !== null) linha.appendChild(pilhaDesenhada(d.pct, corDaBateria(d.pct, false) === c ? c : corDaBateria(d.pct, false), !!d.carregando));
     var selo = el("span", "bat-selo" + (d.carregando ? " carga" : d.pct === null ? " off" : ""), null, el("i"), el("span", "", d.selo));
     linha.appendChild(selo);
     card.appendChild(el("div", "bat-cab", null, img, el("div", "bat-id", null, el("b", "", d.nome), linha)));
@@ -1127,14 +1315,15 @@
       det.appendChild(x);
     });
     var barra = botao("", "bat-mais", null);
-    function rotular() {
-      limpar(barra);
-      barra.appendChild(el("span", "seta icone" + (d.aberto ? " aberta" : ""), ""));
-      barra.appendChild(document.createTextNode(d.aberto ? T("LessDetails", t("Menos detalhes", "Less details")) : T("MoreDetails", t("Mais detalhes", "More details"))));
-      det.hidden = !d.aberto;
+    var seta = el("span", "seta icone", ""), rotulo = el("span");
+    barra.appendChild(seta); barra.appendChild(rotulo);
+    function rotular(animando) {
+      seta.classList.toggle("aberta", !!d.aberto);
+      rotulo.textContent = d.aberto ? T("LessDetails", t("Menos detalhes", "Less details")) : T("MoreDetails", t("Mais detalhes", "More details"));
+      if (animando) deslizarAltura(det, !!d.aberto); else det.hidden = !d.aberto;
     }
     barra.addEventListener("click", function () {
-      d.aberto = !d.aberto; rotular();
+      d.aberto = !d.aberto; rotular(true);
       pedir("bateria.detalhes", { chave: d.chave }).catch(function () { });
     });
     rotular();
@@ -1152,18 +1341,19 @@
     var botaoWidget = el("button", "b bat-widget");
     botaoWidget.type = "button";
     var painel = el("div", "bat-painel");
-    function desenharBotao() {
-      limpar(botaoWidget);
-      botaoWidget.appendChild(el("span", "icone", ""));
-      botaoWidget.appendChild(el("span", "", T("WidgetButton", "Widget")));
-      botaoWidget.appendChild(el("span", "icone seta-w" + (aberto ? " aberta" : ""), ""));
-      botaoWidget.title = T("WidgetButtonTip");
-      painel.hidden = !aberto;
+    var setaW = el("span", "icone seta-w", "");
+    botaoWidget.appendChild(el("span", "icone", ""));
+    botaoWidget.appendChild(el("span", "", T("WidgetButton", "Widget")));
+    botaoWidget.appendChild(setaW);
+    botaoWidget.title = T("WidgetButtonTip");
+    function desenharBotao(animando) {
+      setaW.classList.toggle("aberta", aberto);
+      if (animando) deslizarAltura(painel, aberto); else painel.hidden = !aberto;
     }
     botaoWidget.addEventListener("click", function () {
       aberto = !aberto;
       try { sessionStorage.setItem("widgetAberto", aberto ? "1" : "0"); } catch (e) { }
-      desenharBotao();
+      desenharBotao(true);
     });
     alvo.appendChild(el("div", "bat-topo", null, botaoWidget));
 

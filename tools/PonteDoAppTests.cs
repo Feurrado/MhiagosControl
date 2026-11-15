@@ -183,6 +183,10 @@ namespace MhiagosControl
                 Dictionary<string, object> pm = PonteOk(r) && r.ContainsKey("r") ? r["r"] as Dictionary<string, object> : null;
                 Verdade(pm != null && pm["itens"] is List<object> && pm["conjuntos"] is List<object> && pm["perfis"] is List<object>, "ponte: metricas.acao pagina traz itens, conjuntos e perfis");
 
+                // casa.ar: chave fora da lista e aparelho que nao existe sao recusados
+                Verdade(!PonteOk(PedirNaPonte(ponte, "{\"id\":5,\"m\":\"casa.ar\",\"a\":{\"puid\":\"x\",\"chave\":\"t_mode\",\"valor\":1}}")), "ponte: casa.ar recusa chave fora da lista");
+                Verdade(!PonteOk(PedirNaPonte(ponte, "{\"id\":6,\"m\":\"casa.ar\",\"a\":{\"puid\":\"nao-existe\",\"chave\":\"t_temp\",\"valor\":22}}")), "ponte: casa.ar recusa aparelho que nao existe");
+
                 // perfil.salvar
                 r = PedirNaPonte(ponte, "{\"id\":1,\"m\":\"perfil.salvar\",\"a\":{\"nome\":\"GPU\",\"p1\":\"cpu:temp\",\"p2\":\"\",\"fahrenheit\":true,\"percent\":true,\"div1\":10,\"div2\":0,\"rodizio\":true}}");
                 Verdade(PonteOk(r), "ponte: perfil salvo");
@@ -290,6 +294,9 @@ namespace MhiagosControl
                     Igual("GPU", Json.Texto(d, "ativo"), "ponte: o retrato diz o perfil ativo");
                     Verdade(!string.IsNullOrEmpty(Json.Texto(d, "frase")) && d.ContainsKey("alerta") && d["eventos"] is List<object>,
                         "ponte: o retrato leva a frase e os eventos da Visao geral");
+                    Dictionary<string, object> vc = d["vcasa"] as Dictionary<string, object>;
+                    Verdade(vc != null && vc.ContainsKey("ar") && vc.ContainsKey("lav") && vc.ContainsKey("convite") &&
+                        (vc["ar"] != null || vc["lav"] != null || vc["convite"] != null), "ponte: o retrato leva a casa da Visao geral (ar, lavadora ou convite)");
                 }
                 Verdade(Json.Ler(Json.Escrever(ev)) != null, "ponte: o retrato vira JSON valido");
 

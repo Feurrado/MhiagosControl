@@ -384,6 +384,14 @@ namespace MhiagosControl
             catch (Exception ex) { Log.Error("interface nova: Casa", ex); }
         }
 
+        /// <summary>Barra de titulo escura no tema escuro e com Mica, como a janela classica; o handle recriado perde os atributos.</summary>
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Theme.BarraDeTitulo(this);
+            Mica.Aplicar(this);
+        }
+
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             _relogio.Stop();
