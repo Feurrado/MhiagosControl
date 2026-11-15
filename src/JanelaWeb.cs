@@ -62,6 +62,21 @@ namespace MhiagosControl
                    "){localStorage.setItem('chave'," + Json.Escrever(chave ?? "") + ");}}catch(e){}})();";
         }
 
+        /// <summary>
+        /// A mesma pagina do servidor, para ir dentro da janela do app: sem a
+        /// barra lateral dela (a do app ja existe) e com as tres abas (Casa,
+        /// Consumo, Ajustes) em pilulas no alto. Entra como folha de estilo
+        /// adotada, que a politica de conteudo do servidor nao barra, e vale em
+        /// qualquer largura. Nao muda nada no servidor.
+        /// </summary>
+        internal static string ScriptEmbutido(string origem)
+        {
+            string css = "html, body { background: var(--window) !important; } .app { flex-direction: column !important; min-height: 0 !important; } nav { width: auto !important; height: auto !important; position: static !important; flex-direction: row !important; align-items: center !important; flex-wrap: wrap !important; background: transparent !important; border: 0 !important; padding: 0 0 12px !important; gap: 6px !important; } nav .marca, nav .perfil, nav .rodape { display: none !important; } nav .item { flex: none !important; flex-direction: row !important; justify-content: center !important; gap: 0 !important; margin: 0 !important; padding: 0 16px !important; height: 30px !important; min-width: 82px !important; font-size: 13.33px !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; box-sizing: border-box !important; } nav .item svg { display: none !important; } nav .item:hover { background: var(--hover) !important; } nav .item.ativo { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; font-weight: 600 !important; } nav .item.ativo::before { display: none !important; } main { padding: 0 0 24px !important; } .topo h1 { display: none !important; }";
+            return "(function(){try{if(location.origin!==" + Json.Escrever(origem) + ")return;" +
+                   "var s=new CSSStyleSheet();s.replaceSync(" + Json.Escrever(css) + ");" +
+                   "document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);}catch(e){}})();";
+        }
+
         private JanelaWeb()
         {
             Text = T.CasaNovaTitulo;
