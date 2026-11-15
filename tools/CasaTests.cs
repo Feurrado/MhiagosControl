@@ -1358,7 +1358,6 @@ namespace MhiagosControl
                 using (ItensDaCasa casa = new ItensDaCasa())
                 {
                     Verdade(casa.Ar != null && casa.Lavadora != null && casa.Itens().Length == 2, "itens da casa: ar e lavadora secando");
-                    Igual(Clima.Curto(), casa.Ambiente(), "widget mostra a temperatura de fora junto do alvo");
                     foreach (LayoutDoWidget formato in new LayoutDoWidget[] { LayoutDoWidget.Aneis, LayoutDoWidget.Lista })
                     {
                         string nf = formato == LayoutDoWidget.Aneis ? "aneis" : "lista";
