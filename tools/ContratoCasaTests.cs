@@ -79,6 +79,14 @@ namespace MhiagosControl
             // A preferencia vai e volta do casa.ini.
             PreferenciasCasa pref = new PreferenciasCasa();
             Verdade(pref.ServidorFonte, "contrato: servidor como fonte vem ligado");
+
+            // A sugestao de conforto (GET /api/sugestao): com "cena" tem Aplicar; sem, so o aviso; vazia some.
+            Dictionary<string, object> com = SugestaoCasa.Montar(Json.Ler("{\"puid\":\"p\",\"sugestao\":{\"acao\":\"frio\",\"titulo\":\"Frio a 24 C\",\"texto\":\"t\",\"cena\":{\"modo\":2,\"temp\":24}}}") as Dictionary<string, object>);
+            Verdade(com != null && Json.Texto(com, "titulo") == "Frio a 24 C" && Json.Texto(com, "aplicavel") == "true", "sugestao: com cena tem Aplicar");
+            Dictionary<string, object> sem = SugestaoCasa.Montar(Json.Ler("{\"sugestao\":{\"acao\":\"janela\",\"titulo\":\"Abra as janelas\",\"texto\":\"t\"}}") as Dictionary<string, object>);
+            Verdade(sem != null && Json.Texto(sem, "aplicavel") == "false", "sugestao: sem cena nao tem Aplicar");
+            Verdade(SugestaoCasa.Montar(Json.Ler("{\"puid\":null,\"sugestao\":null}") as Dictionary<string, object>) == null, "sugestao: nula some");
+            Verdade(SugestaoCasa.Montar(null) == null, "sugestao: sem resposta some");
         }
     }
 }

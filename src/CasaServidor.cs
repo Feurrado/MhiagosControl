@@ -129,6 +129,18 @@ namespace MhiagosControl
             Pedir("POST", "/api/aparelhos/" + Uri.EscapeDataString(puid) + "/comando", CargaDoComando(props, semBipe));
         }
 
+        /// <summary>A sugestao de conforto do servidor (GET /api/sugestao). Lanca na falha.</summary>
+        public static Dictionary<string, object> Sugestao()
+        {
+            return Pedir("GET", "/api/sugestao", null);
+        }
+
+        /// <summary>Pede ao servidor que aplique a sugestao atual ao ar (ele a refaz na hora). Lanca na falha.</summary>
+        public static void AplicarSugestao()
+        {
+            Pedir("POST", "/api/sugestao/aplicar", new Dictionary<string, object>());
+        }
+
         internal static Dictionary<string, object> CargaDoComando(Dictionary<string, string> props, bool semBipe)
         {
             Dictionary<string, object> p = new Dictionary<string, object>();

@@ -38,6 +38,7 @@ namespace MhiagosControl
                 case "visao.sistema": Sistema(id); return null;
                 case "metricas.acao": return AcaoDeMetricas(id, a);
                 case "casa.ar": return ComandoDoAr(id, a);
+                case "casa.sugestao": AplicarSugestaoDoAr(id); return null;
                 case "specs.copiar":
                     {
                         string texto = SpecSheet.EmTexto();

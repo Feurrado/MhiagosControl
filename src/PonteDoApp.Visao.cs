@@ -41,6 +41,7 @@ namespace MhiagosControl
                 x["fora"] = T.ClimaLaFora;
                 x["clima"] = Clima.Texto();
                 x["origem"] = Clima.Origem();
+                x["sug"] = SugestaoCasa.Atual();
                 r["ar"] = x;
             }
             else r["ar"] = null;
@@ -84,6 +85,27 @@ namespace MhiagosControl
             }
             else r["convite"] = null;
             return r;
+        }
+
+        /// <summary>O botao Aplicar da sugestao: o servidor refaz a sugestao e manda ao ar; o cartao volta com o estado novo.</summary>
+        private void AplicarSugestaoDoAr(object id)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                Dictionary<string, object> resposta;
+                try
+                {
+                    SugestaoCasa.Aplicar();
+                    resposta = Feito(id, VisaoDaCasa());
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("interface nova: aplicar sugestao", ex);
+                    resposta = Falha(id, T.CasaFalhaInesperada);
+                }
+                Action<Dictionary<string, object>> enviar = Enviar;
+                if (enviar != null) enviar(resposta);
+            });
         }
 
         /// <summary>O - e + e o liga/desliga do cartao do ar, como na classica: o estado muda na hora e o comando segue.</summary>
