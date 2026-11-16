@@ -288,7 +288,8 @@ def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umida
     A escolha do modo tem histerese pelo modo em que o ar ja esta (modo_atual, t_work_mode):
     - Frio: entra com o quarto FRIO_ENTRA acima do alvo (ou acima de TETO_VENTILAR, ou a noite) e fica
       ate o quarto cair FRIO_SAI abaixo do alvo. No meio quem regula e o termostato do proprio ar.
-    - Seco: entra com umidade >= 70% e o quarto entre o alvo e alvo + 1,5 (mais quente que isso, o frio
+    - Seco: so com a umidade de dentro medida pelo ar (umidade_dentro); a de fora nao serve para isso.
+      Entra com umidade >= 70% e o quarto entre o alvo e alvo + 1,5 (mais quente que isso, o frio
       vem primeiro); fica ate a umidade cair a 60%, o quarto chegar no piso (alvo - 1,5) ou esquentar a
       alvo + 2,5. Nunca manda temperatura: o aparelho trava o seco em 22 °C.
     - Ventilar: o que sobra com o ar ligado ou com o quarto pouco acima do alvo; desligado e mais fresco
@@ -300,9 +301,9 @@ def sugestao(dentro, fora, umidade, media_recente, max_hoje, hora, ligado, umida
     """
     if dentro is None or fora is None:
         return None
-    # A umidade que pesa no conforto e a de dentro, quando o ar a mede; sem ela, a de fora.
-    if umidade_dentro is not None:
-        umidade = umidade_dentro
+    # So a umidade de DENTRO decide alguma coisa. A de fora (umidade) nao diz como esta o quarto: com chuva
+    # marca 94% enquanto o quarto com o ar ligado esta em 62%. Sem a medida de dentro, o seco nunca e escolhido.
+    umidade = umidade_dentro
     media = media_recente if media_recente is not None else fora
     neutra = round(0.31 * media + 17.8, 1)
     quente_depois = max_hoje is not None and max_hoje >= 30
