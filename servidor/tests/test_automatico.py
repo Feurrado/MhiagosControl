@@ -22,7 +22,7 @@ class Automatico(Base):
         banco.con()
         automatico._estado.update({"ultimo": 0, "visto": None, "pausaAte": 0, "registro": []})
         self.enviados = []
-        self.envio = mock.patch.object(servico, "enviar", side_effect=lambda puid, props, sem: self.enviados.append(props))
+        self.envio = mock.patch.object(servico, "enviar", side_effect=lambda puid, props, sem, origem="manual": self.enviados.append(props))
         self.envio.start()
         self.addCleanup(self.envio.stop)
         self.comando = mock.patch.object(casa, "comando_da_cena", side_effect=self._props)

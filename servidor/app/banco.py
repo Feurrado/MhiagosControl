@@ -34,7 +34,8 @@ ESQUEMA = """
         id INTEGER PRIMARY KEY, puid TEXT, nome TEXT, quando INTEGER, estado TEXT NOT NULL,
         t INTEGER NOT NULL, tentativas INTEGER NOT NULL DEFAULT 0, detalhe TEXT);
     CREATE TABLE IF NOT EXISTS eventos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER NOT NULL, puid TEXT, tipo TEXT, texto TEXT);
+        id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER NOT NULL, puid TEXT, tipo TEXT, texto TEXT,
+        origem TEXT NOT NULL DEFAULT 'sistema', descricao TEXT);
     CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
 """
 
@@ -52,6 +53,15 @@ def _migrar(c):
         c.execute("ALTER TABLE agendamentos ADD COLUMN proxima INTEGER")
     if "erro" not in cols:
         c.execute("ALTER TABLE agendamentos ADD COLUMN erro TEXT")
+    # 1.18: o historico de eventos ganha origem (manual, recomendacao, automacao, sistema) e a descricao legivel.
+    # Os antigos ficam com origem 'sistema' e sem descricao (a API monta uma a partir do tipo e do texto).
+    cols = _colunas(c, "eventos")
+    if "origem" not in cols:
+        c.execute("ALTER TABLE eventos ADD COLUMN origem TEXT NOT NULL DEFAULT 'sistema'")
+    if "descricao" not in cols:
+        c.execute("ALTER TABLE eventos ADD COLUMN descricao TEXT")
+    c.execute("CREATE INDEX IF NOT EXISTS ix_eventos_t ON eventos(t)")
+    c.execute("CREATE INDEX IF NOT EXISTS ix_eventos_puid_t ON eventos(puid, t)")
 
 
 def con():

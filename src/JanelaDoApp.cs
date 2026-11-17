@@ -416,7 +416,7 @@ namespace MhiagosControl
             if (a == null) return;
             _casaVisivel = Json.Texto(a, "visivel") == "true";
             string aba = Json.Texto(a, "aba");
-            if (aba == "painel" || aba == "clima" || aba == "consumo" || aba == "ajustes") _casaAba = aba;
+            if (aba == "painel" || aba == "clima" || aba == "consumo" || aba == "ajustes" || aba == "ajustes-eventos") _casaAba = aba;
             // A mesma escala do resto do app (DPI do sistema), que e a que o WebView2 usa para o pixel CSS.
             double escala = Ui.S(9600) / 9600.0;
             _casaArea = new Rectangle((int)Math.Round(Int(a, "x") * escala), (int)Math.Round(Int(a, "y") * escala),

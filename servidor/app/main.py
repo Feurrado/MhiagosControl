@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import automatico, avisos, banco, casa, clima, servico, sistema
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.17.0"
+VERSAO = "1.18.0"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
@@ -280,6 +280,8 @@ class Comando(BaseModel):
     semBipe: bool | None = None
     # Mudanca manual cancela o retorno da cena (como no app).
     manual: bool = True
+    # Quem pediu: o painel e os apps mandam "manual" (o padrao).
+    origem: str = Field("manual", pattern=r"^(manual|recomendacao|automacao|sistema)$")
 
 
 def _leves(lista):
@@ -334,7 +336,7 @@ def propriedades(puid: str):
 @app.post("/api/aparelhos/{puid}/comando", dependencies=[Depends(autorizado)])
 def comando(puid: str, c: Comando):
     validar_props(c.props, _aparelho(puid))
-    servico.enviar(puid, c.props, _sem_bipe(c.semBipe))
+    servico.enviar(puid, c.props, _sem_bipe(c.semBipe), origem=c.origem)
     if c.manual:
         servico.cancelar(puid, "retorno")
     return {"ok": True}
@@ -520,7 +522,7 @@ def aplicar_sugestao():
     props = casa.comando_da_cena(s["cena"], ar)
     if props is None:
         raise HTTPException(409, "este aparelho nao aceita a sugestao")
-    servico.enviar(ar["puid"], props, _sem_bipe(None))
+    servico.enviar(ar["puid"], props, _sem_bipe(None), origem="recomendacao")
     servico.cancelar(ar["puid"], "retorno")
     banco.gravar_kv("sugestao_aplicada", {"puid": ar["puid"], "cena": s["cena"], "t": int(time.time())})
     return {"ok": True, "sugestao": s}
@@ -662,6 +664,60 @@ def _previsao_do_mes(hoje, atual, tarifa):
     kwh = atual["kwh"] + media * faltam
     return {"kwh": round(kwh, 2), "custo": round(atual["custo"] + media * faltam * tarifa, 2),
             "mediaDia": round(media, 2), "diasComUso": dias7, "faltam": faltam}
+
+
+TIPOS_DE_EVENTO = {
+    "comando": "Comando", "ar_externo": "Mudança no ar", "ciclo_inicio": "Ciclo iniciado", "ciclo_fim": "Ciclo terminado",
+    "lavadora_erro": "Erro da lavadora", "agendamento": "Agendamento", "agendamento_falhou": "Agendamento falhou",
+    "agendamento_descartado": "Agendamento descartado", "erro": "Erro do servidor",
+}
+ORIGENS = ("manual", "recomendacao", "automacao", "sistema")
+
+
+def _descricao_antiga(e):
+    """Eventos gravados antes da 1.18 nao tem descricao: monta uma do tipo e do texto."""
+    if e["tipo"] == "comando":
+        try:
+            return casa.descrever_comando(servico.achar(e["puid"]), json.loads(e["texto"]))
+        except (TypeError, ValueError):
+            return "Comando enviado"
+    t = TIPOS_DE_EVENTO.get(e["tipo"], e["tipo"] or "Evento")
+    return t + (": " + e["texto"] if e["texto"] else "")
+
+
+@app.get("/api/historico/eventos", dependencies=[Depends(autorizado)])
+def historico_de_eventos(puid: str | None = None, origem: str | None = None, de: int = 0, ate: int = 0,
+                         antes: int = 0, limite: int = 50):
+    """Eventos do mais novo ao mais antigo, filtrados por aparelho, origem e periodo (epoca em segundos).
+    Paginacao por cursor: 'proximo' e o id para passar em 'antes' e trazer a pagina seguinte (None no fim)."""
+    limite = max(1, min(200, limite))
+    where, args = [], []
+    if puid:
+        where.append("puid = ?")
+        args.append(puid)
+    if origem in ORIGENS:
+        where.append("origem = ?")
+        args.append(origem)
+    if de > 0:
+        where.append("t >= ?")
+        args.append(de)
+    if ate > 0:
+        where.append("t < ?")
+        args.append(ate)
+    if antes > 0:
+        where.append("id < ?")
+        args.append(antes)
+    sql = "SELECT * FROM eventos" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY id DESC LIMIT ?"
+    linhas = banco.linhas(sql, tuple(args) + (limite + 1,))
+    mais = len(linhas) > limite
+    linhas = linhas[:limite]
+    nomes = {a["puid"]: a.get("apelido") or a["deviceId"] for a in servico.aparelhos()}
+    saida = [{"id": e["id"], "t": e["t"], "puid": e["puid"],
+              "dispositivo": nomes.get(e["puid"]) or ("Servidor" if not e["puid"] else e["puid"]),
+              "tipo": e["tipo"], "tipoNome": TIPOS_DE_EVENTO.get(e["tipo"], e["tipo"] or "Evento"),
+              "descricao": e["descricao"] or _descricao_antiga(e), "origem": e["origem"] or "sistema"} for e in linhas]
+    return {"eventos": saida, "proximo": linhas[-1]["id"] if mais and linhas else None,
+            "retencaoDias": casa.preferencias()["dados"].get("retencaoEventosDias", 90)}
 
 
 @app.get("/api/eventos", dependencies=[Depends(autorizado)])

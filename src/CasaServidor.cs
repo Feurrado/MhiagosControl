@@ -135,6 +135,30 @@ namespace MhiagosControl
             return Pedir("GET", "/api/sugestao", null);
         }
 
+        /// <summary>
+        /// Os ultimos eventos do historico do servidor (GET /api/historico/eventos), do mais novo ao mais antigo,
+        /// como [hora, descricao]: HH:mm se for de hoje, dd/MM se nao. Lanca na falha (servidor antigo: 404).
+        /// </summary>
+        public static List<string[]> Eventos(int quantos)
+        {
+            Dictionary<string, object> r = Pedir("GET", "/api/historico/eventos?limite=" + quantos, null);
+            List<string[]> saida = new List<string[]>();
+            object o;
+            List<object> l = r != null && r.TryGetValue("eventos", out o) ? o as List<object> : null;
+            if (l == null) return saida;
+            DateTime hoje = DateTime.Now.Date;
+            foreach (object x in l)
+            {
+                Dictionary<string, object> e = x as Dictionary<string, object>;
+                long t;
+                if (e == null || !long.TryParse(Json.Texto(e, "t"), out t)) continue;
+                DateTime quando = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(t).ToLocalTime();
+                string texto = Json.Texto(e, "descricao") ?? "";
+                saida.Add(new string[] { quando.Date == hoje ? quando.ToString("HH:mm") : quando.ToString("dd/MM"), texto });
+            }
+            return saida;
+        }
+
         /// <summary>O tempo da cidade da casa, com a qualidade do ar (GET /api/clima). Lanca na falha.</summary>
         public static Dictionary<string, object> Clima()
         {

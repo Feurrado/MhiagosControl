@@ -43,7 +43,7 @@
     // usada pela faixa da Visao geral e por quem abrir a janela com #specs:cpu.
     var sp = /^specs:(cpu|gpu|ram|disco|placa|so|rede)$/.exec(p || "");
     if (sp) { specAlvo = sp[1]; return "specs"; }
-    var m = /^casa:(clima|consumo|ajustes)$/.exec(p || "");
+    var m = /^casa:(clima|consumo|ajustes|ajustes-eventos)$/.exec(p || "");
     if (!m) return p;
     casaAba = m[1];
     return "casa";
@@ -1103,7 +1103,22 @@
       botao(T("VisaoBaterias", t("Baterias ▸", "Batteries ▸")), "link", function () { mostrar("baterias"); })), perLista);
     aoClicar(per, function () { mostrar("baterias"); });
     var evLista = el("div", "vg-ev");
-    var ev = el("div", "cartao vg-box", null, el("div", "cb", null, el("span", "mono", T("VisaoEventos", t("EVENTOS", "EVENTS")))), evLista);
+    // Eventos: o historico do servidor (ar e lavadora, guardado la); o clique abre o historico completo na Casa.
+    var ev = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("span", "mono", T("VisaoEventos", t("EVENTOS", "EVENTS"))),
+      botao(t("Histórico ▸", "History ▸"), "link", function () { casaAba = "ajustes-eventos"; mostrar("casa"); })), evLista);
+    aoClicar(ev, function () { casaAba = "ajustes-eventos"; mostrar("casa"); });
+    var evServidor = null;
+    function buscarEventos() {
+      pedir("visao.eventos").then(function (r) { if (vivo) { evServidor = r && r.length ? r : null; desenharEventos(); } }, function () { });
+    }
+    function desenharEventos() {
+      limpar(evLista);
+      var linhas = evServidor || ((E && E.eventos) || []).map(function (x) { return [x.h, x.t]; });
+      if (!linhas.length) evLista.appendChild(el("div", "nota", T("VisaoSemEventos", t("Nada novo desde que o app abriu.", "Nothing new since the app started."))));
+      linhas.slice(0, 8).forEach(function (x) { evLista.appendChild(el("div", "", null, el("span", "", x[0]), document.createTextNode(x[1]))); });
+    }
+    buscarEventos();
+    var relogioEv = setInterval(buscarEventos, 30000);
     duas.appendChild(per); duas.appendChild(ev);
     meio.appendChild(esq);
 
@@ -1246,10 +1261,7 @@
           var pct = el("span", !tem ? "sem" : b.carregando ? "carga" : b.bateria <= 20 ? "baixa" : "", tem ? b.bateria + "%" : "--");
           perLista.appendChild(el("div", "vg-per", null, el("span", "", b.nome), pct));
         });
-        // eventos
-        limpar(evLista);
-        if (!E.eventos || !E.eventos.length) evLista.appendChild(el("div", "nota", T("VisaoSemEventos", t("Nada novo desde que o app abriu.", "Nothing new since the app started."))));
-        (E.eventos || []).slice(0, 8).forEach(function (x) { evLista.appendChild(el("div", "", null, el("span", "", x.h), document.createTextNode(x.t))); });
+        desenharEventos();
         // casa
         casa.definir(E.vcasa);
         arranjarTiles();
@@ -1258,6 +1270,7 @@
         vivo = false; clearInterval(relogio);
         window.removeEventListener("resize", redesenhar);
         window.removeEventListener("resize", ajustarPalco);
+        clearInterval(relogioEv);
         if (observador) observador.disconnect();
         previa.sair();
         casa.sair();

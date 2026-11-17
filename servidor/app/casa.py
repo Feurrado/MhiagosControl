@@ -225,7 +225,7 @@ CENAS_PADRAO = [
 PREF_PADRAO = {
     "alertaFalha": True, "alertaDesconectado": True, "alertaQuente": True, "alertaLavadoraFim": True,
     "limiteQuente": 28, "potenciaFrio": 1100, "potenciaEco": 1100, "potenciaSeco": 600, "potenciaVentilar": 60,
-    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "semBipe": True, "ntfyTopico": "", "local": None, "locais": [], "inicio": {"ordem": [], "ocultos": []}, "cenas": CENAS_PADRAO,
+    "tarifa": 0.85, "retornoModo": 2, "retornoTemp": 24, "retornoVento": 2, "retencaoEventosDias": 90, "semBipe": True, "ntfyTopico": "", "local": None, "locais": [], "inicio": {"ordem": [], "ocultos": []}, "cenas": CENAS_PADRAO,
     # Modo automatico do ar (app/automatico.py): desligado por padrao.
     "auto": {"ligado": False, "podeLigar": False, "podeDesligar": True, "pausaMin": 120, "inicio": 0, "fim": 24},
 }
@@ -238,7 +238,7 @@ class PreferenciaInvalida(ValueError):
 _BOOLEANAS = ("alertaFalha", "alertaDesconectado", "alertaQuente", "alertaLavadoraFim", "semBipe")
 _INTEIRAS = {"limiteQuente": (16, 45), "potenciaFrio": (0, 10000), "potenciaEco": (0, 10000),
              "potenciaSeco": (0, 10000), "potenciaVentilar": (0, 10000), "retornoModo": (-1, 10),
-             "retornoTemp": (16, 32), "retornoVento": (-3, 20)}
+             "retornoTemp": (16, 32), "retornoVento": (-3, 20), "retencaoEventosDias": (7, 3650)}
 _CENA_INTEIRAS = {"modo": (-1, 10), "temp": (-1, 40), "vento": (-3, 20), "noturno": (-1, 1), "duracao": (0, 24 * 60)}
 
 
@@ -410,6 +410,50 @@ def comando_da_cena(cena, a):
             return None
         p["t_sleep"] = noturno
     return {k: str(v) for k, v in p.items()} or None
+
+
+def _graus(a, t):
+    """A temperatura do comando em graus C (o ar em F manda F)."""
+    return round((t - 32) * 5 / 9) if _int(a, "t_temp_type") == 1 else t
+
+
+def descrever_comando(a, props):
+    """O que um comando faz, em texto curto para o historico: 'Ligou · modo Frio, 25 °C, ventilador Baixo'."""
+    if a is None or a.get("tipo") not in ("008", "009"):
+        return "Comando enviado (%d ajuste%s)" % (len(props), "" if len(props) == 1 else "s")
+    partes = []
+    try:
+        if "t_power" in props:
+            partes.append("Ligou" if int(props["t_power"]) else "Desligou")
+        if "t_work_mode" in props:
+            partes.append("modo " + tabelas.modo(int(props["t_work_mode"])))
+        if "t_temp" in props:
+            partes.append(("" if partes and "modo" in partes[-1] else "temperatura ") + "%d °C" % _graus(a, int(props["t_temp"])))
+        if "t_fan_speed" in props:
+            partes.append("ventilador " + tabelas.ventilador(int(props["t_fan_speed"]), a["tipo"]))
+        if "t_sleep" in props:
+            partes.append("noturno " + ("ligado" if int(props["t_sleep"]) else "desligado"))
+    except (TypeError, ValueError):
+        pass
+    if not partes:
+        return "Ajuste enviado"
+    return partes[0][0].upper() + partes[0][1:] + (" · " + ", ".join(partes[1:]) if len(partes) > 1 else "")
+
+
+def descrever_estado_ar(estado):
+    """O ar como esta agora, para um evento de mudanca fora do app: 'Ligado · Frio, 25 °C'."""
+    def n(k):
+        try:
+            return int(float(estado.get(k)))
+        except (TypeError, ValueError):
+            return None
+    ligado, modo, alvo = n("t_power"), n("t_work_mode"), n("t_temp")
+    if not ligado:
+        return "Desligado"
+    partes = [tabelas.modo(modo)] if modo is not None else []
+    if alvo is not None and modo not in (0, 3):
+        partes.append("%d °C" % (round((alvo - 32) * 5 / 9) if n("t_temp_type") == 1 else alvo))
+    return "Ligado" + (" · " + ", ".join(partes) if partes else "")
 
 
 def comando_de_retorno(a):

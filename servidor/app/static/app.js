@@ -1047,6 +1047,62 @@ async function carregarLavadoraConsumo() {
             el("td", { class: "n" }, num(p.agua / p.n, 0) + " L"), el("td", { class: "n" }, num(p.energia / p.n, 2) + " kWh"))))] : null));
 }
 
+// ---------------- historico de eventos ----------------
+
+const evFiltro = { puid: "", dias: "7", origem: "" };
+const ORIGEM_NOME = { manual: "Manual", recomendacao: "Recomendação", automacao: "Automação", sistema: "Sistema" };
+
+function linhaDeEvento(e) {
+  return el("div", { class: "ev-lin" },
+    el("div", { class: "ev-q" }, dataHora(e.t)),
+    el("div", { class: "ev-c" }, el("b", {}, e.descricao), el("span", { class: "mu" }, e.dispositivo + " · " + e.tipoNome)),
+    el("span", { class: "ev-o o-" + e.origem }, ORIGEM_NOME[e.origem] || e.origem));
+}
+
+/** Eventos do ar e da lavadora guardados no servidor: filtro por aparelho, origem e periodo, do mais novo ao mais antigo, 30 por vez. */
+function blocoEventos(d) {
+  const lista = el("div", { class: "ev-lista" });
+  const mais = el("button", { class: "b oculto", type: "button" }, "Carregar mais");
+  const info = el("div", { class: "mu", style: "margin-top:10px" }, "Carregando…");
+  let proximo = null, geracao = 0;
+  async function carregar(zerar) {
+    const minha = ++geracao;
+    if (zerar) { proximo = null; lista.replaceChildren(); mais.classList.add("oculto"); info.textContent = "Carregando…"; }
+    mais.disabled = true;
+    const q = new URLSearchParams({ limite: "30" });
+    if (evFiltro.puid) q.set("puid", evFiltro.puid);
+    if (evFiltro.origem) q.set("origem", evFiltro.origem);
+    if (evFiltro.dias !== "0") q.set("de", String(Math.floor(Date.now() / 1000) - Number(evFiltro.dias) * 86400));
+    if (proximo) q.set("antes", String(proximo));
+    try {
+      const r = await api("historico/eventos?" + q);
+      if (minha !== geracao) return;
+      lista.append(...r.eventos.map(linhaDeEvento));
+      proximo = r.proximo;
+      mais.classList.toggle("oculto", !proximo);
+      info.textContent = lista.children.length ? "" : "Nenhum evento neste filtro.";
+    } catch (e) { if (minha === geracao) info.textContent = "Não carregou: " + e.message; }
+    mais.disabled = false;
+  }
+  mais.onclick = () => carregar(false);
+  const seletor = (rotulo, chave, opcoes) => el("label", { class: "campo" }, rotulo, el("select", { on: { change: e => { evFiltro[chave] = e.target.value; carregar(true); } } },
+    opcoes.map(([v, t]) => el("option", { value: v, selected: v === evFiltro[chave] }, t))));
+  const aparelhos = ((estado && estado.lista) || []).map(a => [a.puid, a.apelido || a.deviceId]);
+  const dias = d.retencaoEventosDias || 90;
+  const guardar = [30, 60, 90, 180, 365].includes(dias) ? [30, 60, 90, 180, 365] : [30, 60, 90, 180, 365, dias].sort((a, b) => a - b);
+  if (ajSecao === "eventos") carregar(true); else info.textContent = "";   // so busca com a secao aberta
+  return cartaoSimples("Histórico de eventos", "ar e lavadora, guardados no servidor", null,
+    el("div", { class: "form" },
+      seletor("Aparelho", "puid", [["", "Todos"], ...aparelhos]),
+      seletor("Período", "dias", [["1", "Últimas 24 h"], ["7", "7 dias"], ["30", "30 dias"], ["0", "Tudo guardado"]]),
+      seletor("Origem", "origem", [["", "Todas"], ...Object.entries(ORIGEM_NOME)])),
+    lista, info, el("div", { class: "linha", style: "margin-top:8px" }, mais),
+    el("label", { class: "campo", style: "margin-top:14px" }, "Guardar por",
+      el("select", { on: { change: e => gravarPref({ retencaoEventosDias: Number(e.target.value) }) } },
+        guardar.map(n => el("option", { value: n, selected: n === dias }, n + " dias")))),
+    el("div", { class: "mu" }, "Eventos mais antigos que isso são apagados pelo servidor."));
+}
+
 // ---------------- saude do servidor ----------------
 
 async function carregarSistema(caixa) {
@@ -1683,6 +1739,7 @@ function desenharAjustes() {
   const auto = cartaoSimples("Ar automático", "o servidor ajusta o ar sozinho pelo conforto", null, blocoAuto(d),
     { dica: "Usa a mesma conta da sugestão: conforto adaptativo da ASHRAE 55 com a média dos últimos dias." });
 
+  const eventos = blocoEventos(d);
   const sim = b => b ? 1 : 0;
   const secoes = [
     ["alertas", "Alertas", sim(d.alertaFalha) + sim(d.alertaDesconectado) + sim(d.alertaQuente) + sim(d.alertaLavadoraFim) + " de 4 ligados" + (d.ntfyTopico ? " · no celular" : ""), alertas],
@@ -1692,6 +1749,7 @@ function desenharAjustes() {
     ["clima", "Clima e local", d.local ? d.local.nome : "Nenhuma cidade", clima],
     ["retorno", "Retorno das cenas", (({ 0: "Ventilar", 2: "Frio", 3: "Desumidificar", 5: "ECO" })[d.retornoModo] || "Manter") + " · " + d.retornoTemp + " °C", retorno],
     ["cenas", "Cenas", lista.length + " de 8", cenas],
+    ["eventos", "Eventos", "Histórico no servidor · " + (d.retencaoEventosDias || 90) + " dias", eventos],
     ["servidor", "Servidor", pref.atualizado ? "Salvo " + dataHora(pref.atualizado) : "Nada salvo", el("div", { class: "pilha" }, conta, saude)]
   ];
   if (!secoes.some(x => x[0] === ajSecao)) ajSecao = "alertas";

@@ -36,6 +36,7 @@ namespace MhiagosControl
                 case "diagnostico.salvar": SalvarDiagnostico(id); return null;
                 case "github": Navegador.Abrir(Repositorio); return Feito(id, true);
                 case "visao.sistema": Sistema(id); return null;
+                case "visao.eventos": EventosDoServidor(id); return null;
                 case "metricas.acao": return AcaoDeMetricas(id, a);
                 case "casa.ar": return ComandoDoAr(id, a);
                 case "casa.sugestao": AplicarSugestaoDoAr(id); return null;
@@ -223,6 +224,32 @@ namespace MhiagosControl
         }
 
         /// <summary>[rotulo, valor, chave]: a chave (cpu, gpu, ram, placa, so) e a rota da secao nas Especificacoes (specs:cpu).</summary>
+        /// <summary>Os ultimos eventos guardados no servidor da casa; sem servidor ou com servidor antigo, a resposta e nula (a pagina usa os do app).</summary>
+        private void EventosDoServidor(object id)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                Dictionary<string, object> resposta;
+                try
+                {
+                    List<object> linhas = null;
+                    if (ServidorCasa.Configurado)
+                    {
+                        linhas = new List<object>();
+                        foreach (string[] e in ServidorCasa.Eventos(8)) linhas.Add(new List<object> { e[0], e[1] });
+                    }
+                    resposta = Feito(id, linhas);
+                }
+                catch (Exception ex)
+                {
+                    Log.Write("interface nova: eventos do servidor indisponiveis: " + ex.Message);
+                    resposta = Feito(id, null);
+                }
+                Action<Dictionary<string, object>> enviar = Enviar;
+                if (enviar != null) enviar(resposta);
+            });
+        }
+
         private static void AcrescentarLinha(List<object> linhas, string rotulo, string valor, string chave)
         {
             if (string.IsNullOrEmpty(valor)) return;
