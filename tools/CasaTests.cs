@@ -30,6 +30,7 @@ namespace MhiagosControl
             NucleoSeparado();
             NucleoSemAdmin();
             JanelaWebOrigem();
+            ProporcaoDaJanelaTeste();
             PonteDoAppNova();
             PonteDoAppAjustes();
         }

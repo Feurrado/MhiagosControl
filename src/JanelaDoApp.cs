@@ -280,6 +280,17 @@ namespace MhiagosControl
                 Dictionary<string, object> pedido = Json.Ler(e.WebMessageAsJson) as Dictionary<string, object>;
                 if (pedido == null) return;
                 if (Json.Texto(pedido, "m") == "pronto") { MostrarPagina(); return; }
+                if (Json.Texto(pedido, "m") == "janela.proporcao")
+                {
+                    object pa;
+                    pedido.TryGetValue("a", out pa);
+                    Dictionary<string, object> da = pa as Dictionary<string, object>;
+                    double r;
+                    if (da != null && da.ContainsKey("r") && double.TryParse(Convert.ToString(da["r"], System.Globalization.CultureInfo.InvariantCulture),
+                        System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out r))
+                        DefinirProporcao(r);
+                    return;
+                }
                 if (Json.Texto(pedido, "m") == "casa.area")
                 {
                     object area;
@@ -294,6 +305,47 @@ namespace MhiagosControl
                 if (Json.Texto(pedido, "m") == "iniciar") Publicar(true);
             }
             catch (Exception ex) { Log.Error("interface nova: mensagem da pagina", ex); }
+        }
+
+        private double _proporcao = ProporcaoDaJanela.Padrao;
+        private bool _dimensionada;
+        private const int WM_SIZING = 0x214;
+
+        /// <summary>
+        /// A pagina diz a razao do palco da Visao geral mais a barra lateral. A janela passa a manter essa razao
+        /// ao ser redimensionada; o tamanho minimo acompanha, e na primeira vez a janela ja abre nela.
+        /// </summary>
+        private void DefinirProporcao(double r)
+        {
+            if (IsDisposed) return;
+            _proporcao = ProporcaoDaJanela.Limitar(r);
+            int fw = Width - ClientSize.Width, fh = Height - ClientSize.Height;
+            int minimoW = Ui.S(900);
+            MinimumSize = new Size(fw + minimoW, fh + (int)Math.Round(minimoW / _proporcao));
+            if (_dimensionada || WindowState != FormWindowState.Normal) return;
+            _dimensionada = true;
+            Rectangle area = Screen.FromControl(this).WorkingArea;
+            int cw = Math.Min(Ui.S(1290), Math.Min(area.Width - fw - Ui.S(24), (int)Math.Round((area.Height - fh - Ui.S(24)) * _proporcao)));
+            cw = Math.Max(cw, minimoW);
+            Size novo = new Size(cw + fw, (int)Math.Round(cw / _proporcao) + fh);
+            Bounds = new Rectangle(area.Left + (area.Width - novo.Width) / 2, area.Top + (area.Height - novo.Height) / 2, novo.Width, novo.Height);
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct RetanguloNativo { public int Esq, Topo, Dir, Baixo; }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_SIZING && WindowState == FormWindowState.Normal && m.LParam != IntPtr.Zero)
+            {
+                RetanguloNativo r = (RetanguloNativo)System.Runtime.InteropServices.Marshal.PtrToStructure(m.LParam, typeof(RetanguloNativo));
+                int[] n = ProporcaoDaJanela.Ajustar(r.Esq, r.Topo, r.Dir, r.Baixo, m.WParam.ToInt32(), Width - ClientSize.Width, Height - ClientSize.Height, _proporcao);
+                r.Esq = n[0]; r.Topo = n[1]; r.Dir = n[2]; r.Baixo = n[3];
+                System.Runtime.InteropServices.Marshal.StructureToPtr(r, m.LParam, false);
+                m.Result = (IntPtr)1;
+                return;
+            }
+            base.WndProc(ref m);
         }
 
         private void Postar(Dictionary<string, object> mensagem)
