@@ -536,7 +536,8 @@
      Curvas e tempos do Material: entrada "emphasized decelerate", saida rapida. Tudo some com
      "reduzir movimento" (bloco prefers-reduced-motion, que usa !important). */
   :root { --m3-entra:cubic-bezier(.05,.7,.1,1); --m3-padrao:cubic-bezier(.2,0,0,1); }
-  @keyframes m3-fade-through { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
+  /* A pagina entra encolhida a partir do TOPO: do centro, uma pagina alta (a Clima passa de 1500 px, 2100 no celular) descia ~30-40 px e subia ate o lugar enquanto aparecia. */
+  @keyframes m3-fade-through { from { opacity:0; transform:scale(.985); } to { opacity:1; transform:none; } }
   @keyframes m3-eixo-frente { from { opacity:0; transform:translateX(32px); } to { opacity:1; transform:none; } }
   @keyframes m3-eixo-tras { from { opacity:0; transform:translateX(-32px); } to { opacity:1; transform:none; } }
   @keyframes m3-surge { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
@@ -545,7 +546,7 @@
   @keyframes m3-onda { from { transform:scale(0); opacity:.22; } to { transform:scale(1); opacity:0; } }
   @keyframes m3-gira-abre { from { transform:rotate(0); } to { transform:rotate(180deg); } }
   @keyframes m3-gira-fecha { from { transform:rotate(180deg); } to { transform:rotate(0); } }
-  .m3-aba { animation:m3-fade-through .28s var(--m3-entra) both; }
+  .m3-aba { animation:m3-fade-through .28s var(--m3-entra) both; transform-origin:50% 0; }
   .m3-frente { animation:m3-eixo-frente .3s var(--m3-entra) both; }
   .m3-tras { animation:m3-eixo-tras .3s var(--m3-entra) both; }
   .m3-surge { animation:m3-surge .42s var(--m3-entra) both; }
