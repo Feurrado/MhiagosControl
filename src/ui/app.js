@@ -1367,6 +1367,25 @@
       });
     }
 
+    // A lavadora parada: ocupa o lugar do cartao de ciclo (mesma altura), com o ultimo ciclo e o mes.
+    var lrNome = el("b"), lrLinha = el("small"), lrEstado = el("span", "tempo"), lrMes = el("div", "mes");
+    var cartaoLavRepouso = el("div", "cartao vg-lav repouso vai", null,
+      el("div", "topo", null, el("span", "ic maquina", null, el("i")), el("div", "ct", null, lrNome, lrLinha), el("div", "rel", null, lrEstado)), lrMes);
+    aoClicar(cartaoLavRepouso, function () { mostrar("casa"); });
+    function desenharLavRepouso(l) {
+      lrNome.textContent = l.nome;
+      lrEstado.textContent = l.online ? t("Parada", "Idle") : t("Offline", "Offline");
+      lrEstado.classList.toggle("fora", !l.online);
+      var u = l.ultimo;
+      lrLinha.textContent = u ? t("Último ciclo: ", "Last cycle: ") + (u.programa ? u.programa + " · " : "") +
+        (u.min < 60 ? u.min + " min" : Math.floor(u.min / 60) + " h " + ("0" + (u.min % 60)).slice(-2)) + " · " + u.fim + (u.concluido ? "" : t(" (interrompido)", " (interrupted)"))
+        : t("Nenhum ciclo registrado ainda", "No cycle recorded yet");
+      limpar(lrMes);
+      [[l.mes[0], t("ciclos no mês", "cycles this month")], [l.mes[1] + " L", t("de água", "of water")], [String(l.mes[2]).replace(".", t(",", ".")) + " kWh", t("de energia", "of energy")]].forEach(function (c) {
+        lrMes.appendChild(el("div", "", null, el("b", "", String(c[0])), el("small", "", c[1])));
+      });
+    }
+
     // O convite.
     var cvTitulo = el("b"), cvTexto = el("small");
     var convite = el("div", "cartao vg-casa", null, el("span", "ic icone", "\uE80F"), el("div", "ct", null, cvTitulo, cvTexto),
@@ -1465,9 +1484,10 @@
         raiz.appendChild(cartaoSug);
       }
       if (v.lav) { desenharLav(v.lav); raiz.appendChild(cartaoLav); }
+      else if (v.lavRepouso) { desenharLavRepouso(v.lavRepouso); raiz.appendChild(cartaoLavRepouso); }
       if (v.tempo) raiz.appendChild(cartaoTempo);
       if (v.tempo && v.tempo.dias && v.tempo.dias.length) raiz.appendChild(cartaoDias);
-      if (v.convite || (!ar && !v.lav)) {
+      if (v.convite || (!ar && !v.lav && !v.lavRepouso)) {
         var c = v.convite || {};
         cvTitulo.textContent = c.titulo || T("NavCasa", t("Casa", "Home"));
         cvTexto.textContent = c.texto || "";

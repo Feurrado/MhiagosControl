@@ -447,6 +447,10 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .vg-lav .eseg i { display:block; height:100%; background:var(--accent); border-radius:2px; transition:width 250ms cubic-bezier(.4,0,.2,1), background-color 250ms; }
 .vg-lav .etapas.pausada .seg i { background:var(--warn); }
 .vg-lav .et small { display:block; margin-top:6px; font:11.5px var(--f-peq); color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vg-lav.repouso .tempo { color:var(--muted); font-size:15px; }
+.vg-lav .mes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; text-align:center; }
+.vg-lav .mes b { display:block; font:600 15px/1.2 var(--f-mono); }
+.vg-lav .mes small { display:block; margin-top:2px; font:11.5px var(--f-peq); color:var(--faint); }
 .vg-lav .et.feita small { color:var(--muted); }
 .vg-lav .et.agora small { color:var(--text); font-weight:600; }
 .vg-casa .link { margin-left:auto; }
