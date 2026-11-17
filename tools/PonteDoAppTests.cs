@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using LibreHardwareMonitor.Hardware;
 
@@ -131,6 +132,21 @@ namespace MhiagosControl
             Verdade(textos.ContainsKey("BindGameTo") && ((string)textos["BindGameTo"]).Contains("{0}"), "interface classica: texto com nome vai como molde");
             Verdade(textos.ContainsKey("KeyboardHelp") && textos.ContainsKey("Disclaimer") && textos.ContainsKey("GameReplace"), "interface classica: textos das outras classes parciais");
             Igual(9, PonteDoApp.ChavesDaBarra.Length, "interface classica: as nove paginas da barra (Clima e propria)");
+            // A abertura da janela nova nao e mais um retangulo vazio: logo, nome e arco desenham algo sobre o fundo.
+            using (TelaDeAbertura ab = new TelaDeAbertura())
+            {
+                ab.BackColor = Color.FromArgb(0x1C, 0x1C, 0x1F);
+                ab.Size = new Size(600, 420);
+                using (Bitmap bmp = new Bitmap(600, 420))
+                {
+                    ab.DrawToBitmap(bmp, new Rectangle(0, 0, 600, 420));
+                    int diferentes = 0;
+                    for (int y = 0; y < 420; y += 3)
+                        for (int x = 0; x < 600; x += 3)
+                            if (bmp.GetPixel(x, y).ToArgb() != ab.BackColor.ToArgb() && bmp.GetPixel(x, y).A != 0) diferentes++;
+                    Verdade(diferentes > 200, "janela nova: a tela de abertura desenha logo, nome e indicador (nao fica vazia)");
+                }
+            }
 
             // --- a ponte, com configuracao num arquivo temporario ---
             string caixa = Path.Combine(Path.GetTempPath(), "MhiagosControlTeste" + Guid.NewGuid().ToString("N"));
