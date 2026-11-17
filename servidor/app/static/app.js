@@ -106,6 +106,10 @@ function mostrarInteiro(e) {
  * em vez de encolher e crescer (o que fazia piscar tudo o que vem abaixo).
  */
 function trocarConteudo(caixa, ...filhos) {
+  // imediato: a troca e a primeira pintura de uma aba que acabou de abrir. A altura "de antes" e a de um conteudo
+  // velho ou do "Carregando..." de reserva, e animar dela ate a nova faz a pagina crescer na frente de quem entrou.
+  const imediato = trocarConteudo.imediato;
+  trocarConteudo.imediato = false;
   const h0 = caixa.offsetHeight;
   caixa.style.minHeight = "";
   caixa.replaceChildren(...filhos);
@@ -115,7 +119,7 @@ function trocarConteudo(caixa, ...filhos) {
   // e no Android a barra de abas fixa treme junto. Nesse caso a caixa guarda a altura antiga.
   const sobra = document.documentElement.scrollHeight - (scrollY + innerHeight);
   if (h1 < h0 && sobra < h0 - h1) { caixa.style.minHeight = h0 + "px"; h1 = h0; }
-  if (!h0 || Math.abs(h1 - h0) < 3 || semMovimento() || !caixa.animate) return;
+  if (!h0 || imediato || Math.abs(h1 - h0) < 3 || semMovimento() || !caixa.animate) return;
   caixa.style.overflow = "hidden";
   caixa.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 260, easing: "cubic-bezier(.2,0,0,1)" })
     .onfinish = () => { caixa.style.overflow = ""; };
@@ -201,7 +205,12 @@ function trocarAba(a) {
   abaAtual = a;
   for (const b of document.querySelectorAll("nav .item")) { const on = b.dataset.aba === a; b.classList.toggle("ativo", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); }
   for (const s of ABAS) $("aba-" + s).classList.toggle("oculto", s !== a);
-  if (a === "clima") { desenharClimaPagina(); carregarClima(); }
+  if (a === "clima") {
+    trocarConteudo.imediato = mudou;       // entrando na aba: a primeira pintura nao anima a altura (a propria aba ja entra com o fade)
+    desenharClimaPagina();
+    trocarConteudo.imediato = false;
+    carregarClima();
+  }
   if (a === "consumo") carregarConsumo();
   if (a === "ajustes") desenharAjustes();
   if (a === "painel") desenharCartoes();
@@ -1258,11 +1267,16 @@ try { climaIdx = Math.max(0, parseInt(localStorage.getItem("climaCidade"), 10) |
 async function carregarClima(forcar) {
   if (!forcar && Date.now() - climaEm < 5 * 60 * 1000) return;
   climaEm = Date.now();
+  const fotografia = () => JSON.stringify([climaDados, climaPag], (k, v) => k === "atualizado" || k === "em" ? undefined : v);
+  const antes = fotografia();
   try {
     const [c, s] = await Promise.all([api("clima"), api("sugestao")]);
     climaDados = { c, s: s.sugestao };
   } catch (e) { climaDados = { erro: e.message }; }
   if (climaIdx > 0) await carregarCidade(climaIdx, true);
+  // A previsao e a sugestao mudam pouco: se vieram iguais, nada e refeito (reconstruir a pagina inteira era o piscar ao entrar).
+  const mudou = fotografia() !== antes;
+  if (!mudou && !forcar) return;
   desenharClima();
   if (abaAtual === "clima") desenharClimaPagina();
 }
@@ -1562,10 +1576,13 @@ function desenharClima() {
 function desenharClimaPagina() {
   const caixa = $("climaPagina"), chips = $("cidadesChips");
   if (!caixa) return;
+  // Saindo do esqueleto o conteudo so troca de lugar: a altura nao anima (o esqueleto e so um molde).
+  const eraEsqueleto = caixa.classList.contains("esqueleto");
   const casaD = climaDados;
-  if (!casaD || casaD.erro || !casaD.c.local) {
+  if (!casaD) { chips.replaceChildren(); esqueletoDoClima(caixa, null); return; }      // o desenho da pagina em brilho, nao um "Carregando" de outra altura
+  if (casaD.erro || !casaD.c.local) {
     chips.replaceChildren();
-    trocarConteudo(caixa, el("div", { class: "corpo mu" }, !casaD ? "Carregando…" : casaD.erro ? "Clima indisponível: " + casaD.erro : "Escolha a cidade da casa nos Ajustes."),
+    trocarConteudo(caixa, el("div", { class: "corpo mu" }, casaD.erro ? "Clima indisponível: " + casaD.erro : "Escolha a cidade da casa nos Ajustes."),
       ...(casaD && !casaD.erro ? [el("div", { class: "corpo", style: "padding-top:0" }, el("button", { class: "b", on: { click: () => irPara("ajustes-clima") } }, "Escolher cidade"))] : []));
     caixa.classList.remove("tempo");
     return;
@@ -1579,6 +1596,7 @@ function desenharClimaPagina() {
   if (pag.carregando) { esqueletoDoClima(caixa, lista[climaIdx]); return; }
   if (pag.erro || !pag.c.clima) {
     caixa.classList.remove("tempo", "esqueleto");
+    if (eraEsqueleto) trocarConteudo.imediato = true;
     trocarConteudo(caixa, el("div", { class: "corpo mu" }, pag.erro ? "Clima indisponível: " + pag.erro : "A Open-Meteo não respondeu agora."));
     return;
   }
@@ -1587,6 +1605,7 @@ function desenharClimaPagina() {
   const rolagem = caixa.querySelector(".thoras") ? caixa.querySelector(".thoras").scrollLeft : 0;
   const largura = caixa.clientWidth - (matchMedia("(max-width:760px)").matches ? 54 : 66);
   caixa.classList.add("tempo");
+  if (eraEsqueleto) trocarConteudo.imediato = true;
   trocarConteudo(caixa, heroiDoTempo(c, pag.c.local, pag.c.ar, false),
     el("div", { class: "corpo tcorpo" }, climaIdx === 0 ? blocoSugestao(pag.s) : null, faixaPorHora(c), graficoDoTempo(c, largura),
       el("div", { class: "tgrade" }, listaDeDias(c), detalhesDoTempo(c, pag.c.ar)),
