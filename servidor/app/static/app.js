@@ -1300,6 +1300,7 @@ async function carregarClima(forcar) {
     const [c, s] = await Promise.all([api("clima"), api("sugestao")]);
     climaDados = { c, s: s.sugestao };
   } catch (e) { climaDados = { erro: e.message }; }
+  if (climaDados.erro || !climaDados.c.clima) climaEm = 0;     // sem previsao: a proxima entrada tenta de novo, em vez de esperar 5 minutos
   if (climaIdx > 0) await carregarCidade(climaIdx, true);
   // A previsao e a sugestao mudam pouco: se vieram iguais, nada e refeito (reconstruir a pagina inteira era o piscar ao entrar).
   const mudou = fotografia() !== antes;
@@ -1316,7 +1317,8 @@ async function carregarCidade(i, quieto) {
   if (!quieto) { climaPag = guardado || { carregando: true }; desenharClimaPagina(); }
   if (guardado && Date.now() - guardado.em < 10 * 60 * 1000) return;
   let novo;
-  try { novo = { c: await api("clima?i=" + i), em: Date.now() }; climaCache[i] = novo; }
+  // Resposta sem previsao (Open-Meteo fora, servidor reiniciando) nao vai para o cache: senao o aviso ficava 10 minutos.
+  try { novo = { c: await api("clima?i=" + i), em: Date.now() }; if (novo.c.clima) climaCache[i] = novo; else delete climaCache[i]; }
   catch (e) { novo = guardado || { erro: e.message }; }
   if (climaIdx !== i) return;          // trocou de cidade enquanto esta carregava
   climaPag = novo;
