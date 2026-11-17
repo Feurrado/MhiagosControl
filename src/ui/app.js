@@ -1399,7 +1399,8 @@
       sugAplicar.disabled = true;
       pedir("casa.sugestao", {}).then(function (v) { sugAplicar.disabled = false; if (v) definir(v); }, function () { sugAplicar.disabled = false; });
     });
-    var cartaoSug = el("div", "cartao vg-casa vg-sug vai", null, el("span", "ic icone", "\uE706"), el("div", "ct", null, sugTitulo, sugTexto), sugAplicar);
+    var sugOk = el("span", "sug-ok", t("✓ Aplicada", "✓ Applied"));
+    var cartaoSug = el("div", "cartao vg-casa vg-sug vai", null, el("span", "ic icone", "\uE706"), el("div", "ct", null, sugTitulo, sugTexto), sugAplicar, sugOk);
 
     // O tempo da cidade da casa (do servidor): agora, maxima e minima, AQI e as proximas horas.
     // Com tempo, a sugestao entra no mesmo cartao, abaixo de uma linha, em vez de um cartao a parte.
