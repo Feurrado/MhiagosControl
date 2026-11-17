@@ -19,7 +19,7 @@ os.environ["MHIAGOS_DADOS"] = tempfile.mkdtemp(prefix="mhiagos-demo-")
 
 import uvicorn  # noqa: E402
 
-from app import banco, casa, clima, clima_exemplo, main, servico  # noqa: E402
+from app import banco, casa, clima, clima_exemplo, main, metricas, servico  # noqa: E402
 
 
 class NuvemDemo:
@@ -78,7 +78,27 @@ def clima_falso(lat, lon, agora=None):
     return dict(clima._normalizar(clima_exemplo.exemplo()), velho=False, atualizado=int(time.time()))
 
 
+def prometheus_falso(caminho, params):
+    """Um Prometheus de mentira: valores e series suaves e repetiveis, para ver a pagina de Metricas."""
+    import math
+    q = params["query"]
+    nome = next(n for n, (consulta, _) in metricas.CONSULTAS.items() if consulta == q)
+    base = {"cpu": (22, 14), "ram": (58, 6), "disco": (41, 1), "rede_rx": (2.4e6, 2e6), "rede_tx": (3.1e5, 2.5e5),
+            "uptime": (86400 * 12.4, 0), "temp": (54, 6), "carga": (0.9, 0.5)}[nome]
+
+    def valor(t):
+        v = base[0] + base[1] * (0.5 * math.sin(t / 900.0) + 0.3 * math.sin(t / 211.0 + nome.__len__()))
+        return max(0.0, v)
+    if caminho.endswith("/query"):
+        return [{"value": [time.time(), str(valor(time.time()))]}]
+    ini, fim, passo = int(params["start"]), int(params["end"]), int(params["step"])
+    return [{"values": [[t, str(valor(t))] for t in range(ini, fim + 1, passo)]}]
+
+
 if __name__ == "__main__":
+    os.environ["PROMETHEUS_URL"] = "http://prometheus.demo"
+    os.environ["GRAFANA_URL"] = "http://grafana.demo:3000"
+    metricas._get = prometheus_falso
     clima.previsao = clima_falso
     clima.cidades = lambda q: [{"nome": "Cidade demo, SP, BR", "lat": -23.55, "lon": -46.63}]
     clima.qualidade_ar = lambda lat, lon, agora=None: {"aqi": 42 if lat < -20 else 68, "categoria": "Boa" if lat < -20 else "Moderada",

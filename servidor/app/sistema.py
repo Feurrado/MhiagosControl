@@ -39,17 +39,25 @@ def memoria():
     return (v["MemTotal"], v["MemAvailable"]) if len(v) == 2 else None
 
 
+CHIPS_CPU = ("coretemp", "k10temp", "zenpower", "cpu_thermal", "soc_thermal", "bcm2835_thermal")
+
+
 def temperatura():
-    """Maior temperatura de zona termica legivel, em graus C (ou None)."""
-    melhor = None
+    """Temperatura do processador em graus C (ou None). Prefere o chip de CPU conhecido; sem ele, a maior leitura
+    plausivel (< 95): sensores sem calibragem (acpitz, ventoinha) chegam a 100+ e davam 108 na Saude do servidor."""
+    cpu, geral = None, None
     for arq in glob.glob("/sys/class/thermal/thermal_zone*/temp") + glob.glob("/sys/class/hwmon/hwmon*/temp*_input"):
-        t = _ler(arq)
         try:
-            c = int(t) / 1000
+            c = int(_ler(arq)) / 1000
         except (TypeError, ValueError):
             continue
-        if 0 < c < 130 and (melhor is None or c > melhor):
-            melhor = c
+        if not 0 < c < 95:
+            continue
+        geral = c if geral is None or c > geral else geral
+        nome = (_ler(os.path.join(os.path.dirname(arq), "name")) or "").strip() if os.path.basename(os.path.dirname(arq)).startswith("hwmon") else ""
+        if nome in CHIPS_CPU:
+            cpu = c if cpu is None or c > cpu else cpu
+    melhor = cpu if cpu is not None else geral
     return None if melhor is None else round(melhor, 1)
 
 

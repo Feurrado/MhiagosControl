@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import automatico, avisos, banco, casa, clima, metricas, servico, sistema
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.19.1"
+VERSAO = "1.19.2"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
