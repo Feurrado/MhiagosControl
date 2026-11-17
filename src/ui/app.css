@@ -367,6 +367,8 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .vg-mostrador .mm { top:26px; }
 .vg-specs { display:flex; justify-content:center; flex-wrap:wrap; gap:8px 36px; padding:12px 16px; }
 .vg-specs div { min-width:0; }
+.vg-specs div.vai { padding:4px 10px; margin:-4px -10px; border-radius:6px; }
+.vg-specs div.vai:focus-visible { outline:2px solid var(--accent); }
 .vg-specs small { display:block; font:12px var(--f-peq); color:var(--faint); }
 .vg-specs b { display:block; font-weight:600; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .cartao.vg-casa, .cartao.vg-specs, .cartao.vg-ar { flex-direction:row; }

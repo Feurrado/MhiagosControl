@@ -22,6 +22,8 @@
   var pendentes = {};
   var proximo = 1;
   var ponte = window.chrome && window.chrome.webview;
+  var specAlvo = "";       // a secao das Especificacoes a abrir na proxima vez (rota specs:<chave>)
+  var SPEC_TEXTOS = { cpu: "SpecCpu", gpu: "SpecGpu", ram: "SpecRam", disco: "SpecStorage", placa: "SpecBoard", so: "SpecOs", rede: "SpecNetwork" };
   var casaAba = "";        // a aba da pagina da Casa a abrir na proxima vez (o cartao do tempo pede "clima")
 
   // ---------------- ponte ----------------
@@ -37,6 +39,10 @@
 
   /// "casa:clima" (o tempo no widget) e a pagina Casa ja na aba Clima.
   function paginaPedida(p) {
+    // "specs:cpu" abre as Especificacoes ja na secao (cpu, gpu, ram, disco, placa, so, rede): uma rota so,
+    // usada pela faixa da Visao geral e por quem abrir a janela com #specs:cpu.
+    var sp = /^specs:(cpu|gpu|ram|disco|placa|so|rede)$/.exec(p || "");
+    if (sp) { specAlvo = sp[1]; return "specs"; }
     var m = /^casa:(clima|consumo|ajustes)$/.exec(p || "");
     if (!m) return p;
     casaAba = m[1];
@@ -1130,7 +1136,16 @@
 
     function desenharTira(onde, linhas) {
       limpar(onde);
-      linhas.forEach(function (l) { onde.appendChild(el("div", "", null, el("small", "", l[0]), el("b", "", l[1]))); });
+      linhas.forEach(function (l) {
+        var d = el("div", l[2] ? "vai" : "", null, el("small", "", l[0]), el("b", "", l[1]));
+        if (l[2]) {
+          d.tabIndex = 0; d.setAttribute("role", "link"); d.title = t("Abrir ", "Open ") + l[0];
+          var abrir = function () { mostrar(paginaPedida("specs:" + l[2])); };
+          d.addEventListener("click", abrir);
+          d.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrir(); } });
+        }
+        onde.appendChild(d);
+      });
     }
 
     // Ponteiro sobre um grafico: o valor e a hora daquele ponto, como nas Metricas.
@@ -2328,6 +2343,11 @@
         return;
       }
       estado = "pronto";
+      if (specAlvo) {   // veio por specs:<chave>: ja na secao pedida
+        var titulo = T(SPEC_TEXTOS[specAlvo] || ""), idx = -1;
+        specs.forEach(function (g, k) { if (g.titulo === titulo) idx = k; });
+        categoria = idx >= 0 ? idx + 1 : 0; specAlvo = "";
+      }
       texto.textContent = T("SpecsNote", ""); texto.classList.remove("claro"); texto.classList.add("nota");
       copiar.textContent = T("SpecsCopy", t("Copiar tudo", "Copy all")); copiar.disabled = false;
       desenhar();
