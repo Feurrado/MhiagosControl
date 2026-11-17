@@ -16,10 +16,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, model_validator
 
-from . import automatico, avisos, banco, casa, clima, servico, sistema
+from . import automatico, avisos, banco, casa, clima, metricas, servico, sistema
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.18.0"
+VERSAO = "1.19.0"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
@@ -431,6 +431,30 @@ def _csv(linhas, colunas):
 @app.get("/api/sistema", dependencies=[Depends(autorizado)])
 def sistema_estado():
     return sistema.estado(os.path.dirname(banco.ARQUIVO))
+
+
+@app.get("/api/metricas", dependencies=[Depends(autorizado)])
+def metricas_resumo():
+    """Os valores de agora do servidor (Prometheus). Sem PROMETHEUS_URL: {"disponivel": false}."""
+    try:
+        return metricas.resumo()
+    except metricas.MetricasErro as e:
+        raise HTTPException(502, str(e)) from None
+
+
+@app.get("/api/metricas/serie", dependencies=[Depends(autorizado)])
+def metricas_serie(nome: str, horas: int = 6):
+    """Uma serie para o grafico. So nomes e periodos da lista fixa: o cliente nunca manda PromQL."""
+    if not metricas.url():
+        raise HTTPException(409, "metricas nao configuradas")
+    if nome not in metricas.COM_SERIE:
+        raise HTTPException(404, "metrica desconhecida")
+    if horas not in metricas.HORAS:
+        raise HTTPException(422, "periodo: %s horas" % ", ".join(str(h) for h in metricas.HORAS))
+    try:
+        return metricas.serie(nome, horas)
+    except metricas.MetricasErro as e:
+        raise HTTPException(502, str(e)) from None
 
 
 @app.get("/api/clima", dependencies=[Depends(autorizado)])

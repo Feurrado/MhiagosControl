@@ -186,7 +186,8 @@ function irPara(h, substituir) {
 }
 function aplicarHash() {
   const h = location.hash.slice(1) || "painel";
-  const [aba, sec] = h.split("-");
+  const [aba, sec, ancora] = h.split("-");
+  if (aba === "ajustes" && sec === "metricas" && ancora) metAlvo = ancora;
   aplicarHash.daLista = aplicarHash.ultimo === "ajustes" && !!sec;   // o Voltar do detalhe pode usar o historico
   aplicarHash.ultimo = h;
   if (!ABAS.includes(aba)) { trocarAba("painel"); return; }
@@ -1103,6 +1104,85 @@ function blocoEventos(d) {
     el("div", { class: "mu" }, "Eventos mais antigos que isso são apagados pelo servidor."));
 }
 
+// ---------------- metricas do servidor (Prometheus, pelo proprio servidor) ----------------
+
+const metFiltro = { horas: 6 };
+let metAlvo = "";        // o grafico a mostrar ao abrir a secao (vem da Saude do servidor ou de #ajustes-metricas-cpu)
+const MET_GRAFICOS = [["cpu", "CPU", "%"], ["ram", "Memória", "%"], ["disco", "Disco", "%"], ["rede", "Rede", "B/s"], ["temp", "Temperatura", "C"], ["carga", "Carga", ""]];
+const bps = v => v == null ? "--" : v >= 1e6 ? num(v / 1e6, 1) + " MB/s" : v >= 1e3 ? num(v / 1e3, 0) + " KB/s" : num(v, 0) + " B/s";
+const metFmt = (v, u) => v == null ? "--" : u === "%" ? num(v, 0) + "%" : u === "B/s" ? bps(v) : u === "C" ? num(v, 0) + " °C" : num(v, 2);
+const duracaoLonga = s => s >= 86400 ? num(s / 86400, 1) + " dias" : s >= 3600 ? num(s / 3600, 1) + " h" : Math.round(s / 60) + " min";
+
+/** A curva de uma ou duas series, com as cores do tema; os rotulos ficam em HTML por fora (o svg estica sem deformar texto). */
+function curvaDeMetrica(series, unidade) {
+  const W = 600, H = 140, todos = series.flatMap(s => s.pontos);
+  if (!todos.length) return el("div", { class: "mu met-vazio" }, "Sem dados neste período.");
+  const t0 = Math.min(...todos.map(p => p[0])), t1 = Math.max(...todos.map(p => p[0])) || t0 + 1;
+  const ymax = unidade === "%" ? 100 : (Math.max(...todos.map(p => p[1])) * 1.15 || 1);
+  const x = t => ((t - t0) / Math.max(1, t1 - t0) * W).toFixed(1), y = v => (H - Math.max(0, Math.min(1, v / ymax)) * H).toFixed(1);
+  const marcas = [0.25, 0.5, 0.75].map(f => '<line class="met-g" x1="0" x2="' + W + '" y1="' + (H * f) + '" y2="' + (H * f) + '"/>').join("");
+  const linhas = series.map((s, i) => {
+    const d = s.pontos.map(p => x(p[0]) + "," + y(p[1])).join(" ");
+    return s.pontos.length ? (i === 0 ? '<polygon class="met-a s0" points="0,' + H + " " + d + " " + x(s.pontos[s.pontos.length - 1][0]) + "," + H + '"/>' : "") +
+      '<polyline class="met-l s' + i + '" points="' + d + '"/>' : "";
+  }).join("");
+  const g = svg(marcas + linhas, "0 0 " + W + " " + H);
+  g.setAttribute("preserveAspectRatio", "none");
+  g.setAttribute("class", "met-svg");
+  const hm = t => new Date(t * 1000).toLocaleString("pt-BR", metFiltro.horas > 24 ? { day: "2-digit", month: "2-digit", hour: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+  return el("div", { class: "met-curva" },
+    el("div", { class: "met-eixo" }, el("span", {}, metFmt(ymax, unidade)), el("span", {}, metFmt(0, unidade))), g,
+    el("div", { class: "met-x" }, el("span", {}, hm(t0)), el("span", {}, hm(t1))));
+}
+
+/** A pagina de metricas: valores de agora e um grafico por metrica. Tudo vem de /api/metricas, que consulta o Prometheus por dentro. */
+function blocoMetricas() {
+  const raiz = el("div", { class: "pilha" });
+  const topo = el("div", { class: "met-tiles" }), graficos = el("div", { class: "pilha" });
+  const aviso1 = el("div", { class: "mu" }, "Carregando…");
+  const periodo = el("div", { class: "seg" }, [[1, "1 h"], [6, "6 h"], [24, "24 h"], [168, "7 dias"]].map(([h, t]) =>
+    el("button", { class: metFiltro.horas === h ? "on" : "", type: "button", on: { click: () => { metFiltro.horas = h; for (const b of periodo.children) b.classList.toggle("on", b.textContent === t); atualizar(); } } }, t)));
+  const caixas = {};
+  let grafLink = "";
+
+  async function atualizar() {
+    if (!raiz.isConnected) return;
+    let r;
+    try { r = await api("metricas"); } catch (e) { aviso1.textContent = "Métricas indisponíveis: " + e.message; return; }
+    if (!r.disponivel) { aviso1.textContent = "Métricas desligadas. Defina PROMETHEUS_URL no .env do servidor (e GRAFANA_URL para o link do painel completo) e reinicie o contêiner."; periodo.classList.add("oculto"); return; }
+    aviso1.textContent = "";
+    periodo.classList.remove("oculto");
+    const v = r.valores, u = k => (MET_GRAFICOS.find(g => g[0] === k) || [])[2];
+    const tiles = [["cpu", "CPU", metFmt(v.cpu, "%")], ["ram", "Memória", metFmt(v.ram, "%")], ["disco", "Disco", metFmt(v.disco, "%")],
+      ["rede", "Rede", v.rede_rx == null ? "--" : "↓ " + bps(v.rede_rx) + "  ↑ " + bps(v.rede_tx)], ["", "Ligado há", v.uptime == null ? "--" : duracaoLonga(v.uptime)],
+      ["temp", "Temperatura", metFmt(v.temp, "C")], ["carga", "Carga", metFmt(v.carga, "")]].filter(t => t[2] !== "--");
+    topo.replaceChildren(...tiles.map(([k, nome, valor]) => el("button", { class: "met-tile", type: "button", disabled: !k, on: { click: () => k && caixas[k] && caixas[k].scrollIntoView({ behavior: "smooth", block: "start" }) } },
+      el("span", { class: "mu" }, nome), el("b", {}, valor))));
+    if (r.grafana && !grafLink) { grafLink = r.grafana; raiz.append(el("div", { class: "linha" }, el("a", { class: "b", href: r.grafana, target: "_blank", rel: "noopener" }, "Abrir o painel completo (Grafana)"),
+      el("span", { class: "mu" }, "O link abre o Grafana direto, só na sua rede."))); }
+    const visiveis = MET_GRAFICOS.filter(([k]) => k === "rede" ? v.rede_rx != null : v[k] != null);
+    for (const [k, nome, un] of visiveis) {
+      if (!caixas[k]) { caixas[k] = el("div", { class: "cartao", id: "met-" + k }); graficos.append(caixas[k]); }
+      carregarGrafico(k, nome, un, v);
+    }
+    if (metAlvo && caixas[metAlvo]) { const c = caixas[metAlvo]; metAlvo = ""; setTimeout(() => c.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }
+    clearTimeout(atualizar.t); atualizar.t = setTimeout(atualizar, 30000);
+  }
+  async function carregarGrafico(k, nome, un, v) {
+    const nomes = k === "rede" ? ["rede_rx", "rede_tx"] : [k];
+    try {
+      const rs = await Promise.all(nomes.map(n => api("metricas/serie?nome=" + n + "&horas=" + metFiltro.horas)));
+      caixas[k].replaceChildren(
+        el("div", { class: "cab" }, el("div", { class: "nomes" }, el("div", { class: "nome" }, nome),
+          el("div", { class: "det" }, k === "rede" ? "↓ recebido (azul)  ↑ enviado (verde)" : "agora " + metFmt(v[k], un)))),
+        el("div", { class: "corpo" }, curvaDeMetrica(rs.map(s => ({ pontos: s.pontos })), un)));
+    } catch (e) { caixas[k].replaceChildren(el("div", { class: "corpo mu" }, nome + ": " + e.message)); }
+  }
+  raiz.append(el("div", { class: "linha", style: "justify-content:space-between" }, el("div", { class: "mu" }, "Do servidor da casa, atualizado a cada 30 s."), periodo), aviso1, topo, graficos);
+  setTimeout(atualizar, 0);   // depois de entrar na pagina (atualizar para quando a secao sai do DOM)
+  return cartaoSimples("Métricas do servidor", "CPU, memória, disco, rede e uptime", null, raiz);
+}
+
 // ---------------- saude do servidor ----------------
 
 async function carregarSistema(caixa) {
@@ -1110,10 +1190,11 @@ async function carregarSistema(caixa) {
     const x = await api("sistema");
     const mb = v => v >= 1024 ? num(v / 1024, 1) + " GB" : v + " MB";
     const linhas = [];
-    if (x.carga) linhas.push(["Carga", x.carga.join(" · ") + " (" + x.cpus + " núcleos)", x.carga[0] > x.cpus * 1.5]);
-    if (x.memoria) linhas.push(["Memória livre", mb(x.memoria.livreMB) + " de " + mb(x.memoria.totalMB), x.memoria.livreMB < x.memoria.totalMB * 0.1]);
-    if (x.disco) linhas.push(["Disco livre", num(x.disco.livreGB, 1) + " GB de " + num(x.disco.totalGB, 0) + " GB", x.disco.livreGB < 2]);
-    if (x.temperatura != null) linhas.push(["Temperatura", num(x.temperatura, 0) + " °C", x.temperatura >= 80]);
+    // O quarto valor de cada linha e o grafico da secao Metricas para onde o clique leva (#ajustes-metricas-cpu...).
+    if (x.carga) linhas.push(["Carga", x.carga.join(" · ") + " (" + x.cpus + " núcleos)", x.carga[0] > x.cpus * 1.5, "cpu"]);
+    if (x.memoria) linhas.push(["Memória livre", mb(x.memoria.livreMB) + " de " + mb(x.memoria.totalMB), x.memoria.livreMB < x.memoria.totalMB * 0.1, "ram"]);
+    if (x.disco) linhas.push(["Disco livre", num(x.disco.livreGB, 1) + " GB de " + num(x.disco.totalGB, 0) + " GB", x.disco.livreGB < 2, "disco"]);
+    if (x.temperatura != null) linhas.push(["Temperatura", num(x.temperatura, 0) + " °C", x.temperatura >= 80, "temp"]);
     if (x.ligadoHoras != null) linhas.push(["Ligado há", x.ligadoHoras >= 48 ? num(x.ligadoHoras / 24, 1) + " dias" : num(x.ligadoHoras, 1) + " h", false]);
     if (x.banco) linhas.push(["Banco da Casa", num(x.banco.MB, 1) + " MB", false]);
     if (x.backup) linhas.push(["Último backup", x.backup.quantidade ? (x.backup.idadeHoras < 1 ? "há menos de 1 h" : "há " + num(x.backup.idadeHoras, 0) + " h") + " (" + x.backup.quantidade + " guardados)" : "nenhum encontrado", x.backup.velho]);
@@ -1121,8 +1202,9 @@ async function carregarSistema(caixa) {
     caixa.replaceChildren(
       el("div", { class: "cab" }, el("div", { class: "nomes" }, el("div", { class: "nome" }, "Saúde do servidor"),
         el("div", { class: "det" }, alerta ? "algo pede atenção" : "tudo em ordem"))),
-      el("div", { class: "corpo" }, el("table", { class: "aparelhos" }, linhas.map(l => el("tr", {}, el("td", {}, l[0]),
-        el("td", { class: "n" + (l[2] ? " mais" : "") }, l[2] ? "⚠ " + l[1] : l[1]))))));
+      el("div", { class: "corpo" }, el("table", { class: "aparelhos" }, linhas.map(l => el("tr", l[3] ? { class: "vai-met", tabindex: "0", role: "link", title: "Ver o gráfico em Métricas",
+        on: { click: () => { metAlvo = l[3]; irPara("ajustes-metricas"); }, keydown: e => { if (e.key === "Enter") { metAlvo = l[3]; irPara("ajustes-metricas"); } } } } : {},
+        el("td", {}, l[0]), el("td", { class: "n" + (l[2] ? " mais" : "") }, l[2] ? "⚠ " + l[1] : l[1]))))));
   } catch (e) { caixa.replaceChildren(el("div", { class: "corpo mu" }, "Saúde do servidor indisponível: " + e.message)); }
 }
 
@@ -1740,6 +1822,7 @@ function desenharAjustes() {
     { dica: "Usa a mesma conta da sugestão: conforto adaptativo da ASHRAE 55 com a média dos últimos dias." });
 
   const eventos = blocoEventos(d);
+  const metricas = ajSecao === "metricas" ? blocoMetricas() : cartaoSimples("Métricas do servidor", "", null, el("div", { class: "mu" }, "Abra a seção para ver."));
   const sim = b => b ? 1 : 0;
   const secoes = [
     ["alertas", "Alertas", sim(d.alertaFalha) + sim(d.alertaDesconectado) + sim(d.alertaQuente) + sim(d.alertaLavadoraFim) + " de 4 ligados" + (d.ntfyTopico ? " · no celular" : ""), alertas],
@@ -1749,6 +1832,7 @@ function desenharAjustes() {
     ["clima", "Clima e local", d.local ? d.local.nome : "Nenhuma cidade", clima],
     ["retorno", "Retorno das cenas", (({ 0: "Ventilar", 2: "Frio", 3: "Desumidificar", 5: "ECO" })[d.retornoModo] || "Manter") + " · " + d.retornoTemp + " °C", retorno],
     ["cenas", "Cenas", lista.length + " de 8", cenas],
+    ["metricas", "Métricas", "CPU, memória, disco e rede", metricas],
     ["eventos", "Eventos", "Histórico no servidor · " + (d.retencaoEventosDias || 90) + " dias", eventos],
     ["servidor", "Servidor", pref.atualizado ? "Salvo " + dataHora(pref.atualizado) : "Nada salvo", el("div", { class: "pilha" }, conta, saude)]
   ];
