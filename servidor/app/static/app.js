@@ -186,7 +186,9 @@ const ABAS = ["painel", "clima", "consumo", "ajustes"];
 function irPara(h, substituir) {
   if (("#" + h) === location.hash) { aplicarHash(); return; }
   if (substituir) { history.replaceState(null, "", "#" + h); aplicarHash(); }
-  else location.hash = h;
+  // pushState, nao location.hash: o hash "clima" (e "ajustes") e tambem o id de um bloco da pagina, e o navegador
+  // rolava a Casa ate ele no quadro antes da troca de aba (era a Casa deslocada que aparecia por tras da animacao).
+  else { history.pushState(null, "", "#" + h); aplicarHash(); }
 }
 function aplicarHash() {
   const h = location.hash.slice(1) || "painel";
