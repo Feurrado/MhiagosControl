@@ -1754,10 +1754,12 @@ const AJ_ICONES = {
   cenas: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
   clima: '<circle cx="9" cy="9" r="3.2"/><path d="M9 3v1.5M3 9h1.5M4.8 4.8l1 1M13.2 4.8l-1 1"/><path d="M8 20h9a3.5 3.5 0 0 0 .4-7A5 5 0 0 0 8 13.6 3.2 3.2 0 0 0 8 20z"/>',
   auto: '<path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2"/><path d="M9 15.5 12 8l3 7.5M10.1 13h3.8"/>',
+  metricas: '<path d="M4 4v16h16"/><path d="m7.5 14 3.5-4 3 2.5 4.5-6"/><path d="M18.5 6.5h-2.2M18.5 6.5v2.2"/>',
+  eventos: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/><path d="M4 4.5v3.2h3.2"/>',
   servidor: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
   seta: '<path d="m9 6 6 6-6 6"/>', voltar: '<path d="m15 6-6 6 6 6"/>'
 };
-const AJ_COR = { alertas: "#EB5A4B", ar: "#2D7DF6", auto: "#0E9F9A", consumo: "#F08A24", retorno: "#2EA043", cenas: "#7B61E0", clima: "#1FA3C7", servidor: "#7C808B" };
+const AJ_COR = { alertas: "#EB5A4B", ar: "#2D7DF6", auto: "#0E9F9A", consumo: "#F08A24", retorno: "#2EA043", cenas: "#7B61E0", clima: "#1FA3C7", metricas: "#D6538A", eventos: "#C79A1B", servidor: "#7C808B" };
 function ajSvg(n, cls) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("fill", "none"); s.setAttribute("stroke", "currentColor");
