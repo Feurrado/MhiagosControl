@@ -272,6 +272,7 @@ async function atualizar() {
     desenharSituacao();
     tintaDoAr();
     if (abaAtual === "painel") desenharCartoes();
+    if (abaAtual === "painel" || abaAtual === "clima") atualizarSugestao();
   } catch (e) {
     if (e.message !== "chave") { $("situacao").textContent = "Sem resposta do servidor: " + e.message; marcarConexao(true); }
   }
@@ -1144,9 +1145,29 @@ async function carregarCidade(i, quieto) {
   if (!quieto || abaAtual === "clima") desenharClimaPagina();
 }
 
+/** A sugestao muda quando o ar muda (inclusive por outro cliente): relida a cada leitura nova, e so redesenha se mudou. */
+let sugestaoLendo = false;
+async function atualizarSugestao() {
+  if (sugestaoLendo || !climaDados || climaDados.erro || !climaDados.c.local) return;
+  sugestaoLendo = true;
+  try {
+    const nova = (await api("sugestao")).sugestao;
+    if (JSON.stringify(nova) !== JSON.stringify(climaDados.s)) {
+      climaDados.s = nova;
+      desenharClima();
+      if (abaAtual === "clima") desenharClimaPagina();
+    }
+  } catch (e) { /* fica a anterior */ }
+  sugestaoLendo = false;
+}
+
 async function aplicarSugestao(botao) {
   botao.disabled = true;
-  try { await api("sugestao/aplicar", "POST"); aviso("Sugestão enviada ao ar"); setTimeout(atualizar, 3500); }
+  try {
+    await api("sugestao/aplicar", "POST"); aviso("Sugestão enviada ao ar");
+    if (climaDados && climaDados.s) { climaDados.s = Object.assign({}, climaDados.s, { aplicada: true, aplicadaEm: Math.floor(Date.now() / 1000) }); desenharClima(); if (abaAtual === "clima") desenharClimaPagina(); }
+    setTimeout(atualizar, 3500);
+  }
   catch (e) { aviso("Não deu: " + e.message); }
   botao.disabled = false;
 }
@@ -1355,7 +1376,8 @@ function blocoSugestao(s) {
   return s ? el("div", { class: "sugestao" },
     el("div", {}, el("b", {}, s.titulo), el("span", {}, s.texto),
       auto ? el("small", { class: "auto-nota" }, "Ar automático ligado: o servidor aplica sozinho.") : null),
-    s.cena ? el("button", { class: "b pri", on: { click: e => aplicarSugestao(e.currentTarget) } }, "Aplicar") : null) : null;
+    s.cena ? (s.aplicada ? el("span", { class: "sug-ok", title: s.aplicadaEm ? "Aplicada às " + hora(s.aplicadaEm) : "O ar já está assim" }, "✓ Aplicada")
+      : el("button", { class: "b pri", on: { click: e => aplicarSugestao(e.currentTarget) } }, "Aplicar")) : null) : null;
 }
 
 /** Qualidade do ar: valor, faixa colorida (0 a 300) e os poluentes principais. */

@@ -411,6 +411,7 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .vg-tempo .horas .tic { width:20px; height:20px; }
 @container (max-width:620px) { .vg-tempo .horas div:nth-child(n+4) { display:none; } }
 .vg-tempo .sug { display:flex; align-items:center; gap:14px; padding:10px 0 12px; border-top:1px solid var(--border); }
+.vg-sug .sug-ok, .vg-tempo .sug .sug-ok { flex:none; font-weight:600; color:var(--ok, #2EA043); white-space:nowrap; padding:0 12px; }
 .vg-tempo .sug .ct small { white-space:normal; }
 /* Os proximos dias no espaco que sobra embaixo do cooler: a vaga nao pesa na altura da linha
    (contain), e o cartao mostra so os dias que cabem inteiros. */
