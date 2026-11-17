@@ -32,3 +32,6 @@ if ok != 'ok':
 
 ls -1t "$DESTINO"/casa-*.db 2>/dev/null | tail -n +"$((MANTER + 1))" | xargs -r rm -f
 echo "$(date '+%F %T') backup em $DESTINO/$ARQ"
+
+# Nuvem (Google Drive criptografado), se configurada; falha aqui nao invalida o backup local.
+[ -x "$(dirname "$0")/backup-nuvem.sh" ] && "$(dirname "$0")/backup-nuvem.sh" || true

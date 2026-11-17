@@ -131,3 +131,13 @@ O contêiner precisa alcançar o Prometheus pelo endereço da LAN. Sem `PROMETHE
 ## Modo demo
 
 `python demo.py` (dentro de `servidor/`) sobe o painel em http://127.0.0.1:8770 com um ar simulado, clima e 14 dias de histórico sintéticos, sem nuvem nem rede. A chave é `demo-chave-0123456789` (cole na primeira tela). Nada é gravado fora de uma pasta temporária.
+
+## Backup em nuvem (Google Drive, criptografado)
+
+`backup.sh` (cron 3h30) chama `backup-nuvem.sh`, que envia a copia nova via rclone crypt
+(remote `gcrypt:` sobre `gdrive:MhiagosCasaBackups`, escopo `drive.file`) e faz a rotacao
+(14 diarios, 8 semanais, 6 mensais; ajuste em `/opt/mhiagos-casa/backup.conf` com
+`DIARIOS=`, `SEMANAIS=`, `MENSAIS=`). `configurar-nuvem.sh '<token>'` cria os remotes e mostra
+as senhas de criptografia uma vez: guarde-as fora do servidor. O resultado fica em
+`backups/nuvem.json` e aparece em Ajustes > Servidor. Tokens e senhas ficam so no
+`rclone.conf` do root, nunca no repositorio.
