@@ -21,7 +21,7 @@ gravar() { # ok erro arquivos
   agora=$(date +%s)
   [ "$ok" = true ] && ult=$agora
   [ "$ok" != true ] && [ -f "$STATUS" ] && ult=$(sed -n 's/.*"ultimoOk": *\([0-9]*\).*/\1/p' "$STATUS")
-  erro=$(printf '%s' "$erro" | tr -d '"\' | tr '\n' ' ' | cut -c1-200)
+  erro=$(printf '%s' "$erro" | tr -d '"\\\\' | tr '\n' ' ' | cut -c1-200)
   printf '{"ok": %s, "tentativa": %s, "ultimoOk": %s, "arquivos": %s, "erro": "%s"}\n' \
     "$ok" "$agora" "${ult:-0}" "$n" "$erro" > "$STATUS.tmp"
   chown 10001:10001 "$STATUS.tmp"; chmod 644 "$STATUS.tmp"; mv "$STATUS.tmp" "$STATUS"
