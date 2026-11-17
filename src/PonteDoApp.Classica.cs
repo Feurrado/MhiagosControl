@@ -289,7 +289,7 @@ namespace MhiagosControl
             });
         }
 
-        internal static readonly string[] ChavesDaBarra = { "visao", "paineis", "metricas", "specs", "config", "baterias", "casa", "sobre" };
+        internal static readonly string[] ChavesDaBarra = { "visao", "paineis", "metricas", "specs", "config", "baterias", "casa", "clima", "sobre" };
 
         // ---------------- rodizio ----------------
 

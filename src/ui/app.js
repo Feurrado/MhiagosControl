@@ -43,7 +43,8 @@
     // usada pela faixa da Visao geral e por quem abrir a janela com #specs:cpu.
     var sp = /^specs:(cpu|gpu|ram|disco|placa|so|rede)$/.exec(p || "");
     if (sp) { specAlvo = sp[1]; return "specs"; }
-    var m = /^casa:(clima|consumo|ajustes|ajustes-eventos)$/.exec(p || "");
+    if (p === "casa:clima") return "clima";   // o tempo no widget abre a pagina Clima, que e propria
+    var m = /^casa:(consumo|ajustes|ajustes-eventos)$/.exec(p || "");
     if (!m) return p;
     casaAba = m[1];
     return "casa";
@@ -64,6 +65,13 @@
       // A bandeja, um aviso ou o widget pediram uma pagina com a janela ja aberta.
       var ir = paginaPedida(d.p);
       if (S && MONTAR[ir]) mostrar(ir);
+      return;
+    }
+    if (d.ev === "casa.hash") {
+      // O servidor mudou de aba sozinho (um link dentro da pagina): a barra do app acompanha, sem recarregar nada.
+      if (!S) return;
+      if (d.h === "clima" && atual !== "clima") { naAbaClimaDaCasa = true; mostrar("clima"); }
+      else if (d.h !== "clima" && atual === "clima") { naAbaClimaDaCasa = false; mostrar("casa"); }
       return;
     }
     var p = pendentes[d.id];
@@ -572,6 +580,8 @@
   var PILHA = [["rect", { x: "1", y: "4.5", width: "12.5", height: "7", rx: "1.6" }],
     ["path", { d: "M15 7v2" }], ["rect", { x: "3", y: "6.5", width: "3.4", height: "3", rx: ".5", fill: "currentColor", stroke: "none" }]];
 
+  var NUVEM = [["path", { d: "M4.6 12.6h6.1a2.8 2.8 0 0 0 .4-5.57A3.9 3.9 0 0 0 3.7 8.1a2.3 2.3 0 0 0 .9 4.5z" }]];
+
   /// As chaves da classica (cfg.NavOrder) e a pagina de cada uma.
   var BARRA = {
     visao: ["visao", "NavOverview", "Visão geral", "Overview", ""],
@@ -581,9 +591,10 @@
     config: ["config", "NavSettings", "Configurações", "Settings", ""],
     baterias: ["baterias", "NavBatteries", "Baterias", "Batteries", PILHA],
     casa: ["casa", "NavCasa", "Casa", "Home", ""],
+    clima: ["clima", "NavClima", "Clima", "Weather", NUVEM],
     sobre: ["sobre", "NavAbout", "Sobre", "About", ""]
   };
-  var PADRAO = ["visao", "paineis", "metricas", "specs", "config", "baterias", "casa", "sobre"];
+  var PADRAO = ["visao", "paineis", "metricas", "specs", "config", "baterias", "casa", "clima", "sobre"];
 
   function ordemDaBarra() {
     var r = [];
@@ -591,7 +602,13 @@
       k = k.trim();
       if (BARRA[k] && r.indexOf(k) < 0) r.push(k);
     });
-    PADRAO.forEach(function (k) { if (r.indexOf(k) < 0) r.push(k); });
+    // Pagina que a ordem gravada nao conhecia (uma aba nova) entra logo depois da que vem antes dela no padrao.
+    PADRAO.forEach(function (k, i) {
+      if (r.indexOf(k) >= 0) return;
+      var pos = 0;
+      for (var j = i - 1; j >= 0; j--) { var q = r.indexOf(PADRAO[j]); if (q >= 0) { pos = q + 1; break; } }
+      r.splice(pos, 0, k);
+    });
     return r;
   }
 
@@ -697,6 +714,9 @@
 
   var MONTAR = {};
 
+  /// Casa e Clima sao duas paginas da janela sobre a mesma camada do servidor (um WebView so).
+  function daCasa(p) { return p === "casa" || p === "clima"; }
+
   function mostrar(pagina, mesma) {
     if (!MONTAR[pagina]) pagina = "visao";
     if (vista && vista.sair) vista.sair();
@@ -708,16 +728,16 @@
     var alvo = $("pagina");
     var rolagem = mesma ? alvo.scrollTop : 0;
     limpar(alvo);
-    alvo.className = pagina === "casa" ? "casa" : pagina === "visao" ? "visao" : "";
+    alvo.className = daCasa(pagina) ? "casa" : pagina === "visao" ? "visao" : "";
     if (mudou && !mesma) faixa("");
-    if (pagina !== "casa") avisar("casa.area", { visivel: false, x: 0, y: 0, w: 0, h: 0 });
-    var dentro = pagina === "casa" || pagina === "visao" ? alvo : el("div", "largura");
+    if (!daCasa(pagina)) avisar("casa.area", { visivel: false, x: 0, y: 0, w: 0, h: 0 });
+    var dentro = daCasa(pagina) || pagina === "visao" ? alvo : el("div", "largura");
     if (dentro !== alvo) alvo.appendChild(dentro);
     vista = MONTAR[pagina](dentro) || {};
     alvo.scrollTop = rolagem;
     if (E && vista.atualizar) vista.atualizar();
     // A Casa e a pagina do servidor numa camada propria, com as animacoes dela.
-    if (mudou && !mesma && pagina !== "casa") entradaDaPagina(alvo);
+    if (mudou && !mesma && !daCasa(pagina)) entradaDaPagina(alvo);
   }
 
   function aoEstado() {
@@ -1465,7 +1485,7 @@
       el("div", "topo", null, tpIc, el("div", "ct", null, tpTitulo, tpLinha), tpHoras), tpSug);
     var tpDiasTit = el("div", "tt");
     var cartaoDias = el("div", "cartao vg-dias vai", null, tpDiasTit, tpDias);
-    function abrirClima() { casaAba = "clima"; mostrar("casa"); }
+    function abrirClima() { mostrar("clima"); }
     cartaoTempo.title = cartaoDias.title = t("Abrir o clima", "Open weather");
     aoClicar(cartaoTempo, abrirClima);
     aoClicar(cartaoDias, abrirClima);
@@ -2832,6 +2852,14 @@
     return f;
   }
 
+  /// A camada do servidor esta na aba Clima (so a pagina Clima do app a poe la).
+  var naAbaClimaDaCasa = false;
+
+  MONTAR.clima = function (alvo) {
+    casaAba = "clima";
+    return MONTAR.casa(alvo);
+  };
+
   MONTAR.casa = function (alvo) {
     if (!S.casa.servidor) {
       var largura = el("div", "largura");
@@ -2855,6 +2883,9 @@
     area.appendChild(el("span", "", t("Abrindo a Casa…", "Opening Home…")));
     var aba = casaAba;
     casaAba = "";
+    // Vindo da pagina Clima, a camada ainda esta na aba do tempo: a Casa volta ao painel dela.
+    if (!aba && naAbaClimaDaCasa) aba = "painel";
+    naAbaClimaDaCasa = aba === "clima";
     function medir() {
       var r = area.getBoundingClientRect();
       avisar("casa.area", { visivel: true, x: r.left, y: r.top, w: r.width, h: r.height, aba: aba });

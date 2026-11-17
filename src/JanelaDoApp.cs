@@ -512,6 +512,19 @@ namespace MhiagosControl
                     n.Handled = true;
                     Navegador.Abrir(n.Uri);
                 };
+                // Link dentro da pagina que muda de aba (a hash): a barra do app acompanha (Clima e uma pagina propria).
+                c.SourceChanged += delegate
+                {
+                    try
+                    {
+                        string u = c.Source ?? "";
+                        int i = u.IndexOf('#');
+                        Dictionary<string, object> m = new Dictionary<string, object>();
+                        m["ev"] = "casa.hash"; m["h"] = i < 0 ? "" : u.Substring(i + 1);
+                        Postar(m);
+                    }
+                    catch (Exception ex) { Log.Error("interface nova: Casa, aba", ex); }
+                };
                 _casaIniciada = true;
                 string alvo = _casaEndereco.IndexOf("://", StringComparison.Ordinal) < 0 ? "http://" + _casaEndereco : _casaEndereco;
                 // A primeira abertura ja vai direto a aba pedida (o roteiro abaixo ainda nao acharia a pagina).
