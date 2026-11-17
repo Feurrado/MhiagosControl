@@ -1397,6 +1397,11 @@
     aoClicar(cartaoDias, abrirClima);
     var SEMANA = S && !S.pt ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
     function graus(v) { return v === null || v === undefined ? "--" : v + "°"; }
+    // Aplicavel e ainda nao aplicada: o botao. Ja aplicada (o ar bate com a cena): so o indicador, sem botao.
+    function mostrarAplicar(sug) {
+      sugAplicar.style.display = sug.aplicavel && !sug.aplicada ? "" : "none";
+      sugOk.style.display = sug.aplicavel && sug.aplicada ? "" : "none";
+    }
     function desenharTempo(tp, sug) {
       limpar(tpIc); tpIc.appendChild(iconeDoTempo(tp.icone));
       tpTitulo.textContent = graus(tp.temp) + "  " + tp.texto;
@@ -1434,8 +1439,9 @@
       if (sug) {
         tpSug.appendChild(el("div", "ct", null, el("b", "", sug.titulo), el("small", "", sug.texto)));
         tpSug.lastChild.lastChild.title = sug.texto;
-        sugAplicar.style.display = sug.aplicavel ? "" : "none";
+        mostrarAplicar(sug);
         tpSug.appendChild(sugAplicar);
+        tpSug.appendChild(sugOk);
       }
     }
 
@@ -1454,7 +1460,8 @@
         sugTitulo.textContent = ar.sug.titulo;
         sugTexto.textContent = ar.sug.texto;
         sugTexto.title = ar.sug.texto;
-        sugAplicar.style.display = ar.sug.aplicavel ? "" : "none";
+        mostrarAplicar(ar.sug);
+        cartaoSug.appendChild(sugOk);
         raiz.appendChild(cartaoSug);
       }
       if (v.lav) { desenharLav(v.lav); raiz.appendChild(cartaoLav); }

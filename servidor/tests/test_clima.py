@@ -248,6 +248,34 @@ class Rotas(Base):
         ruim = self.cliente.put("/api/preferencias", headers=self.cab, json={"dados": {"locais": [{"nome": "X", "lat": 0, "lon": 999}]}, "origem": "t"})
         self.assertEqual(ruim.status_code, 422)
 
+    def _aplicada(self, estado, cena, **kw):
+        ar = dict(NuvemFalsa().lista[0], estado=dict(NuvemFalsa().lista[0]["estado"], **estado))
+        from app import main
+        return main._marcar_aplicada(ar, {"cena": cena, **kw})
+
+    def test_aplicada_pelo_estado(self):
+        banco.con()
+        frio = {"modo": 2, "temp": 23, "vento": -1, "noturno": -1}
+        self.assertTrue(self._aplicada({}, frio)["aplicada"])                       # ja coincide (ajuste manual igual)
+        self.assertFalse(self._aplicada({"t_temp": "24"}, frio)["aplicada"])         # mexeu na temperatura
+        self.assertFalse(self._aplicada({"t_work_mode": "3"}, frio)["aplicada"])     # mexeu no modo
+        self.assertFalse(self._aplicada({"t_power": "0"}, frio)["aplicada"])
+        self.assertFalse(self._aplicada({"t_work_mode": "4"}, {"temp": 23, "modo": -1})["aplicada"])  # Auto
+        self.assertTrue(self._aplicada({"t_power": "0"}, {"desligar": True})["aplicada"])
+        self.assertFalse(self._aplicada({}, {"desligar": True})["aplicada"])
+
+    def test_aplicada_logo_apos_o_botao_vale_o_registro(self):
+        banco.con()
+        frio = {"modo": 2, "temp": 22, "vento": -1, "noturno": -1}
+        self.assertFalse(self._aplicada({}, frio)["aplicada"])
+        banco.gravar_kv("sugestao_aplicada", {"puid": "p-ar", "cena": frio, "t": int(__import__("time").time())})
+        s = self._aplicada({}, frio)
+        self.assertTrue(s["aplicada"])                                               # a nuvem ainda nao devolveu o estado novo
+        self.assertIsNotNone(s["aplicadaEm"])
+        banco.gravar_kv("sugestao_aplicada", {"puid": "p-ar", "cena": frio, "t": 1_600_000_000})
+        self.assertFalse(self._aplicada({}, frio)["aplicada"])                       # passou a carencia e o estado nao bate
+        self.assertIsNone(banco.ler_kv("sugestao_aplicada"))                         # registro velho descartado
+
     def test_aplicar_sem_sugestao_da_409(self):
         self.assertEqual(self.cliente.post("/api/sugestao/aplicar", headers=self.cab).status_code, 409)
 

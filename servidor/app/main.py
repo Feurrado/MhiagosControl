@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import automatico, avisos, banco, casa, clima, servico, sistema
 from .connectlife import ConnectLifeErro, ar_condicionado, extrair_codigo, extrair_estado
 
-VERSAO = "1.16.1"
+VERSAO = "1.17.0"
 # Versao do formato de /api/aparelhos (docs/CONTRATO-CASA.md). O app do PC so usa o servidor
 # como fonte da Casa a partir da que ele conhece; sobe quando um campo muda de sentido ou some.
 CONTRATO = 1
@@ -473,10 +473,42 @@ def _sugestao_do_ar():
     return ar, s, c
 
 
+CARENCIA_APLICADA = 30   # s
+MODO_AUTO = 4   # t_work_mode do ar em Auto: com ele a sugestao nunca conta como aplicada
+
+
+def _marcar_aplicada(ar, s):
+    """Acrescenta a s (a sugestao) se ela esta aplicada: o estado do ar ja bate com a cena.
+
+    A verdade e o estado atual: mexer a mao em temperatura, modo ou ventilacao, ou ir para Auto,
+    o desfaz sozinho, e ajustar a mao para o mesmo valor ja conta como aplicada. O registro em kv
+    so guarda quando foi aplicada pelo botao, para o texto "Aplicada as 08:03".
+    """
+    if not s or not s.get("cena") or not ar:
+        banco.apagar_kv("sugestao_aplicada")
+        return s
+    props = casa.comando_da_cena(s["cena"], ar)
+    desligar = bool(s["cena"].get("desligar"))
+    aplicada = bool(props) and all(casa._int(ar, k, padrao=-999) == int(v) for k, v in props.items())
+    reg = banco.ler_kv("sugestao_aplicada")
+    meu = bool(reg) and reg.get("puid") == ar["puid"] and reg.get("cena") == s["cena"]
+    # A nuvem leva alguns segundos para devolver o estado novo: logo depois do botao, vale o registro.
+    if meu and not aplicada and time.time() - reg["t"] < CARENCIA_APLICADA:
+        aplicada = True
+    if aplicada and not desligar and casa._int(ar, "t_work_mode", padrao=-1) == MODO_AUTO and not meu:
+        aplicada = False
+    s["aplicada"] = aplicada
+    if aplicada:
+        s["aplicadaEm"] = reg["t"] if meu else None
+    elif reg:
+        banco.apagar_kv("sugestao_aplicada")
+    return s
+
+
 @app.get("/api/sugestao", dependencies=[Depends(autorizado)])
 def sugestao():
     ar, s, _ = _sugestao_do_ar()
-    return {"puid": ar["puid"] if ar else None, "sugestao": s}
+    return {"puid": ar["puid"] if ar else None, "sugestao": _marcar_aplicada(ar, s)}
 
 
 @app.post("/api/sugestao/aplicar", dependencies=[Depends(autorizado)])
@@ -490,6 +522,7 @@ def aplicar_sugestao():
         raise HTTPException(409, "este aparelho nao aceita a sugestao")
     servico.enviar(ar["puid"], props, _sem_bipe(None))
     servico.cancelar(ar["puid"], "retorno")
+    banco.gravar_kv("sugestao_aplicada", {"puid": ar["puid"], "cena": s["cena"], "t": int(time.time())})
     return {"ok": True, "sugestao": s}
 
 

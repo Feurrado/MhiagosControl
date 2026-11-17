@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -26,7 +26,7 @@ namespace MhiagosControl
         public static event EventHandler Mudou;
 
         /// <summary>
-        /// {titulo, texto, aplicavel} ou nulo. Dispara a busca se a ultima estiver velha ou se o ar mudou
+        /// {titulo, texto, aplicavel, aplicada} ou nulo. Dispara a busca se a ultima estiver velha ou se o ar mudou
         /// desde ela: estadoDoAr e um resumo do que pesa na sugestao (EstadoDoAr), ou nulo para so o prazo.
         /// </summary>
         public static Dictionary<string, object> Atual(string estadoDoAr)
@@ -85,7 +85,9 @@ namespace MhiagosControl
         public static void Aplicar()
         {
             ServidorCasa.AplicarSugestao();
-            lock (_trava) { _emSug = DateTime.MinValue; _pedidaEm = DateTime.MinValue; }
+            // Le a sugestao ja com "aplicada" (o servidor vale o registro nos primeiros segundos, ate a nuvem devolver o estado novo).
+            BuscarSugestao();
+            lock (_trava) { _pedidaEm = DateTime.MinValue; }
         }
 
         private static void BuscarSugestao()
@@ -133,6 +135,8 @@ namespace MhiagosControl
             x["texto"] = Json.Texto(s, "texto") ?? "";
             object cena;
             x["aplicavel"] = s.TryGetValue("cena", out cena) && cena != null;
+            object ap;
+            x["aplicada"] = s.TryGetValue("aplicada", out ap) && ap is bool && (bool)ap;
             return x;
         }
 
