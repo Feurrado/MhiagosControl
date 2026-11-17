@@ -77,6 +77,29 @@ namespace MhiagosControl
             }
             else r["lav"] = null;
 
+            // Lavadora parada: o cartao ocupa o lugar do de ciclo (mesma altura), com o ultimo ciclo e o mes.
+            if (lav != null && !temCiclo)
+            {
+                Dictionary<string, object> x = D();
+                x["nome"] = lav.Nome ?? "";
+                x["online"] = lav.Online;
+                List<CiclosDaLavadora.Ciclo> ult = CiclosDaLavadora.Ultimos(lav.Puid ?? "", 1);
+                if (ult.Count > 0)
+                {
+                    CiclosDaLavadora.Ciclo u = ult[0];
+                    Dictionary<string, object> y = D();
+                    y["programa"] = u.Programa > 0 ? TabelaDaLavadora.Programa(u.Programa) : "";
+                    y["min"] = (int)Math.Round((u.Fim - u.Inicio).TotalMinutes);
+                    y["fim"] = u.Fim.ToString("dd/MM HH:mm", CultureInfo.InvariantCulture);
+                    y["concluido"] = u.Concluido;
+                    x["ultimo"] = y;
+                }
+                double[] mes = CiclosDaLavadora.DoMes(lav.Puid ?? "", DateTime.Now);
+                x["mes"] = new List<object> { mes[0], Math.Round(mes[1]), Math.Round(mes[2], 1) };
+                r["lavRepouso"] = x;
+            }
+            else r["lavRepouso"] = null;
+
             if (ar == null && !temCiclo && (!ServicoCasa.Logado || ServicoCasa.Aparelhos.Count == 0))
             {
                 Dictionary<string, object> x = D();
