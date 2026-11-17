@@ -95,7 +95,7 @@ def passo(agora=None, hora=None, sugerir=None):
         if all(_int(ar["estado"], k) == _int({k: v}, k) for k, v in props.items()):
             return None
         try:
-            servico.enviar(ar["puid"], props, True)
+            servico.enviar(ar["puid"], props, True, origem="automacao")
         except Exception as e:  # noqa: BLE001 - a nuvem pode recusar; tenta de novo no proximo ciclo
             _registrar(agora, "Não deu para mandar ao ar: %s" % e)
             return None

@@ -315,6 +315,14 @@
   .auto-pausa { display:flex; align-items:center; gap:10px; justify-content:space-between; margin-top:12px; padding:10px 12px; border-radius:8px; background:var(--surface-alt); border:1px solid var(--border); }
   .auto-reg { display:grid; grid-template-columns:96px minmax(0,1fr); gap:10px; padding:6px 0; border-top:1px solid var(--border); font-size:13px; }
   .auto-reg:first-of-type { border-top:0; }
+  .ev-lin { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--border); }
+  .ev-lin:first-child { border-top:0; }
+  .ev-q { flex:none; width:88px; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .ev-c { flex:1; min-width:0; } .ev-c b { display:block; font-weight:600; font-size:14px; } .ev-c span { font-size:12px; }
+  .ev-o { flex:none; font-size:11.5px; padding:2px 8px; border-radius:999px; background:var(--surface-alt); color:var(--muted); border:1px solid var(--border); }
+  .ev-o.o-recomendacao { background:var(--accent-soft); color:var(--accent-text); border-color:transparent; }
+  .ev-o.o-automacao { background:var(--ok-soft); color:var(--ok); border-color:transparent; }
+  @media (max-width:760px) { .ev-lin { flex-wrap:wrap; } .ev-q { width:auto; } .ev-c { flex-basis:100%; order:3; } }
   .sugestao .sug-ok { flex:none; font-size:13px; font-weight:600; color:var(--ok, #2EA043); padding:0 4px; white-space:nowrap; }
   .sugestao .auto-nota { display:block; margin-top:4px; font-size:12px; color:var(--accent-text, var(--accent)); }
   /* A barra de carregamento global: fina, no alto, indeterminada. */

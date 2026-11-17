@@ -247,6 +247,7 @@ def _ler():
                 _conferir_ciclo(a, agora)
             elif ar_condicionado(a):
                 _registrar_ar(a, agora)
+                _conferir_ar(a, agora)
         try:
             avisos.conferir(lista)
         except Exception:  # aviso no celular nunca derruba a leitura
@@ -334,6 +335,26 @@ def _registrar_ar(a, agora):
                1 if _int(a, "t_power") else 0, _int(a, "t_work_mode", padrao=-1)))
 
 
+_ar_visto = {}   # puid -> (ligado, modo, alvo, vento) da leitura anterior
+
+
+def _conferir_ar(a, agora):
+    """Mudanca no ar que nao veio de um comando do servidor (controle remoto, app da ConnectLife): vira evento
+    'manual'. Se um comando saiu ha pouco, a mudanca e dele (ja tem o evento) e nao se repete."""
+    if not a["online"] or "t_power" not in a["estado"]:
+        return
+    atual = (_int(a, "t_power"), _int(a, "t_work_mode", padrao=-1), _int(a, "t_temp", padrao=-1), _int(a, "t_fan_speed", padrao=-1))
+    antes = _ar_visto.get(a["puid"])
+    _ar_visto[a["puid"]] = atual
+    if antes is None or antes == atual:
+        return
+    r = banco.con().execute("SELECT 1 FROM eventos WHERE puid=? AND tipo='comando' AND t > ? LIMIT 1",
+                            (a["puid"], int(agora) - 150)).fetchone()
+    if r:
+        return
+    _evento(a["puid"], "ar_externo", "", origem="manual", descricao=casa.descrever_estado_ar(a["estado"]))
+
+
 def _conferir_ciclo(a, agora):
     """Inicio: a leitura passa a 'em funcionamento' (fora do aguardo do programado). Fim: deixa de estar."""
     if not a["online"]:
@@ -384,13 +405,14 @@ def _registrar_ciclo(c, a, agora, trabalhando, concluido, status, programa, agua
         _evento(a["puid"], "ciclo_fim", "Programa %d, %d min" % (atual["programa"], (agora - atual["inicio"]) // 60))
 
 
-def _evento(puid, tipo, texto, uma_vez=False):
+def _evento(puid, tipo, texto, uma_vez=False, origem="sistema", descricao=None):
     with banco.transacao() as c:
         if uma_vez:
             r = c.execute("SELECT tipo FROM eventos WHERE puid IS ? ORDER BY id DESC LIMIT 1", (puid,)).fetchone()
             if r and r["tipo"] == tipo:
                 return
-        c.execute("INSERT INTO eventos(t,puid,tipo,texto) VALUES(?,?,?,?)", (int(time.time()), puid, tipo, texto))
+        c.execute("INSERT INTO eventos(t,puid,tipo,texto,origem,descricao) VALUES(?,?,?,?,?,?)",
+                  (int(time.time()), puid, tipo, texto, origem, descricao))
     if tipo in ("ciclo_fim", "lavadora_erro"):
         a = achar(puid)
         if a:
@@ -407,7 +429,8 @@ def _limpar(agora):
     _ultima_limpeza = agora
     c = banco.con()
     c.execute("DELETE FROM amostras_ar WHERE t < ?", (agora - DIAS_AR * 86400,))
-    c.execute("DELETE FROM eventos WHERE t < ?", (agora - 90 * 86400,))
+    dias = casa.preferencias()["dados"].get("retencaoEventosDias", 90)
+    c.execute("DELETE FROM eventos WHERE t < ?", (agora - dias * 86400,))
     c.execute("DELETE FROM resultados WHERE t < ?", (agora - 7 * 86400,))
 
 
@@ -424,7 +447,7 @@ def partes(props):
     return ([juntas] if juntas else []) + isoladas
 
 
-def enviar(puid, props, sem_bipe=False):
+def enviar(puid, props, sem_bipe=False, origem="manual"):
     """Como ServicoCasa.Enviar: com sem_bipe, t_beep=0 vai junto; se a nuvem recusar o par, repete sem."""
     with _trava:
         nuvem = _nuvem
@@ -443,7 +466,8 @@ def enviar(puid, props, sem_bipe=False):
                 raise
             log.info("comando com t_beep=0 recusado, repetindo sem: %s", e)
             nuvem.definir(puid, parte)
-    _evento(puid, "comando", json.dumps(props, separators=(",", ":")))
+    _evento(puid, "comando", json.dumps(props, separators=(",", ":")), origem=origem,
+            descricao=casa.descrever_comando(achar(puid), props))
     # O aparelho leva uns segundos para confirmar na nuvem.
     tocar()
     threading.Timer(3.0, ler).start()
@@ -529,7 +553,7 @@ def processar_agendamentos(agora, enviar_fn=None):
     (60, 120, 180 s...) ate LIMITE_ATRASO depois da hora; so entao desiste e grava
     'falhou'. Antes ele saia da fila antes de mandar, e uma falha o perdia sem aviso.
     Vencido ha mais de LIMITE_ATRASO sem nenhuma tentativa (servidor parado): descarta."""
-    enviar_fn = enviar_fn or enviar
+    enviar_fn = enviar_fn or (lambda p, pr, sb: enviar(p, pr, sb, origem="automacao"))
     for ag in banco.linhas("SELECT * FROM agendamentos WHERE quando <= ? AND (proxima IS NULL OR proxima <= ?) "
                            "ORDER BY quando", (agora, agora)):
         nome = ag["nome"] or ""

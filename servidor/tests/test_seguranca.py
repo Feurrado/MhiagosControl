@@ -112,7 +112,7 @@ class Entradas(Base):
     def test_comando_so_com_o_que_o_ar_grava(self):
         servico._aparelhos = [dict(AR, meta=META)]
         enviados = []
-        with mock.patch.object(servico, "enviar", lambda puid, props, sem_bipe=False: enviados.append(props)):
+        with mock.patch.object(servico, "enviar", lambda puid, props, sem_bipe=False, origem="manual": enviados.append(props)):
             def post(props):
                 return self.cliente.post("/api/aparelhos/p-ar/comando", headers=self.cab, json={"props": props})
             self.assertEqual(post({"t_trava": "1"}).status_code, 400)
