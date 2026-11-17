@@ -315,18 +315,30 @@
   .auto-pausa { display:flex; align-items:center; gap:10px; justify-content:space-between; margin-top:12px; padding:10px 12px; border-radius:8px; background:var(--surface-alt); border:1px solid var(--border); }
   .auto-reg { display:grid; grid-template-columns:96px minmax(0,1fr); gap:10px; padding:6px 0; border-top:1px solid var(--border); font-size:13px; }
   .auto-reg:first-of-type { border-top:0; }
-  .met-tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
-  .met-tile { all:unset; box-sizing:border-box; display:flex; flex-direction:column; gap:4px; padding:10px 12px; background:var(--surface-alt); border:1px solid var(--border); border-radius:12px; }
-  button.met-tile:not(:disabled) { cursor:pointer; } button.met-tile:not(:disabled):hover { background:var(--hover); }
-  .met-tile b { font-size:15px; font-variant-numeric:tabular-nums; }
-  .met-curva { position:relative; padding-left:48px; }
-  .met-svg { display:block; width:100%; height:140px; overflow:visible; }
-  .met-eixo { position:absolute; left:0; top:0; height:140px; width:44px; display:flex; flex-direction:column; justify-content:space-between; font-size:11px; color:var(--muted); text-align:right; }
+  .met-faixa { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; }
+  .met-faixa a { margin-left:auto; }
+  .met-chip { display:inline-flex; gap:6px; align-items:baseline; padding:5px 12px; border-radius:999px; background:var(--surface-alt); border:1px solid var(--border); font-size:13px; font-variant-numeric:tabular-nums; }
+  .met-grade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .met-card { display:flex; flex-direction:column; gap:10px; padding:14px 16px 12px; background:var(--surface-alt); border:1px solid var(--border); border-radius:12px; min-width:0; scroll-margin-top:12px; }
+  .met-card.larga { grid-column:1 / -1; }
+  .met-cab { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .met-cab .nome { font-weight:600; font-size:14px; }
+  .met-cab .det { color:var(--muted); font-size:12px; margin-top:2px; }
+  .met-valor { font-size:28px; line-height:1.1; font-weight:600; font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; display:flex; gap:14px; }
+  .met-valor.aviso { color:var(--warn); } .met-valor.perigo { color:var(--danger); }
+  .met-rx, .met-tx { font-size:20px; } .met-rx { color:var(--accent-text); } .met-tx { color:var(--ok); }
+  .met-curva { position:relative; padding-left:44px; }
+  .met-area { position:relative; }
+  .met-svg { display:block; width:100%; height:96px; overflow:visible; }
+  .met-eixo { position:absolute; left:0; top:0; height:96px; width:40px; display:flex; flex-direction:column; justify-content:space-between; font-size:11px; color:var(--muted); text-align:right; font-variant-numeric:tabular-nums; }
   .met-x { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:6px; }
-  .met-g { stroke:var(--border); stroke-width:1; vector-effect:non-scaling-stroke; }
+  .met-g { stroke:var(--border); stroke-width:1; stroke-dasharray:3 4; vector-effect:non-scaling-stroke; }
   .met-l { fill:none; stroke-width:2; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
   .met-l.s0 { stroke:var(--accent-text, var(--accent)); } .met-l.s1 { stroke:var(--ok); }
   .met-a.s0 { fill:var(--accent-soft); stroke:none; }
+  .met-mira { display:none; position:absolute; top:0; bottom:0; width:1px; background:var(--muted); opacity:.6; pointer-events:none; }
+  .met-dica { display:none; position:absolute; top:-6px; transform:translate(-50%,-100%); padding:4px 9px; border-radius:6px; background:var(--surface); border:1px solid var(--border); box-shadow:0 2px 8px rgba(0,0,0,.25); font-size:12px; white-space:nowrap; pointer-events:none; z-index:2; }
+  @media (max-width:640px) { .met-grade { grid-template-columns:minmax(0,1fr); } }
   .met-vazio { padding:20px 0; }
   .vai-met { cursor:pointer; } .vai-met:hover td { background:var(--hover); }
   .ev-lin { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--border); }

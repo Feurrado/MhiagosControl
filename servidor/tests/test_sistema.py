@@ -46,3 +46,34 @@ class Rota(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Temperatura(unittest.TestCase):
+    """O 108 C da Saude do servidor vinha de um sensor sem calibragem (maior leitura de todos os sensores)."""
+
+    def _montar(self, base, sensores):
+        arqs = []
+        for i, (chip, milic) in enumerate(sensores):
+            d = os.path.join(base, "hwmon%d" % i)
+            os.makedirs(d)
+            with open(os.path.join(d, "name"), "w") as f:
+                f.write(chip + "\n")
+            arq = os.path.join(d, "temp1_input")
+            with open(arq, "w") as f:
+                f.write(str(milic))
+            arqs.append(arq)
+        return arqs
+
+    def test_prefere_o_chip_da_cpu_e_ignora_leitura_absurda(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as p:
+            arqs = self._montar(p, [("acpitz", 108000), ("coretemp", 54000), ("nvme", 61000)])
+            with mock.patch.object(sistema.glob, "glob", side_effect=lambda g: [] if "thermal_zone" in g else arqs):
+                self.assertEqual(sistema.temperatura(), 54.0)
+
+    def test_sem_chip_conhecido_usa_a_maior_plausivel(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as p:
+            arqs = self._montar(p, [("acpitz", 108000), ("nvme", 61000)])
+            with mock.patch.object(sistema.glob, "glob", side_effect=lambda g: [] if "thermal_zone" in g else arqs):
+                self.assertEqual(sistema.temperatura(), 61.0)

@@ -23,7 +23,10 @@ CONSULTAS = {
     "rede_rx": ('sum(rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[2m]))', "B/s"),
     "rede_tx": ('sum(rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[2m]))', "B/s"),
     "uptime": ("time() - max(node_boot_time_seconds)", "s"),
-    "temp": ("max(node_hwmon_temp_celsius)", "C"),
+    # So sensores de CPU/placa (chip conhecido) e leituras plausiveis: o max() de TODOS os sensores pegava
+    # sensores sem calibragem (acpitz, NVMe composto, ventoinha) que chegam a 100+ graus. Sem chip conhecido, cai no geral.
+    "temp": ('max((node_hwmon_temp_celsius * on(chip) group_left() node_hwmon_chip_names{chip_name=~"coretemp|k10temp|zenpower|cpu_thermal|soc_thermal|bcm2835_thermal|pch_.*"}) > 0 < 95)'
+             ' or max((node_hwmon_temp_celsius > 0) < 95)', "C"),
     "carga": ("max(node_load1)", ""),
 }
 # O que desenha serie (o uptime e so um numero).

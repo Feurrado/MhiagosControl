@@ -1117,19 +1117,31 @@ function blocoEventos(d) {
 
 const metFiltro = { horas: 6 };
 let metAlvo = "";        // o grafico a mostrar ao abrir a secao (vem da Saude do servidor ou de #ajustes-metricas-cpu)
-const MET_GRAFICOS = [["cpu", "CPU", "%"], ["ram", "Memória", "%"], ["disco", "Disco", "%"], ["rede", "Rede", "B/s"], ["temp", "Temperatura", "C"], ["carga", "Carga", ""]];
+const MET_GRAFICOS = [["cpu", "CPU", "%"], ["ram", "Memória", "%"], ["disco", "Disco", "%"], ["temp", "Temperatura", "C"], ["rede", "Rede", "B/s"], ["carga", "Carga", ""]];
+// Limites (aviso, perigo) para colorir o valor de agora; o que nao esta aqui fica neutro.
+const MET_LIMITES = { cpu: [75, 90], ram: [80, 92], disco: [80, 92], temp: [75, 85] };
 const bps = v => v == null ? "--" : v >= 1e6 ? num(v / 1e6, 1) + " MB/s" : v >= 1e3 ? num(v / 1e3, 0) + " KB/s" : num(v, 0) + " B/s";
 const metFmt = (v, u) => v == null ? "--" : u === "%" ? num(v, 0) + "%" : u === "B/s" ? bps(v) : u === "C" ? num(v, 0) + " °C" : num(v, 2);
 const duracaoLonga = s => s >= 86400 ? num(s / 86400, 1) + " dias" : s >= 3600 ? num(s / 3600, 1) + " h" : Math.round(s / 60) + " min";
+const metNivel = (k, v) => { const l = MET_LIMITES[k]; return v == null || !l ? "" : v >= l[1] ? " perigo" : v >= l[0] ? " aviso" : ""; };
 
-/** A curva de uma ou duas series, com as cores do tema; os rotulos ficam em HTML por fora (o svg estica sem deformar texto). */
+/** A escala do eixo y: de 0 a um teto "redondo" (a temperatura anda por uma faixa, nao parte do zero). */
+function escalaMetrica(valores, unidade) {
+  const mx = Math.max(...valores), mn = Math.min(...valores);
+  if (unidade === "C") { const lo = Math.floor((mn - 5) / 5) * 5, hi = Math.max(lo + 10, Math.ceil((mx + 5) / 5) * 5); return [Math.max(0, lo), hi]; }
+  if (unidade === "%") return [0, Math.min(100, Math.max(20, Math.ceil(mx * 1.3 / 10) * 10))];
+  const hi = mx * 1.2 || 1, p = Math.pow(10, Math.floor(Math.log10(hi))), f = hi / p;
+  return [0, (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p];
+}
+
+/** A curva de uma ou duas series, com as cores do tema e o valor sob o ponteiro; os rotulos ficam em HTML por fora (o svg estica sem deformar texto). */
 function curvaDeMetrica(series, unidade) {
-  const W = 600, H = 140, todos = series.flatMap(s => s.pontos);
+  const W = 600, H = 96, todos = series.flatMap(s => s.pontos);
   if (!todos.length) return el("div", { class: "mu met-vazio" }, "Sem dados neste período.");
   const t0 = Math.min(...todos.map(p => p[0])), t1 = Math.max(...todos.map(p => p[0])) || t0 + 1;
-  const ymax = unidade === "%" ? 100 : (Math.max(...todos.map(p => p[1])) * 1.15 || 1);
-  const x = t => ((t - t0) / Math.max(1, t1 - t0) * W).toFixed(1), y = v => (H - Math.max(0, Math.min(1, v / ymax)) * H).toFixed(1);
-  const marcas = [0.25, 0.5, 0.75].map(f => '<line class="met-g" x1="0" x2="' + W + '" y1="' + (H * f) + '" y2="' + (H * f) + '"/>').join("");
+  const [y0, ymax] = escalaMetrica(todos.map(p => p[1]), unidade);
+  const x = t => ((t - t0) / Math.max(1, t1 - t0) * W).toFixed(1), y = v => (H - Math.max(0, Math.min(1, (v - y0) / (ymax - y0))) * H).toFixed(1);
+  const marcas = [0.5].map(f => '<line class="met-g" x1="0" x2="' + W + '" y1="' + (H * f) + '" y2="' + (H * f) + '"/>').join("");
   const linhas = series.map((s, i) => {
     const d = s.pontos.map(p => x(p[0]) + "," + y(p[1])).join(" ");
     return s.pontos.length ? (i === 0 ? '<polygon class="met-a s0" points="0,' + H + " " + d + " " + x(s.pontos[s.pontos.length - 1][0]) + "," + H + '"/>' : "") +
@@ -1138,16 +1150,29 @@ function curvaDeMetrica(series, unidade) {
   const g = svg(marcas + linhas, "0 0 " + W + " " + H);
   g.setAttribute("preserveAspectRatio", "none");
   g.setAttribute("class", "met-svg");
-  const hm = t => new Date(t * 1000).toLocaleString("pt-BR", metFiltro.horas > 24 ? { day: "2-digit", month: "2-digit", hour: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+  const fmtT = (t, curto) => new Date(t * 1000).toLocaleString("pt-BR", metFiltro.horas > 24 ? { day: "2-digit", month: "2-digit", hour: "2-digit", minute: curto ? undefined : "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+  const linha = el("div", { class: "met-mira" }), dica = el("div", { class: "met-dica" });
+  const area = el("div", { class: "met-area" }, g, linha, dica);
+  const sair = () => { linha.style.display = dica.style.display = "none"; };
+  area.addEventListener("pointermove", e => {
+    const r = area.getBoundingClientRect(), f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), t = t0 + f * (t1 - t0);
+    const achar = pts => pts.reduce((m, p) => Math.abs(p[0] - t) < Math.abs(m[0] - t) ? p : m, pts[0]);
+    const ps = series.filter(s => s.pontos.length).map(s => achar(s.pontos));
+    const px = (ps[0][0] - t0) / Math.max(1, t1 - t0) * r.width;
+    linha.style.display = dica.style.display = "block"; linha.style.left = px + "px";
+    dica.textContent = ps.map(p => metFmt(p[1], unidade)).join("  ·  ") + "  " + fmtT(ps[0][0]);
+    dica.style.left = Math.min(Math.max(px, 70), r.width - 70) + "px";
+  });
+  area.addEventListener("pointerleave", sair); sair();
   return el("div", { class: "met-curva" },
-    el("div", { class: "met-eixo" }, el("span", {}, metFmt(ymax, unidade)), el("span", {}, metFmt(0, unidade))), g,
-    el("div", { class: "met-x" }, el("span", {}, hm(t0)), el("span", {}, hm(t1))));
+    el("div", { class: "met-eixo" }, el("span", {}, metFmt(ymax, unidade)), el("span", {}, metFmt(y0, unidade))), area,
+    el("div", { class: "met-x" }, el("span", {}, fmtT(t0, true)), el("span", {}, "agora")));
 }
 
-/** A pagina de metricas: valores de agora e um grafico por metrica. Tudo vem de /api/metricas, que consulta o Prometheus por dentro. */
+/** A pagina de metricas: um cartao por metrica (valor de agora em destaque, media e pico, curva). Tudo vem de /api/metricas, que consulta o Prometheus por dentro. */
 function blocoMetricas() {
   const raiz = el("div", { class: "pilha" });
-  const topo = el("div", { class: "met-tiles" }), graficos = el("div", { class: "pilha" });
+  const faixa = el("div", { class: "met-faixa" }), grade = el("div", { class: "met-grade" });
   const aviso1 = el("div", { class: "mu" }, "Carregando…");
   const periodo = el("div", { class: "seg" }, [[1, "1 h"], [6, "6 h"], [24, "24 h"], [168, "7 dias"]].map(([h, t]) =>
     el("button", { class: metFiltro.horas === h ? "on" : "", type: "button", on: { click: () => { metFiltro.horas = h; for (const b of periodo.children) b.classList.toggle("on", b.textContent === t); atualizar(); } } }, t)));
@@ -1161,17 +1186,14 @@ function blocoMetricas() {
     if (!r.disponivel) { aviso1.textContent = "Métricas desligadas. Defina PROMETHEUS_URL no .env do servidor (e GRAFANA_URL para o link do painel completo) e reinicie o contêiner."; periodo.classList.add("oculto"); return; }
     aviso1.textContent = "";
     periodo.classList.remove("oculto");
-    const v = r.valores, u = k => (MET_GRAFICOS.find(g => g[0] === k) || [])[2];
-    const tiles = [["cpu", "CPU", metFmt(v.cpu, "%")], ["ram", "Memória", metFmt(v.ram, "%")], ["disco", "Disco", metFmt(v.disco, "%")],
-      ["rede", "Rede", v.rede_rx == null ? "--" : "↓ " + bps(v.rede_rx) + "  ↑ " + bps(v.rede_tx)], ["", "Ligado há", v.uptime == null ? "--" : duracaoLonga(v.uptime)],
-      ["temp", "Temperatura", metFmt(v.temp, "C")], ["carga", "Carga", metFmt(v.carga, "")]].filter(t => t[2] !== "--");
-    topo.replaceChildren(...tiles.map(([k, nome, valor]) => el("button", { class: "met-tile", type: "button", disabled: !k, on: { click: () => k && caixas[k] && caixas[k].scrollIntoView({ behavior: "smooth", block: "start" }) } },
-      el("span", { class: "mu" }, nome), el("b", {}, valor))));
-    if (r.grafana && !grafLink) { grafLink = r.grafana; raiz.append(el("div", { class: "linha" }, el("a", { class: "b", href: r.grafana, target: "_blank", rel: "noopener" }, "Abrir o painel completo (Grafana)"),
-      el("span", { class: "mu" }, "O link abre o Grafana direto, só na sua rede."))); }
-    const visiveis = MET_GRAFICOS.filter(([k]) => k === "rede" ? v.rede_rx != null : v[k] != null);
+    const v = r.valores;
+    const chips = [["Ligado há", v.uptime == null ? null : duracaoLonga(v.uptime)], ["Carga", v.carga == null ? null : num(v.carga, 2)]].filter(c => c[1] != null);
+    if (r.grafana && !grafLink) grafLink = r.grafana;
+    faixa.replaceChildren(...chips.map(([n, t]) => el("span", { class: "met-chip" }, el("span", { class: "mu" }, n + " "), el("b", {}, t))),
+      ...(grafLink ? [el("a", { class: "b", href: grafLink, target: "_blank", rel: "noopener", title: "Abre o Grafana direto, só na sua rede" }, "Abrir no Grafana")] : []));
+    const visiveis = MET_GRAFICOS.filter(([k]) => k !== "carga" && (k === "rede" ? v.rede_rx != null : v[k] != null));
     for (const [k, nome, un] of visiveis) {
-      if (!caixas[k]) { caixas[k] = el("div", { class: "cartao", id: "met-" + k }); graficos.append(caixas[k]); }
+      if (!caixas[k]) { caixas[k] = el("div", { class: "met-card" + (k === "rede" ? " larga" : ""), id: "met-" + k }); grade.append(caixas[k]); }
       carregarGrafico(k, nome, un, v);
     }
     if (metAlvo && caixas[metAlvo]) { const c = caixas[metAlvo]; metAlvo = ""; setTimeout(() => c.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }
@@ -1181,13 +1203,16 @@ function blocoMetricas() {
     const nomes = k === "rede" ? ["rede_rx", "rede_tx"] : [k];
     try {
       const rs = await Promise.all(nomes.map(n => api("metricas/serie?nome=" + n + "&horas=" + metFiltro.horas)));
+      const vals = rs[0].pontos.map(p => p[1]);
+      const sub = !vals.length ? "" : k === "rede" ? "↓ recebido · ↑ enviado" : "média " + metFmt(vals.reduce((a, b) => a + b, 0) / vals.length, un) + " · pico " + metFmt(Math.max(...vals), un);
+      const grande = k === "rede" ? el("div", { class: "met-valor" }, el("span", { class: "met-rx" }, "↓ " + bps(v.rede_rx)), el("span", { class: "met-tx" }, "↑ " + bps(v.rede_tx)))
+        : el("div", { class: "met-valor" + metNivel(k, v[k]) }, metFmt(v[k], un));
       caixas[k].replaceChildren(
-        el("div", { class: "cab" }, el("div", { class: "nomes" }, el("div", { class: "nome" }, nome),
-          el("div", { class: "det" }, k === "rede" ? "↓ recebido (azul)  ↑ enviado (verde)" : "agora " + metFmt(v[k], un)))),
-        el("div", { class: "corpo" }, curvaDeMetrica(rs.map(s => ({ pontos: s.pontos })), un)));
-    } catch (e) { caixas[k].replaceChildren(el("div", { class: "corpo mu" }, nome + ": " + e.message)); }
+        el("div", { class: "met-cab" }, el("div", { class: "nomes" }, el("div", { class: "nome" }, nome), el("div", { class: "det" }, sub)), grande),
+        curvaDeMetrica(rs.map(s => ({ pontos: s.pontos })), un));
+    } catch (e) { caixas[k].replaceChildren(el("div", { class: "mu" }, nome + ": " + e.message)); }
   }
-  raiz.append(el("div", { class: "linha", style: "justify-content:space-between" }, el("div", { class: "mu" }, "Do servidor da casa, atualizado a cada 30 s."), periodo), aviso1, topo, graficos);
+  raiz.append(el("div", { class: "linha", style: "justify-content:space-between" }, el("div", { class: "mu" }, "Do servidor da casa, atualizado a cada 30 s."), periodo), aviso1, faixa, grade);
   setTimeout(atualizar, 0);   // depois de entrar na pagina (atualizar para quando a secao sai do DOM)
   return cartaoSimples("Métricas do servidor", "CPU, memória, disco, rede e uptime", null, raiz);
 }
