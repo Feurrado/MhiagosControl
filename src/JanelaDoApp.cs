@@ -35,6 +35,7 @@ namespace MhiagosControl
 
         private readonly PonteDoApp _ponte;
         private readonly Label _aviso;
+        private readonly TelaDeAbertura _abertura;
         private readonly Timer _relogio, _reserva, _textoDoAviso;
         private WebView2 _app, _casa;
         private CoreWebView2Environment _ambiente;
@@ -95,7 +96,13 @@ namespace MhiagosControl
             _aviso.ForeColor = Ui.Dark ? Color.Gainsboro : Color.FromArgb(0x30, 0x30, 0x30);
             _aviso.Font = Ui.FontSemi;
             _aviso.Text = T.NovoAbrindo;
+            _aviso.Visible = false;   // so para o erro do WebView2; a abertura normal e a TelaDeAbertura
             Controls.Add(_aviso);
+            _abertura = new TelaDeAbertura();
+            _abertura.Dock = DockStyle.Fill;
+            _abertura.BackColor = BackColor;
+            Controls.Add(_abertura);
+            _abertura.BringToFront();
 
             _relogio = new Timer();
             _relogio.Interval = 1000;
@@ -107,7 +114,7 @@ namespace MhiagosControl
             _aviso.Text = "";
             _textoDoAviso = new Timer();
             _textoDoAviso.Interval = 900;
-            _textoDoAviso.Tick += delegate { _textoDoAviso.Stop(); if (!IsDisposed && _aviso.Visible && _aviso.Text.Length == 0) _aviso.Text = T.NovoAbrindo; };
+            _textoDoAviso.Tick += delegate { _textoDoAviso.Stop(); if (!IsDisposed && _abertura.Visible) _abertura.MostrarLegenda(T.NovoAbrindo); };
             _textoDoAviso.Start();
             _casaRecolhe = new Timer();
             _casaRecolhe.Interval = 400;
@@ -168,7 +175,9 @@ namespace MhiagosControl
             Log.Error("interface nova: WebView2", ex);
             _reserva.Stop(); _textoDoAviso.Stop();
             _aviso.Text = T.CasaNovaSemWebView;
+            _abertura.Visible = false;
             _aviso.Visible = true;
+            _aviso.BringToFront();
             if (_app != null) _app.Visible = false;
             if (_casa != null) _casa.Visible = false;
             _casaAVista = false;
@@ -267,6 +276,7 @@ namespace MhiagosControl
             if (IsDisposed || _app == null || _app.Visible) return;
             _app.Visible = true;
             _aviso.Visible = false;
+            _abertura.Visible = false;   // a pagina cobre a janela inteira: nada muda de lugar
         }
 
         // ---------------- ponte ----------------
