@@ -29,6 +29,8 @@
       --text:#F0F0F3; --muted:#9699A3; --faint:#7C808B; --hover:#323238; --accent-soft:#1E3352; --accent-text:#6AA6FF; --ok-soft:#1D3B26;
     }
   }
+  /* A barra de rolagem some na Casa (curta) e aparece na Clima (alta): sem reservar o espaco, a largura mudava uns 10 px na troca e a pagina inteira se reorganizava. */
+  html { scrollbar-gutter:stable; }
   * { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:var(--thumb) transparent; }
   ::-webkit-scrollbar { width:10px; height:10px; }
   ::-webkit-scrollbar-track { background:transparent; }
