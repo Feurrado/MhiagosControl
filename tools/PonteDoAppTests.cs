@@ -130,7 +130,7 @@ namespace MhiagosControl
             Verdade(textos.ContainsKey("NavPanels") && (string)textos["NavPanels"] == T.NavPanels, "interface classica: os textos da barra vem do app");
             Verdade(textos.ContainsKey("BindGameTo") && ((string)textos["BindGameTo"]).Contains("{0}"), "interface classica: texto com nome vai como molde");
             Verdade(textos.ContainsKey("KeyboardHelp") && textos.ContainsKey("Disclaimer") && textos.ContainsKey("GameReplace"), "interface classica: textos das outras classes parciais");
-            Igual(8, PonteDoApp.ChavesDaBarra.Length, "interface classica: as oito paginas da barra");
+            Igual(9, PonteDoApp.ChavesDaBarra.Length, "interface classica: as nove paginas da barra (Clima e propria)");
 
             // --- a ponte, com configuracao num arquivo temporario ---
             string caixa = Path.Combine(Path.GetTempPath(), "MhiagosControlTeste" + Guid.NewGuid().ToString("N"));
