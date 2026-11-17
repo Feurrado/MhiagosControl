@@ -5,6 +5,23 @@ namespace MhiagosControl
     /// <summary>Interface nova (WebView2): a janela so confia na origem do servidor da casa. Nao abre o WebView2.</summary>
     public static partial class Tests
     {
+        private static void ProporcaoDaJanelaTeste()
+        {
+            // moldura de 16 x 39 sobre o cliente; razao 1,5
+            int[] r = ProporcaoDaJanela.Ajustar(0, 0, 916, 639, 2, 16, 39, 1.5);        // arrastou a borda direita: 900 de cliente
+            Igual("0,0,916,639", r[0] + "," + r[1] + "," + r[2] + "," + r[3], "proporcao: borda direita mantem a razao (900x600)");
+            r = ProporcaoDaJanela.Ajustar(0, 0, 1000, 639, 2, 16, 39, 1.5);             // 984 de largura de cliente -> 656 de altura
+            Igual(695, r[3], "proporcao: a altura acompanha a largura");
+            r = ProporcaoDaJanela.Ajustar(0, 0, 1000, 639, 6, 16, 39, 1.5);             // arrastou a base: a largura acompanha a altura
+            Igual(916, r[2], "proporcao: a largura acompanha a altura");
+            r = ProporcaoDaJanela.Ajustar(0, 100, 1000, 700, 4, 16, 39, 1.5);           // canto de cima: o topo anda
+            Igual(700, r[3], "proporcao: canto de cima nao mexe na base");
+            Verdade(r[1] != 100, "proporcao: canto de cima move o topo");
+            Igual(1.0, ProporcaoDaJanela.Limitar(0.2), "proporcao: piso");
+            Igual(1.8, ProporcaoDaJanela.Limitar(9), "proporcao: teto");
+            Igual(ProporcaoDaJanela.Padrao, ProporcaoDaJanela.Limitar(double.NaN), "proporcao: NaN vira o padrao");
+        }
+
         private static void JanelaWebOrigem()
         {
             Igual("https://home01.exemplo.ts.net", JanelaWeb.Origem("https://home01.exemplo.ts.net/#painel"), "interface nova: origem sem caminho");

@@ -1033,6 +1033,30 @@
     // altura quando sobra espaco.
     var alvo = el("div", "vg");
     pagina.appendChild(alvo);
+
+    // O palco: a Visao geral tem sempre a mesma largura de projeto (1100) e, medida a altura que ela
+    // tem, e escalada por inteiro para caber na area (sem rolagem, sem corte, sem reflexo de layout).
+    // A janela trava a mesma razao (janela.proporcao), entao nao sobra faixa em volta.
+    var PALCO_L = 1100, ultimaRazao = 0, zoomAntes = "";
+    function ajustarPalco() {
+      if (!vivo) return;
+      alvo.style.zoom = "1";
+      var h = alvo.getBoundingClientRect().height;
+      var cs = getComputedStyle(pagina);
+      var dispL = pagina.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      var dispA = pagina.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      if (h < 50 || dispL < 50 || dispA < 50) return;
+      var f = Math.min(dispL / PALCO_L, dispA / h);
+      var z = String(Math.floor(f * 1000) / 1000);   // para baixo: nunca sobra 1 px de rolagem
+      alvo.style.zoom = z;
+      if (z !== zoomAntes) { zoomAntes = z; if (typeof redesenhar === "function") redesenhar(); }   // os graficos medem o proprio tamanho
+      var faixaH = $("faixa").hidden ? 0 : $("faixa").offsetHeight;
+      var r = Math.round(($("nav").offsetWidth + 32 + PALCO_L) / (faixaH + 32 + h) * 1000) / 1000;
+      if (r !== ultimaRazao) { ultimaRazao = r; avisar("janela.proporcao", { r: r }); }
+    }
+    var observador = window.ResizeObserver ? new ResizeObserver(ajustarPalco) : null;
+    if (observador) { observador.observe(pagina); observador.observe(alvo); }
+    window.addEventListener("resize", ajustarPalco);
     var vivo = true, serie = {}, previa = previaDoCooler();
     var dataEl = el("div", "vg-data"), fraseEl = el("div", "vg-frase");
     alvo.appendChild(el("div", "vg-cab", null, dataEl, fraseEl));
@@ -1218,6 +1242,8 @@
       sair: function () {
         vivo = false; clearInterval(relogio);
         window.removeEventListener("resize", redesenhar);
+        window.removeEventListener("resize", ajustarPalco);
+        if (observador) observador.disconnect();
         previa.sair();
         casa.sair();
       }
