@@ -205,11 +205,11 @@ namespace MhiagosControl
                 {
                     SystemInfo info = SystemInfo.From(copia);
                     List<object> linhas = new List<object>();
-                    AcrescentarLinha(linhas, T.SpecCpu, Junta(info.Cpu, info.CpuNucleos));
-                    AcrescentarLinha(linhas, T.SpecGpu, Junta(info.Gpu, info.GpuMemoria));
-                    AcrescentarLinha(linhas, T.SpecRam, info.Ram);
-                    AcrescentarLinha(linhas, T.SpecBoard, info.Placa);
-                    AcrescentarLinha(linhas, T.SpecOs, info.Sistema);
+                    AcrescentarLinha(linhas, T.SpecCpu, Junta(info.Cpu, info.CpuNucleos), "cpu");
+                    AcrescentarLinha(linhas, T.SpecGpu, Junta(info.Gpu, info.GpuMemoria), "gpu");
+                    AcrescentarLinha(linhas, T.SpecRam, info.Ram, "ram");
+                    AcrescentarLinha(linhas, T.SpecBoard, info.Placa, "placa");
+                    AcrescentarLinha(linhas, T.SpecOs, info.Sistema, "so");
                     resposta = Feito(id, linhas);
                 }
                 catch (Exception ex)
@@ -222,11 +222,12 @@ namespace MhiagosControl
             });
         }
 
-        private static void AcrescentarLinha(List<object> linhas, string rotulo, string valor)
+        /// <summary>[rotulo, valor, chave]: a chave (cpu, gpu, ram, placa, so) e a rota da secao nas Especificacoes (specs:cpu).</summary>
+        private static void AcrescentarLinha(List<object> linhas, string rotulo, string valor, string chave)
         {
             if (string.IsNullOrEmpty(valor)) return;
             List<object> par = new List<object>();
-            par.Add(rotulo); par.Add(valor);
+            par.Add(rotulo); par.Add(valor); par.Add(chave);
             linhas.Add(par);
         }
 
