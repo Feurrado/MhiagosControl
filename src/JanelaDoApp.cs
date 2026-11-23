@@ -435,15 +435,18 @@ namespace MhiagosControl
             double escala = Ui.S(9600) / 9600.0;
             _casaArea = new Rectangle((int)Math.Round(Int(a, "x") * escala), (int)Math.Round(Int(a, "y") * escala),
                 (int)Math.Round(Int(a, "w") * escala), (int)Math.Round(Int(a, "h") * escala));
-            _casaZoom = ZoomDaCasa(Int(a, "w"));
+            _casaZoom = ZoomDaCasa(Int(a, "w"), Int(a, "teto") / 1000.0);
             PosicionarCasa();
         }
 
-        /// A escala da Casa para uma area de largura w (pixel CSS do app), arredondada para baixo como a Visao geral.
-        internal static double ZoomDaCasa(int w)
+        /// A escala da Casa para uma area de largura w (pixel CSS do app), arredondada para baixo como a Visao geral,
+        /// e nunca acima do teto que a pagina manda (o mesmo das outras paginas; 0 = sem teto).
+        internal static double ZoomDaCasa(int w, double teto)
         {
             if (w < 50) return 1;
-            return Math.Floor(w / LarguraDeProjetoDaCasa * 1000) / 1000;
+            double z = w / LarguraDeProjetoDaCasa;
+            if (teto > 0.1 && z > teto) z = teto;
+            return Math.Floor(z * 1000) / 1000;
         }
 
         private void PosicionarCasa()

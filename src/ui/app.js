@@ -762,14 +762,19 @@
   /// escalado pela largura da area, entao grade, colunas e cartoes mantem a mesma composicao em
   /// qualquer tamanho de janela. A altura rola.
   var palcoObs = null;
+  /// A altura de projeto da Visao geral (sem zoom), medida quando ela abre. As demais paginas usam o
+  /// mesmo teto de escala que ela: numa janela larga e baixa (tela cheia 21:9) nada cresce alem dela.
+  var alturaDaVisao = 900;
+  function tetoDaEscala(dispA) { return dispA > 50 ? dispA / alturaDaVisao : 1; }
   function palcoDaPagina(area, palco) {
     if (palcoObs) { palcoObs.disconnect(); palcoObs = null; }
     var antes = "";
     function ajustar() {
       var cs = getComputedStyle(area);
       var disp = area.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      var dispA = area.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
       if (disp < 50) return;
-      var z = String(Math.floor(disp / 1100 * 1000) / 1000);
+      var z = String(Math.floor(Math.min(disp / 1100, tetoDaEscala(dispA)) * 1000) / 1000);
       if (z === antes) return;
       antes = z;
       palco.style.zoom = z;
@@ -1130,6 +1135,7 @@
       if (!vivo) return;
       alvo.style.zoom = "1";
       var h = alvo.getBoundingClientRect().height;
+      if (h >= 300) alturaDaVisao = h;
       var cs = getComputedStyle(pagina);
       var dispL = pagina.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
       var dispA = pagina.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
@@ -2960,7 +2966,9 @@
     naAbaClimaDaCasa = aba === "clima";
     function medir() {
       var r = area.getBoundingClientRect();
-      avisar("casa.area", { visivel: true, x: r.left, y: r.top, w: r.width, h: r.height, aba: aba });
+      // teto: a escala maxima, a mesma das outras paginas (a altura da Visao geral cabendo na area).
+      avisar("casa.area", { visivel: true, x: r.left, y: r.top, w: r.width, h: r.height, aba: aba,
+        teto: Math.round(tetoDaEscala(r.height - 32) * 1000) });
       aba = "";
     }
     var obs = null;

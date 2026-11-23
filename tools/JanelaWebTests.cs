@@ -20,9 +20,11 @@ namespace MhiagosControl
             Igual(1.0, ProporcaoDaJanela.Limitar(0.2), "proporcao: piso");
             Igual(1.8, ProporcaoDaJanela.Limitar(9), "proporcao: teto");
             Igual(ProporcaoDaJanela.Padrao, ProporcaoDaJanela.Limitar(double.NaN), "proporcao: NaN vira o padrao");
-            Igual(1.0, JanelaDoApp.ZoomDaCasa(1132), "casa: na largura de projeto a escala e 1");
-            Igual(0.8, JanelaDoApp.ZoomDaCasa(906), "casa: area menor escala para baixo (arredonda para baixo)");
-            Igual(1.0, JanelaDoApp.ZoomDaCasa(10), "casa: area sem medida fica em 1");
+            Igual(1.0, JanelaDoApp.ZoomDaCasa(1132, 0), "casa: na largura de projeto a escala e 1");
+            Igual(0.8, JanelaDoApp.ZoomDaCasa(906, 0), "casa: area menor escala para baixo (arredonda para baixo)");
+            Igual(1.0, JanelaDoApp.ZoomDaCasa(10, 0), "casa: area sem medida fica em 1");
+            Igual(1.15, JanelaDoApp.ZoomDaCasa(2400, 1.15), "casa: tela cheia larga para no teto da Visao geral");
+            Igual(0.8, JanelaDoApp.ZoomDaCasa(906, 1.15), "casa: o teto nao muda a escala de janela estreita");
         }
 
         private static void JanelaWebOrigem()
