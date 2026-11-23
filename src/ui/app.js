@@ -1187,13 +1187,11 @@
     if (!enxuta()) esq.appendChild(casa.el);
     var duas = el("div", "vg-duas");
     var perLista = el("div");
-    var per = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals"))),
-      botao(T("VisaoBaterias", t("Baterias ▸", "Batteries ▸")), "link", function () { mostrar("baterias"); })), perLista);
+    var per = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals")))), perLista);
     aoClicar(per, function () { mostrar("baterias"); });
     var evLista = el("div", "vg-ev");
     // Eventos: o historico do servidor (ar e lavadora, guardado la); o clique abre o historico completo na Casa.
-    var ev = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("span", "mono", T("VisaoEventos", t("EVENTOS", "EVENTS"))),
-      botao(t("Histórico ▸", "History ▸"), "link", function () { casaAba = "ajustes-eventos"; mostrar("casa"); })), evLista);
+    var ev = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("span", "mono", T("VisaoEventos", t("EVENTOS", "EVENTS")))), evLista);
     aoClicar(ev, function () { casaAba = "ajustes-eventos"; mostrar("casa"); });
     var evServidor = null;
     function buscarEventos() {
