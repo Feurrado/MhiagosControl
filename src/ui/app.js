@@ -1354,7 +1354,9 @@
   /// Os aparelhos da casa em traco, como os icones do tempo e os da pagina da Casa.
   var ICONES_APARELHO = {
     ar: [["rect", { x: 3, y: 5, width: 18, height: 8.5, rx: 2 }], ["path", { d: "M6.5 10.5h11M8 16.5l-.8 2.5M12 16.5v3M16 16.5l.8 2.5" }]],
-    lavadora: [["rect", { x: 4, y: 3, width: 16, height: 18, rx: 2.5 }], ["circle", { cx: 12, cy: 13, r: 4.5 }], ["path", { d: "M7.5 6.5h2M15 6.5h1.5" }]]
+    lavadora: [["rect", { x: 4, y: 3, width: 16, height: 18, rx: 2.5 }], ["circle", { cx: 12, cy: 13, r: 4.5 }], ["path", { d: "M7.5 6.5h2M15 6.5h1.5" }]],
+    casa: [["path", { d: "M4 11l8-7 8 7v9h-5v-6H9v6H4z" }]],
+    termometro: [["path", { d: "M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z" }], ["path", { d: "M12 9v7" }]]
   };
   function iconeDoAparelho(nome) {
     var s = svg(ICONES_APARELHO[nome], "0 0 24 24");
@@ -1495,7 +1497,7 @@
 
     // O convite.
     var cvTitulo = el("b"), cvTexto = el("small");
-    var convite = el("div", "cartao vg-casa", null, el("span", "ic icone", "\uE80F"), el("div", "ct", null, cvTitulo, cvTexto),
+    var convite = el("div", "cartao vg-casa", null, el("span", "ic", null, iconeDoAparelho("casa")), el("div", "ct", null, cvTitulo, cvTexto),
       botao(T("VisaoAbrirCasa", t("Abrir Casa ▸", "Open Home ▸")), "link", function () { mostrar("casa"); }));
     aoClicar(cartaoAr, function () { mostrar("casa"); });
     aoClicar(cartaoLav, function () { mostrar("casa"); });
@@ -1507,7 +1509,7 @@
       pedir("casa.sugestao", {}).then(function (v) { sugAplicar.disabled = false; if (v) definir(v); }, function () { sugAplicar.disabled = false; });
     });
     var sugOk = el("span", "sug-ok", t("✓ Aplicada", "✓ Applied"));
-    var cartaoSug = el("div", "cartao vg-casa vg-sug vai", null, el("span", "ic icone", "\uE706"), el("div", "ct", null, sugTitulo, sugTexto), sugAplicar, sugOk);
+    var cartaoSug = el("div", "cartao vg-casa vg-sug vai", null, el("span", "ic", null, iconeDoAparelho("termometro")), el("div", "ct", null, sugTitulo, sugTexto), sugAplicar, sugOk);
 
     // O tempo da cidade da casa (do servidor): agora, maxima e minima, AQI e as proximas horas.
     // Com tempo, a sugestao entra no mesmo cartao, abaixo de uma linha, em vez de um cartao a parte.

@@ -238,6 +238,7 @@ const ICONE_MODO = { 0: "ventoinha", 1: "sol", 2: "floco", 3: "gota", 4: "auto",
 const COR_MODO = { 0: "#8A93A6", 1: "#F08C3C", 2: "#2D7DF6", 3: "#00B0A9", 4: "#8B5CF6", 5: "#2EA043" };
 const icone = n => svg(ICONES[n] || ICONES.floco);
 const icTermometro = () => svg('<g ' + L + '><path d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 9v7"/></g>');
+const icAr = () => svg('<g ' + L + '><rect x="3" y="5" width="18" height="8.5" rx="2"/><path d="M6.5 10.5h11M8 16.5l-.8 2.5M12 16.5v3M16 16.5l.8 2.5"/></g>');   // o mesmo da Visao geral do PC
 const icLavadora = () => svg('<g ' + L + '><rect x="4" y="3" width="16" height="18" rx="2.5"/><circle cx="12" cy="13" r="4.5"/><path d="M7.5 6.5h2M15 6.5h1.5"/></g>');
 const icChave = () => svg('<path ' + L + ' d="M14.7 6.3a4 4 0 0 0-5.4 5.1L4 16.7V20h3.3l5.3-5.3a4 4 0 0 0 5.1-5.4l-2.5 2.5-2.3-.4-.4-2.3z"/>');
 const icPower = () => svg('<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.6 6.6a7.5 7.5 0 1 0 10.8 0"/></g>');
@@ -634,7 +635,7 @@ function cartaoAr(a) {
       i.funcoes.map(x => chaveLinha(x.nome, String(valor(a, x.chave)) === "1", !ok || !ligado || !x.grava, v => comando(a, { [x.chave]: v ? "1" : "0" }))));
   }
 
-  const cartao = el("div", { class: "cartao" }, cabecalho(a, icTermometro()),
+  const cartao = el("div", { class: "cartao" }, cabecalho(a, icAr()),
     el("div", { class: "corpo" },
       el("div", { class: "ar" }, esquerda, direita),
       painelAuxiliar(a, u, cenas, timer, tm, rt, falho),

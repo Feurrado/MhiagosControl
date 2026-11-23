@@ -100,7 +100,7 @@ main { flex:1; min-width:0; display:flex; flex-direction:column; outline:0; posi
 
 /* ---------------- botoes (FlatBtn) ---------------- */
 
-.b { height:32px; padding:0 16px; border-radius:4px; border:1px solid var(--border); background:var(--surface); white-space:nowrap; flex:none; transition:background .08s, border-color .08s; }
+.b { height:32px; padding:0 16px; border-radius:999px; border:1px solid var(--border); background:var(--surface); white-space:nowrap; flex:none; transition:background .08s, border-color .08s; }
 .b:hover { background:var(--hover); }
 .b:active { background:var(--pressed); }
 .b.p { background:var(--accent); border-color:var(--accent); color:#fff; }
@@ -380,6 +380,7 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
 .vg-esq > .vg-casa-pilha { flex:1 1 auto; min-height:0; }
 .vg-casa-pilha > :last-child { flex:1 1 auto; display:flex; flex-direction:column; }
 .vg-casa-pilha > :last-child:not(.vg-dias) { justify-content:center; }
+.vg-casa-pilha > .cartao.vg-casa:last-child { flex-direction:row; align-items:center; }
 
 .vg-ar { display:flex; align-items:center; gap:14px; padding:0 14px; min-height:92px; }
 .vg-ar .ic { position:relative; width:40px; height:40px; border-radius:8px; background:var(--surface-alt); color:var(--faint); transition:background-color 450ms cubic-bezier(.4,0,.2,1), color 450ms cubic-bezier(.4,0,.2,1); display:flex; align-items:center; justify-content:center; font-size:16px; flex:none; }
