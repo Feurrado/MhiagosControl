@@ -1215,18 +1215,17 @@
     var stEl = el("span", "st"), perfilEl = el("div", "val"), painelEl = el("div", "val");
     var cima = el("div", "cima", null, previa.el, el("div", "info", null,
       el("div", "cap", T("ActiveProfile", t("PERFIL ATIVO", "ACTIVE PROFILE"))), perfilEl,
-      el("div", "cap", T("PanelLabel", t("Painel", "Panel"))), painelEl,
-      botao(T("VisaoAbrirPaineis", t("Abrir Painéis ▸", "Open Panels ▸")), "link", function () { mostrar("painel"); })));
-    var cooler = el("div", "cartao vg-cooler", null, el("div", "titulo", null, el("span", "", T("VisaoChipCooler", t("Display do cooler", "Cooler display"))), stEl), cima);
+      el("div", "cap", T("PanelLabel", t("Painel", "Panel"))), painelEl));
+    var cooler = el("div", "cartao vg-cooler vai", null, el("div", "titulo", null, el("span", "", T("VisaoChipCooler", t("Display do cooler", "Cooler display"))), stEl), cima);
     var mostradores = [1, 2].map(function (n) {
       var canvas = el("canvas"), tt = el("div", "tt"), valor = el("div", "vv"), faixa = el("div", "mm");
       var c = el("div", "vg-mostrador", null, canvas, tt, valor, faixa);
-      c.addEventListener("click", function () { mostrar("painel"); });
       cooler.appendChild(c);
       var m = { n: n, canvas: canvas, tt: tt, valor: valor, faixa: faixa, id: "", hx: -1 };
       seguirPonteiro(c, m);
       return m;
     });
+    aoClicar(cooler, function () { mostrar("painel"); });
     dir.appendChild(cooler);
     if (!enxuta()) dir.appendChild(duas);
     meio.appendChild(dir);
