@@ -238,6 +238,7 @@ const ICONE_MODO = { 0: "ventoinha", 1: "sol", 2: "floco", 3: "gota", 4: "auto",
 const COR_MODO = { 0: "#8A93A6", 1: "#F08C3C", 2: "#2D7DF6", 3: "#00B0A9", 4: "#8B5CF6", 5: "#2EA043" };
 const icone = n => svg(ICONES[n] || ICONES.floco);
 const icTermometro = () => svg('<g ' + L + '><path d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 9v7"/></g>');
+const icAr = () => svg('<g ' + L + '><rect x="3" y="5" width="18" height="8.5" rx="2"/><path d="M6.5 10.5h11M8 16.5l-.8 2.5M12 16.5v3M16 16.5l.8 2.5"/></g>');   // o mesmo da Visao geral do PC
 const icLavadora = () => svg('<g ' + L + '><rect x="4" y="3" width="16" height="18" rx="2.5"/><circle cx="12" cy="13" r="4.5"/><path d="M7.5 6.5h2M15 6.5h1.5"/></g>');
 const icChave = () => svg('<path ' + L + ' d="M14.7 6.3a4 4 0 0 0-5.4 5.1L4 16.7V20h3.3l5.3-5.3a4 4 0 0 0 5.1-5.4l-2.5 2.5-2.3-.4-.4-2.3z"/>');
 const icPower = () => svg('<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.6 6.6a7.5 7.5 0 1 0 10.8 0"/></g>');
@@ -252,21 +253,39 @@ function icBarras(nivel) {
 
 // ---------------- leitura ----------------
 
-/** Controle segmentado com indicador que desliza (iOS): um span sob o botao "on". */
-function posicionarSeg() {
-  for (const g of document.querySelectorAll(".seg")) {
-    const on = g.querySelector("button.on");
+/** Controle segmentado com indicador que desliza (iOS): um span sob o botao "on" anda ate o novo item.
+ *  Pilulas remontadas ao clicar (cidades, previsao) partem da posicao guardada pelo rotulo dos itens.
+ *  .seg-nav: as abas da Casa quando a pagina esta embutida no app do PC (viram pilula la). */
+const posDoSeg = {};
+let cliqueNoSeg = 0;
+const semMovimentoSeg = matchMedia("(prefers-reduced-motion: reduce)");
+function posicionarSeg(semAnimar) {
+  for (const g of document.querySelectorAll(".seg, .seg-nav")) {
+    const bs = [...g.querySelectorAll("button")], on = g.querySelector("button.on, button.ativo");
     let i = g.querySelector(".ind");
     if (!i) { i = document.createElement("span"); i.className = "ind"; g.prepend(i); }
     if (!on || !on.offsetWidth) { i.style.opacity = "0"; continue; }
-    i.style.opacity = "1"; i.style.width = on.offsetWidth + "px"; i.style.transform = "translateX(" + on.offsetLeft + "px)";
-    if (!i.dataset.pronto) requestAnimationFrame(() => requestAnimationFrame(() => { i.dataset.pronto = "1"; }));
+    const chave = bs.map(b => b.textContent).join("|"), novo = { x: on.offsetLeft, w: on.offsetWidth, t: g.scrollWidth };
+    const antes = i._pos || (Date.now() - cliqueNoSeg < 1500 ? posDoSeg[chave] : null);
+    i._pos = novo; posDoSeg[chave] = novo;
+    // O indicador cobre a pilula toda e um recorte mostra so o item ativo: uma propriedade so anima, sem o
+    // rastro que transform (compositor) e width (thread principal) deixavam fora de passo com a pagina ocupada.
+    const recorte = p => "inset(0px " + Math.max(0, novo.t - p.x - p.w) + "px 0px " + p.x + "px round 999px)";
+    i.style.opacity = "1"; i.style.width = novo.t + "px"; i.style.clipPath = recorte(novo);
+    if (semAnimar !== true && antes && (antes.x !== novo.x || antes.w !== novo.w) && !semMovimentoSeg.matches && i.animate)
+      i.animate([{ clipPath: recorte(antes) }, { clipPath: recorte(novo) }], { duration: 250, easing: "cubic-bezier(.4,0,.2,1)" });
   }
 }
 let posSegAgenda = 0;
-new MutationObserver(() => { cancelAnimationFrame(posSegAgenda); posSegAgenda = requestAnimationFrame(posicionarSeg); })
+document.addEventListener("click", e => { if (e.target.closest && e.target.closest(".seg, .seg-nav")) cliqueNoSeg = Date.now(); }, true);
+new MutationObserver(() => {
+  cancelAnimationFrame(posSegAgenda);
+  // Logo depois de um clique a pilula parte no mesmo quadro em que o item muda.
+  if (Date.now() - cliqueNoSeg < 500) { posicionarSeg(); return; }
+  posSegAgenda = requestAnimationFrame(() => posicionarSeg());
+})
   .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
-addEventListener("resize", () => requestAnimationFrame(posicionarSeg));
+addEventListener("resize", () => requestAnimationFrame(() => posicionarSeg(true)));
 
 /** O fundo ganha uma tinta suave do modo do ar: azul no frio, laranja no calor, verde no seco; sem tinta com o ar desligado. */
 function tintaDoAr() {
@@ -634,7 +653,7 @@ function cartaoAr(a) {
       i.funcoes.map(x => chaveLinha(x.nome, String(valor(a, x.chave)) === "1", !ok || !ligado || !x.grava, v => comando(a, { [x.chave]: v ? "1" : "0" }))));
   }
 
-  const cartao = el("div", { class: "cartao" }, cabecalho(a, icTermometro()),
+  const cartao = el("div", { class: "cartao" }, cabecalho(a, icAr()),
     el("div", { class: "corpo" },
       el("div", { class: "ar" }, esquerda, direita),
       painelAuxiliar(a, u, cenas, timer, tm, rt, falho),
@@ -1619,9 +1638,10 @@ function desenharClimaPagina() {
   }
   const lista = casaD.c.locais || [];
   if (climaIdx >= lista.length) climaIdx = 0;
-  chips.replaceChildren(...lista.map((x, i) => el("button", { class: "chip" + (i === climaIdx ? " on" : ""), type: "button",
-    on: { click: () => { if (i !== climaIdx) carregarCidade(i); } } }, x.casa ? icSec("casa") : null, x.nome.split(",")[0])),
-    el("button", { class: "chip mais", type: "button", title: "Adicionar cidade", on: { click: () => irPara("ajustes-clima") } }, "+ Cidade"));
+  // As cidades no mesmo segmentado das outras alternancias (Painéis | Perfis, 10 dias | Últimos 7).
+  chips.replaceChildren(el("div", { class: "seg" }, ...lista.map((x, i) => el("button", { class: i === climaIdx ? "on" : "", type: "button",
+    on: { click: () => { if (i !== climaIdx) carregarCidade(i); } } }, x.casa ? icSec("casa") : null, x.nome.split(",")[0]))),
+    el("button", { class: "b peq", type: "button", title: "Adicionar cidade", on: { click: () => irPara("ajustes-clima") } }, "+ Cidade"));
   const pag = climaIdx === 0 ? { c: casaD.c, s: casaD.s } : climaPag || { carregando: true };
   if (pag.carregando) { esqueletoDoClima(caixa, lista[climaIdx]); return; }
   if (pag.erro || !pag.c.clima) {

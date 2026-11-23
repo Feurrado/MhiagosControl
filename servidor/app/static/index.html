@@ -93,7 +93,7 @@
   .sub-cartao > .tit { display:flex; align-items:center; justify-content:space-between; font-weight:600; margin-bottom:10px; min-height:30px; }
 
   /* ---------- botoes ---------- */
-  .b { cursor:pointer; background:var(--surface-alt); border:1px solid var(--border); border-radius:4px; padding:6px 14px; min-height:32px; }
+  .b { cursor:pointer; background:var(--surface-alt); border:1px solid var(--border); border-radius:999px; padding:6px 14px; min-height:32px; }
   .b:hover:not(:disabled) { background:var(--hover); }
   .b.pri { background:var(--accent); border-color:var(--accent); color:#fff; }
   .b.pri:hover:not(:disabled) { background:var(--accent-hover); }
@@ -108,11 +108,11 @@
   .redondo svg { width:18px; height:18px; }
   .redondo.on { background:var(--accent); border-color:var(--accent); color:#fff; }
   .seg { position:relative; display:inline-flex; background:var(--surface-alt); border:1px solid var(--border); border-radius:999px; padding:3px; gap:2px; }
-  .seg button { all:unset; cursor:pointer; padding:5px 16px; border-radius:999px; font-size:13px; white-space:nowrap; text-align:center; }
+  .seg button { all:unset; box-sizing:border-box; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; height:24px; padding:0 14px; border-radius:999px; font-size:13px; white-space:nowrap; text-align:center; }
+  .seg button svg { width:14px; height:14px; }
   .seg button { position:relative; z-index:1; }
-  .seg button.on { color:#fff; }
-  .seg .ind { position:absolute; z-index:0; top:3px; bottom:3px; left:0; border-radius:999px; background:var(--accent); pointer-events:none; opacity:0; }
-  .seg .ind[data-pronto] { transition:transform .15s cubic-bezier(.2,0,0,1), width .15s cubic-bezier(.2,0,0,1), opacity .1s; }
+  .seg button.on { color:#fff; font-weight:600; }
+  .seg .ind, .seg-nav .ind { position:absolute; z-index:0; top:3px; bottom:3px; left:0; border-radius:999px; background:var(--accent); pointer-events:none; opacity:0; }
   .seg button:hover:not(.on) { background:var(--hover); }
   .dica { all:unset; box-sizing:border-box; position:relative; flex:none; margin-left:auto; width:22px; height:22px; border-radius:50%; border:1px solid var(--border); color:var(--muted); font:italic 600 12px Georgia,serif; text-align:center; line-height:20px; cursor:help; }
   .dica::after { content:attr(data-t); position:absolute; z-index:5; right:0; top:28px; width:max-content; max-width:min(260px,70vw); padding:8px 10px; border-radius:8px; background:var(--text); color:var(--window); font:12px/1.35 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; text-align:left; opacity:0; pointer-events:none; transform:translateY(-3px); transition:opacity .12s, transform .12s; }
@@ -120,7 +120,7 @@
   body { background-repeat:no-repeat; background-image:linear-gradient(180deg,var(--tinta,transparent),transparent 420px); transition:background-color .4s; }
   body[data-modo=frio] { --tinta:rgba(45,125,246,.10); } body[data-modo=eco] { --tinta:rgba(46,160,67,.09); }
   body[data-modo=calor] { --tinta:rgba(240,138,36,.11); } body[data-modo=seco] { --tinta:rgba(0,176,169,.09); }
-  @media (prefers-reduced-motion:reduce) { .seg .ind, .dica::after { transition:none !important; } }
+  @media (prefers-reduced-motion:reduce) { .dica::after { transition:none !important; } }
 
   /* ---------- ar ---------- */
   .ar { display:grid; grid-template-columns:270px 1fr; gap:28px; align-items:start; }
@@ -137,7 +137,7 @@
   .liga-txt.on { color:var(--accent-text); }
   .noturno { margin-left:auto; display:flex; align-items:center; gap:10px; color:var(--muted); font-size:13px; }
   .tiles { display:grid; gap:8px; }
-  .tile { cursor:pointer; background:var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:12px 6px; display:flex; flex-direction:column; align-items:center; gap:8px; min-height:72px; justify-content:center; }
+  .tile { cursor:pointer; background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; padding:12px 6px; display:flex; flex-direction:column; align-items:center; gap:8px; min-height:72px; justify-content:center; }
   .tile svg { width:24px; height:24px; }
   .tile.horiz { flex-direction:row; padding:10px; min-height:44px; gap:10px; }
   .tile.horiz svg { width:18px; height:18px; }
@@ -189,7 +189,7 @@
   .params { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px 8px; }
   .params small { display:block; color:var(--muted); font-size:12px; }
   .params b { font-weight:600; }
-  .aviso { background:color-mix(in srgb, var(--warn) 14%, transparent); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius:4px; padding:8px 10px; margin-top:10px; font-size:13px; }
+  .aviso { background:color-mix(in srgb, var(--warn) 14%, transparent); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius:8px; padding:8px 10px; margin-top:10px; font-size:13px; }
   .aviso.perigo { background:color-mix(in srgb, var(--danger) 12%, transparent); border-color:color-mix(in srgb, var(--danger) 45%, transparent); }
 
   /* ---------- tabelas e propriedades ---------- */
@@ -204,14 +204,9 @@
   .sugestao b { display:block; } .sugestao span { font-size:13px; color:var(--muted); }
   #clima { margin-top:14px; max-width:1100px; }
   /* cidades da aba Clima: troca rapida */
-  .chips { display:flex; gap:8px; overflow-x:auto; padding:2px 0 12px; scrollbar-width:none; }
+  .chips { display:flex; align-items:center; gap:8px; overflow-x:auto; padding:2px 0 12px; scrollbar-width:none; }
+  .chips .seg { flex:none; }
   .chips::-webkit-scrollbar { display:none; }
-  .chip { flex:none; display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 14px; border-radius:17px; border:1px solid var(--border);
-    background:var(--surface); color:var(--text); font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; transition:background .12s, border-color .12s; }
-  .chip svg { width:15px; height:15px; }
-  .chip.on { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .chip.mais { color:var(--muted); border-style:dashed; font-weight:500; }
-  .chip:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .cidade-linha, .cidade-achada { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--border); }
   .cidade-linha > span, .cidade-achada > span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .cidade-linha:first-of-type { border-top:0; }
@@ -238,7 +233,7 @@
   .tic.th-ic { width:96px; height:96px; stroke-width:1.1; filter:drop-shadow(0 4px 12px rgba(0,0,0,.18)); }
   .tcorpo { display:flex; flex-direction:column; gap:12px; }
   .tcorpo .sugestao { margin:0; }
-  .tsec { background:var(--surface-alt); border:1px solid var(--border); border-radius:12px; padding:12px 14px; min-width:0; }
+  .tsec { background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; padding:12px 14px; min-width:0; }
   .tsec-tit { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
   .tresumo { font-size:13px; color:var(--text); padding-bottom:8px; margin-bottom:6px; border-bottom:1px solid var(--border); }
   .thoras { display:flex; gap:2px; overflow-x:auto; scroll-snap-type:x proximity; padding-bottom:4px; scrollbar-width:thin; }
@@ -321,7 +316,7 @@
   .met-faixa a { margin-left:auto; }
   .met-chip { display:inline-flex; gap:6px; align-items:baseline; padding:5px 12px; border-radius:999px; background:var(--surface-alt); border:1px solid var(--border); font-size:13px; font-variant-numeric:tabular-nums; }
   .met-grade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-  .met-card { display:flex; flex-direction:column; gap:10px; padding:14px 16px 12px; background:var(--surface-alt); border:1px solid var(--border); border-radius:12px; min-width:0; scroll-margin-top:12px; }
+  .met-card { display:flex; flex-direction:column; gap:10px; padding:14px 16px 12px; background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; min-width:0; scroll-margin-top:12px; }
   .met-card.larga { grid-column:1 / -1; }
   .met-cab { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .met-cab .nome { font-weight:600; font-size:14px; }
@@ -436,7 +431,7 @@
   /* ---------- ajustes: lista de secoes + detalhe ---------- */
   .aj { display:grid; grid-template-columns:268px minmax(0,1fr); gap:18px; align-items:start; max-width:1100px; }
   .aj-coluna { position:sticky; top:16px; align-self:start; display:flex; flex-direction:column; gap:10px; }
-  .aj-lista { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .aj-lista { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
   .aj-versao { font-size:12px; color:var(--muted); text-align:center; display:flex; flex-direction:column; gap:6px; align-items:center; font-variant-numeric:tabular-nums; }
   .aj-versao.velha { color:var(--warn); }
   .aj-item { all:unset; box-sizing:border-box; cursor:pointer; display:flex; align-items:center; gap:12px; width:100%; padding:11px 12px; min-height:52px; border-top:1px solid var(--border); }
@@ -522,7 +517,7 @@
     input, select { font-size:16px; min-height:44px; }
     .redondo { width:44px; height:44px; }
     .chave-diag { width:44px; height:44px; }
-    .seg button { padding:10px 16px; }
+    .seg button { height:38px; padding:0 16px; }
     .tile.horiz { min-height:48px; }
     .cena { min-height:52px; }
     .chavinha { min-height:44px; }

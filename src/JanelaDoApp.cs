@@ -44,6 +44,10 @@ namespace MhiagosControl
         /// <summary>A aba da pagina da Casa a abrir (o cartao do tempo da Visao geral pede "clima").</summary>
         private string _casaAba = "";
         private Rectangle _casaArea = Rectangle.Empty;
+        /// Como as demais paginas: a Casa e a Clima tem largura de projeto (1100 + recuo de 16 dos dois lados)
+        /// e o WebView inteiro e escalado pela largura da area, sem reflexo de layout.
+        internal const double LarguraDeProjetoDaCasa = 1132;
+        private double _casaZoom = 1;
         private bool _casaVisivel, _casaAVista;
         private readonly Timer _casaRecolhe;
 
@@ -431,7 +435,15 @@ namespace MhiagosControl
             double escala = Ui.S(9600) / 9600.0;
             _casaArea = new Rectangle((int)Math.Round(Int(a, "x") * escala), (int)Math.Round(Int(a, "y") * escala),
                 (int)Math.Round(Int(a, "w") * escala), (int)Math.Round(Int(a, "h") * escala));
+            _casaZoom = ZoomDaCasa(Int(a, "w"));
             PosicionarCasa();
+        }
+
+        /// A escala da Casa para uma area de largura w (pixel CSS do app), arredondada para baixo como a Visao geral.
+        internal static double ZoomDaCasa(int w)
+        {
+            if (w < 50) return 1;
+            return Math.Floor(w / LarguraDeProjetoDaCasa * 1000) / 1000;
         }
 
         private void PosicionarCasa()
@@ -456,6 +468,7 @@ namespace MhiagosControl
                 catch (Exception ex) { Log.Error("interface nova: Casa", ex); }
             }
             _casa.Bounds = _casaArea;
+            if (Math.Abs(_casa.ZoomFactor - _casaZoom) > 0.0005) _casa.ZoomFactor = _casaZoom;
             _casa.Visible = _casaIniciada;
             _casa.BringToFront();
             if (_casaIniciada && _casaAba.Length > 0)
