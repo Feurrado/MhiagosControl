@@ -46,7 +46,9 @@ class Rota(Base):
 
 class NuvemTest(unittest.TestCase):
     def _com(self, conteudo):
-        import json, tempfile, os
+        import json
+        import tempfile
+        import os
         p = tempfile.mkdtemp()
         if conteudo is not None:
             with open(os.path.join(p, "nuvem.json"), "w") as f:
