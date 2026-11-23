@@ -144,6 +144,7 @@ namespace MhiagosControl
             Config c = _app.Cfg;
             Dictionary<string, object> r = D();
             r["versao"] = AppInfo.Versao;
+            r["edicao"] = Edicao.Nome;
             r["pt"] = T.Pt;
             r["escuro"] = Ui.Dark;
             List<object> sensores = new List<object>();

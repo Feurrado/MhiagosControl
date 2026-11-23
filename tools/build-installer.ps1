@@ -5,21 +5,21 @@
 # ao fabricante do cooler e nao a este projeto. Um instalador assim serve a uso
 # pessoal na propria maquina e NAO pode ser publicado, enviado a ninguem nem
 # virar Release no GitHub. Para gerar um instalador distribuivel, use -SemMotor.
-param([switch]$SemMotor)
+param([switch]$SemMotor, [ValidateSet('completa', 'cpu')][string]$Edicao = 'completa')
 
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $fw   = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
 $csc  = Join-Path $fw 'csc.exe'
 $bin  = Join-Path $root 'bin'
 $dist = Join-Path $root 'dist'
-$out  = Join-Path $dist 'MhiagosControlSetup.exe'
+$out  = Join-Path $dist $(if ($Edicao -eq 'cpu') { 'MhiagosControlSetup-cpu.exe' } else { 'MhiagosControlSetup.exe' })
 
 if (-not (Test-Path $csc)) { Write-Output "ERRO: csc.exe nao encontrado em $fw"; exit 1 }
 
 # O instalador carrega o que estiver em bin\. Compilar antes evita empacotar
 # um executavel de duas versoes atras sem perceber.
 Write-Output "compilando o aplicativo primeiro..."
-& (Join-Path $root 'build.ps1') | Out-String | Write-Output
+& (Join-Path $root 'build.ps1') -Edicao $Edicao | Out-String | Write-Output
 if ($LASTEXITCODE -ne 0) { Write-Output "FALHOU: o aplicativo nao compilou"; exit 1 }
 
 $app = Join-Path $bin 'MhiagosControl.exe'

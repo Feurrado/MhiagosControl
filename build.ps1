@@ -1,5 +1,5 @@
 ﻿# Compila o Mhiagos Control com o csc.exe do .NET Framework (nao exige SDK).
-param([switch]$Assets)
+param([switch]$Assets, [ValidateSet('completa', 'cpu')][string]$Edicao = 'completa')
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $fw   = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
@@ -57,6 +57,8 @@ $arguments = @(
     # da pagina de codigo da maquina e acentos viram lixo
     '/codepage:65001',
     ('/out:' + $out),
+    # A edicao enxuta e o mesmo codigo com o simbolo EDICAO_CPU (src\Edicao.cs).
+    ($(if ($Edicao -eq 'cpu') { '/define:EDICAO_CPU' } else { '/define:EDICAO_COMPLETA' })),
     ('/win32manifest:' + (Join-Path $root 'app.manifest')),
     ('/win32icon:'     + (Join-Path $root 'assets\MhiagosControl.ico')),
     ('/resource:' + (Join-Path $root 'assets\tray.ico')            + ',MhiagosControl.tray.ico'),
