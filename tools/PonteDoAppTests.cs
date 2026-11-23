@@ -186,6 +186,7 @@ namespace MhiagosControl
                     Igual(2, ((List<object>)ini["perfis"]).Count, "ponte: dois perfis");
                     Igual("Padrão", Json.Texto(ini, "ativo"), "ponte: perfil ativo");
                     Verdade(ini.ContainsKey("destaques") && ini["destaques"] is List<object>, "ponte: iniciar leva os destaques da Visao geral");
+                    Igual("completa", Json.Texto(ini, "edicao"), "ponte: a suite roda na edicao completa e a interface sabe disso");
                     Dictionary<string, object> volta = Json.Ler(Json.Escrever(r)) as Dictionary<string, object>;
                     Verdade(volta != null && PonteOk(volta), "ponte: a resposta vira JSON valido");
                 }

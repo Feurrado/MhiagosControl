@@ -173,14 +173,14 @@ namespace MhiagosControl
             BuildMenu();
 
             IniciarVigiaDeAtivacao();
-            Perifericos.Iniciar(_stop);
+            if (!Edicao.Enxuta) Perifericos.Iniciar(_stop);
 
             // A abertura das fontes NAO acontece aqui. Ela e agendada para
             // depois que Application.Run assumir: veja AbrirSensores.
             _marshal.BeginInvoke(new MethodInvoker(AbrirSensores));
 
             // O widget nao depende dos sensores: a bateria tem leitores proprios
-            if (_cfgWidget.Ativo) _marshal.BeginInvoke(new MethodInvoker(MostrarWidget));
+            if (_cfgWidget.Ativo && !Edicao.Enxuta) _marshal.BeginInvoke(new MethodInvoker(MostrarWidget));
         }
 
         /// <summary>
@@ -554,7 +554,7 @@ namespace MhiagosControl
                 try
                 {
                     TrayContext contexto = new TrayContext(Nucleo.CriarSensores(), new HidPanel(), activation);
-                    contexto.IniciarCasa();
+                    if (!Edicao.Enxuta) contexto.IniciarCasa();
                     Application.Run(contexto);
                 }
                 catch (Exception ex)

@@ -60,6 +60,30 @@ jobs:
             dist/MhiagosControlSetup.exe
             dist/MhiagosControlSetup.exe.sha256
           if-no-files-found: error
+
+      # A edicao enxuta e o mesmo codigo com EDICAO_CPU (src/Edicao.cs): so Painel CPU, Perfis,
+      # Metricas, Especificacoes e Visao geral, sem Casa, Clima, baterias e widget.
+      - name: Build lite installer (edicao enxuta)
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\tools\build-installer.ps1 -SemMotor -Edicao cpu
+          if ($LASTEXITCODE -ne 0) { throw "instalador da edicao enxuta nao compilou" }
+          $setup = (Resolve-Path .\dist\MhiagosControlSetup-cpu.exe).Path
+          $names = [Reflection.Assembly]::LoadFile($setup).GetManifestResourceNames()
+          if ($names -contains 'payload.engine.dll') {
+            throw "pacote contem a biblioteca comercial do HWiNFO (payload.engine.dll) e NAO pode ser distribuido"
+          }
+          (Get-FileHash $setup -Algorithm SHA256).Hash + '  MhiagosControlSetup-cpu.exe' |
+            Set-Content .\dist\MhiagosControlSetup-cpu.exe.sha256 -Encoding ascii
+
+      - name: Upload lite installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: MhiagosControl-cpu
+          path: |
+            dist/MhiagosControlSetup-cpu.exe
+            dist/MhiagosControlSetup-cpu.exe.sha256
+          if-no-files-found: error
           retention-days: 7
 
   servidor:

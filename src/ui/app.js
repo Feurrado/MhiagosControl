@@ -632,6 +632,9 @@
     sobre: ["sobre", "NavAbout", "Sobre", "About", ""]
   };
   var PADRAO = ["visao", "paineis", "metricas", "specs", "config", "baterias", "casa", "clima", "sobre"];
+  /// A edicao enxuta (Edicao.cs): sem Casa, Clima e baterias, e sem os cartoes deles na Visao geral.
+  var SO_NA_COMPLETA = ["baterias", "casa", "clima"];
+  function enxuta() { return !!(S && S.edicao === "cpu"); }
 
   function ordemDaBarra() {
     var r = [];
@@ -639,9 +642,10 @@
       k = k.trim();
       if (BARRA[k] && r.indexOf(k) < 0) r.push(k);
     });
+    if (enxuta()) r = r.filter(function (k) { return SO_NA_COMPLETA.indexOf(k) < 0; });
     // Pagina que a ordem gravada nao conhecia (uma aba nova) entra logo depois da que vem antes dela no padrao.
     PADRAO.forEach(function (k, i) {
-      if (r.indexOf(k) >= 0) return;
+      if (r.indexOf(k) >= 0 || (enxuta() && SO_NA_COMPLETA.indexOf(k) >= 0)) return;
       var pos = 0;
       for (var j = i - 1; j >= 0; j--) { var q = r.indexOf(PADRAO[j]); if (q >= 0) { pos = q + 1; break; } }
       r.splice(pos, 0, k);
@@ -775,7 +779,7 @@
   }
 
   function mostrar(pagina, mesma) {
-    if (!MONTAR[pagina]) pagina = "visao";
+    if (!MONTAR[pagina] || (enxuta() && SO_NA_COMPLETA.indexOf(pagina) >= 0)) pagina = "visao";
     if (vista && vista.sair) vista.sair();
     vista = null;
     if (palcoObs && (daCasa(pagina) || pagina === "visao")) { palcoObs.disconnect(); palcoObs = null; }
@@ -1174,7 +1178,7 @@
     // Ordem: ar, lavadora, tempo e proximos dias na coluna da esquerda; Perifericos e Eventos
     // ficam embaixo do cooler, na coluna da direita.
     var casa = cartoesDaCasa();
-    esq.appendChild(casa.el);
+    if (!enxuta()) esq.appendChild(casa.el);
     var duas = el("div", "vg-duas");
     var perLista = el("div");
     var per = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals"))),
@@ -1195,10 +1199,11 @@
       if (!linhas.length) evLista.appendChild(el("div", "nota", T("VisaoSemEventos", t("Nada novo desde que o app abriu.", "Nothing new since the app started."))));
       linhas.slice(0, 8).forEach(function (x) { evLista.appendChild(el("div", "", null, el("span", "", x[0]), document.createTextNode(x[1]))); });
     }
-    buscarEventos();
-    var relogioEv = setInterval(buscarEventos, 30000);
+    if (!enxuta()) buscarEventos();
+    var relogioEv = enxuta() ? 0 : setInterval(buscarEventos, 30000);
     duas.appendChild(per); duas.appendChild(ev);
-    meio.appendChild(esq);
+    // Na enxuta o display do cooler ocupa a largura toda.
+    if (enxuta()) meio.classList.add("so-cooler"); else meio.appendChild(esq);
 
     // O display do cooler: a previa, o perfil e as curvas dos dois mostradores.
     var stEl = el("span", "st"), perfilEl = el("div", "val"), painelEl = el("div", "val");
@@ -1217,7 +1222,7 @@
       return m;
     });
     dir.appendChild(cooler);
-    dir.appendChild(duas);
+    if (!enxuta()) dir.appendChild(duas);
     meio.appendChild(dir);
     alvo.appendChild(meio);
 
@@ -1339,9 +1344,10 @@
           var pct = el("span", !tem ? "sem" : b.carregando ? "carga" : b.bateria <= 20 ? "baixa" : "", tem ? b.bateria + "%" : "--");
           perLista.appendChild(el("div", "vg-per", null, el("span", "", b.nome), pct));
         });
-        desenharEventos();
-        // casa
-        casa.definir(E.vcasa);
+        if (!enxuta()) {
+          desenharEventos();
+          casa.definir(E.vcasa);
+        }
         arranjarTiles();
       },
       sair: function () {
