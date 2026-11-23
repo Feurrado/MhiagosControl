@@ -253,21 +253,32 @@ function icBarras(nivel) {
 
 // ---------------- leitura ----------------
 
-/** Controle segmentado com indicador que desliza (iOS): um span sob o botao "on". */
-function posicionarSeg() {
-  for (const g of document.querySelectorAll(".seg")) {
-    const on = g.querySelector("button.on");
+/** Controle segmentado com indicador que desliza (iOS): um span sob o botao "on" anda ate o novo item.
+ *  Pilulas remontadas ao clicar (cidades, previsao) partem da posicao guardada pelo rotulo dos itens.
+ *  .seg-nav: as abas da Casa quando a pagina esta embutida no app do PC (viram pilula la). */
+const posDoSeg = {};
+let cliqueNoSeg = 0;
+const semMovimentoSeg = matchMedia("(prefers-reduced-motion: reduce)");
+function posicionarSeg(semAnimar) {
+  for (const g of document.querySelectorAll(".seg, .seg-nav")) {
+    const bs = [...g.querySelectorAll("button")], on = g.querySelector("button.on, button.ativo");
     let i = g.querySelector(".ind");
     if (!i) { i = document.createElement("span"); i.className = "ind"; g.prepend(i); }
     if (!on || !on.offsetWidth) { i.style.opacity = "0"; continue; }
-    i.style.opacity = "1"; i.style.width = on.offsetWidth + "px"; i.style.transform = "translateX(" + on.offsetLeft + "px)";
-    if (!i.dataset.pronto) requestAnimationFrame(() => requestAnimationFrame(() => { i.dataset.pronto = "1"; }));
+    const chave = bs.map(b => b.textContent).join("|"), novo = { x: on.offsetLeft, w: on.offsetWidth };
+    const antes = i._pos || (Date.now() - cliqueNoSeg < 1500 ? posDoSeg[chave] : null);
+    i._pos = novo; posDoSeg[chave] = novo;
+    i.style.opacity = "1"; i.style.width = novo.w + "px"; i.style.transform = "translateX(" + novo.x + "px)";
+    if (semAnimar !== true && antes && (antes.x !== novo.x || antes.w !== novo.w) && !semMovimentoSeg.matches && i.animate)
+      i.animate([{ transform: "translateX(" + antes.x + "px)", width: antes.w + "px" }, { transform: "translateX(" + novo.x + "px)", width: novo.w + "px" }],
+        { duration: 250, easing: "cubic-bezier(.4,0,.2,1)" });
   }
 }
 let posSegAgenda = 0;
-new MutationObserver(() => { cancelAnimationFrame(posSegAgenda); posSegAgenda = requestAnimationFrame(posicionarSeg); })
+document.addEventListener("click", e => { if (e.target.closest && e.target.closest(".seg, .seg-nav")) cliqueNoSeg = Date.now(); }, true);
+new MutationObserver(() => { cancelAnimationFrame(posSegAgenda); posSegAgenda = requestAnimationFrame(() => posicionarSeg()); })
   .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
-addEventListener("resize", () => requestAnimationFrame(posicionarSeg));
+addEventListener("resize", () => requestAnimationFrame(() => posicionarSeg(true)));
 
 /** O fundo ganha uma tinta suave do modo do ar: azul no frio, laranja no calor, verde no seco; sem tinta com o ar desligado. */
 function tintaDoAr() {

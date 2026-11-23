@@ -327,13 +327,41 @@
       b.addEventListener("click", function () {
         if (s.valor === o[0]) return;
         s.valor = o[0];
-        Array.prototype.forEach.call(s.children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        Array.prototype.forEach.call(s.querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
         if (aoMudar) aoMudar(o[0]);
       });
       s.appendChild(b);
     });
     return s;
   }
+
+  // ---------------- indicador dos segmentados ----------------
+  // Um span azul sob o item ativo de toda pilula (.seg) desliza ate o novo item (250 ms, curva padrao).
+  // Pilulas que a pagina remonta ao clicar (categorias, Paineis | Perfis) partem da posicao
+  // guardada pelo rotulo dos itens, entao a troca tambem anima.
+  var posDoSeg = {}, cliqueNoSeg = 0;
+  function posicionarSegs(semAnimar) {
+    Array.prototype.forEach.call(document.querySelectorAll(".seg"), function (g) {
+      var bs = g.querySelectorAll("button"), on = g.querySelector('button[aria-pressed="true"]');
+      var i = g.querySelector(".ind");
+      if (!i) { i = el("span", "ind"); g.insertBefore(i, g.firstChild); }
+      if (!on || !on.offsetWidth) { i.style.opacity = "0"; return; }
+      var chave = Array.prototype.map.call(bs, function (b) { return b.textContent; }).join("|");
+      var novo = { x: on.offsetLeft, w: on.offsetWidth };
+      var antes = i._pos || (Date.now() - cliqueNoSeg < 1500 ? posDoSeg[chave] : null);
+      i._pos = novo; posDoSeg[chave] = novo;
+      i.style.opacity = "1";
+      i.style.width = novo.w + "px";
+      i.style.transform = "translateX(" + novo.x + "px)";
+      if (!semAnimar && antes && (antes.x !== novo.x || antes.w !== novo.w))
+        animar(i, [{ transform: "translateX(" + antes.x + "px)", width: antes.w + "px" }, { transform: "translateX(" + novo.x + "px)", width: novo.w + "px" }], MOV.lenta, MOV.padrao);
+    });
+  }
+  var agendaDoSeg = 0;
+  function agendarSegs() { cancelAnimationFrame(agendaDoSeg); agendaDoSeg = requestAnimationFrame(function () { posicionarSegs(false); }); }
+  document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest(".seg")) cliqueNoSeg = Date.now(); }, true);
+  new MutationObserver(agendarSegs).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-pressed"] });
+  window.addEventListener("resize", function () { requestAnimationFrame(function () { posicionarSegs(true); }); });
 
   /// NumberBox: menos, o numero e mais; muda ao sair do campo, no Enter ou nos botoes.
   function caixaNumero(valor, min, max, aoMudar) {
