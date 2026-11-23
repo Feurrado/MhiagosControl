@@ -1616,9 +1616,10 @@ function desenharClimaPagina() {
   }
   const lista = casaD.c.locais || [];
   if (climaIdx >= lista.length) climaIdx = 0;
-  chips.replaceChildren(...lista.map((x, i) => el("button", { class: "chip" + (i === climaIdx ? " on" : ""), type: "button",
-    on: { click: () => { if (i !== climaIdx) carregarCidade(i); } } }, x.casa ? icSec("casa") : null, x.nome.split(",")[0])),
-    el("button", { class: "chip mais", type: "button", title: "Adicionar cidade", on: { click: () => irPara("ajustes-clima") } }, "+ Cidade"));
+  // As cidades no mesmo segmentado das outras alternancias (Painéis | Perfis, 10 dias | Últimos 7).
+  chips.replaceChildren(el("div", { class: "seg" }, ...lista.map((x, i) => el("button", { class: i === climaIdx ? "on" : "", type: "button",
+    on: { click: () => { if (i !== climaIdx) carregarCidade(i); } } }, x.casa ? icSec("casa") : null, x.nome.split(",")[0]))),
+    el("button", { class: "b peq", type: "button", title: "Adicionar cidade", on: { click: () => irPara("ajustes-clima") } }, "+ Cidade"));
   const pag = climaIdx === 0 ? { c: casaD.c, s: casaD.s } : climaPag || { carregando: true };
   if (pag.carregando) { esqueletoDoClima(caixa, lista[climaIdx]); return; }
   if (pag.erro || !pag.c.clima) {

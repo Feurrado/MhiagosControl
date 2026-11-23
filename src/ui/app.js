@@ -499,7 +499,8 @@
     // Como no seletor da classica (SensorPicker): pilulas de categoria acima
     // da lista, cabecalho por categoria e o nome curto do sensor na linha,
     // com a peca em cinza para separar os de mesmo nome.
-    var pilulas = el("div", "cats-sensor");
+    var pilulas = el("div", "seg cats-sensor");
+    pilulas.setAttribute("role", "group");
     var catAtual = "";
     function grupoDe(x) { return x.grupo || x.categoria || x.hardware || t("Outros", "Other"); }
     var todasCats = [];
@@ -507,7 +508,7 @@
     function desenharPilulas() {
       limpar(pilulas);
       [""].concat(todasCats).forEach(function (g) {
-        var b = botao(g || t("Todos", "All"), "chip" + (g === catAtual ? " on" : ""), function () { catAtual = g; desenharPilulas(); desenhar(); });
+        var b = botao(g || t("Todos", "All"), "", function () { catAtual = g; desenharPilulas(); desenhar(); });
         b.setAttribute("aria-pressed", g === catAtual ? "true" : "false");
         pilulas.appendChild(b);
       });
@@ -717,10 +718,31 @@
   /// Casa e Clima sao duas paginas da janela sobre a mesma camada do servidor (um WebView so).
   function daCasa(p) { return p === "casa" || p === "clima"; }
 
+  /// O palco das demais paginas: como a Visao geral, o conteudo tem a largura de projeto (1100) e e
+  /// escalado pela largura da area, entao grade, colunas e cartoes mantem a mesma composicao em
+  /// qualquer tamanho de janela. A altura rola.
+  var palcoObs = null;
+  function palcoDaPagina(area, palco) {
+    if (palcoObs) { palcoObs.disconnect(); palcoObs = null; }
+    var antes = "";
+    function ajustar() {
+      var cs = getComputedStyle(area);
+      var disp = area.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      if (disp < 50) return;
+      var z = String(Math.floor(disp / 1100 * 1000) / 1000);
+      if (z === antes) return;
+      antes = z;
+      palco.style.zoom = z;
+    }
+    ajustar();
+    if (window.ResizeObserver) { palcoObs = new ResizeObserver(ajustar); palcoObs.observe(area); }
+  }
+
   function mostrar(pagina, mesma) {
     if (!MONTAR[pagina]) pagina = "visao";
     if (vista && vista.sair) vista.sair();
     vista = null;
+    if (palcoObs && (daCasa(pagina) || pagina === "visao")) { palcoObs.disconnect(); palcoObs = null; }
     var mudou = pagina !== atual;
     atual = pagina;
     try { sessionStorage.setItem("pagina", pagina); } catch (e) { }
@@ -731,8 +753,8 @@
     alvo.className = daCasa(pagina) ? "casa" : pagina === "visao" ? "visao" : "";
     if (mudou && !mesma) faixa("");
     if (!daCasa(pagina)) avisar("casa.area", { visivel: false, x: 0, y: 0, w: 0, h: 0 });
-    var dentro = daCasa(pagina) || pagina === "visao" ? alvo : el("div", "largura");
-    if (dentro !== alvo) alvo.appendChild(dentro);
+    var dentro = daCasa(pagina) || pagina === "visao" ? alvo : el("div", "pg-palco");
+    if (dentro !== alvo) { alvo.appendChild(dentro); palcoDaPagina(alvo, dentro); }
     vista = MONTAR[pagina](dentro) || {};
     alvo.scrollTop = rolagem;
     if (E && vista.atualizar) vista.atualizar();
@@ -1329,6 +1351,17 @@
     cartao.addEventListener("click", function (e) { if (!e.target.closest("button, a, input")) fazer(); });
   }
 
+  /// Os aparelhos da casa em traco, como os icones do tempo e os da pagina da Casa.
+  var ICONES_APARELHO = {
+    ar: [["rect", { x: 3, y: 5, width: 18, height: 8.5, rx: 2 }], ["path", { d: "M6.5 10.5h11M8 16.5l-.8 2.5M12 16.5v3M16 16.5l.8 2.5" }]],
+    lavadora: [["rect", { x: 4, y: 3, width: 16, height: 18, rx: 2.5 }], ["circle", { cx: 12, cy: 13, r: 4.5 }], ["path", { d: "M7.5 6.5h2M15 6.5h1.5" }]]
+  };
+  function iconeDoAparelho(nome) {
+    var s = svg(ICONES_APARELHO[nome], "0 0 24 24");
+    s.setAttribute("class", "dic");
+    return s;
+  }
+
   function cartoesDaCasa() {
     var raiz = el("div", "vg-casa-pilha");
     var ultimo = null, alvoLocal = null, espera = 0, ar = null;
@@ -1346,7 +1379,7 @@
       desenharAr();
       enviar("t_power", novo ? 1 : 0);
     });
-    var anel = el("span", "anel"), arIc = el("span", "ic icone", null, document.createTextNode("\uE9CA"), anel);
+    var anel = el("span", "anel"), arIc = el("span", "ic", null, iconeDoAparelho("ar"), anel);
     var cartaoAr = el("div", "cartao vg-ar vai", null, arIc,
       el("div", "ct", null, arNome, arFora), el("div", "ctl", null, menos, arNum, mais), pilula);
 
@@ -1421,7 +1454,7 @@
     var lavNome = el("b"), lavLinha = el("small"), lavTempo = el("span", "tempo"), lavFim = el("small", "fim");
     var etapas = el("div", "etapas");
     var cartaoLav = el("div", "cartao vg-lav vai", null,
-      el("div", "topo", null, el("span", "ic maquina", null, el("i")), el("div", "ct", null, lavNome, lavLinha),
+      el("div", "topo", null, el("span", "ic maquina", null, iconeDoAparelho("lavadora")), el("div", "ct", null, lavNome, lavLinha),
         el("div", "rel", null, lavTempo, lavFim)), etapas);
     function desenharLav(l) {
       lavNome.textContent = l.nome;
@@ -1444,7 +1477,7 @@
     // A lavadora parada: ocupa o lugar do cartao de ciclo (mesma altura), com o ultimo ciclo e o mes.
     var lrNome = el("b"), lrLinha = el("small"), lrEstado = el("span", "tempo"), lrMes = el("div", "mes");
     var cartaoLavRepouso = el("div", "cartao vg-lav repouso vai", null,
-      el("div", "topo", null, el("span", "ic maquina", null, el("i")), el("div", "ct", null, lrNome, lrLinha), el("div", "rel", null, lrEstado)), lrMes);
+      el("div", "topo", null, el("span", "ic maquina", null, iconeDoAparelho("lavadora")), el("div", "ct", null, lrNome, lrLinha), el("div", "rel", null, lrEstado)), lrMes);
     aoClicar(cartaoLavRepouso, function () { mostrar("casa"); });
     function desenharLavRepouso(l) {
       lrNome.textContent = l.nome;
@@ -2463,17 +2496,12 @@
     var slot = slotDeSensor(p, n);
     c.corpo.appendChild(slot);
     c.corpo.appendChild(el("div", "rotulo", T("Scale", t("Escala", "Scale"))));
-    var escala = el("div", "escala");
     var div = n === 1 ? p.div1 : p.div2;
-    [[0, "Auto"], [1, "÷1"], [10, "÷10"], [100, "÷100"], [1000, "÷1000"]].forEach(function (d) {
-      var b = botao(d[1], "b pequeno" + (d[0] === div ? " sel" : ""), function () {
-        if (d[0] === div) return;
-        var m = {}; m[n === 1 ? "div1" : "div2"] = d[0];
-        salvarPerfil(p, m);
-      });
-      b.setAttribute("aria-pressed", d[0] === div ? "true" : "false");
-      escala.appendChild(b);
+    var escala = segmentos([[0, "Auto"], [1, "÷1"], [10, "÷10"], [100, "÷100"], [1000, "÷1000"]], div, function (v) {
+      var m = {}; m[n === 1 ? "div1" : "div2"] = v;
+      salvarPerfil(p, m);
     });
+    escala.classList.add("escala");
     c.corpo.appendChild(escala);
     c.corpo.appendChild(el("div", "rotulo", T("Unit", t("Unidade", "Unit"))));
     var unidade = n === 1
