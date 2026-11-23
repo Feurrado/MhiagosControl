@@ -1234,6 +1234,7 @@ async function carregarSistema(caixa) {
     if (x.ligadoHoras != null) linhas.push(["Ligado há", x.ligadoHoras >= 48 ? num(x.ligadoHoras / 24, 1) + " dias" : num(x.ligadoHoras, 1) + " h", false]);
     if (x.banco) linhas.push(["Banco da Casa", num(x.banco.MB, 1) + " MB", false]);
     if (x.backup) linhas.push(["Último backup", x.backup.quantidade ? (x.backup.idadeHoras < 1 ? "há menos de 1 h" : "há " + num(x.backup.idadeHoras, 0) + " h") + " (" + x.backup.quantidade + " guardados)" : "nenhum encontrado", x.backup.velho]);
+    if (x.nuvem) linhas.push(["Nuvem (Drive)", !x.nuvem.ok ? "falhou" + (x.nuvem.erro ? ": " + x.nuvem.erro : "") : x.nuvem.idadeHoras == null ? "sem envio" : "último envio há " + (x.nuvem.idadeHoras < 1 ? "menos de 1" : num(x.nuvem.idadeHoras, 0)) + " h (" + x.nuvem.arquivos + " guardados)", x.nuvem.velho]);
     const alerta = linhas.some(l => l[2]);
     caixa.replaceChildren(
       el("div", { class: "cab" }, el("div", { class: "nomes" }, el("div", { class: "nome" }, "Saúde do servidor"),

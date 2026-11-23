@@ -41,7 +41,31 @@ class Rota(Base):
         self.assertEqual(self.cliente.get("/api/sistema").status_code, 401)
         r = self.cliente.get("/api/sistema", headers=self.cab)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(set(r.json()), {"carga", "cpus", "memoria", "disco", "temperatura", "ligadoHoras", "banco", "backup"})
+        self.assertEqual(set(r.json()), {"carga", "cpus", "memoria", "disco", "temperatura", "ligadoHoras", "banco", "backup", "nuvem"})
+
+
+class NuvemTest(unittest.TestCase):
+    def _com(self, conteudo):
+        import json
+        import tempfile
+        import os
+        p = tempfile.mkdtemp()
+        if conteudo is not None:
+            with open(os.path.join(p, "nuvem.json"), "w") as f:
+                json.dump(conteudo, f)
+        return p
+
+    def test_sem_arquivo(self):
+        self.assertIsNone(sistema.nuvem(pasta=self._com(None)))
+
+    def test_ok_recente_e_falha(self):
+        p = self._com({"ok": True, "ultimoOk": 1000, "arquivos": 5, "erro": ""})
+        r = sistema.nuvem(1000 + 3600, p)
+        self.assertEqual((r["ok"], r["idadeHoras"], r["velho"]), (True, 1.0, False))
+        p = self._com({"ok": False, "ultimoOk": 1000, "arquivos": 0, "erro": "x"})
+        self.assertTrue(sistema.nuvem(1000 + 3600, p)["velho"])
+        p = self._com({"ok": True, "ultimoOk": 1000, "arquivos": 5, "erro": ""})
+        self.assertTrue(sistema.nuvem(1000 + 40 * 3600, p)["velho"])
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ o campo vem nulo e nada e dito sobre backup.
 """
 
 import glob
+import json
 import os
 import shutil
 import time
@@ -75,6 +76,22 @@ def backup(agora=None, pasta=None):
             "velho": agora - ult > BACKUP_VELHO}
 
 
+def nuvem(agora=None, pasta=None):
+    """Ultimo envio ao Drive (backup-nuvem.sh grava nuvem.json): {ok, quando, idadeHoras, erro, velho}; None sem o arquivo."""
+    pasta = BACKUPS if pasta is None else pasta
+    try:
+        with open(os.path.join(pasta, "nuvem.json"), encoding="utf-8") as f:
+            j = json.load(f)
+    except (OSError, ValueError):
+        return None
+    agora = agora or time.time()
+    ult = int(j.get("ultimoOk") or 0)
+    ok = bool(j.get("ok"))
+    return {"ok": ok, "quando": ult, "idadeHoras": round((agora - ult) / 3600, 1) if ult else None,
+            "arquivos": int(j.get("arquivos") or 0), "erro": str(j.get("erro") or ""),
+            "velho": (not ok) or agora - ult > BACKUP_VELHO}
+
+
 def estado(dados="/data", agora=None):
     agora = agora or time.time()
     m = memoria()
@@ -94,4 +111,4 @@ def estado(dados="/data", agora=None):
             "disco": disco, "temperatura": temperatura(),
             "ligadoHoras": round(float(up.split()[0]) / 3600, 1) if up else None,
             "banco": {"MB": round(os.path.getsize(banco) / 1e6, 2)} if os.path.exists(banco) else None,
-            "backup": backup(agora)}
+            "backup": backup(agora), "nuvem": nuvem(agora)}
