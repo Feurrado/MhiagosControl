@@ -265,18 +265,25 @@ function posicionarSeg(semAnimar) {
     let i = g.querySelector(".ind");
     if (!i) { i = document.createElement("span"); i.className = "ind"; g.prepend(i); }
     if (!on || !on.offsetWidth) { i.style.opacity = "0"; continue; }
-    const chave = bs.map(b => b.textContent).join("|"), novo = { x: on.offsetLeft, w: on.offsetWidth };
+    const chave = bs.map(b => b.textContent).join("|"), novo = { x: on.offsetLeft, w: on.offsetWidth, t: g.scrollWidth };
     const antes = i._pos || (Date.now() - cliqueNoSeg < 1500 ? posDoSeg[chave] : null);
     i._pos = novo; posDoSeg[chave] = novo;
-    i.style.opacity = "1"; i.style.width = novo.w + "px"; i.style.transform = "translateX(" + novo.x + "px)";
+    // O indicador cobre a pilula toda e um recorte mostra so o item ativo: uma propriedade so anima, sem o
+    // rastro que transform (compositor) e width (thread principal) deixavam fora de passo com a pagina ocupada.
+    const recorte = p => "inset(0px " + Math.max(0, novo.t - p.x - p.w) + "px 0px " + p.x + "px round 999px)";
+    i.style.opacity = "1"; i.style.width = novo.t + "px"; i.style.clipPath = recorte(novo);
     if (semAnimar !== true && antes && (antes.x !== novo.x || antes.w !== novo.w) && !semMovimentoSeg.matches && i.animate)
-      i.animate([{ transform: "translateX(" + antes.x + "px)", width: antes.w + "px" }, { transform: "translateX(" + novo.x + "px)", width: novo.w + "px" }],
-        { duration: 250, easing: "cubic-bezier(.4,0,.2,1)" });
+      i.animate([{ clipPath: recorte(antes) }, { clipPath: recorte(novo) }], { duration: 250, easing: "cubic-bezier(.4,0,.2,1)" });
   }
 }
 let posSegAgenda = 0;
 document.addEventListener("click", e => { if (e.target.closest && e.target.closest(".seg, .seg-nav")) cliqueNoSeg = Date.now(); }, true);
-new MutationObserver(() => { cancelAnimationFrame(posSegAgenda); posSegAgenda = requestAnimationFrame(() => posicionarSeg()); })
+new MutationObserver(() => {
+  cancelAnimationFrame(posSegAgenda);
+  // Logo depois de um clique a pilula parte no mesmo quadro em que o item muda.
+  if (Date.now() - cliqueNoSeg < 500) { posicionarSeg(); return; }
+  posSegAgenda = requestAnimationFrame(() => posicionarSeg());
+})
   .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
 addEventListener("resize", () => requestAnimationFrame(() => posicionarSeg(true)));
 

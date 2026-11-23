@@ -347,18 +347,26 @@
       if (!i) { i = el("span", "ind"); g.insertBefore(i, g.firstChild); }
       if (!on || !on.offsetWidth) { i.style.opacity = "0"; return; }
       var chave = Array.prototype.map.call(bs, function (b) { return b.textContent; }).join("|");
-      var novo = { x: on.offsetLeft, w: on.offsetWidth };
+      var novo = { x: on.offsetLeft, w: on.offsetWidth, t: g.scrollWidth };
       var antes = i._pos || (Date.now() - cliqueNoSeg < 1500 ? posDoSeg[chave] : null);
       i._pos = novo; posDoSeg[chave] = novo;
+      // O indicador cobre a pilula toda e um recorte so mostra o item ativo: uma propriedade so anima,
+      // sem o rastro que transform (compositor) e width (thread principal) deixavam fora de passo.
       i.style.opacity = "1";
-      i.style.width = novo.w + "px";
-      i.style.transform = "translateX(" + novo.x + "px)";
+      i.style.width = novo.t + "px";
+      i.style.clipPath = recorteDoSeg(novo, novo.t);
       if (!semAnimar && antes && (antes.x !== novo.x || antes.w !== novo.w))
-        animar(i, [{ transform: "translateX(" + antes.x + "px)", width: antes.w + "px" }, { transform: "translateX(" + novo.x + "px)", width: novo.w + "px" }], MOV.lenta, MOV.padrao);
+        animar(i, [{ clipPath: recorteDoSeg(antes, novo.t) }, { clipPath: recorteDoSeg(novo, novo.t) }], MOV.lenta, MOV.padrao);
     });
   }
+  function recorteDoSeg(p, total) { return "inset(0px " + Math.max(0, total - p.x - p.w) + "px 0px " + p.x + "px round 999px)"; }
   var agendaDoSeg = 0;
-  function agendarSegs() { cancelAnimationFrame(agendaDoSeg); agendaDoSeg = requestAnimationFrame(function () { posicionarSegs(false); }); }
+  function agendarSegs() {
+    cancelAnimationFrame(agendaDoSeg);
+    // Logo depois de um clique a pilula parte no mesmo quadro em que o item muda (sem o atraso de um quadro).
+    if (Date.now() - cliqueNoSeg < 500) { posicionarSegs(false); return; }
+    agendaDoSeg = requestAnimationFrame(function () { posicionarSegs(false); });
+  }
   document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest(".seg")) cliqueNoSeg = Date.now(); }, true);
   new MutationObserver(agendarSegs).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-pressed"] });
   window.addEventListener("resize", function () { requestAnimationFrame(function () { posicionarSegs(true); }); });
