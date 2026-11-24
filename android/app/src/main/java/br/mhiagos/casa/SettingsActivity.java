@@ -31,7 +31,7 @@ public class SettingsActivity extends Activity {
         raiz.addView(titulo);
 
         TextView dica = new TextView(this);
-        dica.setText("O externo (https, pela internet) é tentado primeiro; se não responder, o app usa o interno (rede de casa). Deixe um deles vazio para usar só o outro. A chave de acesso é pedida uma vez em cada endereço.");
+        dica.setText("O interno (rede de casa) é tentado primeiro; se não responder, o app usa o externo (https, pela internet). Um botão na tela alterna entre os dois à mão. Deixe um deles vazio para usar só o outro. A chave de acesso é pedida uma vez em cada endereço.");
         dica.setTextColor(0xFFB0B0B8);
         dica.setPadding(0, p / 2, 0, p / 2);
         raiz.addView(dica);

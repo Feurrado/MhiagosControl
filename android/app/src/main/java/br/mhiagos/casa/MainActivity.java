@@ -103,8 +103,43 @@ public class MainActivity extends Activity {
         raiz.addView(carregando, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
+        troca = new Button(this);
+        troca.setAllCaps(false);
+        troca.setTextSize(13);
+        troca.setVisibility(View.GONE);
+        troca.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { trocarEndereco(); }
+        });
+        float d = getResources().getDisplayMetrics().density;
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, (int) (36 * d), Gravity.BOTTOM | Gravity.END);
+        lp.setMargins(0, 0, (int) (12 * d), (int) (12 * d));
+        raiz.addView(troca, lp);
+
         setContentView(raiz);
         carregar();
+    }
+
+    /** Botao flutuante: com o interno aberto oferece o remoto, e vice-versa. So vale nesta sessao. */
+    private Button troca;
+
+    private void atualizarTroca() {
+        String in = Config.interno(this), ext = Config.externo(this);
+        boolean noExterno = !ext.isEmpty() && ext.equalsIgnoreCase(urlAtual);
+        boolean temOutro = !in.isEmpty() && !ext.isEmpty();
+        troca.setText(noExterno ? "Usar rede local" : "Usar remoto");
+        troca.setVisibility(temOutro ? View.VISIBLE : View.GONE);
+    }
+
+    private void trocarEndereco() {
+        String alvo = ehExterno(urlAtual) ? Config.interno(this) : Config.externo(this);
+        if (alvo.isEmpty()) return;
+        enderecos = new ArrayList<String>();
+        enderecos.add(alvo);
+        indice = 0;
+        falhas.clear();
+        troca.setVisibility(View.GONE);
+        abrir();
     }
 
     private LinearLayout montarErro() {
@@ -146,7 +181,7 @@ public class MainActivity extends Activity {
         return l;
     }
 
-    /** Recomeca pela ordem de enderecos (externo primeiro, salvo se ele acabou de falhar). */
+    /** Recomeca pela ordem de enderecos (interno primeiro, o externo so como reserva). */
     private void carregar() {
         // casa://atalho?acao=desligar (shortcuts.xml) vira /?acao=desligar na pagina.
         Uri d = getIntent() != null ? getIntent().getData() : null;
@@ -166,6 +201,7 @@ public class MainActivity extends Activity {
         erro.setVisibility(View.GONE);
         carregando.setText("Conectando a\n" + urlAtual + "\n…");
         carregando.setVisibility(View.VISIBLE);
+        if (troca != null) troca.setVisibility(View.GONE);
         if (indice >= enderecos.size() - 1) {
             web.loadUrl(comAtalho(urlAtual));
             relogio.postDelayed(aoEsgotar, LIMITE_DO_ULTIMO_MS);
@@ -221,7 +257,6 @@ public class MainActivity extends Activity {
         relogio.removeCallbacks(aoEsgotar);
         tentativa++;
         falhas.add(urlAtual + "  (" + motivo + ")");
-        if (ehExterno(urlAtual)) Config.externoFalhou();
         if (indice < enderecos.size() - 1) {
             indice++;
             abrir();
@@ -276,7 +311,8 @@ public class MainActivity extends Activity {
         public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
             Uri u = r.getUrl();
             // Fica dentro do app o que e de um dos enderecos do painel; o resto abre fora.
-            for (String e : enderecos) {
+            for (String e : new String[] { Config.interno(MainActivity.this), Config.externo(MainActivity.this) }) {
+                if (e.isEmpty()) continue;
                 String base = Uri.parse(e).getHost();
                 if (base != null && base.equalsIgnoreCase(u.getHost())) return false;
             }
@@ -296,9 +332,9 @@ public class MainActivity extends Activity {
         public void onPageFinished(WebView v, String url) {
             if (falhou || !url.startsWith(urlAtual)) return;
             relogio.removeCallbacks(aoEsgotar);
-            if (ehExterno(urlAtual)) Config.externoFuncionou();
             carregando.setVisibility(View.GONE);
             erro.setVisibility(View.GONE);
+            atualizarTroca();
         }
 
         // A pagina inicial respondeu erro (5xx do Funnel sem o servidor atras, 4xx do proxy): conta como falha do endereco.
