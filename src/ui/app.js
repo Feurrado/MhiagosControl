@@ -15,7 +15,8 @@
   var TX = {};             // os textos do app (T.*) no idioma de agora
   var atual = "";          // pagina a vista
   var vista = null;        // {atualizar(), sair()} da pagina a vista
-  var editando = "";       // perfil selecionado no Painel CPU (o _current da classica)
+  var editando = "";
+  var nomesDosPerfis = null;   // a lista de perfis da ultima montagem (para animar quem entrou)       // perfil selecionado no Painel CPU (o _current da classica)
   var aba = "paineis";     // aba do Painel CPU: paineis ou perfis
   var specs = null;        // especificacoes ja coletadas
   var janela = 600;        // segundos a vista nas Metricas
@@ -196,6 +197,32 @@
       o.c.style.animationDelay = Math.min(n * 20, 160) + "ms";
       animarEntrada(o.c, "m3-surge");
     });
+  }
+
+  /// Numero que corre do valor anterior ate o novo (400 ms, desacelerando), com a unidade em <small>.
+  /// A primeira leitura e as sem valor entram direto.
+  function numeroCorrendo(elm, v, unidade) {
+    function fmt(x) { return x.toLocaleString(S && !S.pt ? "en-US" : "pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+    function pintar(x) {
+      limpar(elm);
+      elm.appendChild(document.createTextNode(x === null ? "--" : fmt(x)));
+      if (x !== null && unidade) elm.appendChild(el("small", "", unidade));
+    }
+    var de = elm._v;
+    elm._v = v;
+    if (elm._raf) { cancelAnimationFrame(elm._raf); elm._raf = 0; }
+    if (v === null || de === undefined || de === null || de === v || semMovimento()) { pintar(v); return; }
+    var t0 = performance.now(), ms = 400;
+    (function quadro(agora) {
+      var k = Math.min(1, (agora - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+      pintar(k >= 1 ? v : de + (v - de) * e);
+      elm._raf = k < 1 ? requestAnimationFrame(quadro) : 0;
+    })(t0);
+  }
+
+  /// Curva redesenhada com outro recorte (periodo, sensor): esmaece e assenta de baixo (250 ms).
+  function trocaDeCurva(canvas) {
+    animar(canvas, [{ opacity: 0.25, transform: "scaleY(0.92)", transformOrigin: "50% 100%" }, { opacity: 1, transform: "none", transformOrigin: "50% 100%" }], MOV.lenta, MOV.entrada);
   }
 
   var aoPrimeiroEstado = null, primeiraEntrada = false;
@@ -998,8 +1025,16 @@
     v = Math.round(v);
     return Math.max(0, Math.min(999, v));
   }
+  var chaveDaPrevia = "";
   function previaDoPerfil(pv, p) {
     if (!p) { pv.definir(null, null, false, true); return; }
+    // Outro sensor, outra unidade ou outro perfil: o mostrador acende de novo, como a peca ao receber o perfil.
+    var chave = p.nome + "|" + p.p1 + "|" + p.p2 + "|" + !!p.fahrenheit + "|" + !!p.percent + "|" + p.div1 + "|" + p.div2;
+    if (chave !== pv.chave) {
+      if (pv.chave !== undefined || (chaveDaPrevia && chaveDaPrevia !== chave))
+        animar(pv.el.firstChild, [{ opacity: 0.35, filter: "brightness(1.9)" }, { opacity: 1, filter: "none" }], 350, MOV.entrada);
+      pv.chave = chave; chaveDaPrevia = chave;
+    }
     pv.definir(valorDoPainel(p.p1, p.div1, p.fahrenheit), valorDoPainel(p.p2, p.div2, false), !!p.fahrenheit, !!p.percent);
   }
 
@@ -1333,10 +1368,8 @@
         fraseEl.className = "vg-frase" + (E.alerta ? " alerta" : "");
         blocos.forEach(function (b) {
           var v = leitura(b.id);
-          limpar(b.valor);
           b.valor.style.color = v === null ? "var(--faint)" : corDoValor(b.d.unidade, v, b.d.atencao, b.d.perigo);
-          b.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
-          if (v !== null && b.d.unidade) b.valor.appendChild(el("small", "", b.d.unidade));
+          numeroCorrendo(b.valor, v, b.d.unidade);
           caber(b);
         });
         var p = E.painel;
@@ -1349,10 +1382,8 @@
         mostradores.forEach(function (m, i) {
           var v = leitura(m.id), s = sensor(m.id);
           m.tt.textContent = (i === 0 ? t("mostrador de cima", "top display") : t("mostrador de baixo", "bottom display")) + " · " + (s ? s.nome : "");
-          limpar(m.valor);
           m.valor.style.color = i === 0 ? "var(--quente)" : "var(--accent-text)";
-          m.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
-          if (v !== null && s && s.unidade) m.valor.appendChild(el("small", "", s.unidade));
+          numeroCorrendo(m.valor, v, s && s.unidade);
         });
         // periféricos
         limpar(perLista);
@@ -2167,6 +2198,8 @@
       return pedir("metricas.acao", a).then(function (r) {
         if (!vivo) return r;
         carregar(r);
+        // Grade trocada por inteiro (conjunto, perfil, metrica nova): os cartoes sobem como na entrada.
+        if (/^(conjunto|perfil\.aplicar|add)$/.test(a.acao)) subirCartoes(grade);
         if (r.aviso) faixa(r.aviso);
         return r;
       }, function (e) { faixa(e.message, true); });
@@ -2181,9 +2214,11 @@
       buscar();
     }
 
+    var curvaNova = false;
     function confirmarJanela() {
       if (!P || P.janela === estado.janela) return;
       P.janela = estado.janela;
+      curvaNova = true; agendar();
       pedir("metricas.acao", { acao: "janela", segundos: estado.janela }).catch(function () { });
     }
 
@@ -2267,7 +2302,7 @@
           P.nav = it.id;
           cartoes.forEach(function (x) { x.el.classList.toggle("sel", x.it.id === it.id); });
           pedir("metricas.acao", { acao: "nav", id: it.id }).catch(function () { });
-          buscarNav();
+          buscarNav(true);
         });
         var obj = { it: it, el: c, canvas: canvas, valor: valor, stats: stats, corAtual: "", hx: -1 };
         // Ponteiro sobre o grafico: o valor naquele ponto (fora dos botoes).
@@ -2329,15 +2364,17 @@
         series = r.series || {};
         desenharCartoes();
         nav.desenhar();
+        if (curvaNova) { curvaNova = false; cartoes.forEach(function (x) { trocaDeCurva(x.canvas); }); }
       }, function () { });
       buscarNav();
     }
-    function buscarNav() {
+    function buscarNav(trocou) {
       if (!P || !P.nav) { nav.definir([], ""); return; }
       pedir("metricas", { ids: [P.nav], segundos: BALDES_6H, atras: 0 }).then(function (r) {
         if (!vivo) return;
         var c = ""; cartoes.forEach(function (x) { if (x.it.id === P.nav) c = x.corAtual; });
         nav.definir((r.series || {})[P.nav] || [], c);
+        if (trocou) trocaDeCurva(nav.canvas);
       }, function () { });
     }
     var espera = null;
@@ -2616,6 +2653,8 @@
     var salvos = cartao(T("SavedProfiles", t("Perfis salvos", "Saved profiles")), "estica");
     var lista = el("div", "perfis");
     lista.setAttribute("role", "listbox");
+    var antes = nomesDosPerfis, linhas = {};
+    nomesDosPerfis = S.perfis.map(function (x) { return x.nome; });
     S.perfis.forEach(function (x) {
       var nome = el("b", "", null, el("span", "", x.nome));
       if (x.nome === S.padrao) nome.appendChild(el("span", "selo", T("DefaultBadge", t("PADRÃO", "DEFAULT"))));
@@ -2627,6 +2666,10 @@
       r.addEventListener("click", function () { if (editando !== x.nome) { editando = x.nome; mostrar("painel", true); } });
       r.addEventListener("dblclick", function () { if (x.nome !== S.ativo) mudar("perfil.ativar", { nome: x.nome }); });
       lista.appendChild(r);
+      linhas[x.nome] = r;
+      // Perfil que nao estava na lista (novo, copia, importado): abre o espaco e aparece.
+      if (antes && antes.indexOf(x.nome) < 0)
+        animar(r, [{ height: "0px", opacity: 0, transform: "translateX(-8px)" }, { height: "54px", opacity: 1, transform: "none" }], MOV.lenta, MOV.entrada);
     });
     lista.addEventListener("keydown", function (e) {
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -2669,7 +2712,10 @@
       confirmar(t("Excluir o perfil " + p.nome + "?", "Delete the profile " + p.nome + "?"), T("Delete", t("Excluir", "Delete")), "b perigo").then(function (sim) {
         if (!sim) return;
         editando = "";
-        mudar("perfil.excluir", { nome: p.nome });
+        // O perfil sai fechando o proprio espaco; so entao a lista e remontada.
+        var r = linhas[p.nome], a = r && animar(r, [{ height: "54px", opacity: 1 }, { height: "0px", opacity: 0, transform: "translateX(8px)" }], MOV.media, MOV.saida);
+        if (a) { r.style.overflow = "hidden"; a.onfinish = function () { r.style.height = "0px"; r.style.opacity = "0"; mudar("perfil.excluir", { nome: p.nome }); }; }
+        else mudar("perfil.excluir", { nome: p.nome });
       });
     }));
     salvos.corpo.appendChild(acoes);
