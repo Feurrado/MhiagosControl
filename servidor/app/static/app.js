@@ -408,7 +408,21 @@ function aparelhosNaOrdemTodos(ordem) {
   const pos = id => { const n = ordem.indexOf(id); return n < 0 ? 999 : n; };
   return estado.lista.map((a, n) => [a, n]).sort((x, y) => pos(x[0].puid) - pos(y[0].puid) || x[1] - y[1]).map(x => x[0]);
 }
-$("personalizar").onclick = () => { editandoInicio = !editandoInicio; desenharEdicaoInicio(); };
+// Abrir e fechar animam a cada vez: expandir/recolher criam uma animacao nova, e ao fechar as antigas sao
+// canceladas (o fill "forwards" do recolher deixaria a caixa com altura 0 na proxima abertura).
+$("personalizar").onclick = () => {
+  const caixa = $("editaInicio");
+  editandoInicio = !editandoInicio;
+  caixa.getAnimations().forEach(a => a.cancel());
+  caixa.style.overflow = "";
+  if (editandoInicio) {
+    desenharEdicaoInicio();
+    if (!caixa.classList.contains("oculto")) expandir(caixa);
+  } else {
+    $("personalizar").classList.remove("pri");
+    recolher(caixa, () => { caixa.getAnimations().forEach(a => a.cancel()); caixa.style.overflow = ""; if (!editandoInicio) desenharEdicaoInicio(); });
+  }
+};
 
 function desenharCartoes() {
   if (!estado) return;
