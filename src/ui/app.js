@@ -199,27 +199,6 @@
     });
   }
 
-  /// Numero que corre do valor anterior ate o novo (400 ms, desacelerando), com a unidade em <small>.
-  /// A primeira leitura e as sem valor entram direto.
-  function numeroCorrendo(elm, v, unidade) {
-    function fmt(x) { return x.toLocaleString(S && !S.pt ? "en-US" : "pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
-    function pintar(x) {
-      limpar(elm);
-      elm.appendChild(document.createTextNode(x === null ? "--" : fmt(x)));
-      if (x !== null && unidade) elm.appendChild(el("small", "", unidade));
-    }
-    var de = elm._v;
-    elm._v = v;
-    if (elm._raf) { cancelAnimationFrame(elm._raf); elm._raf = 0; }
-    if (v === null || de === undefined || de === null || de === v || semMovimento()) { pintar(v); return; }
-    var t0 = performance.now(), ms = 400;
-    (function quadro(agora) {
-      var k = Math.min(1, (agora - t0) / ms), e = 1 - Math.pow(1 - k, 3);
-      pintar(k >= 1 ? v : de + (v - de) * e);
-      elm._raf = k < 1 ? requestAnimationFrame(quadro) : 0;
-    })(t0);
-  }
-
   /// Texto de estado que mudou (Ligado/Desligado, Parada/Offline): o novo entra esmaecendo e subindo um pouco.
   /// So anima a troca de verdade; o primeiro texto entra direto.
   function trocarTexto(elm, texto) {
@@ -1378,7 +1357,9 @@
         blocos.forEach(function (b) {
           var v = leitura(b.id);
           b.valor.style.color = v === null ? "var(--faint)" : corDoValor(b.d.unidade, v, b.d.atencao, b.d.perigo);
-          numeroCorrendo(b.valor, v, b.d.unidade);
+          limpar(b.valor);
+          b.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
+          if (v !== null && b.d.unidade) b.valor.appendChild(el("small", "", b.d.unidade));
           caber(b);
         });
         var p = E.painel;
@@ -1392,7 +1373,9 @@
           var v = leitura(m.id), s = sensor(m.id);
           m.tt.textContent = (i === 0 ? t("mostrador de cima", "top display") : t("mostrador de baixo", "bottom display")) + " · " + (s ? s.nome : "");
           m.valor.style.color = i === 0 ? "var(--quente)" : "var(--accent-text)";
-          numeroCorrendo(m.valor, v, s && s.unidade);
+          limpar(m.valor);
+          m.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
+          if (v !== null && s && s.unidade) m.valor.appendChild(el("small", "", s.unidade));
         });
         // periféricos
         limpar(perLista);
