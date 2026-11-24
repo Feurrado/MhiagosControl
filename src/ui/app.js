@@ -1443,7 +1443,8 @@
     });
     var anel = el("span", "anel"), arIc = el("span", "ic", null, iconeDoAparelho("ar"), anel);
     var cartaoAr = el("div", "cartao vg-ar vai", null, arIc,
-      el("div", "ct", null, arNome, arFora), el("div", "ctl", null, menos, arNum, mais), pilula);
+      el("div", "ct", null, el("span", "vg-cap", t("Ar-condicionado", "Air conditioner")), arNome, arFora),
+      el("div", "ctl", null, arNum, el("div", "pm", null, mais, menos)), pilula);
 
     // O - e o + piscam ao clique (FlashDoBotao, 150 ms).
     function piscar(b) {
@@ -1516,7 +1517,7 @@
     var lavNome = el("b"), lavLinha = el("small"), lavTempo = el("span", "tempo"), lavFim = el("small", "fim");
     var etapas = el("div", "etapas");
     var cartaoLav = el("div", "cartao vg-lav vai", null,
-      el("div", "topo", null, el("span", "ic maquina", null, iconeDoAparelho("lavadora")), el("div", "ct", null, lavNome, lavLinha),
+      el("div", "topo", null, el("span", "ic maquina", null, iconeDoAparelho("lavadora")), el("div", "ct", null, el("span", "vg-cap", t("Lava e seca", "Washer dryer")), lavNome, lavLinha),
         el("div", "rel", null, lavTempo, lavFim)), etapas);
     function desenharLav(l) {
       lavNome.textContent = l.nome;
@@ -1537,21 +1538,22 @@
     }
 
     // A lavadora parada: ocupa o lugar do cartao de ciclo (mesma altura), com o ultimo ciclo e o mes.
-    var lrNome = el("b"), lrLinha = el("small"), lrEstado = el("span", "tempo"), lrMes = el("div", "mes");
+    // O estado vai na legenda de cima e as contas do mes numa faixa presa ao rodape do cartao.
+    var lrNome = el("b"), lrLinha = el("small"), lrCap = el("span", "vg-cap"), lrMes = el("div", "mes");
     var cartaoLavRepouso = el("div", "cartao vg-lav repouso vai", null,
-      el("div", "topo", null, el("span", "ic maquina", null, iconeDoAparelho("lavadora")), el("div", "ct", null, lrNome, lrLinha), el("div", "rel", null, lrEstado)), lrMes);
+      el("div", "topo", null, el("span", "ic maquina", null, iconeDoAparelho("lavadora")), el("div", "ct", null, lrCap, lrNome, lrLinha)), lrMes);
     aoClicar(cartaoLavRepouso, function () { mostrar("casa"); });
     function desenharLavRepouso(l) {
       lrNome.textContent = l.nome;
-      lrEstado.textContent = l.online ? t("Parada", "Idle") : t("Offline", "Offline");
-      lrEstado.classList.toggle("fora", !l.online);
+      lrCap.textContent = t("Lava e seca", "Washer dryer") + " · " + (l.online ? t("Parada", "Idle") : t("Offline", "Offline"));
+      cartaoLavRepouso.classList.toggle("fora", !l.online);
       var u = l.ultimo;
       lrLinha.textContent = u ? t("Último ciclo: ", "Last cycle: ") + (u.programa ? u.programa + " · " : "") +
         (u.min < 60 ? u.min + " min" : Math.floor(u.min / 60) + " h " + ("0" + (u.min % 60)).slice(-2)) + " · " + u.fim + (u.concluido ? "" : t(" (interrompido)", " (interrupted)"))
         : t("Nenhum ciclo registrado ainda", "No cycle recorded yet");
       limpar(lrMes);
-      [[l.mes[0], t("ciclos no mês", "cycles this month")], [l.mes[1] + " L", t("de água", "of water")], [String(l.mes[2]).replace(".", t(",", ".")) + " kWh", t("de energia", "of energy")]].forEach(function (c) {
-        lrMes.appendChild(el("div", "", null, el("b", "", String(c[0])), el("small", "", c[1])));
+      [[l.mes[0], t("Ciclos no mês", "Cycles this month")], [l.mes[1] + " L", t("Água", "Water")], [String(l.mes[2]).replace(".", t(",", ".")) + " kWh", t("Energia", "Energy")]].forEach(function (c) {
+        lrMes.appendChild(el("div", "", null, el("small", "", c[1]), el("b", "", String(c[0]))));
       });
     }
 
