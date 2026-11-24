@@ -220,6 +220,15 @@
     })(t0);
   }
 
+  /// Texto de estado que mudou (Ligado/Desligado, Parada/Offline): o novo entra esmaecendo e subindo um pouco.
+  /// So anima a troca de verdade; o primeiro texto entra direto.
+  function trocarTexto(elm, texto) {
+    if (elm.textContent === texto) return;
+    var tinha = elm.textContent !== "";
+    elm.textContent = texto;
+    if (tinha) animar(elm, [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], MOV.lenta, MOV.entrada);
+  }
+
   /// Curva redesenhada com outro recorte (periodo, sensor): esmaece e assenta de baixo (250 ms).
   function trocaDeCurva(canvas) {
     animar(canvas, [{ opacity: 0.25, transform: "scaleY(0.92)", transformOrigin: "50% 100%" }, { opacity: 1, transform: "none", transformOrigin: "50% 100%" }], MOV.lenta, MOV.entrada);
@@ -1467,6 +1476,7 @@
     mais.setAttribute("aria-label", t("Aumentar", "Raise"));
     var pilula = botao("", "pilula", function () {
       if (!ar || !ar.online) return;
+      animar(pilula, [{ transform: "scale(0.93)" }, { transform: "none" }], MOV.lenta, MOV.entrada);
       var novo = !ar.ligado;
       ar.ligado = novo; ar.ajusta = novo && ar.alvo !== null;
       desenharAr();
@@ -1539,7 +1549,7 @@
       arNum.classList.toggle("apagado", !ar.ajusta);
       var podeMenos = ar.ajusta && v !== null && v > ar.min, podeMais = ar.ajusta && v !== null && v < ar.max;
       menos.disabled = !podeMenos; mais.disabled = !podeMais;
-      pilula.textContent = ar.liga || "";
+      trocarTexto(pilula, ar.liga || "");
       pilula.disabled = !ar.online;
       pilula.className = "pilula" + (!ar.online ? " fora" : ar.ligado ? " on" : "");
     }
@@ -1576,7 +1586,7 @@
     aoClicar(cartaoLavRepouso, function () { mostrar("casa"); });
     function desenharLavRepouso(l) {
       lrNome.textContent = l.nome;
-      lrCap.textContent = t("Lava e seca", "Washer dryer") + " · " + (l.online ? t("Parada", "Idle") : t("Offline", "Offline"));
+      trocarTexto(lrCap, t("Lava e seca", "Washer dryer") + " · " + (l.online ? t("Parada", "Idle") : t("Offline", "Offline")));
       cartaoLavRepouso.classList.toggle("fora", !l.online);
       var u = l.ultimo;
       lrLinha.textContent = u ? t("Último ciclo: ", "Last cycle: ") + (u.programa ? u.programa + " · " : "") +
