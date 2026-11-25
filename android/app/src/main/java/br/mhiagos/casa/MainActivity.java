@@ -88,7 +88,12 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true); // a chave da API fica no localStorage da pagina
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         web.setWebViewClient(new Cliente());
-        raiz.addView(web, new FrameLayout.LayoutParams(
+        // A pagina ocupa o espaco acima; a faixa do botao (abaixo) so aparece com os dois enderecos.
+        LinearLayout coluna = new LinearLayout(this);
+        coluna.setOrientation(LinearLayout.VERTICAL);
+        coluna.addView(web, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        raiz.addView(coluna, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         erro = montarErro();
@@ -106,15 +111,15 @@ public class MainActivity extends Activity {
         troca = new Button(this);
         troca.setAllCaps(false);
         troca.setTextSize(13);
+        troca.setBackgroundColor(escuro ? 0xFF17171A : 0xFFEAECF0);
+        troca.setTextColor(escuro ? Color.WHITE : 0xFF1B1D21);
         troca.setVisibility(View.GONE);
         troca.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { trocarEndereco(); }
         });
         float d = getResources().getDisplayMetrics().density;
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, (int) (36 * d), Gravity.BOTTOM | Gravity.END);
-        lp.setMargins(0, 0, (int) (12 * d), (int) (12 * d));
-        raiz.addView(troca, lp);
+        coluna.addView(troca, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, (int) (40 * d)));
 
         setContentView(raiz);
         carregar();
@@ -127,7 +132,7 @@ public class MainActivity extends Activity {
         String in = Config.interno(this), ext = Config.externo(this);
         boolean noExterno = !ext.isEmpty() && ext.equalsIgnoreCase(urlAtual);
         boolean temOutro = !in.isEmpty() && !ext.isEmpty();
-        troca.setText(noExterno ? "Usar rede local" : "Usar remoto");
+        troca.setText(noExterno ? "Conectado pelo remoto  ·  Usar rede local" : "Conectado na rede local  ·  Usar remoto");
         troca.setVisibility(temOutro ? View.VISIBLE : View.GONE);
     }
 

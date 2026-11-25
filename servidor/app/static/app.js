@@ -32,11 +32,13 @@ async function api(caminho, metodo, corpo) {
   try { return await apiDireto(caminho, metodo, corpo); } finally { if (!longa) cargaMenos(); }
 }
 
+let chaveRecusada = false; // chave recusada: nao insiste (8 erros em 10 min bloqueiam o IP) ate digitar outra
 async function apiDireto(caminho, metodo, corpo) {
+  if (chaveRecusada) { pedirChave(); throw new Error("chave"); }
   const r = await fetch("/api/" + caminho, { method: metodo || "GET",
     headers: { "Authorization": "Bearer " + chave, "Content-Type": "application/json" },
     body: corpo === undefined ? undefined : JSON.stringify(corpo) });
-  if (r.status === 401) { pedirChave(); throw new Error("chave"); }
+  if (r.status === 401) { chaveRecusada = true; pedirChave(); throw new Error("chave"); }
   const tipo = r.headers.get("content-type") || "";
   const j = tipo.includes("json") ? await r.json() : await r.text();
   if (!r.ok) throw new Error((j && (j.erro || j.detail)) || ("HTTP " + r.status));
@@ -158,6 +160,7 @@ const num = (v, c) => v == null ? "--" : Number(v).toLocaleString("pt-BR", { min
 function pedirChave() { $("chave").classList.remove("oculto"); }
 $("salvarChave").onclick = () => {
   chave = $("ch").value.trim();
+  chaveRecusada = false;
   try { localStorage.setItem("chave", chave); } catch (e) {}
   $("chave").classList.add("oculto");
   atualizar(); carregarPref();
