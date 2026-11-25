@@ -607,3 +607,25 @@ input[type=text]:focus, input[type=password]:focus, input[type=search]:focus { b
   *, *::before, *::after { transition-duration:0s !important; animation-duration:0s !important; animation-iteration-count:1 !important; }
   .pilha.carga i::after { display:none; }
 }
+
+/* Cartoes do ar e da lavadora (opcao C): legenda do aparelho, icone maior, fundo tonal
+   quando o ar esta ligado e as contas do mes da lavadora numa faixa presa ao rodape. */
+.vg-cap { display:block; font:11px/14px var(--f-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:1px; }
+.vg-ar .ic, .ic.maquina { width:48px; height:48px; border-radius:10px; }
+.vg-ar .ct b, .vg-lav .ct b { font-size:15px; }
+.vg-ar { padding:0 16px; transition:background-color 450ms cubic-bezier(.4,0,.2,1); }
+.vg-ar.on { background:color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.vg-ar.on .ic { background:color-mix(in srgb, var(--accent) 22%, transparent); }
+.vg-ar .alvo { width:auto; min-width:64px; font-size:32px; }
+.vg-ar .ctl { gap:8px; }
+.vg-ar .pm { display:grid; gap:4px; }
+.vg-ar .pm .redondo { width:28px; height:28px; border-radius:8px; border:1px solid var(--border); font-size:11px; }
+.vg-lav { padding:14px 16px; }
+.vg-lav.repouso { padding:0; gap:0; overflow:hidden; justify-content:flex-start; }
+.vg-lav.repouso .topo { flex:1 1 auto; padding:16px; }
+.vg-lav.repouso.fora .ic.maquina { background:var(--surface-alt); color:var(--faint); }
+.vg-lav.repouso .mes { gap:0; text-align:left; border-top:1px solid var(--border); background:var(--surface-alt); }
+.vg-lav.repouso .mes > div { padding:10px 16px; min-width:0; }
+.vg-lav.repouso .mes > div + div { border-left:1px solid var(--border); }
+.vg-lav.repouso .mes small { margin:0 0 2px; font:11px/14px var(--f-mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vg-lav.repouso .mes b { font-size:17px; }
