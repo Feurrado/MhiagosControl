@@ -128,10 +128,16 @@
   /// Abre ou fecha deslizando a altura, como o CollapsiblePanel: 250 ms,
   /// entrada suave ao abrir, saida ao fechar; virar no meio parte de onde esta.
   function deslizarAltura(elm, abrir) {
+    // As telas do PC ficam num palco com CSS zoom: o retangulo vem em pixels da
+    // janela, e a altura escrita no estilo e em pixels do palco. Sem dividir pelo
+    // zoom a animacao ia ate a altura errada e pulava no fim.
+    // (Oculto, o elemento informa zoom 1: o zoom e lido depois de mostra-lo.)
     var de = elm.hidden ? 0 : elm.getBoundingClientRect().height;
     if (elm._anim) { elm._anim.cancel(); elm._anim = null; }
     elm.hidden = false;
-    var ate = abrir ? elm.getBoundingClientRect().height : 0;
+    var z = elm.currentCSSZoom || 1;
+    de = de / z;
+    var ate = abrir ? elm.getBoundingClientRect().height / z : 0;
     if (semMovimento() || !elm.isConnected || de === ate) { elm.hidden = !abrir; return; }
     elm.style.overflow = "hidden";
     elm.style.boxSizing = "border-box";
@@ -167,10 +173,16 @@
     // Na abertura da janela a pagina entra inteira, ja com tudo: os cartoes
     // subindo um a um ali pareciam carregamento.
     if (primeiraEntrada) return;
-    // Todos os itens a vista entram, na ordem da tela, 20 ms um do outro e
-    // no maximo 160 ms de espera: a pagina inteira assenta em ~0,35 s, sem
-    // item ja pronto ao lado de item ainda escondido.
-    var cartoes = raiz.querySelectorAll(".cartao, .opcao, .grupo, .vg-cab, .mt-barra, .bat-topo, .vg-tiles > *");
+    subirCartoes(raiz);
+  }
+
+  /// Todos os itens a vista entram, na ordem da tela, 20 ms um do outro e
+  /// no maximo 160 ms de espera: a pagina inteira assenta em ~0,35 s, sem
+  /// item ja pronto ao lado de item ainda escondido. Serve tambem para trocas
+  /// dentro da pagina (abas, categorias) e para cartoes que chegam depois.
+  function subirCartoes(raiz, extra) {
+    if (!raiz || semMovimento()) return;
+    var cartoes = raiz.querySelectorAll((extra ? extra + ", " : "") + ".cartao, .opcao, .grupo, .vg-cab, .mt-barra, .bat-topo, .vg-tiles > *");
     var alto = window.innerHeight, lista = [];
     for (var i = 0; i < cartoes.length; i++) {
       var c = cartoes[i];
@@ -1868,6 +1880,9 @@
       });
       if (!dados.length) { limpar(lista); lista.appendChild(vazio); }
       Object.keys(cartoes).forEach(function (k) { cartoes[k].desenhar(); });
+      // Os cartoes chegam depois da entrada da pagina (a busca e assincrona):
+      // sem isto eles apareciam de uma vez, sem a subida dos outros itens.
+      if (!igual && dados.length) subirCartoes(lista);
     }
     function buscar() {
       pedir("baterias").then(function (r) { if (vivo) montar(r || []); }, function () { });
@@ -2444,7 +2459,12 @@
       corpo.appendChild(mosaico);
     }
 
-    function escolher(i) { categoria = i; desenhar(); var m = document.getElementById("main"); if (m) m.scrollTop = 0; }
+    function escolher(i) {
+      if (i === categoria) return;
+      categoria = i; desenhar();
+      var m = document.getElementById("main"); if (m) m.scrollTop = 0;
+      animarEntrada(corpo, "m3-aba"); subirCartoes(corpo, ".sp-mosaico > .cartao");
+    }
 
     function pronto() {
       if (!vivo) return;
@@ -2759,6 +2779,8 @@
       aba = v;
       try { sessionStorage.setItem("aba", v); } catch (e) { }
       mostrar("painel", true);
+      var pal = $("pagina").querySelector(".pg-palco");
+      if (pal) { animarEntrada(pal, "m3-aba"); subirCartoes(pal); }
     }));
     alvo.appendChild(abas);
     var p = perfilEditado();
