@@ -15,7 +15,8 @@
   var TX = {};             // os textos do app (T.*) no idioma de agora
   var atual = "";          // pagina a vista
   var vista = null;        // {atualizar(), sair()} da pagina a vista
-  var editando = "";       // perfil selecionado no Painel CPU (o _current da classica)
+  var editando = "";
+  var nomesDosPerfis = null;   // a lista de perfis da ultima montagem (para animar quem entrou)       // perfil selecionado no Painel CPU (o _current da classica)
   var aba = "paineis";     // aba do Painel CPU: paineis ou perfis
   var specs = null;        // especificacoes ja coletadas
   var janela = 600;        // segundos a vista nas Metricas
@@ -196,6 +197,20 @@
       o.c.style.animationDelay = Math.min(n * 20, 160) + "ms";
       animarEntrada(o.c, "m3-surge");
     });
+  }
+
+  /// Texto de estado que mudou (Ligado/Desligado, Parada/Offline): o novo entra esmaecendo e subindo um pouco.
+  /// So anima a troca de verdade; o primeiro texto entra direto.
+  function trocarTexto(elm, texto) {
+    if (elm.textContent === texto) return;
+    var tinha = elm.textContent !== "";
+    elm.textContent = texto;
+    if (tinha) animar(elm, [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], MOV.lenta, MOV.entrada);
+  }
+
+  /// Curva redesenhada com outro recorte (periodo, sensor): esmaece e assenta de baixo (250 ms).
+  function trocaDeCurva(canvas) {
+    animar(canvas, [{ opacity: 0.25, transform: "scaleY(0.92)", transformOrigin: "50% 100%" }, { opacity: 1, transform: "none", transformOrigin: "50% 100%" }], MOV.lenta, MOV.entrada);
   }
 
   var aoPrimeiroEstado = null, primeiraEntrada = false;
@@ -998,8 +1013,16 @@
     v = Math.round(v);
     return Math.max(0, Math.min(999, v));
   }
+  var chaveDaPrevia = "";
   function previaDoPerfil(pv, p) {
     if (!p) { pv.definir(null, null, false, true); return; }
+    // Outro sensor, outra unidade ou outro perfil: o mostrador acende de novo, como a peca ao receber o perfil.
+    var chave = p.nome + "|" + p.p1 + "|" + p.p2 + "|" + !!p.fahrenheit + "|" + !!p.percent + "|" + p.div1 + "|" + p.div2;
+    if (chave !== pv.chave) {
+      if (pv.chave !== undefined || (chaveDaPrevia && chaveDaPrevia !== chave))
+        animar(pv.el.firstChild, [{ opacity: 0.35, filter: "brightness(1.9)" }, { opacity: 1, filter: "none" }], 350, MOV.entrada);
+      pv.chave = chave; chaveDaPrevia = chave;
+    }
     pv.definir(valorDoPainel(p.p1, p.div1, p.fahrenheit), valorDoPainel(p.p2, p.div2, false), !!p.fahrenheit, !!p.percent);
   }
 
@@ -1330,8 +1353,8 @@
         fraseEl.className = "vg-frase" + (E.alerta ? " alerta" : "");
         blocos.forEach(function (b) {
           var v = leitura(b.id);
-          limpar(b.valor);
           b.valor.style.color = v === null ? "var(--faint)" : corDoValor(b.d.unidade, v, b.d.atencao, b.d.perigo);
+          limpar(b.valor);
           b.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
           if (v !== null && b.d.unidade) b.valor.appendChild(el("small", "", b.d.unidade));
           caber(b);
@@ -1346,8 +1369,8 @@
         mostradores.forEach(function (m, i) {
           var v = leitura(m.id), s = sensor(m.id);
           m.tt.textContent = (i === 0 ? t("mostrador de cima", "top display") : t("mostrador de baixo", "bottom display")) + " · " + (s ? s.nome : "");
-          limpar(m.valor);
           m.valor.style.color = i === 0 ? "var(--quente)" : "var(--accent-text)";
+          limpar(m.valor);
           m.valor.appendChild(document.createTextNode(v === null ? "--" : v.toLocaleString(S.pt ? "pt-BR" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })));
           if (v !== null && s && s.unidade) m.valor.appendChild(el("small", "", s.unidade));
         });
@@ -1433,6 +1456,7 @@
     mais.setAttribute("aria-label", t("Aumentar", "Raise"));
     var pilula = botao("", "pilula", function () {
       if (!ar || !ar.online) return;
+      animar(pilula, [{ transform: "scale(0.93)" }, { transform: "none" }], MOV.lenta, MOV.entrada);
       var novo = !ar.ligado;
       ar.ligado = novo; ar.ajusta = novo && ar.alvo !== null;
       desenharAr();
@@ -1505,7 +1529,7 @@
       arNum.classList.toggle("apagado", !ar.ajusta);
       var podeMenos = ar.ajusta && v !== null && v > ar.min, podeMais = ar.ajusta && v !== null && v < ar.max;
       menos.disabled = !podeMenos; mais.disabled = !podeMais;
-      pilula.textContent = ar.liga || "";
+      trocarTexto(pilula, ar.liga || "");
       pilula.disabled = !ar.online;
       pilula.className = "pilula" + (!ar.online ? " fora" : ar.ligado ? " on" : "");
     }
@@ -1542,7 +1566,7 @@
     aoClicar(cartaoLavRepouso, function () { mostrar("casa"); });
     function desenharLavRepouso(l) {
       lrNome.textContent = l.nome;
-      lrCap.textContent = t("Lava e seca", "Washer dryer") + " · " + (l.online ? t("Parada", "Idle") : t("Offline", "Offline"));
+      trocarTexto(lrCap, t("Lava e seca", "Washer dryer") + " · " + (l.online ? t("Parada", "Idle") : t("Offline", "Offline")));
       cartaoLavRepouso.classList.toggle("fora", !l.online);
       var u = l.ultimo;
       lrLinha.textContent = u ? t("Último ciclo: ", "Last cycle: ") + (u.programa ? u.programa + " · " : "") +
@@ -2164,6 +2188,8 @@
       return pedir("metricas.acao", a).then(function (r) {
         if (!vivo) return r;
         carregar(r);
+        // Grade trocada por inteiro (conjunto, perfil, metrica nova): os cartoes sobem como na entrada.
+        if (/^(conjunto|perfil\.aplicar|add)$/.test(a.acao)) subirCartoes(grade);
         if (r.aviso) faixa(r.aviso);
         return r;
       }, function (e) { faixa(e.message, true); });
@@ -2178,9 +2204,11 @@
       buscar();
     }
 
+    var curvaNova = false;
     function confirmarJanela() {
       if (!P || P.janela === estado.janela) return;
       P.janela = estado.janela;
+      curvaNova = true; agendar();
       pedir("metricas.acao", { acao: "janela", segundos: estado.janela }).catch(function () { });
     }
 
@@ -2264,7 +2292,7 @@
           P.nav = it.id;
           cartoes.forEach(function (x) { x.el.classList.toggle("sel", x.it.id === it.id); });
           pedir("metricas.acao", { acao: "nav", id: it.id }).catch(function () { });
-          buscarNav();
+          buscarNav(true);
         });
         var obj = { it: it, el: c, canvas: canvas, valor: valor, stats: stats, corAtual: "", hx: -1 };
         // Ponteiro sobre o grafico: o valor naquele ponto (fora dos botoes).
@@ -2326,15 +2354,17 @@
         series = r.series || {};
         desenharCartoes();
         nav.desenhar();
+        if (curvaNova) { curvaNova = false; cartoes.forEach(function (x) { trocaDeCurva(x.canvas); }); }
       }, function () { });
       buscarNav();
     }
-    function buscarNav() {
+    function buscarNav(trocou) {
       if (!P || !P.nav) { nav.definir([], ""); return; }
       pedir("metricas", { ids: [P.nav], segundos: BALDES_6H, atras: 0 }).then(function (r) {
         if (!vivo) return;
         var c = ""; cartoes.forEach(function (x) { if (x.it.id === P.nav) c = x.corAtual; });
         nav.definir((r.series || {})[P.nav] || [], c);
+        if (trocou) trocaDeCurva(nav.canvas);
       }, function () { });
     }
     var espera = null;
@@ -2613,6 +2643,8 @@
     var salvos = cartao(T("SavedProfiles", t("Perfis salvos", "Saved profiles")), "estica");
     var lista = el("div", "perfis");
     lista.setAttribute("role", "listbox");
+    var antes = nomesDosPerfis, linhas = {};
+    nomesDosPerfis = S.perfis.map(function (x) { return x.nome; });
     S.perfis.forEach(function (x) {
       var nome = el("b", "", null, el("span", "", x.nome));
       if (x.nome === S.padrao) nome.appendChild(el("span", "selo", T("DefaultBadge", t("PADRÃO", "DEFAULT"))));
@@ -2624,6 +2656,10 @@
       r.addEventListener("click", function () { if (editando !== x.nome) { editando = x.nome; mostrar("painel", true); } });
       r.addEventListener("dblclick", function () { if (x.nome !== S.ativo) mudar("perfil.ativar", { nome: x.nome }); });
       lista.appendChild(r);
+      linhas[x.nome] = r;
+      // Perfil que nao estava na lista (novo, copia, importado): abre o espaco e aparece.
+      if (antes && antes.indexOf(x.nome) < 0)
+        animar(r, [{ height: "0px", opacity: 0, transform: "translateX(-8px)" }, { height: "54px", opacity: 1, transform: "none" }], MOV.lenta, MOV.entrada);
     });
     lista.addEventListener("keydown", function (e) {
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -2666,7 +2702,10 @@
       confirmar(t("Excluir o perfil " + p.nome + "?", "Delete the profile " + p.nome + "?"), T("Delete", t("Excluir", "Delete")), "b perigo").then(function (sim) {
         if (!sim) return;
         editando = "";
-        mudar("perfil.excluir", { nome: p.nome });
+        // O perfil sai fechando o proprio espaco; so entao a lista e remontada.
+        var r = linhas[p.nome], a = r && animar(r, [{ height: "54px", opacity: 1 }, { height: "0px", opacity: 0, transform: "translateX(8px)" }], MOV.media, MOV.saida);
+        if (a) { r.style.overflow = "hidden"; a.onfinish = function () { r.style.height = "0px"; r.style.opacity = "0"; mudar("perfil.excluir", { nome: p.nome }); }; }
+        else mudar("perfil.excluir", { nome: p.nome });
       });
     }));
     salvos.corpo.appendChild(acoes);
