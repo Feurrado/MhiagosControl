@@ -34,7 +34,7 @@ public class MainActivity extends Activity {
     private TextView erroTexto, carregando;
     private final List<String> falhas = new ArrayList<String>();
     /** Quanto esperar um endereco que tem reserva antes de passar para ela. */
-    private static final int LIMITE_COM_RESERVA_MS = 4000;
+    private static final int LIMITE_COM_RESERVA_MS = 3000;
     /** Depois que a sonda confirma o endereco, quanto a pagina pode levar para carregar. */
     private static final int LIMITE_CARGA_MS = 15000;
     private int tentativa;
@@ -88,7 +88,12 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true); // a chave da API fica no localStorage da pagina
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         web.setWebViewClient(new Cliente());
-        raiz.addView(web, new FrameLayout.LayoutParams(
+        // A pagina ocupa o espaco acima; a faixa do botao (abaixo) so aparece com os dois enderecos.
+        LinearLayout coluna = new LinearLayout(this);
+        coluna.setOrientation(LinearLayout.VERTICAL);
+        coluna.addView(web, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        raiz.addView(coluna, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         erro = montarErro();
@@ -103,8 +108,59 @@ public class MainActivity extends Activity {
         raiz.addView(carregando, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
+        pular = new Button(this);
+        pular.setAllCaps(false);
+        pular.setText("Usar endereço externo");
+        pular.setVisibility(View.GONE);
+        pular.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { trocarEndereco(); }
+        });
+        FrameLayout.LayoutParams lpp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        lpp.bottomMargin = (int) (48 * getResources().getDisplayMetrics().density);
+        raiz.addView(pular, lpp);
+
+        troca = new Button(this);
+        troca.setAllCaps(false);
+        troca.setTextSize(13);
+        troca.setBackgroundColor(escuro ? 0xFF17171A : 0xFFEAECF0);
+        troca.setTextColor(escuro ? Color.WHITE : 0xFF1B1D21);
+        troca.setVisibility(View.GONE);
+        troca.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { trocarEndereco(); }
+        });
+        float d = getResources().getDisplayMetrics().density;
+        coluna.addView(troca, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, (int) (40 * d)));
+
         setContentView(raiz);
         carregar();
+    }
+
+    /** Botao flutuante: com o interno aberto oferece o remoto, e vice-versa. So vale nesta sessao. */
+    private Button troca;
+    /** Na tela de carregamento do interno: pula a espera e vai ao externo. */
+    private Button pular;
+
+    private void atualizarTroca() {
+        String in = Config.interno(this), ext = Config.externo(this);
+        boolean noExterno = !ext.isEmpty() && ext.equalsIgnoreCase(urlAtual);
+        boolean temOutro = !in.isEmpty() && !ext.isEmpty();
+        troca.setText(noExterno ? "Conectado pelo remoto  ·  Usar rede local" : "Conectado na rede local  ·  Usar remoto");
+        troca.setVisibility(temOutro ? View.VISIBLE : View.GONE);
+    }
+
+    private void trocarEndereco() {
+        String alvo = ehExterno(urlAtual) ? Config.interno(this) : Config.externo(this);
+        if (alvo.isEmpty()) return;
+        tentativa++;
+        enderecos = new ArrayList<String>();
+        enderecos.add(alvo);
+        indice = 0;
+        falhas.clear();
+        troca.setVisibility(View.GONE);
+        abrir();
     }
 
     private LinearLayout montarErro() {
@@ -146,7 +202,7 @@ public class MainActivity extends Activity {
         return l;
     }
 
-    /** Recomeca pela ordem de enderecos (externo primeiro, salvo se ele acabou de falhar). */
+    /** Recomeca pela ordem de enderecos (interno primeiro, o externo so como reserva). */
     private void carregar() {
         // casa://atalho?acao=desligar (shortcuts.xml) vira /?acao=desligar na pagina.
         Uri d = getIntent() != null ? getIntent().getData() : null;
@@ -166,6 +222,8 @@ public class MainActivity extends Activity {
         erro.setVisibility(View.GONE);
         carregando.setText("Conectando a\n" + urlAtual + "\n…");
         carregando.setVisibility(View.VISIBLE);
+        if (troca != null) troca.setVisibility(View.GONE);
+        if (pular != null) pular.setVisibility(!ehExterno(urlAtual) && !Config.externo(this).isEmpty() ? View.VISIBLE : View.GONE);
         if (indice >= enderecos.size() - 1) {
             web.loadUrl(comAtalho(urlAtual));
             relogio.postDelayed(aoEsgotar, LIMITE_DO_ULTIMO_MS);
@@ -200,8 +258,8 @@ public class MainActivity extends Activity {
         java.net.HttpURLConnection c = null;
         try {
             c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-            c.setConnectTimeout(3000);
-            c.setReadTimeout(3000);
+            c.setConnectTimeout(2000);
+            c.setReadTimeout(2000);
             c.setInstanceFollowRedirects(true);
             return c.getResponseCode() < 500;
         } catch (Exception e) {
@@ -221,13 +279,13 @@ public class MainActivity extends Activity {
         relogio.removeCallbacks(aoEsgotar);
         tentativa++;
         falhas.add(urlAtual + "  (" + motivo + ")");
-        if (ehExterno(urlAtual)) Config.externoFalhou();
         if (indice < enderecos.size() - 1) {
             indice++;
             abrir();
             return;
         }
         falhou = true;
+        if (pular != null) pular.setVisibility(View.GONE);
         web.stopLoading();
         StringBuilder t = new StringBuilder();
         for (String f : falhas) t.append(f).append('\n');
@@ -276,7 +334,8 @@ public class MainActivity extends Activity {
         public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
             Uri u = r.getUrl();
             // Fica dentro do app o que e de um dos enderecos do painel; o resto abre fora.
-            for (String e : enderecos) {
+            for (String e : new String[] { Config.interno(MainActivity.this), Config.externo(MainActivity.this) }) {
+                if (e.isEmpty()) continue;
                 String base = Uri.parse(e).getHost();
                 if (base != null && base.equalsIgnoreCase(u.getHost())) return false;
             }
@@ -296,9 +355,10 @@ public class MainActivity extends Activity {
         public void onPageFinished(WebView v, String url) {
             if (falhou || !url.startsWith(urlAtual)) return;
             relogio.removeCallbacks(aoEsgotar);
-            if (ehExterno(urlAtual)) Config.externoFuncionou();
             carregando.setVisibility(View.GONE);
             erro.setVisibility(View.GONE);
+            pular.setVisibility(View.GONE);
+            atualizarTroca();
         }
 
         // A pagina inicial respondeu erro (5xx do Funnel sem o servidor atras, 4xx do proxy): conta como falha do endereco.
