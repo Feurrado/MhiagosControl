@@ -62,7 +62,7 @@
   nav .rodape { margin-top:auto; color:var(--muted); font-size:12px; padding:10px 6px 0; }
 
   main { flex:1; min-width:0; padding:20px 24px 40px; }
-  .topo { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; }
+  .topo { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; max-width:1100px; }
   .topo h1 { font:600 20px "Segoe UI Variable Display","Segoe UI",sans-serif; margin:0; }
   .topo .sub { color:var(--muted); font-size:12px; margin-top:2px; }
   .topo .acoes { margin-left:auto; display:flex; gap:8px; align-items:center; }
@@ -614,7 +614,7 @@
       <div class="cab"><div class="nomes"><div class="nome">Chave de acesso</div></div></div>
       <div class="corpo">
         <p class="mu" style="margin-top:0">A chave fica em /opt/mhiagos-casa/.env no servidor (MHIAGOS_CHAVE).</p>
-        <div class="linha"><input id="ch" type="password" style="flex:1"><button class="b pri" id="salvarChave">Entrar</button></div>
+        <div class="linha"><input id="ch" type="password" style="flex:1" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"><button class="b pri" id="salvarChave">Entrar</button></div>
       </div>
     </div>
     <div id="login" class="cartao oculto" style="max-width:620px; margin-bottom:14px">

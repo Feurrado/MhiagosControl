@@ -391,7 +391,6 @@ namespace MhiagosControl
         {
             MouseEventArgs m = e as MouseEventArgs;
             if (m != null && m.Button != MouseButtons.Left) return;   // direito e o menu
-            if (IsStarting) MostrarSplash();
         }
 
         private bool IsStarting { get { return Volatile.Read(ref _runtimeState) == (int)RuntimeState.Starting; } }
@@ -402,15 +401,6 @@ namespace MhiagosControl
         {
             _statusInicial = texto;
             Splash.SetStatus(texto);
-        }
-
-        /// <summary>
-        /// Mostra a tela de carregamento a pedido. Fecha-la nao cancela nada -
-        /// a inicializacao roda noutra thread e nem sabe que ela existe.
-        /// </summary>
-        private void MostrarSplash()
-        {
-            Splash.Show(_statusInicial ?? T.OpeningSources);
         }
 
         private void FecharSplash()

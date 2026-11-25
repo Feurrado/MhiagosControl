@@ -18,7 +18,7 @@ namespace MhiagosControl
         private void AbrirJanelaNova(string pagina)
         {
             if (IsStopping) return;
-            if (IsStarting) { _openWhenReady = true; MostrarSplash(); return; }
+            if (IsStarting) { _openWhenReady = true; return; }
             // As duas janelas nao editam a configuracao ao mesmo tempo: a antiga
             // trabalha num rascunho e gravaria por cima do que a nova mudou.
             if (_settingsForm != null && !_settingsForm.IsDisposed) { TrazerParaFrente(_settingsForm); return; }

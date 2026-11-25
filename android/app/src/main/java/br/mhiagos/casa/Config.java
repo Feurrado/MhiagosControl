@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * Enderecos do painel, guardados nas preferencias do app: o externo (https pela internet,
- * tentado primeiro) e o interno (rede local, a reserva quando o externo nao responde).
+ * reserva) e o interno (rede local, tentado primeiro).
  */
 final class Config {
     static final String PADRAO = "http://192.168.1.100:8765";
@@ -20,9 +20,6 @@ final class Config {
     private static final String PREFS = "casa";
     private static final String CHAVE_INTERNO = "url";       // nome antigo: quem ja tinha o app mantem o endereco
     private static final String CHAVE_EXTERNO = "externo";
-    /** Depois de o externo falhar, o interno vai primeiro por este tempo. */
-    private static final long RESERVA_MS = 0; // sempre o externo primeiro, o interno so como reserva
-    private static long externoFalhouEm = 0;
 
     private Config() {}
 
@@ -51,25 +48,15 @@ final class Config {
         return externo(c) + "|" + interno(c);
     }
 
-    /** A ordem de tentativa: externo e interno (so os preenchidos), invertida logo apos o externo falhar. */
+    /** A ordem de tentativa: sempre o interno (rede de casa) primeiro e, se nao responder, o externo. */
     static List<String> enderecos(Context c) {
         String ext = externo(c), in = interno(c);
         List<String> l = new ArrayList<String>();
-        boolean internoPrimeiro = System.currentTimeMillis() - externoFalhouEm < RESERVA_MS;
-        if (internoPrimeiro) {
-            if (!in.isEmpty()) l.add(in);
-            if (!ext.isEmpty()) l.add(ext);
-        } else {
-            if (!ext.isEmpty()) l.add(ext);
-            if (!in.isEmpty()) l.add(in);
-        }
+        if (!in.isEmpty()) l.add(in);
+        if (!ext.isEmpty()) l.add(ext);
         if (l.isEmpty()) l.add(PADRAO);
         return l;
     }
-
-    static void externoFalhou() { externoFalhouEm = System.currentTimeMillis(); }
-
-    static void externoFuncionou() { externoFalhouEm = 0; }
 
     /**
      * Aceita endereco sem esquema (assume o dado: "http" no interno, "https" no externo)

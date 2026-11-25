@@ -32,11 +32,13 @@ async function api(caminho, metodo, corpo) {
   try { return await apiDireto(caminho, metodo, corpo); } finally { if (!longa) cargaMenos(); }
 }
 
+let chaveRecusada = false; // chave recusada: nao insiste (8 erros em 10 min bloqueiam o IP) ate digitar outra
 async function apiDireto(caminho, metodo, corpo) {
+  if (chaveRecusada) { pedirChave(); throw new Error("chave"); }
   const r = await fetch("/api/" + caminho, { method: metodo || "GET",
     headers: { "Authorization": "Bearer " + chave, "Content-Type": "application/json" },
     body: corpo === undefined ? undefined : JSON.stringify(corpo) });
-  if (r.status === 401) { pedirChave(); throw new Error("chave"); }
+  if (r.status === 401) { chaveRecusada = true; pedirChave(); throw new Error("chave"); }
   const tipo = r.headers.get("content-type") || "";
   const j = tipo.includes("json") ? await r.json() : await r.text();
   if (!r.ok) throw new Error((j && (j.erro || j.detail)) || ("HTTP " + r.status));
@@ -157,7 +159,8 @@ const num = (v, c) => v == null ? "--" : Number(v).toLocaleString("pt-BR", { min
 
 function pedirChave() { $("chave").classList.remove("oculto"); }
 $("salvarChave").onclick = () => {
-  chave = $("ch").value.trim();
+  chave = $("ch").value.replace(/\s+/g, "");
+  chaveRecusada = false;
   try { localStorage.setItem("chave", chave); } catch (e) {}
   $("chave").classList.add("oculto");
   atualizar(); carregarPref();
@@ -408,7 +411,21 @@ function aparelhosNaOrdemTodos(ordem) {
   const pos = id => { const n = ordem.indexOf(id); return n < 0 ? 999 : n; };
   return estado.lista.map((a, n) => [a, n]).sort((x, y) => pos(x[0].puid) - pos(y[0].puid) || x[1] - y[1]).map(x => x[0]);
 }
-$("personalizar").onclick = () => { editandoInicio = !editandoInicio; desenharEdicaoInicio(); };
+// Abrir e fechar animam a cada vez: expandir/recolher criam uma animacao nova, e ao fechar as antigas sao
+// canceladas (o fill "forwards" do recolher deixaria a caixa com altura 0 na proxima abertura).
+$("personalizar").onclick = () => {
+  const caixa = $("editaInicio");
+  editandoInicio = !editandoInicio;
+  caixa.getAnimations().forEach(a => a.cancel());
+  caixa.style.overflow = "";
+  if (editandoInicio) {
+    desenharEdicaoInicio();
+    if (!caixa.classList.contains("oculto")) expandir(caixa);
+  } else {
+    $("personalizar").classList.remove("pri");
+    recolher(caixa, () => { caixa.getAnimations().forEach(a => a.cancel()); caixa.style.overflow = ""; if (!editandoInicio) desenharEdicaoInicio(); });
+  }
+};
 
 function desenharCartoes() {
   if (!estado) return;

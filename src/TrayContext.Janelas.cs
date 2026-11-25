@@ -107,7 +107,6 @@ namespace MhiagosControl
             if (IsStarting)
             {
                 _openWhenReady = true;
-                MostrarSplash();
                 return;
             }
             if (!_classicaPedida && JanelaDoApp.WebViewDisponivel()
@@ -143,7 +142,6 @@ namespace MhiagosControl
             if (IsStarting)
             {
                 _openWhenReady = true;
-                MostrarSplash();
                 return;
             }
 
