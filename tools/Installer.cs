@@ -33,7 +33,7 @@ namespace MhiagosSetup
     public static class Setup
     {
         public const string AppName = "Mhiagos Control";
-        public const string Versao = "3.0.2";
+        public const string Versao = "3.1.0";
         /// <summary>A tarefa da 2.x, que abria o app inteiro como administrador. So e apagada.</summary>
         public const string TaskName = "MhiagosControl";
         /// <summary>A tarefa que sobe o nucleo (sensores) elevado no logon; o app a dispara se ele cair.</summary>
