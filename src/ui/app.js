@@ -1187,13 +1187,11 @@
     if (!enxuta()) esq.appendChild(casa.el);
     var duas = el("div", "vg-duas");
     var perLista = el("div");
-    var per = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals"))),
-      botao(T("VisaoBaterias", t("Baterias ▸", "Batteries ▸")), "link", function () { mostrar("baterias"); })), perLista);
+    var per = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("b", "", T("VisaoChipPerifericos", t("Periféricos", "Peripherals")))), perLista);
     aoClicar(per, function () { mostrar("baterias"); });
     var evLista = el("div", "vg-ev");
     // Eventos: o historico do servidor (ar e lavadora, guardado la); o clique abre o historico completo na Casa.
-    var ev = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("span", "mono", T("VisaoEventos", t("EVENTOS", "EVENTS"))),
-      botao(t("Histórico ▸", "History ▸"), "link", function () { casaAba = "ajustes-eventos"; mostrar("casa"); })), evLista);
+    var ev = el("div", "cartao vg-box vai", null, el("div", "cb", null, el("span", "mono", T("VisaoEventos", t("EVENTOS", "EVENTS")))), evLista);
     aoClicar(ev, function () { casaAba = "ajustes-eventos"; mostrar("casa"); });
     var evServidor = null;
     function buscarEventos() {
@@ -1215,18 +1213,17 @@
     var stEl = el("span", "st"), perfilEl = el("div", "val"), painelEl = el("div", "val");
     var cima = el("div", "cima", null, previa.el, el("div", "info", null,
       el("div", "cap", T("ActiveProfile", t("PERFIL ATIVO", "ACTIVE PROFILE"))), perfilEl,
-      el("div", "cap", T("PanelLabel", t("Painel", "Panel"))), painelEl,
-      botao(T("VisaoAbrirPaineis", t("Abrir Painéis ▸", "Open Panels ▸")), "link", function () { mostrar("painel"); })));
-    var cooler = el("div", "cartao vg-cooler", null, el("div", "titulo", null, el("span", "", T("VisaoChipCooler", t("Display do cooler", "Cooler display"))), stEl), cima);
+      el("div", "cap", T("PanelLabel", t("Painel", "Panel"))), painelEl));
+    var cooler = el("div", "cartao vg-cooler vai", null, el("div", "titulo", null, el("span", "", T("VisaoChipCooler", t("Display do cooler", "Cooler display"))), stEl), cima);
     var mostradores = [1, 2].map(function (n) {
       var canvas = el("canvas"), tt = el("div", "tt"), valor = el("div", "vv"), faixa = el("div", "mm");
       var c = el("div", "vg-mostrador", null, canvas, tt, valor, faixa);
-      c.addEventListener("click", function () { mostrar("painel"); });
       cooler.appendChild(c);
       var m = { n: n, canvas: canvas, tt: tt, valor: valor, faixa: faixa, id: "", hx: -1 };
       seguirPonteiro(c, m);
       return m;
     });
+    aoClicar(cooler, function () { mostrar("painel"); });
     dir.appendChild(cooler);
     if (!enxuta()) dir.appendChild(duas);
     meio.appendChild(dir);
