@@ -159,7 +159,7 @@ const num = (v, c) => v == null ? "--" : Number(v).toLocaleString("pt-BR", { min
 
 function pedirChave() { $("chave").classList.remove("oculto"); }
 $("salvarChave").onclick = () => {
-  chave = $("ch").value.trim();
+  chave = $("ch").value.replace(/\s+/g, "");
   chaveRecusada = false;
   try { localStorage.setItem("chave", chave); } catch (e) {}
   $("chave").classList.add("oculto");
